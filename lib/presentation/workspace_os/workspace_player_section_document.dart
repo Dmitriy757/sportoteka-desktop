@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:cross_file/cross_file.dart';
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_picker/file_picker.dart';
@@ -68,6 +70,8 @@ class _WorkspacePlayerSectionDocumentState
   String? _error;
   List<Map<String, dynamic>> _medicalRecords = <Map<String, dynamic>>[];
   List<Map<String, dynamic>> _diary = <Map<String, dynamic>>[];
+  List<Map<String, dynamic>> _recordAttachments = <Map<String, dynamic>>[];
+  List<Map<String, dynamic>> _recordDocuments = <Map<String, dynamic>>[];
   String _workspaceNote = '';
 
   String get _playerName {
@@ -104,7 +108,7 @@ class _WorkspacePlayerSectionDocumentState
     if (record == null) return _sectionTitle;
     switch (widget.section) {
       case WorkspacePlayerSection.matches:
-        final opponent = '${record['opponent'] ?? record['opponent_name'] ?? ''}'.trim();
+        final opponent = '${record['opponent'] ?? record['opponent_name'] ?? record['opponent_team'] ?? record['opponent_team_name'] ?? record['rival'] ?? record['rival_name'] ?? ''}'.trim();
         if (opponent.isNotEmpty) return 'Матч — $opponent';
         break;
       case WorkspacePlayerSection.health:
@@ -177,6 +181,20 @@ class _WorkspacePlayerSectionDocumentState
     return 'player:${_bridge.resolvePlayerId(widget.player)}:${widget.section.name}:documents';
   }
 
+  bool get _canUseRecordAttachments =>
+      widget.record != null && _bridge.resolvePlayerId(widget.player) > 0;
+
+  String get _recordAttachmentSectionKey {
+    final identity = _recordIdentity;
+    if (identity != null) {
+      return '${widget.section.name}:${identity.type}:${identity.id}';
+    }
+    final safe = _noteStorageKey.replaceAll(RegExp(r'[^a-zA-Z0-9_:-]+'), '_');
+    return '${widget.section.name}:record:$safe';
+  }
+
+  String get _recordDocumentsStorageKey => '${_noteStorageKey}_children';
+
   @override
   void initState() {
     super.initState();
@@ -194,6 +212,22 @@ class _WorkspacePlayerSectionDocumentState
       var note = prefs.getString(_noteStorageKey) ?? '';
       if (note.isEmpty && _legacyNoteStorageKey != _noteStorageKey) {
         note = prefs.getString(_legacyNoteStorageKey) ?? '';
+      }
+      var recordAttachments = <Map<String, dynamic>>[];
+      var recordDocuments = <Map<String, dynamic>>[];
+      if (widget.record != null) {
+        final rawChildren = prefs.getString(_recordDocumentsStorageKey);
+        if (rawChildren != null && rawChildren.trim().isNotEmpty) {
+          try {
+            final decodedChildren = jsonDecode(rawChildren);
+            if (decodedChildren is List) {
+              recordDocuments = decodedChildren
+                  .whereType<Map>()
+                  .map((row) => Map<String, dynamic>.from(row))
+                  .toList();
+            }
+          } catch (_) {}
+        }
       }
       final server = _serverStorage;
       if (server != null) {
@@ -232,6 +266,42 @@ class _WorkspacePlayerSectionDocumentState
               title: _effectiveRecordTitle,
             );
           }
+          if (widget.record != null) {
+            final mergedDocuments = <String, Map<String, dynamic>>{
+              for (final row in recordDocuments)
+                if ('${row['id'] ?? ''}'.trim().isNotEmpty)
+                  '${row['id']}': Map<String, dynamic>.from(row),
+            };
+            for (final node in snapshot.nodes.where(
+              (node) =>
+                  node.parentId == _serverParentKey &&
+                  node.kind == WorkspaceFinderNodeKind.note &&
+                  node.id != _noteStorageKey,
+            )) {
+              mergedDocuments[node.id] = <String, dynamic>{
+                'id': node.id,
+                'title': node.title,
+                'body': snapshot.noteBodies[node.id] ?? '',
+                'created_at': node.createdAt?.toIso8601String() ?? '',
+                'updated_at': node.updatedAt?.toIso8601String() ?? '',
+                '_workspace_record_document': true,
+              };
+            }
+            recordDocuments = mergedDocuments.values.toList()
+              ..sort((a, b) => '${b['updated_at'] ?? ''}'.compareTo('${a['updated_at'] ?? ''}'));
+            await prefs.setString(_recordDocumentsStorageKey, jsonEncode(recordDocuments));
+          }
+          if (_canUseRecordAttachments) {
+            try {
+              recordAttachments = await server.listAttachments(
+                entityType: 'player',
+                entityId: _bridge.resolvePlayerId(widget.player),
+                sectionKey: _recordAttachmentSectionKey,
+              );
+            } catch (_) {
+              recordAttachments = <Map<String, dynamic>>[];
+            }
+          }
           _serverAvailable = true;
         } catch (_) {
           _serverAvailable = false;
@@ -260,6 +330,8 @@ class _WorkspacePlayerSectionDocumentState
         _workspaceNote = note;
         _medicalRecords = medical;
         _diary = diary;
+        _recordAttachments = recordAttachments;
+        _recordDocuments = recordDocuments;
         _loading = false;
       });
     } catch (e) {
@@ -306,9 +378,17 @@ class _WorkspacePlayerSectionDocumentState
           updatedAt: DateTime.now(),
         );
         if (_serverAvailable) {
-          await server.updateNode(node);
+          try {
+            await server.updateNode(node);
+          } catch (_) {
+            await server.createNode(node);
+          }
         } else {
-          await server.createNode(node);
+          try {
+            await server.createNode(node);
+          } catch (_) {
+            await server.updateNode(node);
+          }
           _serverAvailable = true;
         }
         await server.saveDocument(clientUid: node.id, title: node.title, body: body);
@@ -382,7 +462,7 @@ class _WorkspacePlayerSectionDocumentState
 
   String _humanRecordDate(Map<String, dynamic> record) {
     for (final key in const <String>[
-      'date', 'record_date', 'match_date', 'test_date', 'event_date', 'start_at', 'created_at',
+      'date', 'record_date', 'match_date', 'test_date', 'event_date', 'scheduled_at', 'start_at', 'start_time', 'datetime', 'created_at',
     ]) {
       final raw = '${record[key] ?? ''}'.trim();
       if (raw.isEmpty) continue;
@@ -503,22 +583,560 @@ class _WorkspacePlayerSectionDocumentState
               ],
             ),
           ),
+        if (_canUseRecordAttachments) _buildRecordMaterials(),
         const Divider(height: 1, color: _line),
         Expanded(
-          child: WorkspaceDocumentEditor(
-            key: ValueKey('${widget.section.name}:$_noteStorageKey'),
-            initialTitle: '$title — $_playerName',
-            initialBody: _workspaceNote,
-            titleReadOnly: true,
-            contextLabel: 'Игрок · $title',
-            contextName: _playerName,
-            documentType: 'Заметка тренера',
-            liveBlocksKey: _noteStorageKey,
-            onSave: _saveWorkspaceNote,
+          child: DropTarget(
+            onDragEntered: (_) => setState(() => _draggingFile = true),
+            onDragExited: (_) => setState(() => _draggingFile = false),
+            onDragDone: (details) async {
+              setState(() => _draggingFile = false);
+              await _handleRecordDroppedFiles(details.files);
+            },
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: WorkspaceDocumentEditor(
+                    key: ValueKey('${widget.section.name}:$_noteStorageKey'),
+                    initialTitle: '$title — $_playerName',
+                    initialBody: _workspaceNote,
+                    titleReadOnly: true,
+                    contextLabel: 'Игрок · $title',
+                    contextName: _playerName,
+                    documentType: widget.section == WorkspacePlayerSection.matches
+                        ? 'Рабочий документ матча'
+                        : widget.section == WorkspacePlayerSection.activity
+                            ? 'Рабочий документ тренировки'
+                            : 'Заметка тренера',
+                    liveBlocksKey: _noteStorageKey,
+                    onSave: _saveWorkspaceNote,
+                  ),
+                ),
+                if (_draggingFile)
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      child: Container(
+                        color: Colors.white.withOpacity(.84),
+                        alignment: Alignment.center,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFEAF5EF),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            'Отпустите файл — добавить внутрь этой записи',
+                            style: AppTypography.menuTitle(color: _green),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
       ],
     );
+  }
+
+  Widget _buildRecordMaterials() {
+    final documents = _recordDocuments;
+    final attachments = _recordAttachments;
+    final count = documents.length + attachments.length;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 760;
+        return Container(
+          height: 54,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+          color: const Color(0xFFFBFCFB),
+          child: Row(
+            children: [
+              const Icon(Icons.folder_open_rounded, size: 18, color: _green),
+              const SizedBox(width: 8),
+              Text(
+                compact ? '$count' : 'Материалы · $count',
+                style: AppTypography.menuTitle(color: _text),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: count == 0
+                    ? Text(
+                        'Документы и файлы этой записи',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.caption(color: _muted),
+                      )
+                    : ListView(
+                        scrollDirection: Axis.horizontal,
+                        children: [
+                          for (final document in documents) ...[
+                            _recordMaterialChip(
+                              title: '${document['title'] ?? 'Документ'}',
+                              icon: Icons.description_outlined,
+                              onOpen: () => _openRecordDocument(document),
+                              onDelete: () => _deleteRecordDocument(document),
+                            ),
+                            const SizedBox(width: 6),
+                          ],
+                          for (final attachment in attachments) ...[
+                            _recordMaterialChip(
+                              title: _recordAttachmentTitle(attachment),
+                              icon: Icons.insert_drive_file_outlined,
+                              onOpen: () => _openRecordAttachment(attachment),
+                              onDelete: () => _deleteRecordAttachment(attachment),
+                            ),
+                            const SizedBox(width: 6),
+                          ],
+                        ],
+                      ),
+              ),
+              const SizedBox(width: 6),
+              if (compact)
+                IconButton(
+                  tooltip: 'Создать документ',
+                  onPressed: _createRecordDocument,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints.tightFor(width: 34, height: 34),
+                  icon: const Icon(Icons.note_add_outlined, size: 19, color: _green),
+                )
+              else
+                TextButton.icon(
+                  onPressed: _createRecordDocument,
+                  style: TextButton.styleFrom(
+                    minimumSize: const Size(0, 34),
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                  ),
+                  icon: const Icon(Icons.note_add_outlined, size: 17, color: _green),
+                  label: Text('Документ', style: AppTypography.actionStrong(color: _green)),
+                ),
+              if (compact)
+                IconButton(
+                  tooltip: 'Добавить файл',
+                  onPressed: _uploading ? null : _pickRecordAttachment,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints.tightFor(width: 34, height: 34),
+                  icon: _uploading
+                      ? const SizedBox.square(
+                          dimension: 15,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: _green),
+                        )
+                      : const Icon(Icons.add_rounded, size: 20, color: _green),
+                )
+              else
+                TextButton.icon(
+                  onPressed: _uploading ? null : _pickRecordAttachment,
+                  style: TextButton.styleFrom(
+                    minimumSize: const Size(0, 34),
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                  ),
+                  icon: _uploading
+                      ? const SizedBox.square(
+                          dimension: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: _green),
+                        )
+                      : const Icon(Icons.add_rounded, size: 17, color: _green),
+                  label: Text(
+                    _uploading ? 'Загрузка…' : 'Файл',
+                    style: AppTypography.actionStrong(color: _green),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _recordMaterialChip({
+    required String title,
+    required IconData icon,
+    required VoidCallback onOpen,
+    required VoidCallback onDelete,
+  }) {
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 235),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: _line),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          InkWell(
+            onTap: onOpen,
+            borderRadius: BorderRadius.circular(8),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(9, 7, 5, 7),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(icon, size: 16, color: _green),
+                  const SizedBox(width: 6),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 150),
+                    child: Text(
+                      title.trim().isEmpty ? 'Документ' : title.trim(),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.captionMedium(color: _text),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          IconButton(
+            tooltip: 'Удалить',
+            visualDensity: VisualDensity.compact,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints.tightFor(width: 30, height: 30),
+            onPressed: onDelete,
+            icon: const Icon(Icons.close_rounded, size: 15, color: _muted),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _persistRecordDocuments() async {
+    if (widget.record == null) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_recordDocumentsStorageKey, jsonEncode(_recordDocuments));
+  }
+
+  Future<void> _createRecordDocument() async {
+    if (widget.record == null) return;
+    final now = DateTime.now();
+    final document = <String, dynamic>{
+      'id': 'workspace_record_${now.microsecondsSinceEpoch}',
+      'title': 'Новый документ',
+      'body': '',
+      'created_at': now.toIso8601String(),
+      'updated_at': now.toIso8601String(),
+      '_workspace_record_document': true,
+    };
+    setState(() => _recordDocuments = <Map<String, dynamic>>[document, ..._recordDocuments]);
+    await _persistRecordDocuments();
+    await _syncRecordDocument(document, create: true);
+    if (mounted) await _openRecordDocument(document);
+  }
+
+  Future<void> _openRecordDocument(Map<String, dynamic> document) async {
+    final id = '${document['id'] ?? ''}'.trim();
+    if (id.isEmpty) return;
+    await Navigator.of(context).push<void>(
+      PageRouteBuilder<void>(
+        transitionDuration: const Duration(milliseconds: 220),
+        reverseTransitionDuration: const Duration(milliseconds: 170),
+        pageBuilder: (routeContext, animation, secondaryAnimation) => Scaffold(
+          backgroundColor: Colors.white,
+          body: SafeArea(
+            child: WorkspaceDocumentEditor(
+              initialTitle: '${document['title'] ?? 'Документ'}',
+              initialBody: '${document['body'] ?? ''}',
+              contextLabel: '$_sectionTitle · $_effectiveRecordTitle',
+              contextName: _playerName,
+              documentType: 'Документ Sportoteka OS',
+              liveBlocksKey: id,
+              onSave: (title, body) => _saveRecordDocument(id, title, body),
+              onClose: () => Navigator.of(routeContext).maybePop(),
+            ),
+          ),
+        ),
+        transitionsBuilder: (_, animation, __, child) => FadeTransition(
+          opacity: CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+          child: SlideTransition(
+            position: Tween<Offset>(begin: const Offset(.018, 0), end: Offset.zero).animate(
+              CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+            ),
+            child: child,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _saveRecordDocument(String id, String title, String body) async {
+    final now = DateTime.now().toIso8601String();
+    Map<String, dynamic>? updated;
+    setState(() {
+      _recordDocuments = _recordDocuments.map((row) {
+        if ('${row['id'] ?? ''}' != id) return row;
+        updated = <String, dynamic>{
+          ...row,
+          'title': title.trim().isEmpty ? 'Документ' : title.trim(),
+          'body': body,
+          'updated_at': now,
+          '_workspace_record_document': true,
+        };
+        return updated!;
+      }).toList();
+    });
+    await _persistRecordDocuments();
+    if (updated != null) await _syncRecordDocument(updated!, create: false);
+  }
+
+  Future<void> _syncRecordDocument(
+    Map<String, dynamic> document, {
+    required bool create,
+  }) async {
+    final server = _serverStorage;
+    if (server == null) return;
+    final id = '${document['id'] ?? ''}'.trim();
+    if (id.isEmpty) return;
+    final title = '${document['title'] ?? 'Документ'}'.trim();
+    final node = WorkspaceFinderNode(
+      id: id,
+      title: title.isEmpty ? 'Документ' : title,
+      subtitle: 'Материал · $_effectiveRecordTitle',
+      kind: WorkspaceFinderNodeKind.note,
+      parentId: _serverParentKey,
+      createdAt: DateTime.tryParse('${document['created_at'] ?? ''}'),
+      updatedAt: DateTime.now(),
+    );
+    try {
+      if (create) {
+        await server.createNode(node);
+      } else {
+        try {
+          await server.updateNode(node);
+        } catch (_) {
+          await server.createNode(node);
+        }
+      }
+      await server.saveDocument(
+        clientUid: id,
+        title: node.title,
+        body: '${document['body'] ?? ''}',
+      );
+      final identity = _recordIdentity;
+      if (identity != null) {
+        await server.linkDocument(
+          documentKey: id,
+          entityType: identity.type,
+          entityId: identity.id,
+          sectionKey: widget.section.name,
+          title: node.title,
+        );
+      }
+      _serverAvailable = true;
+    } catch (_) {
+      _serverAvailable = false;
+    }
+  }
+
+  Future<void> _deleteRecordDocument(Map<String, dynamic> document) async {
+    final id = '${document['id'] ?? ''}'.trim();
+    if (id.isEmpty) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.white,
+        title: Text('Удалить документ?', style: AppTypography.sectionTitle(color: _text)),
+        content: Text('${document['title'] ?? 'Документ'}', style: AppTypography.body(color: _text)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text('Отмена', style: AppTypography.action(color: _muted)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text('Удалить', style: AppTypography.action(color: const Color(0xFFB42318))),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _recordDocuments.removeWhere((row) => '${row['id'] ?? ''}' == id));
+    await _persistRecordDocuments();
+    final server = _serverStorage;
+    if (server != null) {
+      try {
+        await server.deleteNode(id);
+      } catch (_) {
+        _serverAvailable = false;
+      }
+    }
+  }
+
+  String _recordAttachmentTitle(Map<String, dynamic> attachment) {
+    final title = '${attachment['title'] ?? attachment['original_name'] ?? attachment['file_name'] ?? attachment['name'] ?? ''}'.trim();
+    return title.isEmpty ? 'Файл' : title;
+  }
+
+  int _recordAttachmentId(Map<String, dynamic> attachment) =>
+      int.tryParse('${attachment['id'] ?? attachment['attachment_id'] ?? ''}'.trim()) ?? 0;
+
+  String _recordAttachmentUrl(Map<String, dynamic> attachment) =>
+      '${attachment['file_url'] ?? attachment['url'] ?? attachment['file'] ?? ''}'.trim();
+
+  Future<void> _reloadRecordAttachments() async {
+    if (!_canUseRecordAttachments) return;
+    final server = _serverStorage;
+    if (server == null) return;
+    try {
+      final rows = await server.listAttachments(
+        entityType: 'player',
+        entityId: _bridge.resolvePlayerId(widget.player),
+        sectionKey: _recordAttachmentSectionKey,
+      );
+      if (!mounted) return;
+      setState(() {
+        _recordAttachments = rows;
+        _serverAvailable = true;
+      });
+    } catch (_) {
+      _serverAvailable = false;
+    }
+  }
+
+  Future<void> _openRecordAttachment(Map<String, dynamic> attachment) async {
+    final raw = _recordAttachmentUrl(attachment);
+    if (raw.isEmpty) return;
+    final uri = Uri.tryParse(_absoluteFileUrl(raw));
+    if (uri == null) return;
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  Future<void> _pickRecordAttachment() async {
+    if (!_canUseRecordAttachments || _uploading) return;
+    final result = await FilePicker.pickFiles(
+      allowMultiple: false,
+      withData: kIsWeb,
+      type: FileType.any,
+    );
+    if (result == null || result.files.isEmpty) return;
+    await _uploadRecordAttachment(result.files.first);
+  }
+
+  Future<void> _handleRecordDroppedFiles(List<XFile> files) async {
+    if (!_canUseRecordAttachments || files.isEmpty || _uploading) return;
+    for (final xfile in files) {
+      if (!mounted) return;
+      final size = await xfile.length();
+      final platformFile = PlatformFile(
+        name: xfile.name,
+        size: size,
+        path: kIsWeb ? null : xfile.path,
+        bytes: kIsWeb ? await xfile.readAsBytes() : null,
+      );
+      await _uploadRecordAttachment(platformFile);
+    }
+  }
+
+  Future<void> _uploadRecordAttachment(PlatformFile file) async {
+    if (!_canUseRecordAttachments || _uploading) return;
+    final path = file.path?.trim() ?? '';
+    if (path.isEmpty) {
+      if (mounted) _snack('Для загрузки файла нужен локальный путь');
+      return;
+    }
+    final title = await _askRecordAttachmentTitle(file.name);
+    if (title == null || !mounted) return;
+    final server = _serverStorage;
+    if (server == null) return;
+
+    setState(() {
+      _uploading = true;
+      _error = null;
+    });
+    try {
+      await server.uploadAttachment(
+        filePath: path,
+        entityType: 'player',
+        entityId: _bridge.resolvePlayerId(widget.player),
+        sectionKey: _recordAttachmentSectionKey,
+        title: title,
+      );
+      _serverAvailable = true;
+      await _reloadRecordAttachments();
+      if (mounted) _snack('Файл добавлен внутрь записи');
+    } catch (e) {
+      _serverAvailable = false;
+      if (mounted) _snack('Не удалось добавить файл: $e');
+    } finally {
+      if (mounted) setState(() => _uploading = false);
+    }
+  }
+
+  Future<String?> _askRecordAttachmentTitle(String fileName) async {
+    final controller = TextEditingController(
+      text: fileName.replaceFirst(RegExp(r'\.[^.]+$'), ''),
+    );
+    final result = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.white,
+        title: Text('Добавить файл в запись', style: AppTypography.sectionTitle(color: _text)),
+        content: SizedBox(
+          width: 440,
+          child: TextField(
+            controller: controller,
+            autofocus: true,
+            style: AppTypography.formText(color: _text),
+            decoration: InputDecoration(
+              labelText: 'Название',
+              hintText: fileName,
+              labelStyle: AppTypography.formLabel(color: _muted),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: Text('Отмена', style: AppTypography.action(color: _muted)),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: _green, elevation: 0),
+            onPressed: () => Navigator.of(dialogContext).pop(
+              controller.text.trim().isEmpty ? fileName : controller.text.trim(),
+            ),
+            child: Text('Добавить', style: AppTypography.actionStrong(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    return result;
+  }
+
+  Future<void> _deleteRecordAttachment(Map<String, dynamic> attachment) async {
+    final id = _recordAttachmentId(attachment);
+    if (id <= 0) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.white,
+        title: Text('Удалить файл?', style: AppTypography.sectionTitle(color: _text)),
+        content: Text(_recordAttachmentTitle(attachment), style: AppTypography.body(color: _text)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text('Отмена', style: AppTypography.action(color: _muted)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text('Удалить', style: AppTypography.action(color: const Color(0xFFB42318))),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    final server = _serverStorage;
+    if (server == null) return;
+    try {
+      await server.deleteAttachment(id);
+      await _reloadRecordAttachments();
+      if (mounted) _snack('Файл удалён');
+    } catch (e) {
+      if (mounted) _snack('Не удалось удалить файл: $e');
+    }
   }
 
   List<(String, String)> _recordPairs(Map<String, dynamic> record) {
@@ -541,11 +1159,11 @@ class _WorkspacePlayerSectionDocumentState
     }
     switch (widget.section) {
       case WorkspacePlayerSection.matches:
-        add('Соперник', const ['opponent', 'opponent_name']);
-        final our = '${record['our_score'] ?? ''}'.trim();
-        final opp = '${record['opponent_score'] ?? ''}'.trim();
+        add('Соперник', const ['opponent', 'opponent_name', 'opponent_team', 'opponent_team_name', 'rival', 'rival_name']);
+        final our = '${record['our_score'] ?? record['team_score'] ?? record['score_for'] ?? record['home_score'] ?? ''}'.trim();
+        final opp = '${record['opponent_score'] ?? record['score_against'] ?? record['away_score'] ?? ''}'.trim();
         if (our.isNotEmpty || opp.isNotEmpty) out.add(('Счёт', '$our:$opp'));
-        add('Турнир', const ['competition_name', 'event_type']);
+        add('Турнир', const ['competition_name', 'tournament_name', 'competition', 'event_type', 'league_name']);
         add('Стадион', const ['stadium']);
         add('Тур', const ['tour_label']);
         add('Минуты', const ['minutes']);
@@ -580,7 +1198,7 @@ class _WorkspacePlayerSectionDocumentState
         }
         break;
       case WorkspacePlayerSection.activity:
-        add('Тренировка', const ['title', 'event_title', 'training_title', 'name']);
+        add('Тренировка', const ['title', 'event_title', 'event_name', 'training_title', 'training_type', 'name', 'event_type']);
         add('Статус', const ['mark', 'status', 'attendance_status']);
         add('Оценка игрока', const ['player_rating', 'self_rating', 'rating']);
         add('Оценка тренера', const ['coach_rating', 'trainer_rating']);
@@ -699,7 +1317,7 @@ class _WorkspacePlayerSectionDocumentState
 
   DateTime _recordDate(Map<String, dynamic> record) {
     for (final key in const <String>[
-      'date', 'record_date', 'match_date', 'test_date', 'event_date', 'start_at', 'created_at',
+      'date', 'record_date', 'match_date', 'test_date', 'event_date', 'scheduled_at', 'start_at', 'start_time', 'datetime', 'created_at',
     ]) {
       final raw = '${record[key] ?? ''}'.trim();
       if (raw.isEmpty) continue;

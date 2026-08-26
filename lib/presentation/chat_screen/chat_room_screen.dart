@@ -1759,7 +1759,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
                         child: Text(
                           senderName,
                           style: _WinChatText.body(
-                            10.0,
+                            11.0,
                             color: bubbleAccent,
                             weight: FontWeight.w600,
                           ),
@@ -1795,7 +1795,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
                                 Text(
                                   'Сообщение удалено',
                                   style: _WinChatText.body(
-                                    11.3,
+                                    12.3,
                                     color: _WinChatColors.muted,
                                     weight: FontWeight.w400,
                                   ).copyWith(
@@ -1962,7 +1962,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
                                     ];
                                   } else {
                                     final style = _WinChatText.body(
-                                      11.3,
+                                      12.3,
                                       color: _WinChatColors.text,
                                       weight: FontWeight.w500,
                                     );
@@ -2442,7 +2442,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
                                   ? 'Ответить…'
                                   : 'Сообщение…'),
                           hintStyle: _WinChatText.body(
-                            10.8,
+                            11.0,
                             color: _WinChatColors.muted,
                           ),
                           border: InputBorder.none,
@@ -2451,7 +2451,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
                               const EdgeInsets.symmetric(vertical: 9),
                         ),
                         style: _WinChatText.body(
-                          11.3,
+                          12.3,
                           color: _WinChatColors.text,
                           weight: FontWeight.w500,
                         ),
@@ -2500,7 +2500,6 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
     // TODO: Отправка на сервер (multipart как _sendImage)
   }
 }
-
 
 class _AttachmentAction extends StatelessWidget {
   final IconData icon;
@@ -2674,7 +2673,6 @@ class _RoomSendAction extends StatelessWidget {
     );
   }
 }
-
 
 class _ChatVideoPreview extends StatefulWidget {
   final String? url;
@@ -2956,8 +2954,9 @@ class _FullVideoScreenState extends State<_FullVideoScreen> {
                     final value = _controller.value;
                     final duration = value.duration;
                     final position = value.position;
-                    final maxMs =
-                        duration.inMilliseconds <= 0 ? 1 : duration.inMilliseconds;
+                    final maxMs = duration.inMilliseconds <= 0
+                        ? 1
+                        : duration.inMilliseconds;
                     final posMs =
                         position.inMilliseconds.clamp(0, maxMs).toDouble();
 

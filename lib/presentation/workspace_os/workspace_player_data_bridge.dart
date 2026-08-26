@@ -639,16 +639,23 @@ extension WorkspacePlayerDataBrowserBridge on WorkspacePlayerDataBridge {
     required int? teamId,
   }) async {
     final playerId = resolvePlayerId(player);
+    final userId = resolveUserId(player);
     final effectiveTeamId = resolveTeamId(player, teamId);
     if (effectiveTeamId <= 0) return <Map<String, dynamic>>[];
 
-    // Совпадает с актуальной логикой CMR-профиля: сначала персональные
-    // endpoints, затем командная история с фильтрацией по составу.
-    if (playerId > 0) {
+    final playerIds = <int>{
+      if (playerId > 0) playerId,
+      if (userId > 0) userId,
+    };
+
+    // Сначала пробуем персональные endpoints. Важно: пустой ответ одного
+    // endpoint не означает, что матчей нет — раньше на этом месте происходил
+    // ранний return и раздел «Матчи» оставался пустым.
+    if (playerIds.isNotEmpty) {
       final params = <String, String>{
         'team_id': '$effectiveTeamId',
-        'player_id': '$playerId',
-        'user_id': '$playerId',
+        if (playerId > 0) 'player_id': '$playerId',
+        if (userId > 0) 'user_id': '$userId',
       };
       for (final endpoint in const <String>[
         'get_player_matches.php',
@@ -658,14 +665,16 @@ extension WorkspacePlayerDataBrowserBridge on WorkspacePlayerDataBridge {
         try {
           final uri = Uri.parse('$apiBase/$endpoint').replace(queryParameters: params);
           final response = await http.get(uri).timeout(const Duration(seconds: 12));
-          final data = _browserDecodeMap(response.body);
-          final raw = data['matches'] ?? data['items'] ?? data['rows'] ?? data['data'];
-          if (raw is! List) continue;
-          final rows = raw
-              .whereType<Map>()
-              .map((e) => Map<String, dynamic>.from(e))
-              .where((e) => _browserMatchBelongsToPlayer(e, playerId))
-              .toList();
+          final rows = _browserExtractRows(
+            response.body,
+            const <String>['matches', 'items', 'rows', 'data', 'result', 'records'],
+          );
+          if (rows.isEmpty) continue;
+          for (final row in rows) {
+            row['team_id'] ??= effectiveTeamId;
+            row['_workspace_entity_type'] ??= 'match';
+            row['_workspace_entity_id'] ??= '${row['match_id'] ?? row['id'] ?? ''}';
+          }
           _sortBrowserRows(rows);
           return rows;
         } catch (_) {
@@ -674,23 +683,40 @@ extension WorkspacePlayerDataBrowserBridge on WorkspacePlayerDataBridge {
       }
     }
 
-    final uri = Uri.parse('$apiBase/get_team_matches.php').replace(
-      queryParameters: <String, String>{
-        'team_id': '$effectiveTeamId',
-        if (playerId > 0) 'player_id': '$playerId',
-      },
-    );
-    final response = await http.get(uri).timeout(const Duration(seconds: 20));
-    final data = _browserDecodeMap(response.body);
-    final raw = data['matches'] ?? data['items'] ?? data['rows'] ?? data['data'] ?? const [];
-    if (raw is! List) return <Map<String, dynamic>>[];
-    final rows = raw
-        .whereType<Map>()
-        .map((e) => Map<String, dynamic>.from(e))
-        .where((e) => _browserMatchBelongsToPlayer(e, playerId))
-        .toList();
-    _sortBrowserRows(rows);
-    return rows;
+    // Командная история — надёжный fallback. Если сервер умеет фильтровать по
+    // игроку, передаём player_id, но не считаем отсутствие player_id в строке
+    // причиной скрывать реальный матч команды.
+    try {
+      final uri = Uri.parse('$apiBase/get_team_matches.php').replace(
+        queryParameters: <String, String>{
+          'team_id': '$effectiveTeamId',
+          if (playerId > 0) 'player_id': '$playerId',
+        },
+      );
+      final response = await http.get(uri).timeout(const Duration(seconds: 20));
+      final teamRows = _browserExtractRows(
+        response.body,
+        const <String>['matches', 'items', 'rows', 'data', 'result', 'records'],
+      );
+      if (teamRows.isEmpty) return <Map<String, dynamic>>[];
+
+      final filtered = playerIds.isEmpty
+          ? <Map<String, dynamic>>[]
+          : teamRows
+              .where((row) => _browserMatchBelongsToAnyPlayer(row, playerIds))
+              .map((row) => Map<String, dynamic>.from(row))
+              .toList();
+      final rows = filtered.isNotEmpty ? filtered : teamRows;
+      for (final row in rows) {
+        row['team_id'] ??= effectiveTeamId;
+        row['_workspace_entity_type'] ??= 'match';
+        row['_workspace_entity_id'] ??= '${row['match_id'] ?? row['id'] ?? ''}';
+      }
+      _sortBrowserRows(rows);
+      return rows;
+    } catch (_) {
+      return <Map<String, dynamic>>[];
+    }
   }
 
   Future<List<Map<String, dynamic>>> loadPlayerActivity({
@@ -705,7 +731,7 @@ extension WorkspacePlayerDataBrowserBridge on WorkspacePlayerDataBridge {
     final from = now.subtract(Duration(days: days));
     final to = now.add(const Duration(days: 1));
 
-    // Основной источник совпадает с актуальным профилем игрока.
+    // 1. Персональная история тренировок.
     try {
       final historyUri = Uri.parse('$apiBase/get_player_training_history.php').replace(
         queryParameters: <String, String>{
@@ -716,47 +742,87 @@ extension WorkspacePlayerDataBrowserBridge on WorkspacePlayerDataBridge {
         },
       );
       final response = await http.get(historyUri).timeout(const Duration(seconds: 20));
-      final data = _browserDecodeMap(response.body);
-      final raw = data['items'] ?? data['events'] ?? data['data'] ?? data['rows'] ?? const [];
+      final rows = _browserExtractRows(
+        response.body,
+        const <String>['items', 'events', 'trainings', 'data', 'rows', 'result', 'records'],
+      );
+      if (rows.isNotEmpty) {
+        for (final row in rows) {
+          row['team_id'] ??= effectiveTeamId;
+          row['_workspace_entity_type'] ??= 'training';
+          row['_workspace_entity_id'] ??= '${row['event_id'] ?? row['training_id'] ?? row['id'] ?? ''}';
+        }
+        _sortBrowserRows(rows);
+        return rows;
+      }
+    } catch (_) {}
+
+    // 2. Журнал посещаемости игрока.
+    try {
+      final uri = Uri.parse('$apiBase/get_player_attendance_log.php').replace(
+        queryParameters: <String, String>{
+          'team_id': '$effectiveTeamId',
+          'player_id': '$playerId',
+          'from': _browserYmd(from),
+          'to': _browserYmd(to),
+        },
+      );
+      final response = await http.get(uri).timeout(const Duration(seconds: 20));
+      final decoded = _browserDecodeAny(response.body);
+      dynamic raw = decoded;
+      if (decoded is Map) {
+        final map = Map<String, dynamic>.from(decoded);
+        raw = map['items'] ?? map['attendance'] ?? map['events'] ?? map['data'] ?? map['rows'] ?? const [];
+      }
+      final rows = <Map<String, dynamic>>[];
       if (raw is List) {
-        final rows = raw.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
-        if (rows.isNotEmpty) {
-          _sortBrowserRows(rows);
-          return rows;
+        rows.addAll(raw.whereType<Map>().map((e) => Map<String, dynamic>.from(e)));
+      } else if (raw is Map) {
+        for (final entry in raw.entries) {
+          final value = entry.value is Map
+              ? Map<String, dynamic>.from(entry.value as Map)
+              : <String, dynamic>{};
+          rows.add(<String, dynamic>{'event_id': value['event_id'] ?? entry.key, ...value});
         }
       }
-    } catch (_) {
-      // Ниже — резерв через журнал посещаемости/событий игрока.
-    }
-
-    final uri = Uri.parse('$apiBase/get_player_attendance_log.php').replace(
-      queryParameters: <String, String>{
-        'team_id': '$effectiveTeamId',
-        'player_id': '$playerId',
-        'from': _browserYmd(from),
-        'to': _browserYmd(to),
-      },
-    );
-    final response = await http.get(uri).timeout(const Duration(seconds: 20));
-    final decoded = _browserDecodeAny(response.body);
-    dynamic raw = decoded;
-    if (decoded is Map) {
-      final map = Map<String, dynamic>.from(decoded);
-      raw = map['items'] ?? map['attendance'] ?? map['data'] ?? map['rows'] ?? const [];
-    }
-    final rows = <Map<String, dynamic>>[];
-    if (raw is List) {
-      rows.addAll(raw.whereType<Map>().map((e) => Map<String, dynamic>.from(e)));
-    } else if (raw is Map) {
-      for (final entry in raw.entries) {
-        final value = entry.value is Map
-            ? Map<String, dynamic>.from(entry.value as Map)
-            : <String, dynamic>{};
-        rows.add(<String, dynamic>{'event_id': value['event_id'] ?? entry.key, ...value});
+      if (rows.isNotEmpty) {
+        for (final row in rows) {
+          row['team_id'] ??= effectiveTeamId;
+          row['_workspace_entity_type'] ??= 'training';
+          row['_workspace_entity_id'] ??= '${row['event_id'] ?? row['training_id'] ?? row['id'] ?? ''}';
+        }
+        _sortBrowserRows(rows);
+        return rows;
       }
+    } catch (_) {}
+
+    // 3. Командный календарь/тренировки. Это даёт игроку реальный список
+    // активности даже на сервере, где персональные history endpoints ещё не
+    // развёрнуты или возвращают пустой результат.
+    try {
+      final uri = Uri.parse('$apiBase/get_team_events.php').replace(
+        queryParameters: <String, String>{'team_id': '$effectiveTeamId'},
+      );
+      final response = await http.get(uri).timeout(const Duration(seconds: 20));
+      final rows = _browserExtractRows(
+        response.body,
+        const <String>['events', 'items', 'trainings', 'rows', 'data', 'result', 'records'],
+      );
+      final inRange = rows.where((row) {
+        final date = _browserRowDate(row);
+        if (date.year <= 1970) return true;
+        return !date.isBefore(from) && !date.isAfter(to);
+      }).map((row) => Map<String, dynamic>.from(row)).toList();
+      for (final row in inRange) {
+        row['team_id'] ??= effectiveTeamId;
+        row['_workspace_entity_type'] ??= 'training';
+        row['_workspace_entity_id'] ??= '${row['event_id'] ?? row['training_id'] ?? row['id'] ?? ''}';
+      }
+      _sortBrowserRows(inRange);
+      return inRange;
+    } catch (_) {
+      return <Map<String, dynamic>>[];
     }
-    _sortBrowserRows(rows);
-    return rows;
   }
 
   Future<List<Map<String, dynamic>>> loadTestingSessions({
@@ -890,17 +956,21 @@ extension WorkspacePlayerDataBrowserBridge on WorkspacePlayerDataBridge {
     }
   }
 
-  bool _browserMatchBelongsToPlayer(Map<String, dynamic> match, int playerId) {
-    if (playerId <= 0) return true;
+  bool _browserMatchBelongsToAnyPlayer(
+    Map<String, dynamic> match,
+    Set<int> playerIds,
+  ) {
+    if (playerIds.isEmpty) return true;
 
     final directIds = <int>{};
     for (final key in const <String>[
       'player_id', 'footballer_id', 'athlete_id', 'user_id', 'playerId',
+      'player_user_id', 'member_id',
     ]) {
       final id = int.tryParse('${match[key] ?? ''}'.trim()) ?? 0;
       if (id > 0) directIds.add(id);
     }
-    if (directIds.isNotEmpty) return directIds.contains(playerId);
+    if (directIds.isNotEmpty) return directIds.any(playerIds.contains);
 
     var hasExplicitRoster = false;
     for (final raw in <dynamic>[
@@ -908,21 +978,39 @@ extension WorkspacePlayerDataBrowserBridge on WorkspacePlayerDataBridge {
       match['participants'],
       match['lineup'],
       match['squad'],
+      match['roster'],
       match['player_ids'],
       match['participant_ids'],
+      match['lineup_player_ids'],
     ]) {
       if (raw is List) {
         hasExplicitRoster = true;
         for (final item in raw) {
           if (item is Map) {
             final id = int.tryParse(
-                  '${item['player_id'] ?? item['id'] ?? item['user_id'] ?? item['athlete_id'] ?? ''}'
+                  '${item['player_id'] ?? item['footballer_id'] ?? item['athlete_id'] ?? item['user_id'] ?? item['id'] ?? ''}'
                       .trim(),
                 ) ??
                 0;
-            if (id == playerId) return true;
-          } else if ((int.tryParse('$item') ?? 0) == playerId) {
-            return true;
+            if (playerIds.contains(id)) return true;
+          } else {
+            final id = int.tryParse('$item') ?? 0;
+            if (playerIds.contains(id)) return true;
+          }
+        }
+      } else if (raw is Map) {
+        hasExplicitRoster = true;
+        for (final value in raw.values) {
+          if (value is Map) {
+            final id = int.tryParse(
+                  '${value['player_id'] ?? value['footballer_id'] ?? value['athlete_id'] ?? value['user_id'] ?? value['id'] ?? ''}'
+                      .trim(),
+                ) ??
+                0;
+            if (playerIds.contains(id)) return true;
+          } else {
+            final id = int.tryParse('$value') ?? 0;
+            if (playerIds.contains(id)) return true;
           }
         }
       } else if (raw is String && raw.trim().isNotEmpty) {
@@ -930,10 +1018,40 @@ extension WorkspacePlayerDataBrowserBridge on WorkspacePlayerDataBridge {
         final ids = RegExp(r'\d+')
             .allMatches(raw)
             .map((m) => int.tryParse(m.group(0) ?? '') ?? 0);
-        if (ids.contains(playerId)) return true;
+        if (ids.any(playerIds.contains)) return true;
       }
     }
     return !hasExplicitRoster;
+  }
+
+  List<Map<String, dynamic>> _browserExtractRows(
+    String body,
+    List<String> preferredKeys,
+  ) {
+    final decoded = _browserDecodeAny(body);
+    final keys = <String>[
+      ...preferredKeys,
+      'items', 'data', 'rows', 'result', 'records', 'matches', 'events',
+      'trainings', 'sessions', 'attendance',
+    ];
+
+    List<Map<String, dynamic>> extract(dynamic value, int depth) {
+      if (depth > 3 || value == null) return <Map<String, dynamic>>[];
+      if (value is List) {
+        return value.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+      }
+      if (value is Map) {
+        final map = Map<String, dynamic>.from(value);
+        for (final key in keys) {
+          if (!map.containsKey(key)) continue;
+          final rows = extract(map[key], depth + 1);
+          if (rows.isNotEmpty) return rows;
+        }
+      }
+      return <Map<String, dynamic>>[];
+    }
+
+    return extract(decoded, 0);
   }
 
   dynamic _browserDecodeAny(String body) {
@@ -965,7 +1083,7 @@ extension WorkspacePlayerDataBrowserBridge on WorkspacePlayerDataBridge {
 
   DateTime _browserRowDate(Map<String, dynamic> row) {
     for (final key in const <String>[
-      'test_date', 'match_date', 'event_date', 'start_at', 'date',
+      'test_date', 'match_date', 'event_date', 'scheduled_at', 'start_at', 'start_time', 'datetime', 'date',
       'created_at', 'updated_at', 'uploaded_at', 'record_date',
     ]) {
       final raw = '${row[key] ?? ''}'.trim();

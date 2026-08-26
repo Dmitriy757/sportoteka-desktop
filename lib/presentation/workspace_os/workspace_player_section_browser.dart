@@ -12,6 +12,7 @@ import 'package:sportoteka/presentation/workspace_os/workspace_player_data_bridg
 import 'package:sportoteka/presentation/workspace_os/workspace_player_section_document.dart';
 import 'package:sportoteka/presentation/workspace_os/workspace_finder_models.dart';
 import 'package:sportoteka/presentation/workspace_os/workspace_server_storage.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class WorkspacePlayerSectionBrowser extends StatefulWidget {
   const WorkspacePlayerSectionBrowser({
@@ -88,13 +89,14 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
     }
   }
 
-  bool get _canUpload =>
-      widget.section == WorkspacePlayerSection.health ||
-      widget.section == WorkspacePlayerSection.documents;
+  bool get _canUpload => widget.clubId > 0 && _bridge.resolvePlayerId(widget.player) > 0;
 
   bool get _canCreateDiary => widget.section == WorkspacePlayerSection.diary;
 
+  bool get _canCreateDocument => widget.clubId > 0 && _bridge.resolvePlayerId(widget.player) > 0;
+
   bool get _documentsOnly => widget.section == WorkspacePlayerSection.documents;
+  bool get _medicalSection => widget.section == WorkspacePlayerSection.health;
 
   String get _serverParentKey {
     final playerId = _bridge.resolvePlayerId(widget.player);
@@ -183,54 +185,68 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
       }
 
       rows = rows.map((row) => Map<String, dynamic>.from(row)).toList();
-      var legacyRows = <Map<String, dynamic>>[];
-      if (_canCreateDiary) {
-        legacyRows = await _readLocalRecords();
-        if (legacyRows.isNotEmpty) {
-          legacyRows = await _migrateLegacyDiaryRecords(rows, legacyRows);
-          if (legacyRows.isEmpty) {
-            rows = await _bridge.loadDiary(
-              player: widget.player,
-              teamId: widget.teamId,
-              clubId: widget.clubId,
-            );
-          }
+      var localRows = _canCreateDocument ? await _readLocalRecords() : <Map<String, dynamic>>[];
+
+      // Old Diary drafts are still migrated into the canonical diary endpoint,
+      // but documents explicitly created in Sportoteka OS remain documents.
+      if (_canCreateDiary && localRows.isNotEmpty) {
+        final documents = localRows.where((row) => row['_workspace_document'] == true).toList();
+        final legacyDiary = localRows.where((row) => row['_workspace_document'] != true).toList();
+        final pendingDiary = await _migrateLegacyDiaryRecords(rows, legacyDiary);
+        localRows = <Map<String, dynamic>>[...documents, ...pendingDiary];
+        if (legacyDiary.isNotEmpty && pendingDiary.isEmpty) {
+          rows = await _bridge.loadDiary(
+            player: widget.player,
+            teamId: widget.teamId,
+            clubId: widget.clubId,
+          );
         }
       }
 
-      // Only an old Diary draft that could not yet be migrated may be shown
-      // beside canonical data. Real Matches/Activity/Testing/etc never mix
-      // with Workspace-only copies anymore.
+      var attachments = <Map<String, dynamic>>[];
+      if (_canUpload) {
+        try {
+          attachments = (await _serverStorage.listAttachments(
+            entityType: 'player',
+            entityId: _bridge.resolvePlayerId(widget.player),
+            sectionKey: widget.section.name,
+          )).map((row) => <String, dynamic>{...row, '_workspace_attachment': true}).toList();
+          _serverAvailable = true;
+        } catch (_) {}
+      }
+
       final visibleRows = <Map<String, dynamic>>[
         ...rows.map((row) => Map<String, dynamic>.from(row)),
-        ...legacyRows,
+        ...attachments,
+        ...localRows,
       ]..sort((a, b) => _dateOf(b).compareTo(_dateOf(a)));
 
       if (!mounted) return;
       setState(() {
-        _localRecords = legacyRows;
+        _localRecords = localRows;
         _records = visibleRows;
         _selected = visibleRows.isNotEmpty ? visibleRows.first : null;
         _loading = false;
       });
     } catch (e) {
       if (!mounted) return;
-      final legacyRows = _canCreateDiary ? await _readLocalRecords() : <Map<String, dynamic>>[];
+      final localRows = _canCreateDocument ? await _readLocalRecords() : <Map<String, dynamic>>[];
       if (!mounted) return;
       setState(() {
         _error = '$e';
-        _localRecords = legacyRows;
-        _records = legacyRows;
-        _selected = legacyRows.isNotEmpty ? legacyRows.first : null;
+        _localRecords = localRows;
+        _records = localRows;
+        _selected = localRows.isNotEmpty ? localRows.first : null;
         _loading = false;
       });
     }
   }
 
   bool _isLocalRecord(Map<String, dynamic> row) => row['_workspace_local'] == true;
+  bool _isAttachment(Map<String, dynamic> row) => row['_workspace_attachment'] == true;
 
   Future<List<Map<String, dynamic>>> _readLocalRecords() async {
-    if (!_canCreateDiary) return <Map<String, dynamic>>[];
+    if (!_canCreateDocument) return <Map<String, dynamic>>[];
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_localStorageKey);
     var local = <Map<String, dynamic>>[];
@@ -252,37 +268,69 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
       final serverNodes = snapshot.nodes
           .where((node) => node.parentId == _serverParentKey && node.kind == WorkspaceFinderNodeKind.note)
           .toList();
-      final serverIds = serverNodes.map((e) => e.id).toSet();
-      final unsynced = local.where((row) => !serverIds.contains('${row['id'] ?? ''}')).toList();
-      for (final row in unsynced) {
+      final serverById = <String, WorkspaceFinderNode>{for (final node in serverNodes) node.id: node};
+      var serverChanged = false;
+      for (final row in local) {
         final id = '${row['id'] ?? ''}';
         if (id.isEmpty) continue;
-        final node = WorkspaceFinderNode(
-          id: id,
-          title: '${row['title'] ?? 'Рабочая заметка'}',
-          subtitle: '${row['subtitle'] ?? 'Редактируемая заметка'}',
-          kind: WorkspaceFinderNodeKind.note,
-          parentId: _serverParentKey,
-          createdAt: DateTime.tryParse('${row['created_at'] ?? ''}'),
-          updatedAt: DateTime.tryParse('${row['updated_at'] ?? ''}'),
-        );
-        await _serverStorage.createNode(node);
-        await _serverStorage.saveDocument(
-          clientUid: id,
-          title: node.title,
-          body: '${row['workspace_note'] ?? ''}',
-        );
+        final localTitle = '${row['title'] ?? 'Рабочая заметка'}';
+        final localSubtitle = '${row['subtitle'] ?? 'Редактируемая заметка'}';
+        final localBody = '${row['workspace_note'] ?? ''}';
+        final localUpdated = DateTime.tryParse('${row['updated_at'] ?? ''}');
+        final existing = serverById[id];
+        if (existing == null) {
+          final node = WorkspaceFinderNode(
+            id: id,
+            title: localTitle,
+            subtitle: localSubtitle,
+            kind: WorkspaceFinderNodeKind.note,
+            payload: <String, dynamic>{'workspace_document': row['_workspace_document'] == true},
+            parentId: _serverParentKey,
+            createdAt: DateTime.tryParse('${row['created_at'] ?? ''}'),
+            updatedAt: localUpdated,
+          );
+          await _serverStorage.createNode(node);
+          await _serverStorage.saveDocument(clientUid: id, title: node.title, body: localBody);
+          serverChanged = true;
+          continue;
+        }
+
+        final serverUpdated = existing.updatedAt;
+        final serverBody = snapshot.noteBodies[id] ?? '';
+        final localIsNotOlder = localUpdated == null ||
+            serverUpdated == null ||
+            !localUpdated.isBefore(serverUpdated.subtract(const Duration(seconds: 5)));
+        final differs = existing.title != localTitle ||
+            existing.subtitle != localSubtitle ||
+            serverBody != localBody ||
+            existing.payload?['workspace_document'] != (row['_workspace_document'] == true);
+        if (differs && localIsNotOlder) {
+          final node = WorkspaceFinderNode(
+            id: id,
+            title: localTitle,
+            subtitle: localSubtitle,
+            kind: WorkspaceFinderNodeKind.note,
+            payload: <String, dynamic>{'workspace_document': row['_workspace_document'] == true},
+            parentId: _serverParentKey,
+            createdAt: existing.createdAt,
+            updatedAt: localUpdated ?? DateTime.now(),
+          );
+          await _serverStorage.updateNode(node);
+          await _serverStorage.saveDocument(clientUid: id, title: node.title, body: localBody);
+          serverChanged = true;
+        }
       }
-      if (unsynced.isNotEmpty) snapshot = await _serverStorage.load();
+      if (serverChanged) snapshot = await _serverStorage.load();
       final rows = <Map<String, dynamic>>[];
       for (final node in snapshot.nodes.where((n) => n.parentId == _serverParentKey && n.kind == WorkspaceFinderNodeKind.note)) {
         rows.add(<String, dynamic>{
           'id': node.id,
           '_workspace_local': true,
           '_workspace_server': true,
+          '_workspace_document': node.payload?['workspace_document'] == true,
           'title': node.title,
           'subtitle': node.subtitle,
-          'type': 'Рабочая заметка',
+          'type': node.payload?['workspace_document'] == true ? 'Документ Sportoteka OS' : 'Рабочая заметка',
           'workspace_note': snapshot.noteBodies[node.id] ?? '',
           'created_at': node.createdAt?.toIso8601String() ?? '',
           'updated_at': node.updatedAt?.toIso8601String() ?? '',
@@ -355,7 +403,25 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
         } catch (_) {}
       }
       final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(_localStorageKey);
+      final legacyIds = legacyRows.map((row) => '${row['id'] ?? ''}').where((id) => id.isNotEmpty).toSet();
+      final raw = prefs.getString(_localStorageKey);
+      if (raw != null && raw.trim().isNotEmpty) {
+        try {
+          final decoded = jsonDecode(raw);
+          if (decoded is List) {
+            final remaining = decoded
+                .whereType<Map>()
+                .map((row) => Map<String, dynamic>.from(row))
+                .where((row) => !legacyIds.contains('${row['id'] ?? ''}'))
+                .toList();
+            if (remaining.isEmpty) {
+              await prefs.remove(_localStorageKey);
+            } else {
+              await prefs.setString(_localStorageKey, jsonEncode(remaining));
+            }
+          }
+        } catch (_) {}
+      }
       return <Map<String, dynamic>>[];
     } catch (_) {
       // Server Phase 25 may not be deployed yet. Keep old drafts visible and
@@ -398,11 +464,15 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
   String _titleOf(Map<String, dynamic> row) {
     if (_isLocalRecord(row)) {
       final value = '${row['title'] ?? ''}'.trim();
-      return value.isEmpty ? 'Рабочая заметка' : value;
+      return value.isEmpty ? (row['_workspace_document'] == true ? 'Новый документ' : 'Рабочая заметка') : value;
+    }
+    if (_isAttachment(row)) {
+      final value = '${row['title'] ?? row['original_name'] ?? ''}'.trim();
+      return value.isEmpty ? 'Файл' : value;
     }
     if (widget.section == WorkspacePlayerSection.matches) {
-      final opponent = '${row['opponent'] ?? row['opponent_name'] ?? ''}'.trim();
-      final competition = '${row['competition_name'] ?? row['event_type'] ?? ''}'.trim();
+      final opponent = '${row['opponent'] ?? row['opponent_name'] ?? row['opponent_team'] ?? row['opponent_team_name'] ?? row['rival'] ?? row['rival_name'] ?? ''}'.trim();
+      final competition = '${row['competition_name'] ?? row['tournament_name'] ?? row['competition'] ?? row['event_type'] ?? row['league_name'] ?? ''}'.trim();
       return opponent.isNotEmpty ? 'Матч — $opponent' : (competition.isNotEmpty ? competition : 'Матч');
     }
     if (widget.section == WorkspacePlayerSection.testing) {
@@ -411,7 +481,7 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
       return 'Тестирование${category.isEmpty ? '' : ' · ${_categoryRu(category)}'}${stage.isEmpty ? '' : ' · $stage'}';
     }
     if (widget.section == WorkspacePlayerSection.activity) {
-      return '${row['title'] ?? row['event_title'] ?? row['name'] ?? row['training_title'] ?? 'Тренировка'}'.trim();
+      return '${row['title'] ?? row['event_title'] ?? row['event_name'] ?? row['training_title'] ?? row['training_type'] ?? row['name'] ?? row['event_type'] ?? 'Тренировка'}'.trim();
     }
     if (widget.section == WorkspacePlayerSection.diary || widget.section == WorkspacePlayerSection.readiness) {
       return '${row['title'] ?? row['training_title'] ?? row['event_title'] ?? 'Запись дневника'}'.trim();
@@ -422,12 +492,18 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
   String _subtitleOf(Map<String, dynamic> row) {
     if (_isLocalRecord(row)) {
       final value = '${row['subtitle'] ?? ''}'.trim();
-      return value.isEmpty ? 'Редактируемая заметка' : value;
+      return value.isEmpty ? (row['_workspace_document'] == true ? 'Документ Sportoteka OS' : 'Редактируемая заметка') : value;
+    }
+    if (_isAttachment(row)) {
+      final mime = '${row['mime_type'] ?? ''}'.trim();
+      final size = int.tryParse('${row['file_size'] ?? '0'}') ?? 0;
+      final sizeLabel = size <= 0 ? '' : (size < 1024 * 1024 ? '${(size / 1024).toStringAsFixed(0)} КБ' : '${(size / 1024 / 1024).toStringAsFixed(1)} МБ');
+      return <String>[mime, sizeLabel].where((e) => e.isNotEmpty).join(' · ');
     }
     if (widget.section == WorkspacePlayerSection.matches) {
-      final our = '${row['our_score'] ?? ''}'.trim();
-      final opp = '${row['opponent_score'] ?? ''}'.trim();
-      final competition = '${row['competition_name'] ?? row['event_type'] ?? ''}'.trim();
+      final our = '${row['our_score'] ?? row['team_score'] ?? row['score_for'] ?? row['home_score'] ?? ''}'.trim();
+      final opp = '${row['opponent_score'] ?? row['score_against'] ?? row['away_score'] ?? ''}'.trim();
+      final competition = '${row['competition_name'] ?? row['tournament_name'] ?? row['competition'] ?? row['event_type'] ?? row['league_name'] ?? ''}'.trim();
       final score = our.isNotEmpty && opp.isNotEmpty ? '$our:$opp' : '';
       return <String>[competition, score].where((e) => e.isNotEmpty).join(' · ');
     }
@@ -449,7 +525,7 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
 
   DateTime _dateOf(Map<String, dynamic> row) {
     for (final key in const <String>[
-      'test_date', 'match_date', 'event_date', 'start_at', 'date',
+      'test_date', 'match_date', 'event_date', 'scheduled_at', 'start_at', 'start_time', 'datetime', 'date',
       'record_date', 'created_at', 'updated_at', 'uploaded_at',
     ]) {
       final value = '${row[key] ?? ''}'.trim();
@@ -480,9 +556,126 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
     }
   }
 
+  Future<void> _createWorkspaceDocument() async {
+    if (!_canCreateDocument) return;
+    final now = DateTime.now();
+    final row = <String, dynamic>{
+      'id': 'workspace_${now.microsecondsSinceEpoch}',
+      '_workspace_local': true,
+      '_workspace_document': true,
+      'title': 'Новый документ',
+      'subtitle': 'Документ Sportoteka OS',
+      'type': 'Документ Sportoteka OS',
+      'workspace_note': '',
+      'created_at': now.toIso8601String(),
+      'updated_at': now.toIso8601String(),
+    };
+    setState(() {
+      _localRecords = <Map<String, dynamic>>[row, ..._localRecords];
+      _records = <Map<String, dynamic>>[row, ..._records];
+      _selected = row;
+    });
+    await _persistLocalRecords();
+    await _syncCreateRecord(row);
+    if (mounted) await _openLocalRecord(row);
+  }
+
+  Future<void> _saveDiaryWithFallback({
+    required String draftId,
+    required String title,
+    required String body,
+    required DateTime date,
+  }) async {
+    final cleanTitle = title.trim();
+    final cleanBody = body.trim();
+    final note = <String>[
+      if (cleanTitle.isNotEmpty && cleanTitle != 'Заметка тренера') cleanTitle,
+      if (cleanBody.isNotEmpty) cleanBody,
+    ].join('\n\n').trim();
+    if (note.isEmpty) return;
+
+    try {
+      await _bridge.saveDiaryNote(
+        player: widget.player,
+        clubId: widget.clubId,
+        teamId: widget.teamId,
+        note: note,
+        date: date,
+      );
+      await _removeDiaryFallback(draftId);
+    } catch (_) {
+      // Diary backend may be temporarily unavailable or not yet deployed.
+      // Keep the edit as a real Workspace document so autosave never loses it;
+      // _migrateLegacyDiaryRecords retries canonical sync on refresh.
+      await _upsertDiaryFallback(
+        id: draftId,
+        title: cleanTitle.isEmpty ? 'Заметка тренера' : cleanTitle,
+        body: cleanBody,
+        date: date,
+      );
+    }
+  }
+
+  Future<void> _upsertDiaryFallback({
+    required String id,
+    required String title,
+    required String body,
+    required DateTime date,
+  }) async {
+    final now = DateTime.now().toIso8601String();
+    final existing = _localRecords.indexWhere((row) => '${row['id'] ?? ''}' == id);
+    final row = <String, dynamic>{
+      'id': id,
+      '_workspace_local': true,
+      'title': title.trim().isEmpty ? 'Заметка тренера' : title.trim(),
+      'subtitle': _bodyPreview(body),
+      'type': 'Запись дневника',
+      'workspace_note': body,
+      'date': date.toIso8601String(),
+      'created_at': existing >= 0 ? '${_localRecords[existing]['created_at'] ?? now}' : now,
+      'updated_at': now,
+    };
+    setState(() {
+      if (existing >= 0) {
+        _localRecords[existing] = row;
+        final recordIndex = _records.indexWhere((item) => '${item['id'] ?? ''}' == id);
+        if (recordIndex >= 0) _records[recordIndex] = row;
+      } else {
+        _localRecords = <Map<String, dynamic>>[row, ..._localRecords];
+        _records = <Map<String, dynamic>>[row, ..._records];
+      }
+      _selected = row;
+    });
+    await _persistLocalRecords();
+    if (existing >= 0) {
+      await _syncUpdateRecord(row);
+    } else {
+      await _syncCreateRecord(row);
+    }
+  }
+
+  Future<void> _removeDiaryFallback(String id) async {
+    final hadLocal = _localRecords.any((row) => '${row['id'] ?? ''}' == id);
+    if (!hadLocal) return;
+    setState(() {
+      _localRecords.removeWhere((row) => '${row['id'] ?? ''}' == id);
+      _records.removeWhere((row) => '${row['id'] ?? ''}' == id);
+      if ('${_selected?['id'] ?? ''}' == id) _selected = _records.isEmpty ? null : _records.first;
+    });
+    await _persistLocalRecords();
+    if (_serverAvailable) {
+      try {
+        await _serverStorage.deleteNode(id);
+      } catch (_) {
+        _serverAvailable = false;
+      }
+    }
+  }
+
   Future<void> _createLocalRecord() async {
     if (!_canCreateDiary) return;
     final today = DateTime.now();
+    final draftId = 'workspace_diary_${today.microsecondsSinceEpoch}';
     await Navigator.of(context).push<void>(
       PageRouteBuilder<void>(
         transitionDuration: const Duration(milliseconds: 220),
@@ -496,22 +689,12 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
               contextLabel: 'Игрок · Дневник',
               contextName: _playerName,
               documentType: 'Запись дневника',
-              onSave: (title, body) async {
-                final cleanTitle = title.trim();
-                final cleanBody = body.trim();
-                final note = <String>[
-                  if (cleanTitle.isNotEmpty && cleanTitle != 'Заметка тренера') cleanTitle,
-                  if (cleanBody.isNotEmpty) cleanBody,
-                ].join('\n\n').trim();
-                if (note.isEmpty) return;
-                await _bridge.saveDiaryNote(
-                  player: widget.player,
-                  clubId: widget.clubId,
-                  teamId: widget.teamId,
-                  note: note,
-                  date: today,
-                );
-              },
+              onSave: (title, body) => _saveDiaryWithFallback(
+                draftId: draftId,
+                title: title,
+                body: body,
+                date: today,
+              ),
               onClose: () => Navigator.of(routeContext).maybePop(),
             ),
           ),
@@ -549,7 +732,7 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
               initialBody: initialBody,
               contextLabel: 'Игрок · $_sectionTitle',
               contextName: _playerName,
-              documentType: 'Рабочая заметка',
+              documentType: record['_workspace_document'] == true ? 'Документ Sportoteka OS' : 'Рабочая заметка',
               onSave: (title, body) => _updateLocalRecord(id, title, body),
               onClose: () => Navigator.of(routeContext).maybePop(),
             ),
@@ -611,6 +794,7 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
         title: '${row['title'] ?? 'Рабочая заметка'}',
         subtitle: '${row['subtitle'] ?? 'Редактируемая заметка'}',
         kind: WorkspaceFinderNodeKind.note,
+        payload: <String, dynamic>{'workspace_document': row['_workspace_document'] == true},
         parentId: _serverParentKey,
         createdAt: DateTime.tryParse('${row['created_at'] ?? ''}'),
         updatedAt: DateTime.tryParse('${row['updated_at'] ?? ''}'),
@@ -632,6 +816,7 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
         title: '${row['title'] ?? 'Рабочая заметка'}',
         subtitle: '${row['subtitle'] ?? ''}',
         kind: WorkspaceFinderNodeKind.note,
+        payload: <String, dynamic>{'workspace_document': row['_workspace_document'] == true},
         parentId: _serverParentKey,
         updatedAt: DateTime.now(),
       );
@@ -681,15 +866,15 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
   }
 
   Future<void> _deleteLocalRecord(Map<String, dynamic> record) async {
-    if (!_isLocalRecord(record)) return;
+    if (!_isLocalRecord(record) && !_isAttachment(record)) return;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        title: Text('Удалить заметку?', style: AppTypography.sectionTitle(color: _text)),
-        content: Text('«${_titleOf(record)}» будет удалена из этого раздела игрока.', style: AppTypography.secondary(color: _muted)),
+        title: Text(_isAttachment(record) ? 'Удалить файл?' : 'Удалить документ?', style: AppTypography.sectionTitle(color: _text)),
+        content: Text('«${_titleOf(record)}» будет удалён из этого раздела игрока.', style: AppTypography.secondary(color: _muted)),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
           TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text('Удалить', style: AppTypography.action(color: _danger))),
@@ -698,6 +883,19 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
     );
     if (confirmed != true || !mounted) return;
     final id = '${record['id'] ?? ''}';
+    if (_isAttachment(record)) {
+      final attachmentId = int.tryParse(id) ?? 0;
+      if (attachmentId <= 0) return;
+      try {
+        await _serverStorage.deleteAttachment(attachmentId);
+        if (mounted) await _load();
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Не удалось удалить файл: $e')));
+        }
+      }
+      return;
+    }
     setState(() {
       _localRecords.removeWhere((row) => '${row['id'] ?? ''}' == id);
       _records.removeWhere((row) => '${row['id'] ?? ''}' == id);
@@ -717,6 +915,15 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
     setState(() => _selected = record);
     if (_isLocalRecord(record)) {
       await _openLocalRecord(record);
+      return;
+    }
+    if (_isAttachment(record)) {
+      final raw = '${record['file_url'] ?? ''}'.trim();
+      if (raw.isEmpty) return;
+      final url = raw.startsWith('http://') || raw.startsWith('https://')
+          ? raw
+          : 'https://sportotekaapp.ru/${raw.replaceFirst(RegExp(r'^/+'), '')}';
+      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
       return;
     }
     var openRecord = Map<String, dynamic>.from(record);
@@ -793,8 +1000,8 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
           height: 38,
           child: Text('Свойства', style: AppTypography.menuTitle(color: _text)),
         ),
-        if (_isLocalRecord(record)) const PopupMenuDivider(),
-        if (_isLocalRecord(record))
+        if (_isLocalRecord(record) || _isAttachment(record)) const PopupMenuDivider(),
+        if (_isLocalRecord(record) || _isAttachment(record))
           PopupMenuItem(
             value: _ContextAction.delete,
             height: 38,
@@ -843,8 +1050,7 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
     final result = await FilePicker.pickFiles(
       allowMultiple: false,
       withData: kIsWeb,
-      type: FileType.custom,
-      allowedExtensions: const <String>['pdf', 'doc', 'docx', 'xls', 'xlsx', 'jpg', 'jpeg', 'png'],
+      type: FileType.any,
     );
     if (result == null || result.files.isEmpty) return;
     await _upload(result.files.first);
@@ -855,14 +1061,29 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
     if (meta == null) return;
     setState(() => _uploading = true);
     try {
-      await _bridge.uploadMedicalAttachment(
-        player: widget.player,
-        file: file,
-        title: meta.$1,
-        type: _documentsOnly ? 'Документ' : meta.$2,
-        comment: meta.$3,
-        date: meta.$4,
-      );
+      if (_medicalSection || _documentsOnly) {
+        await _bridge.uploadMedicalAttachment(
+          player: widget.player,
+          file: file,
+          title: meta.$1,
+          type: _documentsOnly ? 'Документ' : meta.$2,
+          comment: meta.$3,
+          date: meta.$4,
+        );
+      } else {
+        final path = file.path?.trim() ?? '';
+        if (path.isEmpty) {
+          throw StateError('Для загрузки в этот раздел нужен локальный путь к файлу');
+        }
+        await _serverStorage.uploadAttachment(
+          filePath: path,
+          entityType: 'player',
+          entityId: _bridge.resolvePlayerId(widget.player),
+          sectionKey: widget.section.name,
+          title: meta.$1,
+        );
+        _serverAvailable = true;
+      }
       await _load();
       await widget.onRefresh?.call();
     } catch (e) {
@@ -877,7 +1098,7 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
   Future<(String, String, String, DateTime)?> _askUploadMeta(String fileName) async {
     final title = TextEditingController(text: fileName);
     final comment = TextEditingController();
-    var type = _documentsOnly ? 'Документ' : 'Справка';
+    var type = _documentsOnly ? 'Документ' : (_medicalSection ? 'Справка' : 'Файл');
     var date = DateTime.now();
     final result = await showDialog<(String, String, String, DateTime)>(
       context: context,
@@ -886,14 +1107,14 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
           backgroundColor: Colors.white,
           surfaceTintColor: Colors.white,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-          title: Text(_documentsOnly ? 'Новый документ' : 'Новый медицинский файл', style: AppTypography.sectionTitle(color: _text)),
+          title: Text(_documentsOnly ? 'Новый файл документа' : (_medicalSection ? 'Новый медицинский файл' : 'Добавить файл'), style: AppTypography.sectionTitle(color: _text)),
           content: SizedBox(
             width: 460,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 TextField(controller: title, style: AppTypography.formText(color: _text), decoration: const InputDecoration(labelText: 'Название')),
-                if (!_documentsOnly) ...[
+                if (_medicalSection) ...[
                   const SizedBox(height: 10),
                   DropdownButtonFormField<String>(
                     value: type,
@@ -904,19 +1125,21 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
                     onChanged: (v) => setLocal(() => type = v ?? type),
                   ),
                 ],
-                const SizedBox(height: 10),
-                TextField(controller: comment, maxLines: 3, style: AppTypography.formText(color: _text), decoration: const InputDecoration(labelText: 'Комментарий')),
-                const SizedBox(height: 10),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: TextButton(
-                    onPressed: () async {
-                      final picked = await showDatePicker(context: ctx, firstDate: DateTime(2000), lastDate: DateTime(2100), initialDate: date);
-                      if (picked != null) setLocal(() => date = picked);
-                    },
-                    child: Text('Дата: ${date.day.toString().padLeft(2, '0')}.${date.month.toString().padLeft(2, '0')}.${date.year}'),
+                if (_medicalSection || _documentsOnly) ...[
+                  const SizedBox(height: 10),
+                  TextField(controller: comment, maxLines: 3, style: AppTypography.formText(color: _text), decoration: const InputDecoration(labelText: 'Комментарий')),
+                  const SizedBox(height: 10),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton(
+                      onPressed: () async {
+                        final picked = await showDatePicker(context: ctx, firstDate: DateTime(2000), lastDate: DateTime(2100), initialDate: date);
+                        if (picked != null) setLocal(() => date = picked);
+                      },
+                      child: Text('Дата: ${date.day.toString().padLeft(2, '0')}.${date.month.toString().padLeft(2, '0')}.${date.year}'),
+                    ),
                   ),
-                ),
+                ],
               ],
             ),
           ),
@@ -958,10 +1181,10 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
             mobile: mobile,
             uploading: _uploading,
             canUpload: _canUpload,
-            canCreate: _canCreateDiary,
+            canCreate: _canCreateDocument,
             onBack: () => Navigator.of(context).maybePop(),
             onRefresh: _load,
-            onCreate: _createLocalRecord,
+            onCreate: _createWorkspaceDocument,
             onUpload: _pickAndUpload,
           ),
           const Divider(height: 1, color: _line),
@@ -983,7 +1206,7 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
             child: _loading
                 ? const Center(child: CircularProgressIndicator(color: _green))
                 : list.isEmpty
-                    ? _EmptyState(canUpload: _canUpload, canCreate: _canCreateDiary, onCreate: _createLocalRecord, onUpload: _pickAndUpload)
+                    ? _EmptyState(canUpload: _canUpload, canCreate: _canCreateDocument, onCreate: _createWorkspaceDocument, onUpload: _pickAndUpload)
                     : ListView.separated(
                         padding: EdgeInsets.fromLTRB(mobile ? 8 : 12, 6, mobile ? 8 : 12, 18),
                         itemCount: list.length,
@@ -1005,7 +1228,7 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
                             },
                             onOpen: () => _openRecord(r),
                             onCopy: _isLocalRecord(r) ? () => _duplicateRecord(r) : null,
-                            onDelete: _isLocalRecord(r) ? () => _deleteLocalRecord(r) : null,
+                            onDelete: (_isLocalRecord(r) || _isAttachment(r)) ? () => _deleteLocalRecord(r) : null,
                             onProperties: () => _showProperties(r),
                             onSecondary: (p) => _showContext(r, p),
                           );
@@ -1149,7 +1372,7 @@ class _BrowserHeader extends StatelessWidget {
           if (canCreate) ...[
             if (mobile)
               IconButton(
-                tooltip: 'Новая заметка',
+                tooltip: 'Создать документ',
                 onPressed: () { onCreate(); },
                 icon: const Icon(Icons.add_rounded, size: 21, color: _WorkspacePlayerSectionBrowserState._green),
               )
@@ -1162,7 +1385,7 @@ class _BrowserHeader extends StatelessWidget {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
                 ),
                 icon: const Icon(Icons.add_rounded, size: 17),
-                label: Text('Новая заметка', style: AppTypography.actionStrong(color: Colors.white)),
+                label: Text('Создать документ', style: AppTypography.actionStrong(color: Colors.white)),
               ),
             const SizedBox(width: 4),
           ],
@@ -1404,9 +1627,9 @@ class _EmptyState extends StatelessWidget {
             const SizedBox(height: 5),
             Text(
               canUpload
-                  ? 'Перетащите сюда файл или добавьте его кнопкой сверху.'
+                  ? 'Создайте документ Sportoteka OS или перетащите сюда файл.'
                   : canCreate
-                      ? 'Создайте первую запись дневника.'
+                      ? 'Создайте первый документ Sportoteka OS.'
                       : 'Когда в основном разделе появятся данные, они будут показаны здесь.',
               textAlign: TextAlign.center,
               style: AppTypography.secondary(color: _WorkspacePlayerSectionBrowserState._muted),
@@ -1416,7 +1639,7 @@ class _EmptyState extends StatelessWidget {
               FilledButton(
                 onPressed: onCreate,
                 style: FilledButton.styleFrom(backgroundColor: _WorkspacePlayerSectionBrowserState._green, elevation: 0),
-                child: Text('Новая заметка', style: AppTypography.actionStrong(color: Colors.white)),
+                child: Text('Создать документ', style: AppTypography.actionStrong(color: Colors.white)),
               ),
             ],
             if (canUpload) ...[

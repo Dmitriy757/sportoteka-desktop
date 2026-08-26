@@ -5344,9 +5344,12 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
           clubName: clubName,
           teamId: selectedTeamId,
           teamName: selectedTeamName,
-          onUnreadChanged: (value) {
+          onUnreadChanged: (_) {
             if (!mounted) return;
-            setState(() => _chatUnreadCount = value);
+            // Защита от любого устаревшего локального значения дочерней панели:
+            // итоговый badge всегда пересчитываем из get_user_chats /
+            // get_groups_feed по реальным unread_count.
+            unawaited(_refreshChatUnreadCount());
           },
           onAiNavigate: _handleAiNavigate,
           onAiOpenPdf: _handleAiOpenDocument,

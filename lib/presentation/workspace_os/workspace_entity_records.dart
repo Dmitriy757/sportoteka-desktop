@@ -40,6 +40,7 @@ class WorkspaceEntityRecordBrowser extends StatefulWidget {
     this.attachmentEntityId = 0,
     this.attachmentSectionKey = 'documents',
     this.externalUploadPaths,
+    this.allowCreateDocuments = false,
     this.showBackButton = true,
   });
 
@@ -61,6 +62,7 @@ class WorkspaceEntityRecordBrowser extends StatefulWidget {
   final int attachmentEntityId;
   final String attachmentSectionKey;
   final Future<void> Function(List<String> paths)? externalUploadPaths;
+  final bool allowCreateDocuments;
   final bool showBackButton;
 
   @override
@@ -94,6 +96,19 @@ class _WorkspaceEntityRecordBrowserState extends State<WorkspaceEntityRecordBrow
   bool get _canUploadAttachments =>
       widget.externalUploadPaths != null || _usesWorkspaceAttachments;
 
+  bool get _canCreateDocuments => widget.allowCreateDocuments;
+
+  String get _effectiveLocalStorageKey {
+    final explicit = widget.localStorageKey.trim();
+    if (explicit.isNotEmpty) return explicit;
+    if (!_canCreateDocuments) return '';
+    final parent = widget.serverParentKey.trim().isEmpty
+        ? '${widget.contextLabel}_${widget.ownerTitle}_${widget.sectionTitle}'
+        : widget.serverParentKey.trim();
+    final safe = parent.replaceAll(RegExp(r'[^a-zA-Z0-9_\-]+'), '_');
+    return 'sportoteka_os_entity_docs_v1_${widget.clubId}_$safe';
+  }
+
   @override
   void initState() {
     super.initState();
@@ -126,13 +141,13 @@ class _WorkspaceEntityRecordBrowserState extends State<WorkspaceEntityRecordBrow
   bool _isAttachment(Map<String, dynamic> row) => row['_workspace_attachment'] == true;
 
   String _titleFor(Map<String, dynamic> row) {
-    if (_isLocal(row)) return '${row['title'] ?? 'Рабочая заметка'}'.trim();
+    if (_isLocal(row)) return '${row['title'] ?? 'Новый документ'}'.trim();
     if (_isAttachment(row)) return '${row['title'] ?? row['original_name'] ?? 'Файл'}'.trim();
     return widget.titleFor(row);
   }
 
   String _subtitleFor(Map<String, dynamic> row) {
-    if (_isLocal(row)) return '${row['subtitle'] ?? 'Редактируемая заметка'}'.trim();
+    if (_isLocal(row)) return '${row['subtitle'] ?? 'Документ Sportoteka OS'}'.trim();
     if (_isAttachment(row)) {
       final mime = '${row['mime_type'] ?? ''}'.trim();
       final size = int.tryParse('${row['file_size'] ?? '0'}') ?? 0;
@@ -161,7 +176,7 @@ class _WorkspaceEntityRecordBrowserState extends State<WorkspaceEntityRecordBrow
     }
     if (_isLocal(row)) {
       return <WorkspaceEntityProperty>[
-        const WorkspaceEntityProperty('Тип', 'Рабочая заметка'),
+        const WorkspaceEntityProperty('Тип', 'Документ Sportoteka OS'),
         WorkspaceEntityProperty('Раздел', widget.sectionTitle),
         WorkspaceEntityProperty('Обновлено', _friendlyDate(_dateFor(row))),
       ];
@@ -225,13 +240,12 @@ class _WorkspaceEntityRecordBrowserState extends State<WorkspaceEntityRecordBrow
   }
 
   Future<List<Map<String, dynamic>>> _readLocalRecords() async {
-    // Empty localStorageKey means this browser represents canonical Sportoteka
-    // entities. Never mix Workspace-only notes into Matches/Trainings/Plans/etc.
-    if (widget.localStorageKey.trim().isEmpty) return <Map<String, dynamic>>[];
+    final storageKey = _effectiveLocalStorageKey;
+    if (storageKey.isEmpty) return <Map<String, dynamic>>[];
     var local = <Map<String, dynamic>>[];
-    if (widget.localStorageKey.trim().isNotEmpty) {
+    if (storageKey.isNotEmpty) {
       final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(widget.localStorageKey);
+      final raw = prefs.getString(storageKey);
       if (raw != null && raw.isNotEmpty) {
         try {
           final decoded = jsonDecode(raw);
@@ -247,24 +261,59 @@ class _WorkspaceEntityRecordBrowserState extends State<WorkspaceEntityRecordBrow
     try {
       var snapshot = await server.load();
       final serverNodes = snapshot.nodes.where((n) => n.parentId == widget.serverParentKey && n.kind == WorkspaceFinderNodeKind.note).toList();
-      final serverIds = serverNodes.map((e) => e.id).toSet();
-      final unsynced = local.where((row) => !serverIds.contains('${row['id'] ?? ''}')).toList();
-      for (final row in unsynced) {
+      final serverById = <String, WorkspaceFinderNode>{for (final node in serverNodes) node.id: node};
+      var serverChanged = false;
+      for (final row in local) {
         final id = '${row['id'] ?? ''}';
         if (id.isEmpty) continue;
-        final node = WorkspaceFinderNode(
-          id: id,
-          title: '${row['title'] ?? 'Рабочая заметка'}',
-          subtitle: '${row['subtitle'] ?? 'Редактируемая заметка'}',
-          kind: WorkspaceFinderNodeKind.note,
-          parentId: widget.serverParentKey,
-          createdAt: DateTime.tryParse('${row['created_at'] ?? ''}'),
-          updatedAt: DateTime.tryParse('${row['updated_at'] ?? ''}'),
-        );
-        await server.createNode(node);
-        await server.saveDocument(clientUid: id, title: node.title, body: '${row['workspace_note'] ?? ''}');
+        final localTitle = '${row['title'] ?? 'Новый документ'}';
+        final localSubtitle = '${row['subtitle'] ?? 'Документ Sportoteka OS'}';
+        final localBody = '${row['workspace_note'] ?? ''}';
+        final localUpdated = DateTime.tryParse('${row['updated_at'] ?? ''}');
+        final existing = serverById[id];
+        if (existing == null) {
+          final node = WorkspaceFinderNode(
+            id: id,
+            title: localTitle,
+            subtitle: localSubtitle,
+            kind: WorkspaceFinderNodeKind.note,
+            payload: <String, dynamic>{'workspace_document': row['_workspace_document'] == true},
+            parentId: widget.serverParentKey,
+            createdAt: DateTime.tryParse('${row['created_at'] ?? ''}'),
+            updatedAt: localUpdated,
+          );
+          await server.createNode(node);
+          await server.saveDocument(clientUid: id, title: node.title, body: localBody);
+          serverChanged = true;
+          continue;
+        }
+
+        final serverUpdated = existing.updatedAt;
+        final serverBody = snapshot.noteBodies[id] ?? '';
+        final localIsNotOlder = localUpdated == null ||
+            serverUpdated == null ||
+            !localUpdated.isBefore(serverUpdated.subtract(const Duration(seconds: 5)));
+        final differs = existing.title != localTitle ||
+            existing.subtitle != localSubtitle ||
+            serverBody != localBody ||
+            existing.payload?['workspace_document'] != (row['_workspace_document'] == true);
+        if (differs && localIsNotOlder) {
+          final node = WorkspaceFinderNode(
+            id: id,
+            title: localTitle,
+            subtitle: localSubtitle,
+            kind: WorkspaceFinderNodeKind.note,
+            payload: <String, dynamic>{'workspace_document': row['_workspace_document'] == true},
+            parentId: widget.serverParentKey,
+            createdAt: existing.createdAt,
+            updatedAt: localUpdated ?? DateTime.now(),
+          );
+          await server.updateNode(node);
+          await server.saveDocument(clientUid: id, title: node.title, body: localBody);
+          serverChanged = true;
+        }
       }
-      if (unsynced.isNotEmpty) snapshot = await server.load();
+      if (serverChanged) snapshot = await server.load();
       _serverAvailable = true;
       return snapshot.nodes
           .where((n) => n.parentId == widget.serverParentKey && n.kind == WorkspaceFinderNodeKind.note)
@@ -272,6 +321,7 @@ class _WorkspaceEntityRecordBrowserState extends State<WorkspaceEntityRecordBrow
                 'id': node.id,
                 '_workspace_local': true,
                 '_workspace_server': true,
+                '_workspace_document': node.payload?['workspace_document'] == true,
                 'title': node.title,
                 'subtitle': node.subtitle,
                 'workspace_note': snapshot.noteBodies[node.id] ?? '',
@@ -286,18 +336,21 @@ class _WorkspaceEntityRecordBrowserState extends State<WorkspaceEntityRecordBrow
   }
 
   Future<void> _persistLocalRecords() async {
-    if (widget.localStorageKey.trim().isEmpty) return;
+    final storageKey = _effectiveLocalStorageKey;
+    if (storageKey.isEmpty) return;
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(widget.localStorageKey, jsonEncode(_localRecords));
+    await prefs.setString(storageKey, jsonEncode(_localRecords));
   }
 
   Future<void> _createLocalRecord() async {
+    if (!_canCreateDocuments) return;
     final now = DateTime.now();
     final row = <String, dynamic>{
       'id': 'workspace_${now.microsecondsSinceEpoch}',
       '_workspace_local': true,
-      'title': 'Новая заметка',
-      'subtitle': 'Редактируемая заметка',
+      'title': 'Новый документ',
+      'subtitle': 'Документ Sportoteka OS',
+      '_workspace_document': true,
       'workspace_note': '',
       'created_at': now.toIso8601String(),
       'updated_at': now.toIso8601String(),
@@ -343,7 +396,7 @@ class _WorkspaceEntityRecordBrowserState extends State<WorkspaceEntityRecordBrow
               initialBody: '${row['workspace_note'] ?? ''}',
               contextLabel: '${widget.contextLabel} · ${widget.sectionTitle}',
               contextName: widget.ownerTitle,
-              documentType: 'Рабочая заметка',
+              documentType: row['_workspace_document'] == true ? 'Документ Sportoteka OS' : 'Рабочая заметка',
               liveBlocksKey: 'entity_local_$id',
               onSave: (title, body) => _updateLocalRecord(id, title, body),
               onClose: () => Navigator.of(routeContext).maybePop(),
@@ -369,7 +422,7 @@ class _WorkspaceEntityRecordBrowserState extends State<WorkspaceEntityRecordBrow
       if ('${row['id'] ?? ''}' != id) return row;
       return <String, dynamic>{
         ...row,
-        'title': title.trim().isEmpty ? 'Рабочая заметка' : title.trim(),
+        'title': title.trim().isEmpty ? 'Новый документ' : title.trim(),
         'subtitle': _preview(body),
         'workspace_note': body,
         'updated_at': now,
@@ -398,9 +451,10 @@ class _WorkspaceEntityRecordBrowserState extends State<WorkspaceEntityRecordBrow
       if (id.isEmpty) return;
       final node = WorkspaceFinderNode(
         id: id,
-        title: '${row['title'] ?? 'Рабочая заметка'}',
-        subtitle: '${row['subtitle'] ?? 'Редактируемая заметка'}',
+        title: '${row['title'] ?? 'Новый документ'}',
+        subtitle: '${row['subtitle'] ?? 'Документ Sportoteka OS'}',
         kind: WorkspaceFinderNodeKind.note,
+        payload: <String, dynamic>{'workspace_document': row['_workspace_document'] == true},
         parentId: widget.serverParentKey,
         createdAt: DateTime.tryParse('${row['created_at'] ?? ''}'),
       );
@@ -419,9 +473,10 @@ class _WorkspaceEntityRecordBrowserState extends State<WorkspaceEntityRecordBrow
       if (id.isEmpty) return;
       final node = WorkspaceFinderNode(
         id: id,
-        title: '${row['title'] ?? 'Рабочая заметка'}',
+        title: '${row['title'] ?? 'Новый документ'}',
         subtitle: '${row['subtitle'] ?? ''}',
         kind: WorkspaceFinderNodeKind.note,
+        payload: <String, dynamic>{'workspace_document': row['_workspace_document'] == true},
         parentId: widget.serverParentKey,
         updatedAt: DateTime.now(),
       );
@@ -434,7 +489,7 @@ class _WorkspaceEntityRecordBrowserState extends State<WorkspaceEntityRecordBrow
 
   String _preview(String body) {
     final clean = body.replaceAll(RegExp(r'\s+'), ' ').trim();
-    if (clean.isEmpty) return 'Редактируемая заметка';
+    if (clean.isEmpty) return 'Документ Sportoteka OS';
     return clean.length <= 92 ? clean : '${clean.substring(0, 92)}…';
   }
 
@@ -446,6 +501,7 @@ class _WorkspaceEntityRecordBrowserState extends State<WorkspaceEntityRecordBrow
     final copy = <String, dynamic>{
       'id': 'workspace_${now.microsecondsSinceEpoch}',
       '_workspace_local': true,
+      '_workspace_document': true,
       'title': 'Копия — ${_titleFor(source)}',
       'subtitle': _preview(body),
       'workspace_note': body,
@@ -469,7 +525,7 @@ class _WorkspaceEntityRecordBrowserState extends State<WorkspaceEntityRecordBrow
       builder: (ctx) => AlertDialog(
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.white,
-        title: Text(_isAttachment(row) ? 'Удалить файл?' : 'Удалить заметку?', style: AppTypography.sectionTitle(color: _text)),
+        title: Text(_isAttachment(row) ? 'Удалить файл?' : 'Удалить документ?', style: AppTypography.sectionTitle(color: _text)),
         content: Text('«${_titleFor(row)}» будет удалён из раздела.', style: AppTypography.secondary(color: _muted)),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
@@ -532,7 +588,7 @@ class _WorkspaceEntityRecordBrowserState extends State<WorkspaceEntityRecordBrow
         final server = _serverStorage;
         if (server == null) return;
         for (final path in normalized) {
-          final name = path.split(RegExp(r'[\/]')).last;
+          final name = path.split(RegExp(r'[\\/]')).last;
           await server.uploadAttachment(
             filePath: path,
             entityType: widget.attachmentEntityType,
@@ -637,10 +693,10 @@ class _WorkspaceEntityRecordBrowserState extends State<WorkspaceEntityRecordBrow
                         ],
                       ),
                     ),
-                    if (widget.localStorageKey.trim().isNotEmpty)
+                    if (_canCreateDocuments)
                       mobile
                           ? IconButton(
-                              tooltip: 'Новая заметка',
+                              tooltip: 'Создать документ',
                               onPressed: _createLocalRecord,
                               icon: const Icon(Icons.add_rounded, color: _green, size: 21),
                             )
@@ -648,7 +704,7 @@ class _WorkspaceEntityRecordBrowserState extends State<WorkspaceEntityRecordBrow
                               onPressed: _createLocalRecord,
                               style: FilledButton.styleFrom(backgroundColor: _green, elevation: 0),
                               icon: const Icon(Icons.add_rounded, size: 17),
-                              label: Text('Новая заметка', style: AppTypography.actionStrong(color: Colors.white)),
+                              label: Text('Создать документ', style: AppTypography.actionStrong(color: Colors.white)),
                             ),
                     if (_canUploadAttachments) ...[
                       const SizedBox(width: 6),
@@ -748,12 +804,12 @@ class _WorkspaceEntityRecordBrowserState extends State<WorkspaceEntityRecordBrow
                                         SportotekaWorkspaceIcon(kind: widget.iconKind, size: 48, color: const Color(0xFF6E7A73)),
                                         const SizedBox(height: 12),
                                         Text(widget.emptyText, textAlign: TextAlign.center, style: AppTypography.secondary(color: _muted)),
-                                        if (widget.localStorageKey.trim().isNotEmpty) ...[
+                                        if (_canCreateDocuments) ...[
                                           const SizedBox(height: 12),
                                           FilledButton(
                                             onPressed: _createLocalRecord,
                                             style: FilledButton.styleFrom(backgroundColor: _green, elevation: 0),
-                                            child: Text('Новая заметка', style: AppTypography.actionStrong(color: Colors.white)),
+                                            child: Text('Создать документ', style: AppTypography.actionStrong(color: Colors.white)),
                                           ),
                                         ],
                                         if (_canUploadAttachments) ...[

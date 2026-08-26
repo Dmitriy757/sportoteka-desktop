@@ -1,6 +1,5 @@
 import 'dart:io' show Platform;
 
-import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -16,13 +15,17 @@ import 'core/utils/route_observer.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
-import 'package:sportoteka/core/push/push_service.dart';
 bool get _isMobileFirebasePlatform {
   if (kIsWeb) return false;
   return Platform.isAndroid || Platform.isIOS;
 }
 
-
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  if (_isMobileFirebasePlatform) {
+    await Firebase.initializeApp();
+    debugPrint("Background message: ${message.messageId}");
+  }
+}
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -33,7 +36,7 @@ Future<void> main() async {
     await Firebase.initializeApp();
 
     FirebaseMessaging.onBackgroundMessage(
-      sportotekaFirebaseMessagingBackgroundHandler,
+      _firebaseMessagingBackgroundHandler,
     );
 
     final NotificationSettings settings =
@@ -77,20 +80,6 @@ Future<void> main() async {
   runApp(MyApp(
     isSignedIn: isSignedIn,
   ));
-
-  // SPORTOTEKA_CALLKIT_COLD_START_INIT
-  // Login screens initialize PushService after a new sign-in.
-  // This also covers a saved session that bypasses the login screen.
-  if (_isMobileFirebasePlatform) {
-    final sportotekaPushUserId = await PrefUtils.getUserId() ?? 0;
-
-    if (sportotekaPushUserId > 0) {
-      unawaited(
-        PushService.instance.init(userId: sportotekaPushUserId),
-      );
-    }
-  }
-
 }
 
 class MyApp extends StatelessWidget {
