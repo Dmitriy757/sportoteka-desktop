@@ -12,8 +12,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
+import 'package:livekit_client/livekit_client.dart' as lk;
 import 'package:sportoteka/call/audio_call_screen.dart';
-
+import 'package:sportoteka/call/call_session_service.dart';
+import 'package:sportoteka/call/ios_native_call_bridge.dart';
 
 String _sportotekaCallUuid(int callId) {
   var hex = callId <= 0 ? '0' : callId.toRadixString(16);
@@ -71,13 +73,16 @@ CallKitParams _sportotekaCallKitParams(Map<String, dynamic> data) {
       isCustomNotification: false,
       isShowLogo: false,
       isShowCallID: false,
-      ringtonePath: 'system_ringtone_default',
+      ringtonePath: 'ringtone_default',
       actionColor: '#00A750',
       textColor: '#0B0F14',
       incomingCallNotificationChannelName: 'Входящие звонки SPORTOTEKA',
       missedCallNotificationChannelName: 'Пропущенные звонки SPORTOTEKA',
       isShowFullLockedScreen: true,
-      isFullScreen: true,
+      // ВАЖНО: false здесь не отключает полноэкранный входящий экран.
+      // Плагин создаёт notification с fullScreenIntent.
+      // Зато проходят ringtone + activeCalls lifecycle.
+      isFullScreen: false,
       isImportant: true,
       textAccept: 'Принять',
       textDecline: 'Отклонить',
@@ -101,6 +106,53 @@ CallKitParams _sportotekaCallKitParams(Map<String, dynamic> data) {
   );
 }
 
+Future<bool> _sportotekaCallIsStillRinging({
+  required int callId,
+  required int userId,
+}) async {
+  if (callId <= 0) return false;
+
+  // Если user_id по какой-то причине ещё неизвестен,
+  // не рискуем потерять настоящий звонок.
+  if (userId <= 0) return true;
+
+  try {
+    final response = await http.post(
+      Uri.parse(
+        'https://sportotekaapp.ru/api/calls/status.php',
+      ),
+      body: <String, String>{
+        'call_id': callId.toString(),
+        'user_id': userId.toString(),
+      },
+    ).timeout(const Duration(seconds: 4));
+
+    if (response.statusCode != 200) {
+      return true;
+    }
+
+    final decoded = jsonDecode(response.body);
+
+    if (decoded is! Map) {
+      return true;
+    }
+
+    final map = decoded.map<String, dynamic>(
+      (key, value) => MapEntry(key.toString(), value),
+    );
+
+    final state = '${map['call_status'] ?? ''}'.trim().toLowerCase();
+
+    // Старый сервер без call_status — не блокируем звонок.
+    if (state.isEmpty) return true;
+
+    return state == 'ringing';
+  } catch (_) {
+    // Сетевой сбой не должен приводить к пропущенному звонку.
+    return true;
+  }
+}
+
 @pragma('vm:entry-point')
 Future<void> sportotekaFirebaseMessagingBackgroundHandler(
   RemoteMessage message,
@@ -108,15 +160,43 @@ Future<void> sportotekaFirebaseMessagingBackgroundHandler(
   await Firebase.initializeApp();
 
   final data = Map<String, dynamic>.from(message.data);
-  if ('${data['type'] ?? ''}' != 'incoming_call') return;
 
-  // На iOS настоящий terminated/lock-screen вызов приходит через PushKit
-  // и обрабатывается в AppDelegate.swift. FCM здесь нужен прежде всего Android.
-  if (Platform.isAndroid) {
-    await FlutterCallkitIncoming.showCallkitIncoming(
-      _sportotekaCallKitParams(data),
-    );
+  if ('${data['type'] ?? ''}' != 'incoming_call') {
+    return;
   }
+
+  if (!Platform.isAndroid) {
+    return;
+  }
+
+  final callId = _sportotekaPushInt(data['call_id']);
+
+  final userId = _sportotekaPushInt(data['callee_id']);
+
+  if (callId <= 0) {
+    return;
+  }
+
+  // КРИТИЧНО:
+  // FCM может доставить старый incoming_call после того,
+  // как звонок уже принят/завершён.
+  // Такой пакет больше НЕ должен поднимать экран звонка.
+  final ringing = await _sportotekaCallIsStillRinging(
+    callId: callId,
+    userId: userId,
+  );
+
+  if (!ringing) {
+    debugPrint(
+      '[PUSH] stale Android incoming ignored '
+      'callId=$callId',
+    );
+    return;
+  }
+
+  await FlutterCallkitIncoming.showCallkitIncoming(
+    _sportotekaCallKitParams(data),
+  );
 }
 
 @pragma('vm:entry-point')
@@ -143,24 +223,32 @@ Future<void> sportotekaCallkitBackgroundHandler(CallEvent event) async {
   if (callId <= 0 || userId <= 0) return;
 
   try {
-    await http
-        .post(
-          Uri.parse(
-            'https://sportotekaapp.ru/api/calls/$action.php',
-          ),
-          body: <String, String>{
-            'call_id': callId.toString(),
-            'user_id': userId.toString(),
-          },
-        )
-        .timeout(const Duration(seconds: 8));
+    await http.post(
+      Uri.parse(
+        'https://sportotekaapp.ru/api/calls/$action.php',
+      ),
+      body: <String, String>{
+        'call_id': callId.toString(),
+        'user_id': userId.toString(),
+      },
+    ).timeout(const Duration(seconds: 8));
   } catch (_) {
     // Foreground isolate retries Accept after it resumes.
   }
 }
 
+@pragma('vm:entry-point')
+void sportotekaCallkitAcceptHandle(Map<dynamic, dynamic> data) {
+  PushService.instance.handleCallkitAcceptHandle(data);
+}
+
 class PushService with WidgetsBindingObserver {
-  PushService._();
+  PushService._() {
+    if (Platform.isIOS) {
+      IosNativeCallBridge.onAccepted = _handleIosNativeAcceptedCall;
+    }
+  }
+
   static final PushService instance = PushService._();
 
   final FirebaseMessaging _messaging = FirebaseMessaging.instance;
@@ -177,18 +265,21 @@ class PushService with WidgetsBindingObserver {
   static const String _groupsFeedUrl = '$_apiBase/get_groups_feed.php';
   static const String _notificationsUnreadUrl =
       '$_apiBase/notifications/unread_count.php';
-  static const String _newsSummaryUrl =
-      '$_apiBase/sportoteka_news/summary.php';
+  static const String _newsSummaryUrl = '$_apiBase/sportoteka_news/summary.php';
 
   static const String _chatChannelId = 'chat_messages';
   static const String _updatesChannelId = 'sportoteka_updates';
   static const String _callChannelId = 'calls';
 
+  bool _lifecycleObserverAdded = false;
   bool _inited = false;
   int? _userId;
 
   int? _visibleCallId;
   bool _callActionInProgress = false;
+
+  // Один AudioCallScreen на один callId.
+  final Set<int> _openingAcceptedCallIds = <int>{};
   StreamSubscription<CallEvent?>? _callkitEventSubscription;
 
   Timer? _badgeSyncTimer;
@@ -202,8 +293,16 @@ class PushService with WidgetsBindingObserver {
     }
   }
 
+  Map<String, dynamic>? _pendingCallkitAccept;
+
   Future<void> init({required int userId}) async {
     _userId = userId;
+
+    if (!_lifecycleObserverAdded) {
+      WidgetsBinding.instance.addObserver(this);
+      _lifecycleObserverAdded = true;
+      _log('CALLKIT lifecycle observer registered');
+    }
 
     if (_inited) {
       _log('PUSH already initialized. userId=$userId');
@@ -233,6 +332,7 @@ class PushService with WidgetsBindingObserver {
     // was being launched, recover the accepted call even if the first event
     // arrived before the Dart listener was ready.
     unawaited(_resumeAcceptedCallIfNeeded());
+    unawaited(_consumePendingCallkitAccept());
 
     // Apple platforms: iOS + macOS.
     if (Platform.isIOS || Platform.isMacOS) {
@@ -428,6 +528,48 @@ class PushService with WidgetsBindingObserver {
       return;
     }
 
+    if (Platform.isAndroid) {
+      final calleeId = _sportotekaPushInt(data['callee_id']);
+
+      // Запоздавший FCM после accepted/ended/declined игнорируем.
+      final ringing = await _sportotekaCallIsStillRinging(
+        callId: callId,
+        userId: calleeId,
+      );
+
+      if (!ringing) {
+        _log(
+          'INCOMING CALL stale Android push ignored '
+          'callId=$callId',
+        );
+        return;
+      }
+
+      // Background isolate мог уже показать системный звонок,
+      // а foreground isolate проснулся следом.
+      // Не создаём второй native call для того же call_id.
+      try {
+        final activeCalls = await FlutterCallkitIncoming.activeCalls();
+
+        for (final active in activeCalls) {
+          final activeId = _sportotekaPushInt(
+            active.extra?['call_id'],
+          );
+
+          if (activeId == callId) {
+            _visibleCallId = callId;
+
+            _log(
+              'INCOMING CALL already exists natively '
+              'callId=$callId',
+            );
+
+            return;
+          }
+        }
+      } catch (_) {}
+    }
+
     // Если сервер уже доставил iOS VoIP PushKit, системный CallKit создаётся
     // AppDelegate-ом. Не создаём второй экран по FCM-дубликату.
     final voipExpected = '${data['voip_expected'] ?? '0'}' == '1';
@@ -457,15 +599,67 @@ class PushService with WidgetsBindingObserver {
     }
   }
 
+  Future<void> _handleIosNativeAcceptedCall(
+    Map<String, dynamic> data,
+  ) async {
+    if (!Platform.isIOS) return;
+
+    final callId = _sportotekaPushInt(data['call_id']);
+
+    final userId = _sportotekaPushInt(data['user_id']);
+
+    final callerId = _sportotekaPushInt(data['caller_id']);
+
+    final callerName = '${data['caller_name'] ?? ''}'.trim();
+
+    if (callId <= 0 || userId <= 0) {
+      _log(
+        'IOS NATIVE ACCEPT UI invalid data '
+        'callId=$callId userId=$userId',
+      );
+      return;
+    }
+
+    _log(
+      'IOS NATIVE ACCEPT LiveKit ready '
+      'callId=$callId lifecycle='
+      '${WidgetsBinding.instance.lifecycleState}',
+    );
+
+    // При заблокированном iPhone остаёмся на системном CallKit.
+    // Не пытаемся насильно открыть SPORTOTEKA.
+    if (WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed) {
+      _log(
+        'IOS NATIVE ACCEPT background '
+        'callId=$callId — CallKit owns UI',
+      );
+      return;
+    }
+
+    // Приложение уже открыто:
+    // native bridge становится гарантированным источником навигации.
+    await _openAcceptedCallScreen(
+      callId: callId,
+      userId: userId,
+      callerId: callerId,
+      callerName: callerName.isEmpty ? null : callerName,
+    );
+  }
 
   Future<void> _acceptIncomingCall({
     required int callId,
     required int callerId,
     int? calleeId,
     String? callerName,
+    String? callUuid,
     bool allowAlreadyAccepted = false,
   }) async {
     final userId = _userId ?? calleeId;
+
+    final suppliedUuid = (callUuid ?? '').trim();
+
+    final nativeCallUuid =
+        suppliedUuid.isNotEmpty ? suppliedUuid : _sportotekaCallUuid(callId);
     if (userId == null || userId <= 0) {
       _showError('Не удалось определить пользователя.');
       return;
@@ -494,24 +688,73 @@ class PushService with WidgetsBindingObserver {
       final serverStatus = (body['status'] ?? '').toString();
       final error = (body['error'] ?? '').toString();
 
-      final acceptedNow =
-          response.statusCode >= 200 &&
+      final acceptedNow = response.statusCode >= 200 &&
           response.statusCode < 300 &&
           serverStatus == 'ok';
 
       // On iOS the native CallKit delegate also accepts the server call so
       // the action is reliable even if Dart starts a moment later. In that
       // path a second Dart POST legitimately gets "not_ringing/accepted".
-      final acceptedByNative =
-          allowAlreadyAccepted &&
+      final acceptedByNative = allowAlreadyAccepted &&
           error == 'not_ringing' &&
           serverStatus == 'accepted';
 
       if (acceptedNow || acceptedByNative) {
+        // КРИТИЧНО ДЛЯ iOS:
+        // LiveKit должен подключаться сразу после системного CallKit Accept,
+        // даже когда iPhone заблокирован и Navigator ещё недоступен.
+        try {
+          _log(
+            'CALL ACCEPT LiveKit background connect '
+            'callId=$callId userId=$userId',
+          );
+
+          await CallSessionService.instance.ensureConnected(
+            callId: callId,
+            userId: userId,
+          );
+
+          _log(
+            'CALL ACCEPT LiveKit CONNECTED '
+            'callId=$callId',
+          );
+
+          // Сообщаем iOS CallKit, что медиа реально подключено.
+          if (Platform.isIOS || Platform.isAndroid) {
+            try {
+              await FlutterCallkitIncoming.setCallConnected(
+                nativeCallUuid,
+              );
+
+              // Android Telecom только сейчас окончательно переводит
+              // self-managed call в ACTIVE. Поэтому audio route
+              // обязательно применяем ПОСЛЕ setCallConnected().
+              if (Platform.isAndroid) {
+                await CallSessionService.instance.applyAndroidAudioRoute(
+                  callId: callId,
+                  callUuid: nativeCallUuid,
+                  speaker: false,
+                );
+              }
+            } catch (e) {
+              _log(
+                'CALLKIT setCallConnected/audio route error: $e',
+              );
+            }
+          }
+        } catch (e) {
+          _log(
+            'CALL ACCEPT background LiveKit error '
+            'callId=$callId error=$e',
+          );
+        }
+
         if (Get.isDialogOpen == true) {
           Get.back<void>();
         }
 
+        // Экран вторичен.
+        // Если телефон заблокирован, Room уже работает без него.
         await _openAcceptedCallScreen(
           callId: callId,
           userId: userId,
@@ -535,6 +778,26 @@ class PushService with WidgetsBindingObserver {
       // If native iOS already accepted the server call, a short Dart-side
       // network failure must not strand the user on the CallKit screen.
       if (allowAlreadyAccepted) {
+        try {
+          await CallSessionService.instance.ensureConnected(
+            callId: callId,
+            userId: userId,
+          );
+
+          if (Platform.isIOS) {
+            try {
+              await FlutterCallkitIncoming.setCallConnected(
+                nativeCallUuid,
+              );
+            } catch (_) {}
+          }
+        } catch (connectError) {
+          _log(
+            'CALL ACCEPT fallback LiveKit error '
+            'callId=$callId error=$connectError',
+          );
+        }
+
         await _openAcceptedCallScreen(
           callId: callId,
           userId: userId,
@@ -555,47 +818,71 @@ class PushService with WidgetsBindingObserver {
     required int callerId,
     String? callerName,
   }) async {
-    final peerName = (callerName ?? '').trim().isNotEmpty
-        ? callerName!.trim()
-        : (callerId > 0
-            ? 'Пользователь #$callerId'
-            : 'Входящий звонок');
-
-    _visibleCallId = callId;
-
-    // CallKit may have woken SPORTOTEKA from terminated state.
-    // Wait briefly for GetMaterialApp/Navigator to exist.
-    for (var i = 0; i < 40 && Get.context == null; i++) {
-      await Future<void>.delayed(const Duration(milliseconds: 100));
-    }
-
-    if (Get.context == null) {
-      _log('CALL ACCEPTED but navigation context is not ready');
+    if (_openingAcceptedCallIds.contains(callId)) {
+      _log(
+        'CALL SCREEN duplicate open ignored '
+        'callId=$callId',
+      );
       return;
     }
 
-    await Get.to<void>(
-      () => AudioCallScreen(
-        callId: callId,
-        userId: userId,
-        isCaller: false,
-        peerName: peerName,
-      ),
-    );
+    _openingAcceptedCallIds.add(callId);
 
-    _visibleCallId = null;
+    try {
+      final peerName = (callerName ?? '').trim().isNotEmpty
+          ? callerName!.trim()
+          : (callerId > 0 ? 'Пользователь #$callerId' : 'Входящий звонок');
 
-    // AudioCallScreen already reports server-side end. This only closes the
-    // native CallKit/full-screen UI if it is still active.
-    if (Platform.isAndroid || Platform.isIOS) {
-      try {
-        await FlutterCallkitIncoming.endCall(
-          _sportotekaCallUuid(callId),
+      _visibleCallId = callId;
+
+      // CallKit may have woken SPORTOTEKA from terminated state.
+      // Wait briefly for GetMaterialApp/Navigator to exist.
+      for (var i = 0; i < 40 && Get.context == null; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+      }
+
+      if (Get.context == null) {
+        _log('CALL ACCEPTED but navigation context is not ready');
+        return;
+      }
+
+      await Get.to<void>(
+        () => AudioCallScreen(
+          isIncoming: true,
+          callId: callId,
+          userId: userId,
+          isCaller: false,
+          peerName: peerName,
+        ),
+      );
+
+      _visibleCallId = null;
+
+      // Возврат из AudioCallScreen сам по себе больше НЕ означает конец звонка.
+      // Например, iOS может заменить экран приложения системным CallKit UI.
+      final session = CallSessionService.instance;
+      final activeRoom = session.room;
+
+      final sameCallStillActive = session.callId == callId &&
+          activeRoom != null &&
+          activeRoom.connectionState != lk.ConnectionState.disconnected;
+
+      if (sameCallStillActive) {
+        _log(
+          'CALL SCREEN closed but session remains active '
+          'callId=$callId state=${activeRoom.connectionState}',
         );
-      } catch (_) {}
+      } else if (Platform.isAndroid || Platform.isIOS) {
+        try {
+          await FlutterCallkitIncoming.endCall(
+            _sportotekaCallUuid(callId),
+          );
+        } catch (_) {}
+      }
+    } finally {
+      _openingAcceptedCallIds.remove(callId);
     }
   }
-
 
   Future<void> _declineIncomingCall(int callId) async {
     final userId = _userId;
@@ -641,8 +928,256 @@ class PushService with WidgetsBindingObserver {
     }
   }
 
+  void handleCallkitAcceptHandle(Map<dynamic, dynamic> raw) {
+    final data = raw.map<String, dynamic>(
+      (key, value) => MapEntry(key.toString(), value),
+    );
+
+    _pendingCallkitAccept = data;
+
+    _log('CALLKIT ACCEPT HANDLE received: $data');
+
+    unawaited(_consumePendingCallkitAccept());
+  }
+
+  Map<String, dynamic> _callkitStringMap(dynamic value) {
+    if (value is Map) {
+      return value.map<String, dynamic>(
+        (key, item) => MapEntry(key.toString(), item),
+      );
+    }
+    return <String, dynamic>{};
+  }
+
+  int _callIdFromCallkitUuid(dynamic value) {
+    final uuid = '${value ?? ''}'.trim();
+    if (uuid.isEmpty) return 0;
+
+    // SPORTOTEKA UUID:
+    // 00000000-0000-4000-8000-00000000002c -> call_id 44
+    final parts = uuid.split('-');
+    if (parts.isEmpty) return 0;
+
+    final tail = parts.last.trim();
+
+    final hex = int.tryParse(tail, radix: 16);
+    if (hex != null && hex > 0) {
+      return hex;
+    }
+
+    return int.tryParse(uuid) ?? 0;
+  }
+
+  Future<void> _consumePendingCallkitAccept() async {
+    final pending = _pendingCallkitAccept;
+    if (pending == null) return;
+
+    final body = _callkitStringMap(
+      pending['body'] ?? pending['data'] ?? pending['callData'] ?? pending,
+    );
+
+    final extra = _callkitStringMap(body['extra']);
+
+    var callId = _sportotekaPushInt(
+      extra['call_id'] ?? body['call_id'],
+    );
+
+    if (callId <= 0) {
+      callId = _callIdFromCallkitUuid(
+        body['id'] ?? pending['id'],
+      );
+    }
+
+    final callerId = _sportotekaPushInt(
+      extra['caller_id'] ?? body['caller_id'],
+    );
+
+    var calleeId = _sportotekaPushInt(
+      extra['callee_id'] ?? body['callee_id'],
+    );
+
+    if (calleeId <= 0) {
+      calleeId = _userId ?? 0;
+    }
+
+    final callerName =
+        '${extra['caller_name'] ?? body['caller_name'] ?? body['nameCaller'] ?? 'Входящий звонок'}'
+            .trim();
+
+    if (callId <= 0 || calleeId <= 0) {
+      _log(
+        'CALLKIT ACCEPT HANDLE invalid IDs '
+        'callId=$callId calleeId=$calleeId',
+      );
+      return;
+    }
+
+    // КРИТИЧНО:
+    // LiveKit запускаем сразу из CallKit Accept.
+    // Navigator/Get.context здесь НЕ нужен.
+    try {
+      _log(
+        'CALLKIT BACKGROUND CONNECT '
+        'callId=$callId userId=$calleeId',
+      );
+
+      await CallSessionService.instance.ensureConnected(
+        callId: callId,
+        userId: calleeId,
+      );
+
+      _log(
+        'CALLKIT BACKGROUND CONNECTED '
+        'callId=$callId',
+      );
+    } catch (e) {
+      _log(
+        'CALLKIT BACKGROUND CONNECT ERROR '
+        'callId=$callId error=$e',
+      );
+    }
+
+    _pendingCallkitAccept = null;
+
+    // Экран разговора открываем только если/когда UI реально доступен.
+    for (var attempt = 0; attempt < 40; attempt++) {
+      if (Get.context == null) {
+        await Future<void>.delayed(
+          const Duration(milliseconds: 250),
+        );
+        continue;
+      }
+
+      await _acceptIncomingCall(
+        callId: callId,
+        callerId: callerId,
+        calleeId: calleeId,
+        callerName: callerName,
+        allowAlreadyAccepted: true,
+      );
+
+      return;
+    }
+
+    _log(
+      'CALLKIT background call connected, '
+      'UI remains locked callId=$callId',
+    );
+  }
+
+  Future<void> _recoverAcceptedCallOnResume() async {
+    if (!Platform.isAndroid && !Platform.isIOS) return;
+
+    _log('CALLKIT foreground recovery START');
+
+    // После системного Accept CallKit и Flutter могут проснуться
+    // с небольшой разницей по времени.
+    for (var attempt = 1; attempt <= 12; attempt++) {
+      if (_callActionInProgress) {
+        _log(
+          'CALLKIT foreground recovery: '
+          'call action already running',
+        );
+        return;
+      }
+
+      try {
+        final calls = await FlutterCallkitIncoming.activeCalls();
+
+        _log(
+          'CALLKIT foreground recovery '
+          'attempt=$attempt activeCalls=${calls.length}',
+        );
+
+        for (final params in calls) {
+          if (!params.isAccepted) continue;
+
+          final callId = _extraInt(params, 'call_id');
+          if (callId <= 0) continue;
+
+          final callerId = _extraInt(params, 'caller_id');
+
+          var calleeId = _extraInt(
+            params,
+            'callee_id',
+          );
+
+          if (calleeId <= 0) {
+            calleeId = _userId ?? 0;
+          }
+
+          if (calleeId <= 0) continue;
+
+          final callerName = _extraString(
+            params,
+            'caller_name',
+          );
+
+          _log(
+            'CALLKIT foreground recovery accepted '
+            'callId=$callId '
+            'callerId=$callerId '
+            'calleeId=$calleeId',
+          );
+
+          // Если background Accept уже успел подключить LiveKit,
+          // ensureConnected просто вернёт существующий Room.
+          // Если событие background было потеряно — подключаем здесь.
+          try {
+            await CallSessionService.instance.ensureConnected(
+              callId: callId,
+              userId: calleeId,
+            );
+          } catch (e) {
+            _log(
+              'CALLKIT foreground LiveKit recovery '
+              'callId=$callId error=$e',
+            );
+          }
+
+          if (Get.context == null) {
+            await Future<void>.delayed(
+              const Duration(milliseconds: 250),
+            );
+            continue;
+          }
+
+          _visibleCallId = null;
+
+          await _acceptIncomingCall(
+            callId: callId,
+            callerId: callerId,
+            calleeId: calleeId,
+            callerName: callerName,
+            allowAlreadyAccepted: true,
+          );
+
+          return;
+        }
+      } catch (e) {
+        _log(
+          'CALLKIT foreground recovery '
+          'attempt=$attempt error=$e',
+        );
+      }
+
+      await Future<void>.delayed(
+        const Duration(milliseconds: 300),
+      );
+    }
+
+    _log(
+      'CALLKIT foreground recovery: '
+      'no accepted call found',
+    );
+  }
+
   Future<void> _initCallKit() async {
     if (!Platform.isAndroid && !Platform.isIOS) return;
+
+    FlutterCallkitIncoming.acceptCallHandle(
+      sportotekaCallkitAcceptHandle,
+    );
 
     // Plugin-level killed/background action handler.
     await FlutterCallkitIncoming.onBackgroundMessage(
@@ -709,11 +1244,17 @@ class PushService with WidgetsBindingObserver {
     if (eventName.contains('accept')) {
       if (callId <= 0) return;
 
+      // Android 3.1.x использует self-managed Telecom.
+      // После ACTION_CALL_ACCEPT не скрываем CallKit вручную:
+      // native Telecom сам завершает ringing lifecycle.
+      // Иначе можно разрушить audio lifecycle до запуска WebRTC.
+
       await _acceptIncomingCall(
         callId: callId,
         callerId: callerId,
         calleeId: calleeId,
         callerName: callerName,
+        callUuid: _extraString(params, 'uuid'),
         allowAlreadyAccepted: true,
       );
       return;
@@ -789,16 +1330,14 @@ class PushService with WidgetsBindingObserver {
         return;
       }
 
-      final response = await http
-          .post(
-            Uri.parse(_registerVoipTokenUrl),
-            body: <String, String>{
-              'user_id': userId.toString(),
-              'token': clean,
-              'platform': 'ios',
-            },
-          )
-          .timeout(const Duration(seconds: 10));
+      final response = await http.post(
+        Uri.parse(_registerVoipTokenUrl),
+        body: <String, String>{
+          'user_id': userId.toString(),
+          'token': clean,
+          'platform': 'ios',
+        },
+      ).timeout(const Duration(seconds: 10));
 
       _log(
         'VOIP TOKEN SAVE ${response.statusCode}: ${response.body}',
@@ -884,7 +1423,7 @@ class PushService with WidgetsBindingObserver {
 
     final isSportotekaUpdate =
         (msg.data['type'] ?? '').toString() == 'sportoteka_notification' ||
-        (msg.data['type'] ?? '').toString() == 'sportoteka_news';
+            (msg.data['type'] ?? '').toString() == 'sportoteka_news';
 
     final android = AndroidNotificationDetails(
       isSportotekaUpdate ? _updatesChannelId : _chatChannelId,
@@ -924,6 +1463,10 @@ class PushService with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_recoverAcceptedCallOnResume());
+    }
+
     if (state == AppLifecycleState.resumed) {
       _startBadgeSync();
       unawaited(syncAppBadge());

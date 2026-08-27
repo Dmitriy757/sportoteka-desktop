@@ -1,8 +1,11 @@
+import 'dart:io';
 import 'dart:io' show Platform;
 
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:livekit_client/livekit_client.dart' as lk;
+import 'package:sportoteka/call/ios_native_call_bridge.dart';
 import 'package:flutter/services.dart';
 
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -26,6 +29,15 @@ bool get _isMobileFirebasePlatform {
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // iOS CallKit owns AVAudioSession activation/deactivation.
+  // LiveKit only uses the audio engine inside CallKit's active window.
+  if (Platform.isIOS) {
+    await lk.AudioManager.instance.setAudioSessionManagementMode(
+      lk.AudioSessionManagementMode.externalCallSystem,
+    );
+  }
+
 
   // Firebase Messaging оставляем только для Android/iOS.
   // На macOS из-за этого был чёрный экран при запуске.
@@ -77,6 +89,16 @@ Future<void> main() async {
   runApp(MyApp(
     isSignedIn: isSignedIn,
   ));
+
+  // Не блокируем первый кадр приложения native CallKit bridge.
+  // На чистой установке iOS Flutter UI должен сначала запуститься.
+  if (Platform.isIOS) {
+    PushService.instance;
+
+    unawaited(
+      IosNativeCallBridge.install(),
+    );
+  }
 
   // SPORTOTEKA_CALLKIT_COLD_START_INIT
   // Login screens initialize PushService after a new sign-in.

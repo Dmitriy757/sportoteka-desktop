@@ -4,13 +4,31 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
+import 'package:flutter_callkit_incoming/entities/entities.dart';
 import 'package:http/http.dart' as http;
 import 'package:livekit_client/livekit_client.dart' as lk;
 import 'package:permission_handler/permission_handler.dart';
+import 'package:sportoteka/call/call_session_service.dart';
+
+
+String _sportotekaCallUuid(int callId) {
+  var hex = callId <= 0 ? '0' : callId.toRadixString(16);
+
+  if (hex.length > 12) {
+    hex = hex.substring(hex.length - 12);
+  }
+
+  hex = hex.padLeft(12, '0');
+
+  return '00000000-0000-4000-8000-$hex';
+}
 
 class AudioCallScreen extends StatefulWidget {
   final int callId;
   final int userId;
+  final bool isIncoming;
   final bool isCaller;
   final String? peerName;
   final String? peerUsername;
@@ -20,6 +38,7 @@ class AudioCallScreen extends StatefulWidget {
     super.key,
     required this.callId,
     required this.userId,
+    this.isIncoming = false,
     required this.isCaller,
     this.peerName,
     this.peerUsername,
@@ -33,6 +52,9 @@ class AudioCallScreen extends StatefulWidget {
 class _AudioCallScreenState extends State<AudioCallScreen> {
   static const String _apiBase = 'https://sportotekaapp.ru/api/calls';
 
+  static const MethodChannel _androidCallAudio =
+      MethodChannel('sportoteka/call_audio');
+
   lk.Room? _room;
   Timer? _connectTimeout;
   Timer? _durationTimer;
@@ -42,6 +64,7 @@ class _AudioCallScreenState extends State<AudioCallScreen> {
   bool _speakerOn = false;
   bool _closing = false;
   bool _endNotified = false;
+  bool _nativeCallUiEnded = false;
   bool _statusPollBusy = false;
   String? _roomName;
   String? _fatalError;
@@ -69,6 +92,66 @@ class _AudioCallScreenState extends State<AudioCallScreen> {
     unawaited(_init());
   }
 
+  Future<void> _startIosOutgoingCallKit() async {
+    if (kIsWeb ||
+        defaultTargetPlatform != TargetPlatform.iOS ||
+        widget.isIncoming) {
+      return;
+    }
+
+    final callUuid = _sportotekaCallUuid(
+      widget.callId,
+    );
+
+    final displayName = _peerName.trim().isNotEmpty
+        ? _peerName.trim()
+        : 'SPORTOTEKA';
+
+    final handle = _peerUsername.trim().isNotEmpty
+        ? _peerUsername.trim()
+        : displayName;
+
+    final params = CallKitParams(
+      id: callUuid,
+      nameCaller: displayName,
+      appName: 'SPORTOTEKA',
+      handle: handle,
+      type: 0,
+      extra: <String, dynamic>{
+        'call_id': widget.callId,
+        'user_id': widget.userId,
+        'direction': 'outgoing',
+      },
+      ios: const IOSParams(
+        handleType: 'generic',
+        supportsVideo: false,
+      ),
+    );
+
+    debugPrint(
+      '[CALL] iOS OUTGOING CALLKIT START '
+      'callId=${widget.callId} '
+      'uuid=$callUuid',
+    );
+
+    await FlutterCallkitIncoming.startCall(
+      params,
+    );
+
+    // CXStartCallAction и provider(didActivate:)
+    // выполняются асинхронно.
+    // Даём CallKit активировать AVAudioSession
+    // до создания LocalAudioTrack.
+    await Future<void>.delayed(
+      const Duration(milliseconds: 450),
+    );
+
+    debugPrint(
+      '[CALL] iOS OUTGOING CALLKIT READY '
+      'callId=${widget.callId}',
+    );
+  }
+
   Future<void> _init() async {
     // Сразу загружаем профиль второго участника по call_id, чтобы имя и
     // аватар появились ещё до установления медиасоединения.
@@ -84,45 +167,36 @@ class _AudioCallScreenState extends State<AudioCallScreen> {
     }
 
     try {
-      final details = await _fetchConnectionDetails();
+      await _startIosOutgoingCallKit();
+
+      final room =
+          await CallSessionService.instance.ensureConnected(
+        callId: widget.callId,
+        userId: widget.userId,
+      );
+
       if (!mounted) return;
 
-      final room = lk.Room(
-        roomOptions: const lk.RoomOptions(
-          adaptiveStream: true,
-          dynacast: true,
-        ),
-      );
       room.addListener(_onRoomChanged);
       _room = room;
-      _roomName = details.roomName;
+      _roomName = CallSessionService.instance.roomName;
 
-      _connectTimeout?.cancel();
-      _connectTimeout = Timer(const Duration(seconds: 25), () {
-        if (!mounted) return;
-        final current = _room;
-        if (current == null ||
-            current.connectionState != lk.ConnectionState.connected) {
-          setState(() => _fatalError = 'Не удалось установить соединение');
-        }
-      });
-
-      await room.prepareConnection(details.serverUrl, details.token);
-      await room.connect(
-        details.serverUrl,
-        details.token,
-      );
-
-      await room.localParticipant?.setMicrophoneEnabled(true);
-
-      // Телефонный разговор начинаем через обычный разговорный динамик.
-      // Громкая связь включается только пользователем кнопкой ниже.
-      if (_supportsSpeakerToggle) {
+      // Android начинаем через обычный разговорный динамик.
+      // На iOS CallKit сам владеет AVAudioSession и маршрутом в момент Accept.
+      // Не переопределяем его сразу после подключения LiveKit.
+      if (!kIsWeb &&
+          defaultTargetPlatform == TargetPlatform.android) {
         try {
-          await lk.AudioManager.instance.setSpeakerOutputPreferred(false);
-        } catch (_) {
-          // Аудиосеанс уже может быть активирован системой — звонок не роняем.
-        }
+
+
+          await _androidCallAudio.invokeMethod<bool>(
+            'setSpeaker',
+            <String, dynamic>{
+              'enabled': false,
+              'callUuid': _sportotekaCallUuid(widget.callId),
+            },
+          );
+        } catch (_) {}
       }
 
       _connectTimeout?.cancel();
@@ -407,16 +481,52 @@ class _AudioCallScreenState extends State<AudioCallScreen> {
   Future<void> _toggleSpeaker() async {
     if (!_supportsSpeakerToggle) return;
 
+    final room = _room;
+
+    if (room == null ||
+        room.connectionState != lk.ConnectionState.connected) {
+      return;
+    }
+
     final next = !_speakerOn;
+
     try {
-      await lk.AudioManager.instance.setSpeakerOutputPreferred(next);
+      // Сначала LiveKit обновляет собственный AudioSwitch.
+
+
+      // Затем на Android фиксируем тот же маршрут нативно,
+      // включая self-managed Telecom Connection.
+      if (!kIsWeb &&
+          defaultTargetPlatform == TargetPlatform.android) {
+        await _androidCallAudio.invokeMethod<bool>(
+          'setSpeaker',
+          <String, dynamic>{
+            'enabled': next,
+            'callUuid': _sportotekaCallUuid(widget.callId),
+          },
+        );
+      }
+ else {
+        // На iOS маршрутом продолжает управлять
+        // LiveKit / CallKit.
+        await lk.AudioManager.instance
+            .setSpeakerOutputPreferred(
+          next,
+          force: next,
+        );
+      }
+
       if (!mounted) return;
+
       setState(() => _speakerOn = next);
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Не удалось переключить аудиовыход'),
+        SnackBar(
+          content: Text(
+            'Не удалось переключить аудиовыход: $e',
+          ),
         ),
       );
     }
@@ -512,7 +622,30 @@ class _AudioCallScreenState extends State<AudioCallScreen> {
       await _disposeRoom(room);
     }
 
+    await _endNativeCallUi();
+
     if (mounted) Navigator.pop(context);
+  }
+
+
+  Future<void> _endNativeCallUi() async {
+    if (_nativeCallUiEnded) return;
+    _nativeCallUiEnded = true;
+
+    if (kIsWeb) return;
+
+    if (defaultTargetPlatform != TargetPlatform.android &&
+        defaultTargetPlatform != TargetPlatform.iOS) {
+      return;
+    }
+
+    try {
+      await FlutterCallkitIncoming.endCall(
+        _sportotekaCallUuid(widget.callId),
+      );
+    } catch (_) {
+      // Если системный экран уже закрыт, это нормально.
+    }
   }
 
   Future<void> _notifyEnded() async {
@@ -534,9 +667,16 @@ class _AudioCallScreenState extends State<AudioCallScreen> {
 
   Future<void> _disposeRoom(lk.Room room) async {
     room.removeListener(_onRoomChanged);
+
+    if (identical(CallSessionService.instance.room, room)) {
+      await CallSessionService.instance.disconnect();
+      return;
+    }
+
     try {
       await room.disconnect();
     } catch (_) {}
+
     try {
       await room.dispose();
     } catch (_) {}
@@ -551,6 +691,7 @@ class _AudioCallScreenState extends State<AudioCallScreen> {
     _durationTimer?.cancel();
     _statusTimer?.cancel();
     await _notifyEnded();
+    await _endNativeCallUi();
 
     final room = _room;
     _room = null;
@@ -567,7 +708,7 @@ class _AudioCallScreenState extends State<AudioCallScreen> {
     if (raw.contains('call_not_joinable')) return 'Этот вызов уже завершён';
     if (raw.contains('call_not_found')) return 'Вызов не найден';
     if (raw.contains('MediaConnectException')) {
-      return 'Нет соединения с медиасервером. Проверьте WebRTC-порты.';
+      return 'Медиасоединение прервано. Выполняется восстановление соединения.';
     }
     return 'Ошибка соединения: $raw';
   }
@@ -615,24 +756,35 @@ class _AudioCallScreenState extends State<AudioCallScreen> {
     _durationTimer?.cancel();
     _statusTimer?.cancel();
 
-    // Если экран был закрыт внешней навигацией/ошибкой, всё равно
-    // закрываем серверный lifecycle. Повторный вызов безопасен.
-    if (!_endNotified) {
-      unawaited(_notifyEnded());
-    }
-
+    // AudioCallScreen больше НЕ владеет LiveKit lifecycle.
+    //
+    // Экран может исчезнуть из-за:
+    // - CallKit foreground/background transition,
+    // - навигации,
+    // - rebuild приложения,
+    // - разблокировки iPhone.
+    //
+    // Ни одно из этих событий не означает завершение разговора.
     final room = _room;
     _room = null;
+
     if (room != null) {
-      unawaited(_disposeRoom(room));
+      try {
+        room.removeListener(_onRoomChanged);
+      } catch (_) {}
     }
 
-    // Не оставляем предпочтение громкой связи для следующего вызова.
-    if (_supportsSpeakerToggle && _speakerOn) {
-      unawaited(
-        lk.AudioManager.instance.setSpeakerOutputPreferred(false),
-      );
-    }
+    // ВАЖНО:
+    // здесь больше НЕТ:
+    // _notifyEnded()
+    // _disposeRoom()
+    // _endNativeCallUi()
+    // setSpeakerOutputPreferred(false)
+    //
+    // Завершать звонок имеют право только:
+    // _hangup()
+    // _closeFromRemoteStatus()
+    // CallSessionService status polling.
 
     super.dispose();
   }
