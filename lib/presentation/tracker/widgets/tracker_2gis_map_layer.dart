@@ -109,14 +109,38 @@ class TrackerGeoTrack {
       if (cursorTimeMs == null || cursorTimeMs <= 0) {
         current = valid.last;
       } else {
+        TrackerGeoPoint? previous;
+        TrackerGeoPoint? next;
         for (final point in valid) {
           if (point.timeMs <= cursorTimeMs) {
-            current = point;
+            previous = point;
           } else {
+            next = point;
             break;
           }
         }
-        current ??= valid.first;
+        final base = previous ?? valid.first;
+        current = base;
+        // Replay: положение на 2ГИС/спутнике вычисляем внутри GPS-сегмента,
+        // а не прыгаем только по сохранённым точкам. На больших разрывах связи
+        // остаёмся на последней подтверждённой позиции.
+        if (next != null && next.timeMs > base.timeMs && !next.breakBefore) {
+          final gapMs = next.timeMs - base.timeMs;
+          if (gapMs <= 15000 &&
+              cursorTimeMs >= base.timeMs &&
+              cursorTimeMs <= next.timeMs) {
+            final ratio = ((cursorTimeMs - base.timeMs) / gapMs)
+                .clamp(0.0, 1.0)
+                .toDouble();
+            current = TrackerGeoPoint(
+              latitude: base.latitude + (next.latitude - base.latitude) * ratio,
+              longitude:
+                  base.longitude + (next.longitude - base.longitude) * ratio,
+              timeMs: cursorTimeMs,
+              speedKmh: base.speedKmh + (next.speedKmh - base.speedKmh) * ratio,
+            );
+          }
+        }
       }
     }
     return <String, dynamic>{
@@ -870,6 +894,8 @@ class Tracker2GisMapLayer extends StatefulWidget {
     this.showLabels = true,
     this.showTrace = true,
     this.routeWindowMs,
+    this.smoothPlayerMotion = false,
+    this.playerMotionDurationMs = 220,
     this.calibrationEnabled = false,
     this.calibrationRectangleMode = false,
     this.calibrationCorners = const <TrackerGeoPoint>[],
@@ -892,6 +918,10 @@ class Tracker2GisMapLayer extends StatefulWidget {
   final bool showLabels;
   final bool showTrace;
   final int? routeWindowMs;
+  /// Плавное визуальное перемещение архивных/Replay-маркеров между
+  /// обновлениями курсора. Live включает сглаживание независимо от этого флага.
+  final bool smoothPlayerMotion;
+  final int playerMotionDurationMs;
   final bool calibrationEnabled;
   final bool calibrationRectangleMode;
   final List<TrackerGeoPoint> calibrationCorners;
@@ -1145,6 +1175,10 @@ class _Tracker2GisMapLayerState extends State<Tracker2GisMapLayer> {
           )
           .toList(growable: false),
       'live': widget.live,
+      'smooth_player_motion': widget.smoothPlayerMotion,
+      'player_motion_duration_ms': widget.live
+          ? 780
+          : widget.playerMotionDurationMs.clamp(80, 1200),
       'follow': widget.followLatest,
       'interactive': widget.interactive,
       'pitch': widget.perspective3d ? 48 : 0,
@@ -1212,11 +1246,75 @@ class _Tracker2GisMapLayerState extends State<Tracker2GisMapLayer> {
     .player-dot img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
     .player-label { max-width:150px; padding:5px 8px; border-radius:8px; background:rgba(255,255,255,.94); color:#203229; box-shadow:0 2px 9px rgba(16,45,31,.18); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font:750 11px -apple-system, BlinkMacSystemFont, sans-serif; }
     .player-label small { display:block; margin-top:1px; color:#67756e; font-size:9px; }
-    .calibration-pin { width:34px; height:34px; transform:translate(-17px,-17px); border:3px solid #fff; border-radius:50%; background:#00a65a; color:#fff; display:flex; align-items:center; justify-content:center; box-shadow:0 3px 14px rgba(0,73,42,.38); font:900 13px -apple-system, BlinkMacSystemFont, sans-serif; pointer-events:auto; cursor:pointer; user-select:none; }
-    .calibration-pin.editing { background:#111827; box-shadow:0 0 0 5px rgba(0,167,80,.28), 0 5px 18px rgba(0,0,0,.34); transform:translate(-17px,-17px) scale(1.12); }
-    .leaflet-calibration-icon { background:transparent !important; border:0 !important; }
+    .calibration-pin {
+      position:relative; width:40px; height:40px; transform:translate(-20px,-20px);
+      border:3px solid #fff; border-radius:50%; background:#00a65a; color:#fff;
+      display:flex; align-items:center; justify-content:center; overflow:visible;
+      box-shadow:0 4px 16px rgba(0,73,42,.42);
+      font:900 14px -apple-system, BlinkMacSystemFont, sans-serif;
+      pointer-events:auto; cursor:grab; user-select:none; -webkit-user-select:none;
+      touch-action:none; -webkit-tap-highlight-color:transparent;
+      transition:transform .16s cubic-bezier(.2,.8,.2,1), background .16s ease,
+        box-shadow .16s ease, filter .16s ease;
+    }
+    .calibration-pin::before {
+      content:''; position:absolute; inset:-9px; border:2px solid rgba(0,166,90,.46);
+      border-radius:50%; opacity:0; transform:scale(.7); pointer-events:none;
+    }
+    .calibration-pin:hover {
+      transform:translate(-20px,-20px) scale(1.08);
+      box-shadow:0 0 0 4px rgba(0,166,90,.18), 0 6px 20px rgba(0,73,42,.44);
+    }
+    .calibration-pin.editing {
+      background:#17382b;
+      box-shadow:0 0 0 5px rgba(0,166,90,.30), 0 7px 22px rgba(0,0,0,.34);
+      transform:translate(-20px,-20px) scale(1.16);
+      animation:calibrationSelectPop .24s cubic-bezier(.2,.9,.3,1.25);
+    }
+    .calibration-pin.editing::before {
+      opacity:1; animation:calibrationPulse 1.15s ease-out infinite;
+    }
+    .calibration-pin.dragging, .calibration-pin:active {
+      cursor:grabbing; background:#0b6e44; filter:brightness(1.06);
+      transform:translate(-20px,-20px) scale(1.24);
+      box-shadow:0 0 0 7px rgba(0,166,90,.24), 0 10px 28px rgba(0,0,0,.38);
+    }
+    .calibration-pin.dragging::before {
+      opacity:1; animation:calibrationPulse .72s ease-out infinite;
+    }
+    .calibration-drag-label {
+      position:absolute; left:50%; top:45px; transform:translate(-50%,-4px) scale(.94);
+      padding:3px 6px; border-radius:6px; background:rgba(17,24,39,.94); color:#fff;
+      box-shadow:0 4px 12px rgba(0,0,0,.24); font-size:8px; font-weight:900;
+      letter-spacing:.7px; line-height:1; white-space:nowrap; opacity:0; pointer-events:none;
+      transition:opacity .14s ease, transform .14s ease;
+    }
+    .calibration-pin.editing .calibration-drag-label,
+    .calibration-pin.dragging .calibration-drag-label {
+      opacity:1; transform:translate(-50%,0) scale(1);
+    }
+    @keyframes calibrationPulse {
+      0% { opacity:.78; transform:scale(.70); }
+      70%, 100% { opacity:0; transform:scale(1.32); }
+    }
+    @keyframes calibrationSelectPop {
+      0% { transform:translate(-20px,-20px) scale(.88); }
+      70% { transform:translate(-20px,-20px) scale(1.23); }
+      100% { transform:translate(-20px,-20px) scale(1.16); }
+    }
+    .leaflet-calibration-icon {
+      background:transparent !important; border:0 !important; overflow:visible !important;
+      display:flex !important; align-items:center; justify-content:center;
+    }
     .leaflet-calibration-icon .calibration-pin { transform:none; }
-    .leaflet-calibration-icon .calibration-pin.editing { transform:scale(1.12); }
+    .leaflet-calibration-icon .calibration-pin:hover { transform:scale(1.08); }
+    .leaflet-calibration-icon .calibration-pin.editing { transform:scale(1.16); }
+    .leaflet-calibration-icon .calibration-pin.dragging,
+    .leaflet-calibration-icon .calibration-pin:active { transform:scale(1.24); }
+    @keyframes calibrationSelectPopLeaflet {
+      0% { transform:scale(.88); } 70% { transform:scale(1.23); } 100% { transform:scale(1.16); }
+    }
+    .leaflet-calibration-icon .calibration-pin.editing { animation-name:calibrationSelectPopLeaflet; }
     /* Атрибуция остаётся доступной, но не перекрывает рабочую область поля. */
     .leaflet-control-attribution {
       margin:0 2px 2px 0 !important; padding:1px 4px !important;
@@ -1238,6 +1336,7 @@ class _Tracker2GisMapLayerState extends State<Tracker2GisMapLayer> {
     let map = null;
     let routes = [];
     const markers = new Map();
+    const markerMotion = new Map();
     let lastPayload = null;
     let firstFit = true;
     let leafletTileErrorSent = false;
@@ -1305,6 +1404,56 @@ class _Tracker2GisMapLayerState extends State<Tracker2GisMapLayer> {
         iconAnchor:[20, 20],
       });
     }
+    function setPlayerMarkerCoordinates(marker, coordinates) {
+      if (cfg.satellite) {
+        marker.setLatLng([coordinates[1], coordinates[0]]);
+      } else {
+        marker.setCoordinates(coordinates);
+      }
+    }
+    function movePlayerMarker(id, marker, coordinates, smooth, durationMs) {
+      const next = [Number(coordinates[0]), Number(coordinates[1])];
+      let motion = markerMotion.get(id);
+      if (!motion) {
+        motion = { current:next.slice(), target:next.slice(), raf:0, token:0 };
+        markerMotion.set(id, motion);
+        setPlayerMarkerCoordinates(marker, next);
+        return;
+      }
+      const unchanged = Math.abs(motion.target[0] - next[0]) < 1e-10 &&
+        Math.abs(motion.target[1] - next[1]) < 1e-10;
+      if (unchanged) return;
+      if (motion.raf) cancelAnimationFrame(motion.raf);
+      const from = motion.current ? motion.current.slice() : motion.target.slice();
+      motion.target = next.slice();
+      motion.token += 1;
+      const token = motion.token;
+      if (!smooth || typeof requestAnimationFrame !== 'function') {
+        motion.current = next.slice();
+        setPlayerMarkerCoordinates(marker, next);
+        return;
+      }
+      const started = performance.now();
+      const duration = Math.max(80, Math.min(1200, Number(durationMs) || 780));
+      const frame = (now) => {
+        if (token !== motion.token) return;
+        const raw = Math.max(0, Math.min(1, (now - started) / duration));
+        const t = raw * raw * (3 - 2 * raw);
+        const current = [
+          from[0] + (next[0] - from[0]) * t,
+          from[1] + (next[1] - from[1]) * t,
+        ];
+        motion.current = current;
+        try { setPlayerMarkerCoordinates(marker, current); } catch (_) { return; }
+        if (raw < 1) {
+          motion.raf = requestAnimationFrame(frame);
+        } else {
+          motion.raf = 0;
+          motion.current = next.slice();
+        }
+      };
+      motion.raf = requestAnimationFrame(frame);
+    }
     function clearCalibrationGraphics() {
       calibrationMarkers.forEach((marker) => {
         try { cfg.satellite ? marker.remove() : marker.destroy(); } catch (_) {}
@@ -1327,8 +1476,88 @@ class _Tracker2GisMapLayerState extends State<Tracker2GisMapLayer> {
     window.sportotekaSelectCalibration = selectCalibrationCorner;
     function calibrationPin(label, index, selected) {
       return '<div class="calibration-pin' + (selected ? ' editing' : '') +
-        '" onclick="window.sportotekaSelectCalibration(' + index + ', event)">' +
-        esc(label) + '</div>';
+        '" data-calibration-index="' + Number(index) + '">' +
+        esc(label) + '<span class="calibration-drag-label">ТЯНИТЕ</span></div>';
+    }
+    function calibrationPinElement(marker) {
+      try {
+        const root = marker && typeof marker.getContent === 'function'
+          ? marker.getContent()
+          : marker && typeof marker.getElement === 'function'
+            ? marker.getElement()
+            : null;
+        return root && root.querySelector
+          ? root.querySelector('.calibration-pin')
+          : null;
+      } catch (_) {
+        return null;
+      }
+    }
+    function setCalibrationPinDragging(marker, dragging) {
+      const pin = calibrationPinElement(marker);
+      if (!pin || !pin.classList) return;
+      pin.classList.toggle('dragging', !!dragging);
+    }
+    function updateSatelliteCalibrationShape() {
+      if (!cfg.satellite || !calibrationShape || calibrationCoordinates.length < 2) return;
+      const latLngs = calibrationCoordinates.map((value) => [value[1], value[0]]);
+      try {
+        calibrationShape.setLatLngs(latLngs);
+      } catch (_) {}
+    }
+    function bindMapGlCalibrationDrag(marker, index) {
+      const pin = calibrationPinElement(marker);
+      if (!pin || !pin.addEventListener) return;
+      pin.addEventListener('pointerdown', (downEvent) => {
+        if (!lastPayload || !lastPayload.calibration_enabled) return;
+        try { downEvent.preventDefault(); downEvent.stopPropagation(); } catch (_) {}
+        const pointerId = downEvent.pointerId;
+        const startX = Number(downEvent.clientX || 0);
+        const startY = Number(downEvent.clientY || 0);
+        let moved = false;
+        setCalibrationPinDragging(marker, true);
+        setInteractive(false);
+        try { if (pin.setPointerCapture) pin.setPointerCapture(pointerId); } catch (_) {}
+
+        const move = (moveEvent) => {
+          if (moveEvent.pointerId !== pointerId) return;
+          const dx = Number(moveEvent.clientX || 0) - startX;
+          const dy = Number(moveEvent.clientY || 0) - startY;
+          if (!moved && Math.hypot(dx, dy) < 4) return;
+          moved = true;
+          try { moveEvent.preventDefault(); moveEvent.stopPropagation(); } catch (_) {}
+          const rect = document.getElementById('map').getBoundingClientRect();
+          const coordinate = coordinateFromScreen([
+            Number(moveEvent.clientX || 0) - rect.left,
+            Number(moveEvent.clientY || 0) - rect.top,
+          ]);
+          if (!validCoordinate(coordinate)) return;
+          calibrationCoordinates[index] = [Number(coordinate[0]), Number(coordinate[1])];
+          try { marker.setCoordinates(calibrationCoordinates[index]); } catch (_) {}
+        };
+
+        const finish = (upEvent) => {
+          if (upEvent.pointerId !== pointerId) return;
+          document.removeEventListener('pointermove', move, true);
+          document.removeEventListener('pointerup', finish, true);
+          document.removeEventListener('pointercancel', finish, true);
+          try { if (pin.releasePointerCapture) pin.releasePointerCapture(pointerId); } catch (_) {}
+          setCalibrationPinDragging(marker, false);
+          setInteractive(true);
+          try { upEvent.preventDefault(); upEvent.stopPropagation(); } catch (_) {}
+          if (moved) {
+            renderCalibration(calibrationCoordinates);
+            postCalibration();
+            post('calibration-select:-1');
+          } else {
+            selectCalibrationCorner(index, upEvent);
+          }
+        };
+
+        document.addEventListener('pointermove', move, true);
+        document.addEventListener('pointerup', finish, true);
+        document.addEventListener('pointercancel', finish, true);
+      }, { passive:false });
     }
     function validCoordinate(value) {
       return Array.isArray(value) && value.length >= 2 &&
@@ -1367,26 +1596,57 @@ class _Tracker2GisMapLayerState extends State<Tracker2GisMapLayer> {
               icon:L.divIcon({
                 html,
                 className:'leaflet-calibration-icon',
-                iconSize:[34, 34],
-                iconAnchor:[17, 17],
+                iconSize:[44, 44],
+                iconAnchor:[22, 22],
               }),
               interactive:true,
               keyboard:false,
+              draggable:true,
+              autoPan:true,
               zIndexOffset:4000 + index,
             },
           ).addTo(map);
+          let calibrationMarkerMoved = false;
+          marker.on('dragstart', () => {
+            calibrationMarkerMoved = false;
+            setCalibrationPinDragging(marker, true);
+          });
+          marker.on('drag', (markerEvent) => {
+            calibrationMarkerMoved = true;
+            const latLng = markerEvent && markerEvent.target
+              ? markerEvent.target.getLatLng()
+              : marker.getLatLng();
+            if (!latLng) return;
+            calibrationCoordinates[index] = [Number(latLng.lng), Number(latLng.lat)];
+            updateSatelliteCalibrationShape();
+          });
+          marker.on('dragend', () => {
+            setCalibrationPinDragging(marker, false);
+            if (!calibrationMarkerMoved) return;
+            renderCalibration(calibrationCoordinates);
+            postCalibration();
+            post('calibration-select:-1');
+          });
           marker.on('click', (markerEvent) => {
             try { L.DomEvent.stopPropagation(markerEvent); } catch (_) {}
+            if (calibrationMarkerMoved) {
+              calibrationMarkerMoved = false;
+              return;
+            }
             selectCalibrationCorner(index, markerEvent.originalEvent);
           });
           calibrationMarkers.push(marker);
         } else {
-          calibrationMarkers.push(new mapgl.HtmlMarker(map, {
+          const marker = new mapgl.HtmlMarker(map, {
             coordinates,
             html,
             anchor:[0, 0],
             zIndex:40 + index,
-          }));
+            interactive:true,
+            preventMapInteractions:true,
+          });
+          bindMapGlCalibrationDrag(marker, index);
+          calibrationMarkers.push(marker);
         }
       });
       if (calibrationCoordinates.length < 2) return;
@@ -1849,8 +2109,15 @@ class _Tracker2GisMapLayerState extends State<Tracker2GisMapLayer> {
               zIndexOffset:track.selected ? 2000 : 1000,
             }).addTo(map);
             markers.set(track.id, marker);
+            markerMotion.set(track.id, { current:coordinates.slice(), target:coordinates.slice(), raf:0, token:0 });
           } else {
-            marker.setLatLng(latLng);
+            movePlayerMarker(
+              track.id,
+              marker,
+              coordinates,
+              Boolean(payload.live || payload.smooth_player_motion),
+              payload.player_motion_duration_ms,
+            );
             marker.setIcon(icon);
             marker.setZIndexOffset(track.selected ? 2000 : 1000);
           }
@@ -1862,8 +2129,15 @@ class _Tracker2GisMapLayerState extends State<Tracker2GisMapLayer> {
             zIndex:track.selected ? 20 : 10,
           });
           markers.set(track.id, marker);
+          markerMotion.set(track.id, { current:coordinates.slice(), target:coordinates.slice(), raf:0, token:0 });
         } else {
-          marker.setCoordinates(coordinates);
+          movePlayerMarker(
+              track.id,
+              marker,
+              coordinates,
+              Boolean(payload.live || payload.smooth_player_motion),
+              payload.player_motion_duration_ms,
+            );
           marker.setContent(html);
           marker.setZIndex(track.selected ? 20 : 10);
         }
@@ -1871,6 +2145,9 @@ class _Tracker2GisMapLayerState extends State<Tracker2GisMapLayer> {
       markers.forEach((marker, id) => {
         if (!alive.has(id)) {
           try { cfg.satellite ? marker.remove() : marker.destroy(); } catch (_) {}
+          const motion = markerMotion.get(id);
+          if (motion && motion.raf) cancelAnimationFrame(motion.raf);
+          markerMotion.delete(id);
           markers.delete(id);
         }
       });
@@ -1901,9 +2178,9 @@ class _Tracker2GisMapLayerState extends State<Tracker2GisMapLayer> {
           [0, 0]
         ).map((value) => value / followPoints.length);
         if (cfg.satellite) {
-          map.panTo([center[1], center[0]], { animate:true, duration:0.12 });
+          map.panTo([center[1], center[0]], { animate:true, duration:0.68 });
         } else {
-          map.setCenter(center, { duration:120 });
+          map.setCenter(center, { duration:680 });
         }
       }
       applyRotation(

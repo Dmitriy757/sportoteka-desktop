@@ -2055,7 +2055,12 @@ Padding(
                             title,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: _ChatText.title(11.7),
+                            style: AppTypography.custom(
+                              size: 13.5,
+                              weight: FontWeight.w600,
+                              color: _ChatStyle.text,
+                              height: 1.18,
+                            ),
                           ),
                         ),
                         if (isGroup) ...<Widget>[
@@ -2072,11 +2077,13 @@ Padding(
                       secondLine,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: _ChatText.body(
-                        9.8,
+                      style: AppTypography.custom(
+                        size: 12.8,
+                        weight: FontWeight.w400,
                         color: rawLast.isNotEmpty
                             ? _ChatStyle.muted
                             : _ChatStyle.muted2,
+                        height: 1.28,
                       ),
                     ),
                   ],

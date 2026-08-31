@@ -91,6 +91,20 @@ class _WinChatText {
     return base.copyWith(fontWeight: weight);
   }
 
+  /// Текст непосредственно внутри пузыря сообщения.
+  /// Отдельный стиль нужен, чтобы размер сообщения не зависел от
+  /// семантического порога `_WinChatText.body()`.
+  static TextStyle messageBody({
+    Color color = _WinChatColors.text,
+    FontWeight weight = FontWeight.w500,
+  }) =>
+      AppTypography.custom(
+        size: 13.5,
+        weight: weight,
+        color: color,
+        height: 1.38,
+      );
+
   static TextStyle caption({
     Color color = _WinChatColors.muted,
   }) =>
@@ -1961,8 +1975,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
                                       )
                                     ];
                                   } else {
-                                    final style = _WinChatText.body(
-                                      12.3,
+                                    final style = _WinChatText.messageBody(
                                       color: _WinChatColors.text,
                                       weight: FontWeight.w500,
                                     );

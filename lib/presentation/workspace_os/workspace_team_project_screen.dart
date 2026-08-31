@@ -15,6 +15,7 @@ class SportotekaTeamProjectScreen extends StatefulWidget {
     this.onRefresh,
     this.onOpenModule,
     this.onClose,
+    this.currentUserId = 0,
   });
 
   final Map<String, dynamic> team;
@@ -23,6 +24,7 @@ class SportotekaTeamProjectScreen extends StatefulWidget {
   final Future<void> Function()? onRefresh;
   final void Function(String moduleKey)? onOpenModule;
   final VoidCallback? onClose;
+  final int currentUserId;
 
   @override
   State<SportotekaTeamProjectScreen> createState() => _SportotekaTeamProjectScreenState();
@@ -102,6 +104,7 @@ class _SportotekaTeamProjectScreenState extends State<SportotekaTeamProjectScree
       entityType: 'team',
       entityId: '$_teamId',
       clubId: widget.clubId,
+      currentUserId: widget.currentUserId,
       serverParentKey: 'entity:team:$_teamId',
       onEdit: _editTeam,
       onRefresh: widget.onRefresh,
@@ -120,6 +123,7 @@ class _SportotekaTeamProjectScreenState extends State<SportotekaTeamProjectScree
       propertiesFor: (row) => _propertiesFor(file.section, row),
       localStorageKey: '',
       clubId: widget.clubId,
+      currentUserId: widget.currentUserId,
       serverParentKey: 'team:${_teamId}:${file.section.name}',
       attachmentEntityType: '',
       attachmentEntityId: file.section == _TeamSection.documents ? _teamId : 0,
@@ -295,6 +299,7 @@ class _SportotekaTeamProjectScreenState extends State<SportotekaTeamProjectScree
           clubId: widget.clubId,
           teamId: _teamId,
           teamName: _teamName,
+          currentUserId: widget.currentUserId,
           onRefresh: widget.onRefresh,
         ),
       );
@@ -322,6 +327,7 @@ class _SportotekaTeamProjectScreenState extends State<SportotekaTeamProjectScree
       entityType: identity.type,
       entityId: identity.id,
       clubId: widget.clubId,
+      currentUserId: widget.currentUserId,
       serverParentKey: 'entity:${identity.type}:${identity.id}',
       fileUrl: fileUrl,
       onRefresh: widget.onRefresh,

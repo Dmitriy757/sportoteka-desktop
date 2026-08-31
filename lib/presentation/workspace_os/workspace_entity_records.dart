@@ -42,6 +42,7 @@ class WorkspaceEntityRecordBrowser extends StatefulWidget {
     this.externalUploadPaths,
     this.allowCreateDocuments = false,
     this.showBackButton = true,
+    this.currentUserId = 0,
   });
 
   final String ownerTitle;
@@ -64,6 +65,7 @@ class WorkspaceEntityRecordBrowser extends StatefulWidget {
   final Future<void> Function(List<String> paths)? externalUploadPaths;
   final bool allowCreateDocuments;
   final bool showBackButton;
+  final int currentUserId;
 
   @override
   State<WorkspaceEntityRecordBrowser> createState() => _WorkspaceEntityRecordBrowserState();
@@ -113,7 +115,10 @@ class _WorkspaceEntityRecordBrowserState extends State<WorkspaceEntityRecordBrow
   void initState() {
     super.initState();
     if (widget.clubId > 0 && widget.serverParentKey.trim().isNotEmpty) {
-      _serverStorage = WorkspaceServerStorage(clubId: widget.clubId);
+      _serverStorage = WorkspaceServerStorage(
+        clubId: widget.clubId,
+        userId: widget.currentUserId,
+      );
     }
     _search.addListener(_changed);
     _load();
@@ -266,6 +271,8 @@ class _WorkspaceEntityRecordBrowserState extends State<WorkspaceEntityRecordBrow
       for (final row in local) {
         final id = '${row['id'] ?? ''}';
         if (id.isEmpty) continue;
+        final needsSync = row['_workspace_pending_sync'] == true || row['_workspace_server'] != true;
+        if (!needsSync) continue;
         final localTitle = '${row['title'] ?? 'Новый документ'}';
         final localSubtitle = '${row['subtitle'] ?? 'Документ Sportoteka OS'}';
         final localBody = '${row['workspace_note'] ?? ''}';
@@ -282,8 +289,7 @@ class _WorkspaceEntityRecordBrowserState extends State<WorkspaceEntityRecordBrow
             createdAt: DateTime.tryParse('${row['created_at'] ?? ''}'),
             updatedAt: localUpdated,
           );
-          await server.createNode(node);
-          await server.saveDocument(clientUid: id, title: node.title, body: localBody);
+          await server.syncNodeDocument(node: node, body: localBody, createHint: true);
           serverChanged = true;
           continue;
         }
@@ -308,19 +314,19 @@ class _WorkspaceEntityRecordBrowserState extends State<WorkspaceEntityRecordBrow
             createdAt: existing.createdAt,
             updatedAt: localUpdated ?? DateTime.now(),
           );
-          await server.updateNode(node);
-          await server.saveDocument(clientUid: id, title: node.title, body: localBody);
+          await server.syncNodeDocument(node: node, body: localBody);
           serverChanged = true;
         }
       }
       if (serverChanged) snapshot = await server.load();
       _serverAvailable = true;
-      return snapshot.nodes
+      final serverRows = snapshot.nodes
           .where((n) => n.parentId == widget.serverParentKey && n.kind == WorkspaceFinderNodeKind.note)
           .map((node) => <String, dynamic>{
                 'id': node.id,
                 '_workspace_local': true,
                 '_workspace_server': true,
+                '_workspace_pending_sync': false,
                 '_workspace_document': node.payload?['workspace_document'] == true,
                 'title': node.title,
                 'subtitle': node.subtitle,
@@ -329,6 +335,9 @@ class _WorkspaceEntityRecordBrowserState extends State<WorkspaceEntityRecordBrow
                 'updated_at': node.updatedAt?.toIso8601String() ?? '',
               })
           .toList();
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_effectiveLocalStorageKey, jsonEncode(serverRows));
+      return serverRows;
     } catch (_) {
       _serverAvailable = false;
       return local;
@@ -348,6 +357,7 @@ class _WorkspaceEntityRecordBrowserState extends State<WorkspaceEntityRecordBrow
     final row = <String, dynamic>{
       'id': 'workspace_${now.microsecondsSinceEpoch}',
       '_workspace_local': true,
+      '_workspace_pending_sync': true,
       'title': 'Новый документ',
       'subtitle': 'Документ Sportoteka OS',
       '_workspace_document': true,
@@ -426,6 +436,7 @@ class _WorkspaceEntityRecordBrowserState extends State<WorkspaceEntityRecordBrow
         'subtitle': _preview(body),
         'workspace_note': body,
         'updated_at': now,
+        '_workspace_pending_sync': true,
       };
     }
     setState(() {
@@ -439,27 +450,51 @@ class _WorkspaceEntityRecordBrowserState extends State<WorkspaceEntityRecordBrow
     if (matches.isNotEmpty) await _syncUpdateLocalRecord(matches.first);
   }
 
+  Future<void> _markLocalRecordSynced(String id) async {
+    if (id.isEmpty) return;
+    Map<String, dynamic> clean(Map<String, dynamic> row) {
+      if ('${row['id'] ?? ''}' != id) return row;
+      return <String, dynamic>{
+        ...row,
+        '_workspace_server': true,
+        '_workspace_pending_sync': false,
+      };
+    }
+    if (mounted) {
+      setState(() {
+        _localRecords = _localRecords.map(clean).toList();
+        _records = _records.map(clean).toList();
+      });
+    } else {
+      _localRecords = _localRecords.map(clean).toList();
+      _records = _records.map(clean).toList();
+    }
+    await _persistLocalRecords();
+  }
+
   Future<void> _syncCreateLocalRecord(Map<String, dynamic> row) async {
     final server = _serverStorage;
     if (server == null) return;
+    final id = '${row['id'] ?? ''}';
+    if (id.isEmpty) return;
+    final node = WorkspaceFinderNode(
+      id: id,
+      title: '${row['title'] ?? 'Новый документ'}',
+      subtitle: '${row['subtitle'] ?? 'Документ Sportoteka OS'}',
+      kind: WorkspaceFinderNodeKind.note,
+      payload: <String, dynamic>{'workspace_document': row['_workspace_document'] == true},
+      parentId: widget.serverParentKey,
+      createdAt: DateTime.tryParse('${row['created_at'] ?? ''}'),
+      updatedAt: DateTime.tryParse('${row['updated_at'] ?? ''}'),
+    );
     try {
-      if (!_serverAvailable) {
-        await server.load();
-        _serverAvailable = true;
-      }
-      final id = '${row['id'] ?? ''}';
-      if (id.isEmpty) return;
-      final node = WorkspaceFinderNode(
-        id: id,
-        title: '${row['title'] ?? 'Новый документ'}',
-        subtitle: '${row['subtitle'] ?? 'Документ Sportoteka OS'}',
-        kind: WorkspaceFinderNodeKind.note,
-        payload: <String, dynamic>{'workspace_document': row['_workspace_document'] == true},
-        parentId: widget.serverParentKey,
-        createdAt: DateTime.tryParse('${row['created_at'] ?? ''}'),
+      await server.syncNodeDocument(
+        node: node,
+        body: '${row['workspace_note'] ?? ''}',
+        createHint: true,
       );
-      await server.createNode(node);
-      await server.saveDocument(clientUid: id, title: node.title, body: '${row['workspace_note'] ?? ''}');
+      _serverAvailable = true;
+      await _markLocalRecordSynced(id);
     } catch (_) {
       _serverAvailable = false;
     }
@@ -467,23 +502,28 @@ class _WorkspaceEntityRecordBrowserState extends State<WorkspaceEntityRecordBrow
 
   Future<void> _syncUpdateLocalRecord(Map<String, dynamic> row) async {
     final server = _serverStorage;
-    if (server == null || !_serverAvailable) return;
+    if (server == null) return;
+    final id = '${row['id'] ?? ''}';
+    if (id.isEmpty) return;
+    final node = WorkspaceFinderNode(
+      id: id,
+      title: '${row['title'] ?? 'Новый документ'}',
+      subtitle: '${row['subtitle'] ?? ''}',
+      kind: WorkspaceFinderNodeKind.note,
+      payload: <String, dynamic>{'workspace_document': row['_workspace_document'] == true},
+      parentId: widget.serverParentKey,
+      updatedAt: DateTime.now(),
+    );
     try {
-      final id = '${row['id'] ?? ''}';
-      if (id.isEmpty) return;
-      final node = WorkspaceFinderNode(
-        id: id,
-        title: '${row['title'] ?? 'Новый документ'}',
-        subtitle: '${row['subtitle'] ?? ''}',
-        kind: WorkspaceFinderNodeKind.note,
-        payload: <String, dynamic>{'workspace_document': row['_workspace_document'] == true},
-        parentId: widget.serverParentKey,
-        updatedAt: DateTime.now(),
+      await server.syncNodeDocument(
+        node: node,
+        body: '${row['workspace_note'] ?? ''}',
       );
-      await server.updateNode(node);
-      await server.saveDocument(clientUid: id, title: node.title, body: '${row['workspace_note'] ?? ''}');
-    } catch (_) {
+      _serverAvailable = true;
+      await _markLocalRecordSynced(id);
+    } catch (e) {
       _serverAvailable = false;
+      throw Exception('Документ сохранён локально, но серверная синхронизация не выполнена: $e');
     }
   }
 
@@ -1043,6 +1083,7 @@ class WorkspaceEntityRecordDocument extends StatefulWidget {
     this.clubId = 0,
     this.serverParentKey = '',
     this.onClose,
+    this.currentUserId = 0,
   });
 
   final String ownerTitle;
@@ -1061,6 +1102,7 @@ class WorkspaceEntityRecordDocument extends StatefulWidget {
   final int clubId;
   final String serverParentKey;
   final VoidCallback? onClose;
+  final int currentUserId;
 
   @override
   State<WorkspaceEntityRecordDocument> createState() => _WorkspaceEntityRecordDocumentState();
@@ -1077,11 +1119,16 @@ class _WorkspaceEntityRecordDocumentState extends State<WorkspaceEntityRecordDoc
   WorkspaceServerStorage? _serverStorage;
   bool _serverAvailable = false;
 
+  String get _notePendingKey => '${widget.noteKey}_workspace_sync_pending_v1';
+
   @override
   void initState() {
     super.initState();
     if (widget.clubId > 0 && widget.serverParentKey.trim().isNotEmpty) {
-      _serverStorage = WorkspaceServerStorage(clubId: widget.clubId);
+      _serverStorage = WorkspaceServerStorage(
+        clubId: widget.clubId,
+        userId: widget.currentUserId,
+      );
     }
     _loadNote();
   }
@@ -1101,9 +1148,31 @@ class _WorkspaceEntityRecordDocumentState extends State<WorkspaceEntityRecordDoc
       }
     }
 
+    final pendingSync = prefs.getBool(_notePendingKey) ?? false;
     final server = _serverStorage;
     if (server != null) {
       try {
+        if (pendingSync) {
+          final pendingNode = WorkspaceFinderNode(
+            id: widget.noteKey,
+            title: widget.title,
+            subtitle: widget.sectionTitle,
+            kind: WorkspaceFinderNodeKind.note,
+            parentId: widget.serverParentKey,
+            updatedAt: DateTime.now(),
+          );
+          await server.syncNodeDocument(node: pendingNode, body: note);
+          if (widget.entityType.isNotEmpty && widget.entityId.isNotEmpty) {
+            await server.linkDocument(
+              documentKey: widget.noteKey,
+              entityType: widget.entityType,
+              entityId: widget.entityId,
+              sectionKey: widget.sectionTitle,
+              title: widget.title,
+            );
+          }
+          await prefs.setBool(_notePendingKey, false);
+        }
         var snapshot = await server.load();
         final serverBody = snapshot.noteBodies[widget.noteKey];
         if (serverBody != null && serverBody.isNotEmpty) {
@@ -1129,8 +1198,7 @@ class _WorkspaceEntityRecordDocumentState extends State<WorkspaceEntityRecordDoc
             parentId: widget.serverParentKey,
             createdAt: DateTime.now(),
           );
-          await server.createNode(node);
-          await server.saveDocument(clientUid: node.id, title: node.title, body: note);
+          await server.syncNodeDocument(node: node, body: note, createHint: true);
           snapshot = await server.load();
         }
         if (widget.entityType.isNotEmpty && widget.entityId.isNotEmpty) {
@@ -1163,6 +1231,7 @@ class _WorkspaceEntityRecordDocumentState extends State<WorkspaceEntityRecordDoc
   Future<void> _saveNote(String title, String body) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(widget.noteKey, body);
+    await prefs.setBool(_notePendingKey, true);
     final server = _serverStorage;
     if (server != null) {
       try {
@@ -1174,14 +1243,17 @@ class _WorkspaceEntityRecordDocumentState extends State<WorkspaceEntityRecordDoc
           parentId: widget.serverParentKey,
           updatedAt: DateTime.now(),
         );
-        if (_serverAvailable) {
-          await server.updateNode(node);
-        } else {
-          await server.createNode(node);
-          _serverAvailable = true;
-        }
         final savedTitle = title.trim().isEmpty ? node.title : title.trim();
-        await server.saveDocument(clientUid: node.id, title: savedTitle, body: body);
+        final savedNode = WorkspaceFinderNode(
+          id: node.id,
+          title: savedTitle,
+          subtitle: node.subtitle,
+          kind: node.kind,
+          parentId: node.parentId,
+          updatedAt: node.updatedAt,
+        );
+        await server.syncNodeDocument(node: savedNode, body: body);
+        _serverAvailable = true;
         if (widget.entityType.isNotEmpty && widget.entityId.isNotEmpty) {
           await server.linkDocument(
             documentKey: widget.noteKey,
@@ -1191,8 +1263,11 @@ class _WorkspaceEntityRecordDocumentState extends State<WorkspaceEntityRecordDoc
             title: savedTitle,
           );
         }
-      } catch (_) {
+        await prefs.setBool(_notePendingKey, false);
+      } catch (e) {
         _serverAvailable = false;
+        if (mounted) setState(() => _note = body);
+        throw Exception('Документ сохранён локально, но серверная синхронизация не выполнена: $e');
       }
     }
     if (mounted) setState(() => _note = body);

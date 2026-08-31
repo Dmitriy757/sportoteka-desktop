@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:sportoteka/presentation/workspace_os/workspace_finder_models.dart';
 
@@ -28,6 +29,28 @@ class WorkspaceServerStorage {
   final int userId;
   final String apiUrl;
 
+  String _preview(String value, {int max = 1200}) {
+    final compact = value.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (compact.length <= max) return compact;
+    return '${compact.substring(0, max)}…(${compact.length} chars)';
+  }
+
+  String _requestMeta(String action, Map<String, dynamic> data) {
+    final uid = '${data['client_uid'] ?? data['document_key'] ?? ''}'.trim();
+    final title = '${data['title'] ?? ''}'.trim();
+    final body = data['body'];
+    final blocks = data['blocks_json'];
+    return 'action=$action club=$clubId user=$userId'
+        '${uid.isEmpty ? '' : ' uid=$uid'}'
+        '${title.isEmpty ? '' : ' title=${_preview(title, max: 100)}'}'
+        '${body is String ? ' bodyLen=${body.length}' : ''}'
+        '${blocks is String ? ' blocksLen=${blocks.length}' : ''}';
+  }
+
+  void _log(String message) {
+    debugPrint('[WORKSPACE_SYNC][HTTP] $message');
+  }
+
   Uri _uri([Map<String, String>? query]) {
     final base = Uri.parse(apiUrl);
     return base.replace(queryParameters: <String, String>{
@@ -39,41 +62,90 @@ class WorkspaceServerStorage {
   }
 
   Future<Map<String, dynamic>> _get(Map<String, String> query) async {
-    final response = await http.get(_uri(query)).timeout(const Duration(seconds: 10));
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception('Workspace API ${response.statusCode}');
+    final action = query['action'] ?? 'GET';
+    final uri = _uri(query);
+    _log('GET -> action=$action club=$clubId user=$userId uri=${uri.path}');
+    late http.Response response;
+    try {
+      response = await http.get(uri).timeout(const Duration(seconds: 10));
+    } catch (e, st) {
+      _log('GET !! action=$action NETWORK_ERROR=$e');
+      _log('GET !! stack=${_preview('$st', max: 900)}');
+      rethrow;
     }
-    final decoded = jsonDecode(response.body);
-    if (decoded is! Map) throw Exception('Некорректный ответ Workspace API');
+    _log('GET <- action=$action status=${response.statusCode} response=${_preview(response.body)}');
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      final detail = response.body.trim();
+      throw Exception(
+        'Workspace API ${response.statusCode}${detail.isEmpty ? '' : ': $detail'}',
+      );
+    }
+    dynamic decoded;
+    try {
+      decoded = jsonDecode(response.body);
+    } catch (e) {
+      _log('GET !! action=$action JSON_DECODE_ERROR=$e body=${_preview(response.body)}');
+      rethrow;
+    }
+    if (decoded is! Map) {
+      _log('GET !! action=$action INVALID_JSON_TYPE=${decoded.runtimeType}');
+      throw Exception('Некорректный ответ Workspace API');
+    }
     final data = Map<String, dynamic>.from(decoded);
     if (data['success'] != true) {
+      _log('GET !! action=$action API_ERROR=${data['message'] ?? data['error']} debug_id=${data['debug_id'] ?? ''}');
       throw Exception('${data['message'] ?? data['error'] ?? 'Workspace API error'}');
     }
     return data;
   }
 
   Future<Map<String, dynamic>> _post(String action, Map<String, dynamic> data) async {
-    final response = await http
-        .post(
-          _uri(),
-          headers: const <String, String>{'Content-Type': 'application/json; charset=utf-8'},
-          body: jsonEncode(<String, dynamic>{
-            'action': action,
-            'club_id': clubId,
-            if (userId > 0) 'user_id': userId,
-            ...data,
-          }),
-        )
-        .timeout(const Duration(seconds: 12));
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception('Workspace API ${response.statusCode}');
+    final meta = _requestMeta(action, data);
+    final uri = _uri();
+    _log('POST -> $meta uri=${uri.path}');
+    late http.Response response;
+    try {
+      response = await http
+          .post(
+            uri,
+            headers: const <String, String>{'Content-Type': 'application/json; charset=utf-8'},
+            body: jsonEncode(<String, dynamic>{
+              'action': action,
+              'club_id': clubId,
+              if (userId > 0) 'user_id': userId,
+              ...data,
+            }),
+          )
+          .timeout(const Duration(seconds: 12));
+    } catch (e, st) {
+      _log('POST !! $meta NETWORK_ERROR=$e');
+      _log('POST !! stack=${_preview('$st', max: 900)}');
+      rethrow;
     }
-    final decoded = jsonDecode(response.body);
-    if (decoded is! Map) throw Exception('Некорректный ответ Workspace API');
+    _log('POST <- $meta status=${response.statusCode} response=${_preview(response.body)}');
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      final detail = response.body.trim();
+      throw Exception(
+        'Workspace API ${response.statusCode}${detail.isEmpty ? '' : ': $detail'}',
+      );
+    }
+    dynamic decoded;
+    try {
+      decoded = jsonDecode(response.body);
+    } catch (e) {
+      _log('POST !! $meta JSON_DECODE_ERROR=$e body=${_preview(response.body)}');
+      rethrow;
+    }
+    if (decoded is! Map) {
+      _log('POST !! $meta INVALID_JSON_TYPE=${decoded.runtimeType}');
+      throw Exception('Некорректный ответ Workspace API');
+    }
     final result = Map<String, dynamic>.from(decoded);
     if (result['success'] != true) {
+      _log('POST !! $meta API_ERROR=${result['message'] ?? result['error']} debug_id=${result['debug_id'] ?? ''}');
       throw Exception('${result['message'] ?? result['error'] ?? 'Workspace API error'}');
     }
+    _log('POST OK $meta debug_id=${result['debug_id'] ?? ''}');
     return result;
   }
 
@@ -206,6 +278,61 @@ class WorkspaceServerStorage {
     });
   }
 
+  /// Loads one document directly from the server. This is used immediately
+  /// before opening the editor so another device's latest saved copy is not
+  /// hidden behind an old SharedPreferences cache.
+  Future<Map<String, dynamic>?> loadDocument({required String clientUid}) async {
+    final data = await _get(<String, String>{
+      'action': 'load_document',
+      'client_uid': clientUid,
+    });
+    final raw = data['document'];
+    if (raw is! Map) return null;
+    return Map<String, dynamic>.from(raw);
+  }
+
+
+  /// Saves a node and its document body as one logical sync operation.
+  ///
+  /// The second create/update attempt is intentional: it makes retries safe
+  /// after a partial request (for example, the node was created but the body
+  /// upload failed). The final error is propagated so the editor can show that
+  /// the document is cached locally but has not reached the server yet.
+  Future<void> syncNodeDocument({
+    required WorkspaceFinderNode node,
+    required String body,
+    bool createHint = false,
+  }) async {
+    _log('SYNC BEGIN uid=${node.id} title=${_preview(node.title, max: 100)} bodyLen=${body.length} createHint=$createHint club=$clubId user=$userId');
+    if (createHint) {
+      try {
+        await createNode(node);
+        _log('SYNC NODE create OK uid=${node.id}');
+      } catch (e) {
+        _log('SYNC NODE create FAILED uid=${node.id} error=$e -> trying update');
+        await updateNode(node);
+        _log('SYNC NODE update-after-create-fail OK uid=${node.id}');
+      }
+    } else {
+      try {
+        await updateNode(node);
+        _log('SYNC NODE update OK uid=${node.id}');
+      } catch (e) {
+        _log('SYNC NODE update FAILED uid=${node.id} error=$e -> trying create');
+        await createNode(node);
+        _log('SYNC NODE create-after-update-fail OK uid=${node.id}');
+      }
+    }
+    try {
+      await saveDocument(clientUid: node.id, title: node.title, body: body);
+      _log('SYNC DOCUMENT OK uid=${node.id} bodyLen=${body.length}');
+    } catch (e) {
+      _log('SYNC DOCUMENT FAILED uid=${node.id} bodyLen=${body.length} error=$e');
+      rethrow;
+    }
+    _log('SYNC END uid=${node.id} SUCCESS');
+  }
+
   Future<void> saveState({
     required Iterable<String> favorites,
     required Iterable<String> recent,
@@ -257,6 +384,7 @@ class WorkspaceServerStorage {
     String sectionKey = 'documents',
     String title = '',
   }) async {
+    _log('UPLOAD -> action=upload_attachment club=$clubId user=$userId entity=$entityType:$entityId section=$sectionKey file=$filePath');
     final request = http.MultipartRequest('POST', _uri());
     request.fields['action'] = 'upload_attachment';
     request.fields['club_id'] = '$clubId';
@@ -266,16 +394,26 @@ class WorkspaceServerStorage {
     request.fields['section_key'] = sectionKey;
     request.fields['title'] = title;
     request.files.add(await http.MultipartFile.fromPath('file', filePath));
-    final streamed = await request.send().timeout(const Duration(seconds: 30));
-    final response = await http.Response.fromStream(streamed);
+    late http.Response response;
+    try {
+      final streamed = await request.send().timeout(const Duration(seconds: 30));
+      response = await http.Response.fromStream(streamed);
+    } catch (e, st) {
+      _log('UPLOAD !! entity=$entityType:$entityId NETWORK_ERROR=$e');
+      _log('UPLOAD !! stack=${_preview('$st', max: 900)}');
+      rethrow;
+    }
+    _log('UPLOAD <- entity=$entityType:$entityId status=${response.statusCode} response=${_preview(response.body)}');
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception('Workspace upload ${response.statusCode}');
+      final detail = response.body.trim();
+      throw Exception('Workspace upload ${response.statusCode}${detail.isEmpty ? '' : ': $detail'}');
     }
     final decoded = jsonDecode(response.body);
     if (decoded is! Map) throw Exception('Некорректный ответ Workspace upload');
     final result = Map<String, dynamic>.from(decoded);
     if (result['success'] != true) throw Exception('${result['message'] ?? result['error'] ?? 'Upload error'}');
     final attachment = result['attachment'];
+    _log('UPLOAD OK entity=$entityType:$entityId attachmentId=${attachment is Map ? attachment['id'] : ''} debug_id=${result['debug_id'] ?? ''}');
     return attachment is Map ? Map<String, dynamic>.from(attachment) : <String, dynamic>{};
   }
 

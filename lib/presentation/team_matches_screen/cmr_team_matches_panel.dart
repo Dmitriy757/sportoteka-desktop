@@ -11,6 +11,7 @@ import 'package:http/http.dart' as http;
 import 'package:sportoteka/core/theme/app_typography.dart';
 import 'package:sportoteka/core/utils/pref_utils.dart';
 import 'package:sportoteka/presentation/team_matches_screen/team_match_detail_screen.dart';
+import 'package:sportoteka/presentation/team_video_analysis/team_match_video_workspace_screen.dart';
 
 // ==================== Цветовая схема (унифицирована) ====================
 
@@ -199,7 +200,7 @@ class _CmrMatchDecor {
 enum CmrMatchesFilter { all, upcoming, past }
 enum CmrMatchKindFilter { all, tournament, friendly, home, away }
 enum _MatchesCalendarMode { month, week }
-enum _MatchesWorkPanel { list, details, editor, matchEditor, documents, video }
+enum _MatchesWorkPanel { list, details, editor, matchEditor, documents }
 
 class CmrTeamMatchesPanel extends StatefulWidget {
   final int teamId;
@@ -478,20 +479,22 @@ class _CmrTeamMatchesPanelState extends State<CmrTeamMatchesPanel> {
     if (mounted) setState(() => openingMatchId = id);
 
     try {
-      // Детальный разбор матча больше не открываем через Get.to().
-      // Он должен появляться как независимое CMR-окно поверх списка матчей.
-      showTeamMatchDetailCmrWindow(
-        context,
-        matchId: id,
-        teamId: widget.teamId,
-        teamName: widget.teamName,
-        clubId: widget.clubId,
-        clubName: widget.clubName,
-        initialMatch: Map<String, dynamic>.from(match),
-        onClosed: () {
-          if (mounted) _fetch();
-        },
+      // VNEW VIDEO WORKSPACE: основной путь детального матча теперь один.
+      // Открываем новый Tracker-подобный видеоэкран на весь рабочий маршрут,
+      // без CMR-overlay и без старых дублирующих переходов.
+      await Navigator.of(context, rootNavigator: true).push(
+        MaterialPageRoute<void>(
+          builder: (_) => TeamMatchVideoWorkspaceScreen(
+            matchId: id,
+            teamId: widget.teamId,
+            teamName: widget.teamName,
+            clubId: widget.clubId,
+            clubName: widget.clubName,
+            initialMatch: Map<String, dynamic>.from(match),
+          ),
+        ),
       );
+      if (mounted) await _fetch();
     } finally {
       if (mounted) setState(() => openingMatchId = 0);
     }
@@ -1250,9 +1253,6 @@ Widget _buildTabletMatchesWorkspace({
       if (_workPanel == _MatchesWorkPanel.documents) {
         return _buildSelectedMatchDocumentsPane(selected);
       }
-      if (_workPanel == _MatchesWorkPanel.video) {
-        return _buildSelectedMatchVideoPane(selected);
-      }
       if (_workPanel == _MatchesWorkPanel.details) {
         return _buildMatchDetailsPane(selected, compact: compact);
       }
@@ -1298,10 +1298,23 @@ Widget _buildTabletMatchesWorkspace({
   void _openMatchVideoPane(Map<String, dynamic> match) {
     final id = _matchId(match);
     if (id <= 0) return;
-    setState(() {
-      selectedMatchId = id;
-      _workPanel = _MatchesWorkPanel.video;
-    });
+
+    // Видео матча больше не открываем во втором embedded-представлении.
+    // Любая кнопка «Видео» ведёт в тот же единый Tracker-подобный workspace.
+    unawaited(
+      Navigator.of(context, rootNavigator: true).push(
+        MaterialPageRoute<void>(
+          builder: (_) => TeamMatchVideoWorkspaceScreen(
+            matchId: id,
+            teamId: widget.teamId,
+            teamName: widget.teamName,
+            clubId: widget.clubId,
+            clubName: widget.clubName,
+            initialMatch: Map<String, dynamic>.from(match),
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _refreshSelectedMatchAndReturn() async {
@@ -1343,21 +1356,6 @@ Widget _buildTabletMatchesWorkspace({
     );
   }
 
-  Widget _buildSelectedMatchVideoPane(Map<String, dynamic> match) {
-    final id = _matchId(match);
-    return TeamMatchDetailScreen(
-      key: ValueKey('cmr-match-video-$id-${calendarRevision}'),
-      matchId: id,
-      teamId: widget.teamId,
-      clubId: widget.clubId,
-      teamName: widget.teamName,
-      clubName: widget.clubName,
-      initialMatch: Map<String, dynamic>.from(match),
-      embedded: true,
-      videoOnly: true,
-      onClose: () => setState(() => _workPanel = _MatchesWorkPanel.details),
-    );
-  }
 
   Widget _buildMatchesRightListPanel(
     List<Map<String, dynamic>> timeline,

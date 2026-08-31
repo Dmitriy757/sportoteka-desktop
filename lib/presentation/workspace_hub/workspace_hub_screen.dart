@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:sportoteka/core/theme/app_typography.dart';
 import 'package:sportoteka/core/utils/pref_utils.dart';
 import 'package:sportoteka/presentation/club_workspace/club_workspace_screen.dart';
+import 'package:sportoteka/presentation/club_workspace/cmr_press_assistant_screen.dart';
 import 'package:sportoteka/presentation/my_profile_screen/my_profile_screen.dart';
 import 'package:sportoteka/presentation/player_screen/player_dashboard_screen.dart';
 import 'package:sportoteka/routes/app_routes.dart';
@@ -62,6 +63,13 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
 
   bool _coachHasAssignedTeam = false;
 
+  // Пресс-служба — дополнительный доступ, а не users.role.
+  // Поэтому читаем назначения отдельно и показываем отдельный Workspace.
+  final List<Map<String, dynamic>> _pressAssignments =
+      <Map<String, dynamic>>[];
+
+  bool get _hasPressAccess => _pressAssignments.isNotEmpty;
+
   String get _normalizedRole => _role.trim().toLowerCase();
 
   bool get _isClub =>
@@ -105,6 +113,10 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
 
       if (userId > 0) {
         await _loadUserFromServer(userId);
+
+        // Нужен всем ролям: тренер/медик/ассистент может дополнительно
+        // иметь пресс-доступ, не теряя основной должности.
+        await _loadPressAssignments(userId);
 
         if (_isCoach) {
           await _loadAssignedTeamForCoach(userId);
@@ -263,6 +275,102 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
       }
     } catch (e) {
       debugPrint('WorkspaceHub get_user error: $e');
+    }
+  }
+
+  Future<void> _loadPressAssignments(int userId) async {
+    _pressAssignments.clear();
+    if (userId <= 0) return;
+
+    bool isPressValue(dynamic value) {
+      final v = '${value ?? ''}'.trim().toLowerCase();
+      return v == 'press_assistant' ||
+          v == 'press' ||
+          v == 'press_service' ||
+          v.contains('press_assistant') ||
+          v.contains('пресс');
+    }
+
+    void collect(dynamic node, List<Map<String, dynamic>> out) {
+      if (node is Map) {
+        final map = Map<String, dynamic>.from(node);
+
+        final looksLikePressAssignment =
+            isPressValue(map['profile']) ||
+            isPressValue(map['link_profile']) ||
+            isPressValue(map['staff_role']) ||
+            isPressValue(map['position_code']);
+
+        final teamId = _asInt(map['team_id'] ?? map['teamId']);
+        final clubId = _asInt(map['club_id'] ?? map['clubId']);
+
+        if (looksLikePressAssignment && (teamId > 0 || clubId > 0)) {
+          final key = '$clubId:$teamId';
+          final exists = out.any((item) {
+            final itemClubId = _asInt(item['club_id'] ?? item['clubId']);
+            final itemTeamId = _asInt(item['team_id'] ?? item['teamId']);
+            return '$itemClubId:$itemTeamId' == key;
+          });
+
+          if (!exists) out.add(map);
+        }
+
+        for (final value in map.values) {
+          collect(value, out);
+        }
+        return;
+      }
+
+      if (node is List) {
+        for (final value in node) {
+          collect(value, out);
+        }
+      }
+    }
+
+    try {
+      final response = await http
+          .post(
+            Uri.parse('$_apiBase/get_trainer_profile.php'),
+            headers: const <String, String>{
+              'Content-Type': 'application/json; charset=utf-8',
+            },
+            body: jsonEncode(<String, dynamic>{
+              'trainer_id': userId,
+              'user_id': userId,
+            }),
+          )
+          .timeout(const Duration(seconds: 12));
+
+      if (response.statusCode != 200) return;
+
+      final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+      final found = <Map<String, dynamic>>[];
+      collect(decoded, found);
+
+      _pressAssignments
+        ..clear()
+        ..addAll(found);
+
+      if (_pressAssignments.isNotEmpty) {
+        final first = _pressAssignments.first;
+
+        final club = _cleanString(
+          first['club_name'] ?? first['clubName'],
+        );
+        final team = _cleanString(
+          first['team_name'] ?? first['teamName'],
+        );
+
+        if ((_clubName ?? '').trim().isEmpty && club.isNotEmpty) {
+          _clubName = club;
+        }
+        if ((_teamName ?? '').trim().isEmpty && team.isNotEmpty) {
+          _teamName = team;
+        }
+      }
+    } catch (e) {
+      debugPrint('WorkspaceHub press access error: $e');
     }
   }
 
@@ -498,6 +606,44 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
     );
   }
 
+  Future<void> _openPressWorkspace() async {
+    final userId = await PrefUtils.getUserId() ?? 0;
+    if (!mounted || userId <= 0) return;
+
+    if (_pressAssignments.isEmpty) {
+      Get.snackbar(
+        'Пресс-служба',
+        'Для аккаунта пока не назначен пресс-доступ.',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      return;
+    }
+
+    final first = _pressAssignments.first;
+
+    final clubId = _asInt(first['club_id'] ?? first['clubId']);
+    final teamId = _asInt(first['team_id'] ?? first['teamId']);
+    final clubName = _cleanString(
+      first['club_name'] ?? first['clubName'],
+    );
+    final teamName = _cleanString(
+      first['team_name'] ?? first['teamName'],
+    );
+    final sportName = _cleanString(first['sport']);
+
+    Get.to<void>(
+      () => CmrPressAssistantScreen(
+        userId: userId,
+        clubId: clubId,
+        teamId: teamId,
+        clubName: clubName,
+        teamName: teamName,
+        sportName: sportName.isEmpty ? 'Футбол' : sportName,
+        embedded: false,
+      ),
+    );
+  }
+
   Future<void> _openPlayerTeam() async {
     final userId = await PrefUtils.getUserId() ?? 0;
 
@@ -621,6 +767,41 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
     return null;
   }
 
+  _HubCardData? get _pressCard {
+    if (!_hasPressAccess) return null;
+
+    final first = _pressAssignments.first;
+
+    final firstClub = _cleanString(
+      first['club_name'] ?? first['clubName'],
+    );
+    final firstTeam = _cleanString(
+      first['team_name'] ?? first['teamName'],
+    );
+
+    final assignmentCount = _pressAssignments.length;
+
+    final context = <String>[
+      if (firstClub.isNotEmpty) firstClub,
+      if (assignmentCount == 1 && firstTeam.isNotEmpty) firstTeam,
+    ].join(' · ');
+
+    final scope = assignmentCount > 1
+        ? '$assignmentCount команд'
+        : context.isNotEmpty
+            ? context
+            : 'назначенная команда';
+
+    return _HubCardData(
+      title: 'Пресс-служба',
+      subtitle:
+          '$scope · только пресс-лента, свои новости и разрешённые команды',
+      imageUrl: _clubLogoUrl ?? _teamLogoUrl ?? _userAvatarUrl,
+      circularImage: false,
+      onTap: _openPressWorkspace,
+    );
+  }
+
   _HubCardData get _profileCard {
     return _HubCardData(
       title: 'Мой профиль',
@@ -654,6 +835,22 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
   }
 
   String get _choiceSubtitle {
+    if (_hasPressAccess && _isCoach && _coachHasAssignedTeam) {
+      return 'Выберите кабинет тренера, пресс-службу или личный профиль.';
+    }
+
+    if (_hasPressAccess && _isClub) {
+      return 'Выберите клубный кабинет, пресс-службу или личный профиль.';
+    }
+
+    if (_hasPressAccess && _isPlayer) {
+      return 'Выберите свой профиль, команду или пресс-службу.';
+    }
+
+    if (_hasPressAccess) {
+      return 'Выберите CMR пресс-службы или личный профиль.';
+    }
+
     if (_isCoach && _coachHasAssignedTeam) {
       return 'Выберите «Мой кабинет тренера» или личный профиль.';
     }
@@ -675,6 +872,11 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
   }
 
   String get _accessHint {
+    if (_hasPressAccess) {
+      return 'CMR пресс-службы ограничен назначенными командами: '
+          'сотрудник видит свою пресс-ленту и работает только со своими новостями.';
+    }
+
     if (_isClub) {
       return 'Аккаунт клуба открывает клубное пространство '
           'и личный профиль.';
@@ -702,22 +904,25 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
   String get _accountRoleLine {
     if (_isCoach && _coachHasAssignedTeam) {
       final team = (_teamName ?? '').trim();
-
-      return team.isNotEmpty
-          ? 'Тренер · $team'
-          : 'Тренер';
+      final base = team.isNotEmpty ? 'Тренер · $team' : 'Тренер';
+      return _hasPressAccess ? '$base · Пресс-служба' : base;
     }
 
-    if (_isCoach) return 'Тренер';
-    if (_isClub) return 'Клуб';
+    if (_isCoach) {
+      return _hasPressAccess ? 'Тренер · Пресс-служба' : 'Тренер';
+    }
+
+    if (_isClub) {
+      return _hasPressAccess ? 'Клуб · Пресс-служба' : 'Клуб';
+    }
 
     if (_isPlayer) {
       final team = (_teamName ?? '').trim();
-
-      return team.isNotEmpty
-          ? 'Игрок · $team'
-          : 'Игрок';
+      final base = team.isNotEmpty ? 'Игрок · $team' : 'Игрок';
+      return _hasPressAccess ? '$base · Пресс-служба' : base;
     }
+
+    if (_hasPressAccess) return 'Пресс-служба';
 
     return _role.trim().isEmpty
         ? 'Sportoteka'
@@ -868,7 +1073,9 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
             height: desktop ? 90 : 64,
           ),
           _buildAccountMini(),
-          const SizedBox(height: 24),
+          const SizedBox(height: 18),
+          _buildWideLogoutButton(),
+          const SizedBox(height: 18),
           _buildFooter(
             mobile: false,
           ),
@@ -881,6 +1088,7 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
     required bool desktop,
   }) {
     final workspace = _workspaceCard;
+    final press = _pressCard;
 
     return SingleChildScrollView(
       padding: EdgeInsets.fromLTRB(
@@ -918,6 +1126,13 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
                 ),
                 const SizedBox(height: 12),
               ],
+              if (press != null) ...[
+                _WorkspaceChoiceCard(
+                  data: press,
+                  compact: false,
+                ),
+                const SizedBox(height: 12),
+              ],
               _WorkspaceChoiceCard(
                 data: _secondaryCard,
                 compact: false,
@@ -947,6 +1162,7 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
 
   Widget _buildMobile() {
     final workspace = _workspaceCard;
+    final press = _pressCard;
 
     return ColoredBox(
       color: _panel,
@@ -988,6 +1204,13 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
                       if (workspace != null) ...[
                         _WorkspaceChoiceCard(
                           data: workspace,
+                          compact: true,
+                        ),
+                        const SizedBox(height: 10),
+                      ],
+                      if (press != null) ...[
+                        _WorkspaceChoiceCard(
+                          data: press,
                           compact: true,
                         ),
                         const SizedBox(height: 10),
@@ -1117,6 +1340,47 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildWideLogoutButton() {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Material(
+        color: _soft,
+        borderRadius: BorderRadius.circular(9),
+        child: InkWell(
+          onTap: _logoutFromProfile,
+          borderRadius: BorderRadius.circular(9),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 10,
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.logout_rounded,
+                  size: 16,
+                  color: _secondary,
+                ),
+                const SizedBox(width: 7),
+                Text(
+                  'Выйти из профиля',
+                  style: AppTypography.custom(
+                    size: 10.8,
+                    weight: FontWeight.w600,
+                    color: _secondary,
+                    height: 1.2,
+                    letterSpacing: 0,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 

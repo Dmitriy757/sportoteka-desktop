@@ -1,0 +1,1171 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:app_badge_plus/app_badge_plus.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter_callkit_incoming/entities/entities.dart';
+import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:get/get.dart';
+import 'package:http/http.dart' as http;
+import 'package:sportoteka/call/audio_call_screen.dart';
+
+
+String _sportotekaCallUuid(int callId) {
+  var hex = callId <= 0 ? '0' : callId.toRadixString(16);
+  if (hex.length > 12) {
+    hex = hex.substring(hex.length - 12);
+  }
+  hex = hex.padLeft(12, '0');
+  return '00000000-0000-4000-8000-$hex';
+}
+
+int _sportotekaPushInt(dynamic value) =>
+    int.tryParse('${value ?? ''}'.trim()) ?? 0;
+
+CallKitParams _sportotekaCallKitParams(Map<String, dynamic> data) {
+  final callId = _sportotekaPushInt(data['call_id']);
+  final callerId = _sportotekaPushInt(data['caller_id']);
+  final calleeId = _sportotekaPushInt(data['callee_id']);
+
+  final uuid = '${data['uuid'] ?? ''}'.trim().isNotEmpty
+      ? '${data['uuid']}'.trim()
+      : _sportotekaCallUuid(callId);
+
+  final callerName = '${data['caller_name'] ?? ''}'.trim().isNotEmpty
+      ? '${data['caller_name']}'.trim()
+      : (callerId > 0 ? 'Пользователь #$callerId' : 'Входящий звонок');
+
+  final avatar = '${data['caller_photo'] ?? ''}'.trim();
+
+  return CallKitParams(
+    id: uuid,
+    nameCaller: callerName,
+    appName: 'SPORTOTEKA',
+    avatar: avatar.isEmpty ? null : avatar,
+    handle: 'SPORTOTEKA',
+    type: 0,
+    duration: 90000,
+    missedCallNotification: const NotificationParams(
+      showNotification: true,
+      isShowCallback: false,
+      subtitle: 'Пропущенный звонок',
+      callbackText: 'Перезвонить',
+    ),
+    extra: <String, dynamic>{
+      'type': 'incoming_call',
+      'call_id': callId.toString(),
+      'caller_id': callerId.toString(),
+      'callee_id': calleeId.toString(),
+      'channel_id': '${data['channel_id'] ?? ''}',
+      'caller_name': callerName,
+      'caller_photo': avatar,
+      'transport': '${data['transport'] ?? 'livekit'}',
+      'uuid': uuid,
+    },
+    android: const AndroidParams(
+      isCustomNotification: false,
+      isShowLogo: false,
+      isShowCallID: false,
+      ringtonePath: 'system_ringtone_default',
+      actionColor: '#00A750',
+      textColor: '#0B0F14',
+      incomingCallNotificationChannelName: 'Входящие звонки SPORTOTEKA',
+      missedCallNotificationChannelName: 'Пропущенные звонки SPORTOTEKA',
+      isShowFullLockedScreen: true,
+      isFullScreen: true,
+      isImportant: true,
+      textAccept: 'Принять',
+      textDecline: 'Отклонить',
+    ),
+    ios: const IOSParams(
+      handleType: 'generic',
+      supportsVideo: false,
+      maximumCallGroups: 1,
+      maximumCallsPerCallGroup: 1,
+      audioSessionMode: 'voiceChat',
+      audioSessionActive: true,
+      audioSessionPreferredSampleRate: 44100.0,
+      audioSessionPreferredIOBufferDuration: 0.005,
+      configureAudioSession: true,
+      supportsDTMF: false,
+      supportsHolding: false,
+      supportsGrouping: false,
+      supportsUngrouping: false,
+      ringtonePath: 'system_ringtone_default',
+    ),
+  );
+}
+
+@pragma('vm:entry-point')
+Future<void> sportotekaFirebaseMessagingBackgroundHandler(
+  RemoteMessage message,
+) async {
+  await Firebase.initializeApp();
+
+  final data = Map<String, dynamic>.from(message.data);
+  if ('${data['type'] ?? ''}' != 'incoming_call') return;
+
+  // На iOS настоящий terminated/lock-screen вызов приходит через PushKit
+  // и обрабатывается в AppDelegate.swift. FCM здесь нужен прежде всего Android.
+  if (Platform.isAndroid) {
+    await FlutterCallkitIncoming.showCallkitIncoming(
+      _sportotekaCallKitParams(data),
+    );
+  }
+}
+
+@pragma('vm:entry-point')
+Future<void> sportotekaCallkitBackgroundHandler(CallEvent event) async {
+  CallKitParams? params;
+  String? action;
+
+  if (event is CallEventActionCallAccept) {
+    params = event.callKitParams;
+    action = 'accept';
+  } else if (event is CallEventActionCallDecline) {
+    params = event.callKitParams;
+    action = 'decline';
+  } else if (event is CallEventActionCallEnded) {
+    params = event.callKitParams;
+    action = 'end';
+  }
+
+  if (params == null || action == null) return;
+
+  final callId = _sportotekaPushInt(params.extra?['call_id']);
+  final userId = _sportotekaPushInt(params.extra?['callee_id']);
+
+  if (callId <= 0 || userId <= 0) return;
+
+  try {
+    await http
+        .post(
+          Uri.parse(
+            'https://sportotekaapp.ru/api/calls/$action.php',
+          ),
+          body: <String, String>{
+            'call_id': callId.toString(),
+            'user_id': userId.toString(),
+          },
+        )
+        .timeout(const Duration(seconds: 8));
+  } catch (_) {
+    // Foreground isolate retries Accept after it resumes.
+  }
+}
+
+class PushService with WidgetsBindingObserver {
+  PushService._();
+  static final PushService instance = PushService._();
+
+  final FirebaseMessaging _messaging = FirebaseMessaging.instance;
+  final FlutterLocalNotificationsPlugin _local =
+      FlutterLocalNotificationsPlugin();
+
+  static const String _apiBase = 'https://sportotekaapp.ru/api';
+  static const String _saveTokenUrl = '$_apiBase/save_fcm_token.php';
+  static const String _acceptCallUrl = '$_apiBase/calls/accept.php';
+  static const String _declineCallUrl = '$_apiBase/calls/decline.php';
+  static const String _registerVoipTokenUrl =
+      '$_apiBase/calls/register_voip_token.php';
+  static const String _privateChatsUrl = '$_apiBase/get_user_chats.php';
+  static const String _groupsFeedUrl = '$_apiBase/get_groups_feed.php';
+  static const String _notificationsUnreadUrl =
+      '$_apiBase/notifications/unread_count.php';
+  static const String _newsSummaryUrl =
+      '$_apiBase/sportoteka_news/summary.php';
+
+  static const String _chatChannelId = 'chat_messages';
+  static const String _updatesChannelId = 'sportoteka_updates';
+  static const String _callChannelId = 'calls';
+
+  bool _inited = false;
+  int? _userId;
+
+  int? _visibleCallId;
+  bool _callActionInProgress = false;
+  StreamSubscription<CallEvent?>? _callkitEventSubscription;
+
+  Timer? _badgeSyncTimer;
+  bool _badgeSyncInProgress = false;
+  int _lastAppliedBadge = -1;
+
+  /// Лог только для Debug
+  void _log(Object msg) {
+    if (kDebugMode) {
+      debugPrint(msg.toString());
+    }
+  }
+
+  Future<void> init({required int userId}) async {
+    _userId = userId;
+
+    if (_inited) {
+      _log('PUSH already initialized. userId=$userId');
+
+      try {
+        final token = await _messaging.getToken();
+        if (token != null && token.isNotEmpty) {
+          await _sendTokenToServer(userId: userId, token: token);
+        }
+      } catch (_) {}
+
+      await _registerCurrentVoipToken(userId);
+      unawaited(syncAppBadge(userId: userId));
+      return;
+    }
+
+    _inited = true;
+    WidgetsBinding.instance.addObserver(this);
+
+    _log('PUSH INIT START userId=$userId');
+
+    await _initLocalNotifications();
+    await _requestPermission();
+    await _initCallKit();
+
+    // If the user accepted from the native lock-screen UI while SPORTOTEKA
+    // was being launched, recover the accepted call even if the first event
+    // arrived before the Dart listener was ready.
+    unawaited(_resumeAcceptedCallIfNeeded());
+
+    // Apple platforms: iOS + macOS.
+    if (Platform.isIOS || Platform.isMacOS) {
+      try {
+        final apns = await _messaging.getAPNSToken();
+        _log('APNS TOKEN = $apns');
+      } catch (e) {
+        _log('APNS TOKEN ERROR: $e');
+      }
+    }
+
+    // FCM token.
+    String? token = await _messaging.getToken();
+
+    // На Apple-платформах токен иногда появляется не мгновенно.
+    if (token == null && (Platform.isIOS || Platform.isMacOS)) {
+      await Future.delayed(const Duration(seconds: 2));
+      token = await _messaging.getToken();
+    }
+
+    _log('FCM TOKEN = $token');
+
+    if (token != null && token.isNotEmpty) {
+      await _sendTokenToServer(userId: userId, token: token);
+    }
+
+    await _registerCurrentVoipToken(userId);
+
+    // Обновление FCM token.
+    _messaging.onTokenRefresh.listen((newToken) async {
+      _log('FCM TOKEN REFRESHED = $newToken');
+      await _sendTokenToServer(
+        userId: _userId ?? userId,
+        token: newToken,
+      );
+    });
+
+    // Приложение открыто.
+    FirebaseMessaging.onMessage.listen((msg) async {
+      _log('FCM FOREGROUND: ${msg.data}');
+
+      if (_isIncomingCall(msg.data)) {
+        await _handleIncomingCall(msg.data, showDialog: true);
+        return;
+      }
+
+      await _showLocal(msg);
+
+      // Сервер уже должен успеть записать новое unread-состояние.
+      Future<void>.delayed(const Duration(milliseconds: 700), () async {
+        await syncAppBadge();
+      });
+    });
+
+    // Пользователь нажал системный FCM push, пока приложение было background.
+    FirebaseMessaging.onMessageOpenedApp.listen((msg) async {
+      _log('FCM OPENED APP: ${msg.data}');
+      await _handleRemoteMessage(msg);
+    });
+
+    // Пользователь запустил приложение нажатием push из terminated state.
+    final initialMessage = await _messaging.getInitialMessage();
+    if (initialMessage != null) {
+      _log('FCM INITIAL MESSAGE: ${initialMessage.data}');
+
+      // Даём GetMaterialApp/навигации завершить первый кадр.
+      Future<void>.delayed(const Duration(milliseconds: 500), () async {
+        await _handleRemoteMessage(initialMessage);
+      });
+    }
+
+    // Foreground notifications are rendered by _showLocal() on both
+    // platforms. Disable Firebase's second Apple presentation to prevent
+    // duplicate banners/sounds.
+    await _messaging.setForegroundNotificationPresentationOptions(
+      alert: false,
+      badge: false,
+      sound: false,
+    );
+
+    _startBadgeSync();
+    await syncAppBadge(userId: userId);
+
+    _log('PUSH INIT DONE userId=$userId');
+  }
+
+  Future<void> _handleRemoteMessage(RemoteMessage msg) async {
+    if (_isIncomingCall(msg.data)) {
+      await _handleIncomingCall(msg.data, showDialog: true);
+      return;
+    }
+
+    _log('Notification opened: ${msg.data}');
+
+    // После открытия push пересчитываем реальное состояние, а не доверяем
+    // badge из старого push payload.
+    Future<void>.delayed(const Duration(milliseconds: 450), () async {
+      await syncAppBadge();
+    });
+  }
+
+  bool _isIncomingCall(Map<String, dynamic> data) {
+    return (data['type'] ?? '').toString() == 'incoming_call';
+  }
+
+  Future<void> _requestPermission() async {
+    await _messaging.requestPermission(
+      alert: true,
+      badge: true,
+      sound: true,
+      provisional: false,
+    );
+  }
+
+  Future<void> _initLocalNotifications() async {
+    const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const iosInit = DarwinInitializationSettings();
+
+    const init = InitializationSettings(
+      android: androidInit,
+      iOS: iosInit,
+      macOS: iosInit,
+    );
+
+    await _local.initialize(
+      settings: init,
+      onDidReceiveNotificationResponse: (response) async {
+        final payload = response.payload;
+        if (payload == null || payload.isEmpty) return;
+
+        try {
+          final decoded = jsonDecode(payload);
+          if (decoded is! Map) return;
+
+          final data = decoded.map<String, dynamic>(
+            (key, value) => MapEntry(key.toString(), value),
+          );
+
+          _log('LOCAL NOTIFICATION TAP: $data');
+
+          if (_isIncomingCall(data)) {
+            await _handleIncomingCall(data, showDialog: true);
+          }
+        } catch (e) {
+          _log('LOCAL PAYLOAD ERROR: $e');
+        }
+      },
+    );
+
+    if (Platform.isAndroid) {
+      const chatChannel = AndroidNotificationChannel(
+        _chatChannelId,
+        'Chat messages',
+        description: 'Notifications for chat messages',
+        importance: Importance.high,
+      );
+
+      const updatesChannel = AndroidNotificationChannel(
+        _updatesChannelId,
+        'SPORTOTEKA',
+        description: 'Официальные уведомления SPORTOTEKA',
+        importance: Importance.high,
+        playSound: true,
+        enableVibration: true,
+      );
+
+      const callsChannel = AndroidNotificationChannel(
+        _callChannelId,
+        'Incoming calls',
+        description: 'Incoming SPORTOTEKA calls',
+        importance: Importance.max,
+        playSound: true,
+        enableVibration: true,
+      );
+
+      final androidPlugin = _local.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
+
+      await androidPlugin?.createNotificationChannel(chatChannel);
+      await androidPlugin?.createNotificationChannel(updatesChannel);
+      await androidPlugin?.createNotificationChannel(callsChannel);
+    }
+  }
+
+  Future<void> _handleIncomingCall(
+    Map<String, dynamic> data, {
+    required bool showDialog,
+  }) async {
+    final callId = int.tryParse((data['call_id'] ?? '').toString()) ?? 0;
+
+    if (callId <= 0) {
+      _log('INCOMING CALL ignored: invalid call_id. data=$data');
+      return;
+    }
+
+    // Если сервер уже доставил iOS VoIP PushKit, системный CallKit создаётся
+    // AppDelegate-ом. Не создаём второй экран по FCM-дубликату.
+    final voipExpected = '${data['voip_expected'] ?? '0'}' == '1';
+    if (Platform.isIOS && voipExpected) {
+      _log('INCOMING CALL iOS is owned by PushKit callId=$callId');
+      return;
+    }
+
+    if (_visibleCallId == callId) {
+      _log('INCOMING CALL already visible callId=$callId');
+      return;
+    }
+
+    _visibleCallId = callId;
+
+    try {
+      await FlutterCallkitIncoming.showCallkitIncoming(
+        _sportotekaCallKitParams(data),
+      );
+      _log('CALLKIT shown callId=$callId');
+    } catch (e) {
+      _visibleCallId = null;
+      _log('CALLKIT show error: $e');
+
+      // Последний fallback: обычное высокоприоритетное уведомление.
+      await _showIncomingCallLocal(data);
+    }
+  }
+
+
+  Future<void> _acceptIncomingCall({
+    required int callId,
+    required int callerId,
+    int? calleeId,
+    String? callerName,
+    bool allowAlreadyAccepted = false,
+  }) async {
+    final userId = _userId ?? calleeId;
+    if (userId == null || userId <= 0) {
+      _showError('Не удалось определить пользователя.');
+      return;
+    }
+
+    if (_callActionInProgress) return;
+    _callActionInProgress = true;
+
+    try {
+      _log('CALL ACCEPT -> callId=$callId userId=$userId');
+
+      final response = await http.post(
+        Uri.parse(_acceptCallUrl),
+        body: <String, String>{
+          'call_id': callId.toString(),
+          'user_id': userId.toString(),
+        },
+      );
+
+      final body = _decodeJson(response.body);
+
+      _log(
+        'CALL ACCEPT RESPONSE ${response.statusCode}: ${response.body}',
+      );
+
+      final serverStatus = (body['status'] ?? '').toString();
+      final error = (body['error'] ?? '').toString();
+
+      final acceptedNow =
+          response.statusCode >= 200 &&
+          response.statusCode < 300 &&
+          serverStatus == 'ok';
+
+      // On iOS the native CallKit delegate also accepts the server call so
+      // the action is reliable even if Dart starts a moment later. In that
+      // path a second Dart POST legitimately gets "not_ringing/accepted".
+      final acceptedByNative =
+          allowAlreadyAccepted &&
+          error == 'not_ringing' &&
+          serverStatus == 'accepted';
+
+      if (acceptedNow || acceptedByNative) {
+        if (Get.isDialogOpen == true) {
+          Get.back<void>();
+        }
+
+        await _openAcceptedCallScreen(
+          callId: callId,
+          userId: userId,
+          callerId: callerId,
+          callerName: callerName,
+        );
+        return;
+      }
+
+      if (error == 'not_ringing' && serverStatus == 'accepted') {
+        _visibleCallId = null;
+        _showError('Этот звонок уже принят на другом устройстве.');
+        return;
+      }
+
+      _visibleCallId = null;
+      _showError('Не удалось принять звонок.');
+    } catch (e) {
+      _log('CALL ACCEPT ERROR: $e');
+
+      // If native iOS already accepted the server call, a short Dart-side
+      // network failure must not strand the user on the CallKit screen.
+      if (allowAlreadyAccepted) {
+        await _openAcceptedCallScreen(
+          callId: callId,
+          userId: userId,
+          callerId: callerId,
+          callerName: callerName,
+        );
+      } else {
+        _showError('Ошибка соединения при принятии звонка.');
+      }
+    } finally {
+      _callActionInProgress = false;
+    }
+  }
+
+  Future<void> _openAcceptedCallScreen({
+    required int callId,
+    required int userId,
+    required int callerId,
+    String? callerName,
+  }) async {
+    final peerName = (callerName ?? '').trim().isNotEmpty
+        ? callerName!.trim()
+        : (callerId > 0
+            ? 'Пользователь #$callerId'
+            : 'Входящий звонок');
+
+    _visibleCallId = callId;
+
+    // CallKit may have woken SPORTOTEKA from terminated state.
+    // Wait briefly for GetMaterialApp/Navigator to exist.
+    for (var i = 0; i < 40 && Get.context == null; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    }
+
+    if (Get.context == null) {
+      _log('CALL ACCEPTED but navigation context is not ready');
+      return;
+    }
+
+    await Get.to<void>(
+      () => AudioCallScreen(
+        callId: callId,
+        userId: userId,
+        isCaller: false,
+        peerName: peerName,
+      ),
+    );
+
+    _visibleCallId = null;
+
+    // AudioCallScreen already reports server-side end. This only closes the
+    // native CallKit/full-screen UI if it is still active.
+    if (Platform.isAndroid || Platform.isIOS) {
+      try {
+        await FlutterCallkitIncoming.endCall(
+          _sportotekaCallUuid(callId),
+        );
+      } catch (_) {}
+    }
+  }
+
+
+  Future<void> _declineIncomingCall(int callId) async {
+    final userId = _userId;
+    if (userId == null || userId <= 0) {
+      _showError('Не удалось определить пользователя.');
+      return;
+    }
+
+    if (_callActionInProgress) return;
+    _callActionInProgress = true;
+
+    try {
+      _log('CALL DECLINE -> callId=$callId userId=$userId');
+
+      final response = await http.post(
+        Uri.parse(_declineCallUrl),
+        body: {
+          'call_id': callId.toString(),
+          'user_id': userId.toString(),
+        },
+      );
+
+      _log(
+        'CALL DECLINE RESPONSE ${response.statusCode}: ${response.body}',
+      );
+
+      if (Get.isDialogOpen == true) {
+        Get.back<void>();
+      }
+
+      _visibleCallId = null;
+
+      try {
+        await FlutterCallkitIncoming.endCall(
+          _sportotekaCallUuid(callId),
+        );
+      } catch (_) {}
+    } catch (e) {
+      _log('CALL DECLINE ERROR: $e');
+      _showError('Не удалось отклонить звонок.');
+    } finally {
+      _callActionInProgress = false;
+    }
+  }
+
+  Future<void> _initCallKit() async {
+    if (!Platform.isAndroid && !Platform.isIOS) return;
+
+    // Plugin-level killed/background action handler.
+    await FlutterCallkitIncoming.onBackgroundMessage(
+      sportotekaCallkitBackgroundHandler,
+    );
+
+    _callkitEventSubscription ??=
+        FlutterCallkitIncoming.onEvent.listen((event) {
+      if (event == null) return;
+      unawaited(_handleCallKitEvent(event));
+    });
+
+    if (Platform.isAndroid) {
+      try {
+        final canUse = await FlutterCallkitIncoming.canUseFullScreenIntent();
+        _log('CALLKIT fullScreenIntent allowed=$canUse');
+
+        if (!canUse) {
+          await FlutterCallkitIncoming.requestFullIntentPermission();
+        }
+      } catch (e) {
+        _log('CALLKIT fullScreenIntent permission error: $e');
+      }
+    }
+  }
+
+  CallKitParams? _paramsFromCallEvent(CallEvent event) {
+    try {
+      final dynamic dynamicEvent = event;
+      final dynamic params = dynamicEvent.callKitParams;
+      return params is CallKitParams ? params : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  int _extraInt(CallKitParams? params, String key) {
+    final value = params?.extra?[key];
+    return int.tryParse('${value ?? ''}'.trim()) ?? 0;
+  }
+
+  String _extraString(CallKitParams? params, String key) =>
+      '${params?.extra?[key] ?? ''}'.trim();
+
+  Future<void> _handleCallKitEvent(CallEvent event) async {
+    final eventName = event.eventName.toLowerCase();
+    final params = _paramsFromCallEvent(event);
+
+    _log('CALLKIT EVENT ${event.eventName} params=$params');
+
+    if (eventName.contains('device_push_token_voip')) {
+      final userId = _userId ?? 0;
+      if (userId > 0) {
+        await _registerCurrentVoipToken(userId);
+      }
+      return;
+    }
+
+    final callId = _extraInt(params, 'call_id');
+    final callerId = _extraInt(params, 'caller_id');
+    final calleeId = _extraInt(params, 'callee_id');
+    final callerName = _extraString(params, 'caller_name');
+
+    if (eventName.contains('accept')) {
+      if (callId <= 0) return;
+
+      await _acceptIncomingCall(
+        callId: callId,
+        callerId: callerId,
+        calleeId: calleeId,
+        callerName: callerName,
+        allowAlreadyAccepted: true,
+      );
+      return;
+    }
+
+    if (eventName.contains('decline')) {
+      if (callId > 0) {
+        await _declineIncomingCall(callId);
+      }
+      return;
+    }
+
+    if (eventName.contains('timeout')) {
+      _visibleCallId = null;
+      _log('CALLKIT timeout callId=$callId');
+      return;
+    }
+
+    if (eventName.contains('ended')) {
+      _visibleCallId = null;
+    }
+  }
+
+  Future<void> _resumeAcceptedCallIfNeeded() async {
+    if (!Platform.isAndroid && !Platform.isIOS) return;
+
+    await Future<void>.delayed(const Duration(milliseconds: 450));
+
+    try {
+      final calls = await FlutterCallkitIncoming.activeCalls();
+
+      for (final params in calls) {
+        if (!params.isAccepted) continue;
+
+        final callId = _extraInt(params, 'call_id');
+        if (callId <= 0) continue;
+        if (_visibleCallId == callId || _callActionInProgress) return;
+
+        final callerId = _extraInt(params, 'caller_id');
+        final calleeId = _extraInt(params, 'callee_id');
+        final callerName = _extraString(params, 'caller_name');
+
+        _log('CALLKIT resume accepted callId=$callId');
+
+        await _acceptIncomingCall(
+          callId: callId,
+          callerId: callerId,
+          calleeId: calleeId,
+          callerName: callerName,
+          allowAlreadyAccepted: true,
+        );
+        return;
+      }
+    } catch (e) {
+      _log('CALLKIT resume error: $e');
+    }
+  }
+
+  Future<void> _registerCurrentVoipToken(int userId) async {
+    if (!Platform.isIOS || userId <= 0) return;
+
+    try {
+      String? token = await FlutterCallkitIncoming.getDevicePushTokenVoIP();
+
+      if ((token ?? '').trim().isEmpty) {
+        await Future<void>.delayed(const Duration(milliseconds: 900));
+        token = await FlutterCallkitIncoming.getDevicePushTokenVoIP();
+      }
+
+      final clean = (token ?? '').trim();
+      if (clean.isEmpty) {
+        _log('VOIP TOKEN is not ready yet');
+        return;
+      }
+
+      final response = await http
+          .post(
+            Uri.parse(_registerVoipTokenUrl),
+            body: <String, String>{
+              'user_id': userId.toString(),
+              'token': clean,
+              'platform': 'ios',
+            },
+          )
+          .timeout(const Duration(seconds: 10));
+
+      _log(
+        'VOIP TOKEN SAVE ${response.statusCode}: ${response.body}',
+      );
+    } catch (e) {
+      _log('VOIP TOKEN SAVE ERROR: $e');
+    }
+  }
+
+  Map<String, dynamic> _decodeJson(String raw) {
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is Map) {
+        return decoded.map<String, dynamic>(
+          (key, value) => MapEntry(key.toString(), value),
+        );
+      }
+    } catch (_) {
+      // ignore
+    }
+
+    return <String, dynamic>{};
+  }
+
+  void _showError(String text) {
+    if (Get.context == null) {
+      _log(text);
+      return;
+    }
+
+    Get.snackbar(
+      'Звонок',
+      text,
+      snackPosition: SnackPosition.BOTTOM,
+      duration: const Duration(seconds: 3),
+    );
+  }
+
+  Future<void> _showIncomingCallLocal(Map<String, dynamic> data) async {
+    final callId = int.tryParse((data['call_id'] ?? '').toString()) ??
+        DateTime.now().millisecondsSinceEpoch;
+
+    final callerId = int.tryParse((data['caller_id'] ?? '').toString()) ?? 0;
+
+    const android = AndroidNotificationDetails(
+      _callChannelId,
+      'Incoming calls',
+      channelDescription: 'Incoming SPORTOTEKA calls',
+      importance: Importance.max,
+      priority: Priority.max,
+      category: AndroidNotificationCategory.call,
+      fullScreenIntent: true,
+      ongoing: true,
+      autoCancel: true,
+    );
+
+    const apple = DarwinNotificationDetails(
+      presentAlert: true,
+      // Badge управляется централизованно через syncAppBadge().
+      presentBadge: false,
+      presentSound: true,
+    );
+
+    final details = NotificationDetails(
+      android: android,
+      iOS: apple,
+      macOS: apple,
+    );
+
+    await _local.show(
+      id: callId % 2147483647,
+      title: 'Входящий звонок',
+      body: callerId > 0 ? 'Пользователь #$callerId звонит вам' : 'Вам звонят…',
+      notificationDetails: details,
+      payload: jsonEncode(data),
+    );
+  }
+
+  Future<void> _showLocal(RemoteMessage msg) async {
+    final title = msg.notification?.title ??
+        (msg.data['title'] ?? 'Сообщение').toString();
+    final body = msg.notification?.body ?? (msg.data['body'] ?? '').toString();
+
+    final isSportotekaUpdate =
+        (msg.data['type'] ?? '').toString() == 'sportoteka_notification' ||
+        (msg.data['type'] ?? '').toString() == 'sportoteka_news';
+
+    final android = AndroidNotificationDetails(
+      isSportotekaUpdate ? _updatesChannelId : _chatChannelId,
+      isSportotekaUpdate ? 'SPORTOTEKA' : 'Chat messages',
+      channelDescription: isSportotekaUpdate
+          ? 'Официальные уведомления SPORTOTEKA'
+          : 'Notifications for chat messages',
+      importance: Importance.high,
+      priority: Priority.high,
+    );
+
+    const apple = DarwinNotificationDetails(
+      presentAlert: true,
+      // Badge управляется централизованно через syncAppBadge().
+      presentBadge: false,
+      presentSound: true,
+    );
+
+    final details = NotificationDetails(
+      android: android,
+      iOS: apple,
+      macOS: apple,
+    );
+
+    final id = (int.tryParse(msg.data['message_id'] ?? '') ??
+            DateTime.now().millisecondsSinceEpoch) %
+        2147483647;
+
+    await _local.show(
+      id: id,
+      title: title,
+      body: body,
+      notificationDetails: details,
+      payload: jsonEncode(msg.data),
+    );
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _startBadgeSync();
+      unawaited(syncAppBadge());
+      return;
+    }
+
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.detached) {
+      _badgeSyncTimer?.cancel();
+      _badgeSyncTimer = null;
+    }
+  }
+
+  void _startBadgeSync() {
+    _badgeSyncTimer?.cancel();
+
+    // Пока приложение открыто, раз в несколько секунд приводим launcher badge
+    // к серверной истине. Поэтому после чтения уведомления цифра исчезнет,
+    // даже если конкретный экран не знает о системном badge.
+    _badgeSyncTimer = Timer.periodic(
+      const Duration(seconds: 6),
+      (_) => unawaited(syncAppBadge()),
+    );
+  }
+
+  int _asInt(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse('${value ?? 0}') ?? 0;
+  }
+
+  bool _isPrivateChat(Map<dynamic, dynamic> chat) {
+    final type =
+        '${chat['type'] ?? chat['chat_type'] ?? ''}'.trim().toLowerCase();
+
+    if (type == 'private' || type == 'personal' || type == 'direct') {
+      return true;
+    }
+
+    final flag = chat['is_private'];
+    return flag == 1 || flag == '1' || flag == true;
+  }
+
+  bool _isGroupMember(Map<dynamic, dynamic> group) {
+    final flag = group['i_am_member'];
+
+    // Старые версии API могли не присылать поле. Тогда строка уже относится
+    // к доступным группам пользователя.
+    return flag == null || flag == 1 || flag == '1' || flag == true;
+  }
+
+  int _sumUnreadRows(
+    dynamic raw, {
+    bool Function(Map<dynamic, dynamic>)? filter,
+  }) {
+    if (raw is! List) return 0;
+
+    var total = 0;
+
+    for (final entry in raw.whereType<Map>()) {
+      if (filter != null && !filter(entry)) continue;
+
+      final unread = _asInt(entry['unread_count']);
+      if (unread > 0) total += unread;
+    }
+
+    return total;
+  }
+
+  Future<int> _fetchPrivateChatUnread(int userId) async {
+    try {
+      final response = await http
+          .get(Uri.parse('$_privateChatsUrl?user_id=$userId'))
+          .timeout(const Duration(seconds: 8));
+
+      if (response.statusCode != 200) return 0;
+
+      final decoded = jsonDecode(response.body);
+
+      if (decoded is List) {
+        return _sumUnreadRows(
+          decoded,
+          filter: _isPrivateChat,
+        );
+      }
+    } catch (e) {
+      _log('BADGE private chats error: $e');
+    }
+
+    return 0;
+  }
+
+  Future<int> _fetchGroupUnread(int userId) async {
+    try {
+      final response = await http
+          .get(Uri.parse('$_groupsFeedUrl?user_id=$userId'))
+          .timeout(const Duration(seconds: 8));
+
+      if (response.statusCode != 200) return 0;
+
+      final decoded = jsonDecode(response.body);
+
+      if (decoded is Map && decoded['success'] == true) {
+        return _sumUnreadRows(
+          decoded['groups'],
+          filter: _isGroupMember,
+        );
+      }
+    } catch (e) {
+      _log('BADGE groups error: $e');
+    }
+
+    return 0;
+  }
+
+  Future<int> _fetchImportantUnread(int userId) async {
+    try {
+      final response = await http
+          .get(Uri.parse('$_notificationsUnreadUrl?user_id=$userId'))
+          .timeout(const Duration(seconds: 8));
+
+      if (response.statusCode != 200) return 0;
+
+      final decoded = jsonDecode(response.body);
+
+      if (decoded is Map && decoded['success'] == true) {
+        return _asInt(decoded['unread_count']).clamp(0, 9999).toInt();
+      }
+    } catch (e) {
+      _log('BADGE notifications error: $e');
+    }
+
+    return 0;
+  }
+
+  Future<int> _fetchSportotekaNewsUnread(int userId) async {
+    try {
+      final response = await http
+          .get(Uri.parse('$_newsSummaryUrl?user_id=$userId'))
+          .timeout(const Duration(seconds: 8));
+
+      if (response.statusCode != 200) return 0;
+
+      final decoded = jsonDecode(response.body);
+
+      if (decoded is Map && decoded['success'] == true) {
+        final visible = decoded['visible'] == true ||
+            decoded['visible'] == 1 ||
+            decoded['visible'] == '1';
+
+        if (!visible) return 0;
+
+        return _asInt(decoded['unread_count']).clamp(0, 9999).toInt();
+      }
+    } catch (e) {
+      _log('BADGE SPORTOTEKA news error: $e');
+    }
+
+    return 0;
+  }
+
+  /// Единый источник системной цифры на иконке приложения.
+  ///
+  /// Считаются только реальные серверные unread:
+  /// - личные чаты;
+  /// - группы;
+  /// - Центр уведомлений;
+  /// - SPORTOTEKA Новости.
+  ///
+  /// Если всё прочитано, выставляем 0 и системная цифра снимается.
+  Future<int> syncAppBadge({int? userId}) async {
+    final resolvedUserId = userId ?? _userId ?? 0;
+
+    if (resolvedUserId <= 0 || _badgeSyncInProgress) {
+      return _lastAppliedBadge < 0 ? 0 : _lastAppliedBadge;
+    }
+
+    _badgeSyncInProgress = true;
+
+    try {
+      final values = await Future.wait<int>(<Future<int>>[
+        _fetchPrivateChatUnread(resolvedUserId),
+        _fetchGroupUnread(resolvedUserId),
+        _fetchImportantUnread(resolvedUserId),
+        _fetchSportotekaNewsUnread(resolvedUserId),
+      ]);
+
+      final total = values.fold<int>(0, (sum, value) => sum + value);
+      final badge = total.clamp(0, 9999).toInt();
+
+      if (_lastAppliedBadge == badge) {
+        return badge;
+      }
+
+      try {
+        final supported = await AppBadgePlus.isSupported();
+
+        if (supported) {
+          await AppBadgePlus.updateBadge(badge);
+          _lastAppliedBadge = badge;
+          _log(
+            'APP BADGE = $badge '
+            '(chat=${values[0]}, groups=${values[1]}, '
+            'notifications=${values[2]}, news=${values[3]})',
+          );
+        } else {
+          _log('APP BADGE not supported on this launcher/platform');
+        }
+      } catch (e) {
+        _log('APP BADGE native error: $e');
+      }
+
+      return badge;
+    } finally {
+      _badgeSyncInProgress = false;
+    }
+  }
+
+  Future<void> _sendTokenToServer({
+    required int userId,
+    required String token,
+  }) async {
+    try {
+      // Текущая серверная схема использует android/ios.
+      // macOS относится к Apple/APNs, поэтому сохраняем его как ios.
+      final platform = (Platform.isIOS || Platform.isMacOS) ? 'ios' : 'android';
+
+      _log('SEND TOKEN -> userId=$userId platform=$platform');
+
+      final res = await http.post(
+        Uri.parse(_saveTokenUrl),
+        body: {
+          'user_id': userId.toString(),
+          'token': token,
+          'platform': platform,
+        },
+      );
+
+      _log('SAVE TOKEN RESPONSE: ${res.statusCode} ${res.body}');
+    } catch (e) {
+      _log('SAVE TOKEN ERROR: $e');
+    }
+  }
+}

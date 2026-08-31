@@ -56,11 +56,17 @@ String _trainerName(Map<String, dynamic> t) {
 }
 
 String _trainerRole(Map<String, dynamic> t) {
+  final assignmentRole = _s(t['profile'] ?? t['link_profile'] ?? t['staff_role']);
+  final assignmentLower = assignmentRole.toLowerCase();
+  if (assignmentLower.contains('press') || assignmentLower.contains('пресс')) {
+    return 'Пресс-служба';
+  }
   final raw = _s(t['position'] ?? t['role_title'] ?? t['specialization'] ?? t['staff_role'] ?? t['role'] ?? t['profile']);
   if (raw.isEmpty || raw == 'extra') return 'Тренер';
   if (raw == 'main') return 'Главный тренер';
   if (raw == 'doctor') return 'Медик';
   if (raw == 'assistant') return 'Ассистент';
+  if (raw == 'press_assistant' || raw == 'press' || raw == 'press_service') return 'Пресс-служба';
   return raw;
 }
 
@@ -100,6 +106,40 @@ List<Map<String, dynamic>> _trainerTeams(Map<String, dynamic> t) {
   return [];
 }
 
+bool _isPressProfileValue(dynamic value) {
+  final raw = _s(value).trim().toLowerCase();
+  return raw == 'press_assistant' ||
+      raw == 'press' ||
+      raw == 'press_service' ||
+      raw.contains('пресс');
+}
+
+List<Map<String, dynamic>> _trainerPressTeams(Map<String, dynamic> trainer) {
+  for (final key in const <String>['press_teams', 'press_assignments']) {
+    final raw = trainer[key];
+    if (raw is List) {
+      final rows = raw
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+      if (rows.isNotEmpty) return rows;
+    }
+  }
+
+  // Совместимость со старыми назначениями, где press_assistant
+  // временно хранился прямо в team_trainers.profile.
+  return _trainerTeams(trainer)
+      .where(
+        (team) =>
+            _isPressProfileValue(team['profile']) ||
+            _isPressProfileValue(team['link_profile']) ||
+            _isPressProfileValue(team['staff_role']) ||
+            _isPressProfileValue(team['role_code']),
+      )
+      .toList();
+}
+
+
 List<Map<String, dynamic>> _trainerSchedule(Map<String, dynamic> t) {
   final raw = t['_schedule'];
   if (raw is List) {
@@ -114,6 +154,7 @@ String _teamLogo(Map<String, dynamic> team) => _normalizeImage(_s(team['logo_url
 String _profileTitle(String raw) {
   final v = raw.trim().toLowerCase();
   if (v == 'main' || v == 'head' || v.contains('глав')) return 'Главный тренер';
+  if (v.contains('press') || v.contains('пресс')) return 'Пресс-служба';
   if (v.contains('assistant') || v.contains('ассист')) return 'Ассистент';
   if (v.contains('doctor') || v.contains('med') || v.contains('мед')) return 'Медик';
   if (v.contains('manager') || v.contains('admin')) return 'Администратор';
@@ -510,7 +551,7 @@ class CmrClubTrainersPanel extends StatefulWidget {
   State<CmrClubTrainersPanel> createState() => _CmrClubTrainersPanelState();
 }
 
-enum _CmrStaffFilter { all, main, coaches, assistants, doctors, noTeam }
+enum _CmrStaffFilter { all, main, coaches, assistants, doctors, press, noTeam }
 
 class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
   static const String apiBase = 'https://sportotekaapp.ru/api';
@@ -518,12 +559,17 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
   static const String getTeamTrainersUrl = '$apiBase/get_team_trainers.php';
   static const String getTeamEventsUrl = '$apiBase/get_team_events.php';
   static const String searchTrainerByEmailUrl = '$apiBase/search_trainer_by_email.php';
+  static const String searchUsersUrl = '$apiBase/search_users.php';
   static const String linkTrainerToClubUrl = '$apiBase/link_trainer_to_club.php';
   static const String unlinkTrainerFromClubUrl = '$apiBase/unlink_trainer_from_club.php';
   static const String linkTrainerToTeamUrl = '$apiBase/link_trainer_to_team.php';
+  static const String setPressStaffScopeUrl = '$apiBase/set_press_staff_scope.php';
+  static const String removePressStaffUrl = '$apiBase/remove_press_staff.php';
   static const String unlinkTrainerFromTeamUrl = '$apiBase/unlink_trainer_from_team.php';
   static const String getTrainerProfileUrl = '$apiBase/get_trainer_profile.php';
   static const String updateTrainerProfileUrl = '$apiBase/update_trainer_profile.php';
+  static const String updateClubStaffAccountUrl = '$apiBase/update_club_staff_account.php';
+  static const String resetClubStaffPasswordUrl = '$apiBase/reset_club_staff_password.php';
   static const String createChatUrl = '$apiBase/create_chat.php';
 
   final TextEditingController _searchC = TextEditingController();
@@ -540,6 +586,8 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
 
   Map<String, dynamic>? _openedTrainerProfile;
   bool _addTrainerOpen = false;
+  Map<String, dynamic>? _assigningTrainer;
+  String _assigningInitialProfile = 'extra';
 
   int _sideChatId = 0;
   int _sideChatUserId = 0;
@@ -726,6 +774,11 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
           return _detectGroup(trainer) == _CmrStaffFilter.assistants;
         case _CmrStaffFilter.doctors:
           return _detectGroup(trainer) == _CmrStaffFilter.doctors;
+        case _CmrStaffFilter.press:
+          // Во вкладке «Пресс-служба» показываем только уже назначенных.
+          // Выдача новой роли выполняется из раздела «Все» через правый инспектор.
+          return _trainerPressTeams(trainer).isNotEmpty ||
+              _b(trainer['is_press_assistant']);
         case _CmrStaffFilter.noTeam:
           return _trainerTeams(trainer).isEmpty;
       }
@@ -734,7 +787,8 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
 
   _CmrStaffFilter _detectGroup(Map<String, dynamic> trainer) {
     if (_isMain(trainer)) return _CmrStaffFilter.main;
-    final raw = '${_trainerRole(trainer)} ${_s(trainer['staff_role'])} ${_s(trainer['role_code'])} ${_s(trainer['position_code'])}'.toLowerCase();
+    final raw = '${_trainerRole(trainer)} ${_s(trainer['profile'])} ${_s(trainer['link_profile'])} ${_s(trainer['staff_role'])} ${_s(trainer['role_code'])} ${_s(trainer['position_code'])}'.toLowerCase();
+    if (raw.contains('press') || raw.contains('пресс')) return _CmrStaffFilter.press;
     if (raw.contains('мед') || raw.contains('врач') || raw.contains('doctor') || raw.contains('med')) return _CmrStaffFilter.doctors;
     if (raw.contains('ассист') || raw.contains('помощ') || raw.contains('assistant')) return _CmrStaffFilter.assistants;
     return _CmrStaffFilter.coaches;
@@ -765,6 +819,58 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
       }
     }
     return visible.first;
+  }
+
+  Future<void> _selectTrainerForInspector(
+    Map<String, dynamic> trainer,
+  ) async {
+    final key = _trainerIdentity(trainer);
+
+    // Обычный клик по сотруднику НЕ открывает полный CMR-профиль.
+    // Он только выбирает сотрудника и показывает его в правом инспекторе.
+    if (mounted) {
+      setState(() {
+        _selectedTrainerKey = key;
+        _addTrainerOpen = false;
+        _assigningTrainer = null;
+        _editingTrainer = null;
+        _openedTrainerProfile = null;
+        _sideChatId = 0;
+        _sideChatUserId = 0;
+        _sideChatName = '';
+      });
+    }
+
+    // Детальные данные догружаем фоном и обновляем правую панель,
+    // не переводя пользователя на отдельный экран.
+    final profileData = await _loadTrainerProfileForCard(trainer);
+    if (!mounted) return;
+
+    // Не подменяем инспектор, если пользователь уже выбрал другого сотрудника.
+    if (_selectedTrainerKey.isNotEmpty &&
+        key.isNotEmpty &&
+        _selectedTrainerKey != key) {
+      return;
+    }
+
+    final profileKey = _trainerIdentity(profileData);
+
+    setState(() {
+      _selectedTrainerKey = profileKey.isEmpty ? key : profileKey;
+
+      final idx = _trainers.indexWhere(
+        (item) =>
+            _trainerIdentity(item) == key ||
+            _trainerIdentity(item) == profileKey,
+      );
+
+      if (idx >= 0) {
+        _trainers[idx] = <String, dynamic>{
+          ..._trainers[idx],
+          ...profileData,
+        };
+      }
+    });
   }
 
   Future<void> _handleOpenTrainer(
@@ -1044,10 +1150,17 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
       builder: (context, constraints) {
         final mobile = constraints.maxWidth < 640;
         final compact = constraints.maxWidth < 980;
+        final pressMode = _filter == _CmrStaffFilter.press;
         final listWidth = math.min(compact ? 430.0 : 480.0, constraints.maxWidth * (compact ? .43 : .45));
 
         final list = _TrainerListPanel(
           clubName: widget.clubName,
+          sectionTitle: pressMode ? 'Пресс-служба' : 'Тренеры',
+          sectionSubtitle: pressMode
+              ? 'Только сотрудники с активным пресс-доступом'
+              : widget.clubName,
+          searchHint: pressMode ? 'Поиск в пресс-службе' : 'Поиск тренера',
+          pressMode: pressMode,
           trainersCount: _trainers.length,
           visibleCount: visible.length,
           assignedCount: assigned,
@@ -1060,8 +1173,37 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
           trainers: visible,
           selectedKey: selectedKey,
           trainerIdentity: _trainerIdentity,
-          onOpenTrainer: (trainer) => _handleOpenTrainer(trainer, mobile),
-          onAddTrainer: !_canManageAllTrainers() || _saving ? null : _openAddTrainerRightPanel,
+          onOpenTrainer: (trainer) {
+            if (pressMode) {
+              final key = _trainerIdentity(trainer);
+              if (mounted) {
+                setState(() {
+                  _selectedTrainerKey = key;
+                  _addTrainerOpen = false;
+                  _editingTrainer = null;
+                });
+              }
+              if (mobile) {
+                _assignTrainer(
+                  trainer,
+                  initialProfile: 'press_assistant',
+                );
+              }
+              return;
+            }
+            if (mobile) {
+              // На телефоне правой колонки нет, поэтому открываем подробный экран.
+              _handleOpenTrainer(trainer, true);
+            } else {
+              // Desktop/tablet: обычный клик только открывает инспектор справа.
+              _selectTrainerForInspector(trainer);
+            }
+          },
+          onAddTrainer: pressMode ||
+                  !_canManageAllTrainers() ||
+                  _saving
+              ? null
+              : _openAddTrainerRightPanel,
           onAssignTrainer:
               !_canManageAllTrainers() ||
                       _saving ||
@@ -1090,12 +1232,50 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
                       color: Colors.white,
                       borderRadius: BorderRadius.all(Radius.circular(18)),
                     ),
-                    child: _addTrainerOpen
+                    child: _assigningTrainer != null
+                        ? _TrainerAssignRightPanel(
+                            trainer: _assigningTrainer!,
+                            clubName: widget.clubName,
+                            teams: widget.teams,
+                            saving: _saving,
+                            initialProfile: _assigningInitialProfile,
+                            onClose: _closeTrainerAssignmentPanel,
+                            onSaveProfile: ({
+                              required String firstName,
+                              required String lastName,
+                            }) =>
+                                _updateClubStaffAccountFromRightPanel(
+                              trainer: _assigningTrainer!,
+                              firstName: firstName,
+                              lastName: lastName,
+                            ),
+                            onResetPassword: ({
+                              required String newPassword,
+                            }) =>
+                                _resetClubStaffPasswordFromRightPanel(
+                              trainer: _assigningTrainer!,
+                              newPassword: newPassword,
+                            ),
+                            onAssign: ({
+                              required List<int> teamIds,
+                              required bool allTeams,
+                              required String profile,
+                            }) =>
+                                _assignTrainerFromRightPanel(
+                              trainer: _assigningTrainer!,
+                              teamIds: teamIds,
+                              allTeams: allTeams,
+                              profile: profile,
+                            ),
+                          )
+                        : _addTrainerOpen
                         ? _TrainerAddRightPanel(
                             clubName:
                                 widget.clubName,
                             teams:
                                 widget.teams,
+                            pressMode:
+                                pressMode,
                             saving:
                                 _saving,
                             trainerIdOf:
@@ -1153,12 +1333,50 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
                                   onClose:
                                       _closeSideChat,
                                 )
+                              : _assigningTrainer != null
+                                  ? _TrainerAssignRightPanel(
+                                      trainer: _assigningTrainer!,
+                                      clubName: widget.clubName,
+                                      teams: widget.teams,
+                                      saving: _saving,
+                                      initialProfile: _assigningInitialProfile,
+                                      onClose: _closeTrainerAssignmentPanel,
+                                      onSaveProfile: ({
+                                        required String firstName,
+                                        required String lastName,
+                                      }) =>
+                                          _updateClubStaffAccountFromRightPanel(
+                                        trainer: _assigningTrainer!,
+                                        firstName: firstName,
+                                        lastName: lastName,
+                                      ),
+                                      onResetPassword: ({
+                                        required String newPassword,
+                                      }) =>
+                                          _resetClubStaffPasswordFromRightPanel(
+                                        trainer: _assigningTrainer!,
+                                        newPassword: newPassword,
+                                      ),
+                                      onAssign: ({
+                                        required List<int> teamIds,
+                                        required bool allTeams,
+                                        required String profile,
+                                      }) =>
+                                          _assignTrainerFromRightPanel(
+                                        trainer: _assigningTrainer!,
+                                        teamIds: teamIds,
+                                        allTeams: allTeams,
+                                        profile: profile,
+                                      ),
+                                    )
                               : _addTrainerOpen
                                   ? _TrainerAddRightPanel(
                                   clubName:
                                       widget.clubName,
                                   teams:
                                       widget.teams,
+                                  pressMode:
+                                      pressMode,
                                   saving:
                                       _saving,
                                   trainerIdOf:
@@ -1182,7 +1400,32 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
                                   onAssignTeam:
                                       _assignTrainerRight,
                                 )
-                              : _TrainerDetailPanel(
+                              : pressMode
+                                  ? _PressServiceDetailPanel(
+                                      trainer: selected,
+                                      clubName: widget.clubName,
+                                      allTeamsCount: widget.teams.length,
+                                      onManageTeams: selected == null ||
+                                              !_canManageAllTrainers()
+                                          ? null
+                                          : () => _assignTrainer(
+                                                selected,
+                                                initialProfile:
+                                                    'press_assistant',
+                                              ),
+                                      onRemovePress: selected == null ||
+                                              !_canManageAllTrainers() ||
+                                              _trainerPressTeams(selected).isEmpty
+                                          ? null
+                                          : () => _removePressScope(selected),
+                                      onOpenProfile: selected == null
+                                          ? null
+                                          : () => _handleOpenTrainer(
+                                                selected,
+                                                false,
+                                              ),
+                                    )
+                                  : _TrainerDetailPanel(
                                   trainer: selected,
                                   clubName:
                                       widget.clubName,
@@ -1259,6 +1502,22 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
                   },
                   onLoadProfile: _loadTrainerEditProfile,
                   onSaveProfile: _saveTrainerEditProfile,
+                  onSaveAccount: ({
+                    required String firstName,
+                    required String lastName,
+                  }) =>
+                      _updateClubStaffAccountFromRightPanel(
+                    trainer: _editingTrainer!,
+                    firstName: firstName,
+                    lastName: lastName,
+                  ),
+                  onResetPassword: ({
+                    required String newPassword,
+                  }) =>
+                      _resetClubStaffPasswordFromRightPanel(
+                    trainer: _editingTrainer!,
+                    newPassword: newPassword,
+                  ),
                   onSaved: () async {
                     if (mounted) setState(() => _editingTrainer = null);
                     await _afterMutation('Профиль тренера обновлён');
@@ -1587,6 +1846,7 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
     if (!mounted || _saving) return;
     setState(() {
       _editingTrainer = null;
+      _assigningTrainer = null;
       _addTrainerOpen = true;
     });
   }
@@ -1613,7 +1873,7 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
       },
     );
 
-    return _extractList(
+    var rows = _extractList(
       data,
       const <String>[
         'trainers',
@@ -1623,6 +1883,34 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
         'data',
       ],
     );
+
+    // Пресс-ассистент может быть обычным пользователем SPORTOTEKA, а не
+    // заранее созданным тренером. Поэтому при пустом trainer-поиске делаем
+    // fallback в общий поиск пользователей по точному email.
+    if (rows.isEmpty) {
+      try {
+        final uri = Uri.parse(searchUsersUrl).replace(
+          queryParameters: <String, String>{'q': value},
+        );
+        var response = await http.get(uri).timeout(const Duration(seconds: 12));
+        if (response.statusCode == 405) {
+          response = await http.post(
+            Uri.parse(searchUsersUrl),
+            body: <String, String>{'q': value},
+          ).timeout(const Duration(seconds: 12));
+        }
+        final decoded = _tryDecode(response.body);
+        rows = _extractList(
+          decoded,
+          const <String>['users', 'items', 'data', 'results'],
+        ).where((user) {
+          final email = _s(user['email']).toLowerCase();
+          return email == value.toLowerCase();
+        }).toList();
+      } catch (_) {}
+    }
+
+    return rows;
   }
 
   Future<bool> _addTrainerToClubRight(
@@ -1689,7 +1977,7 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
         _trainerId(trainer);
 
     if (trainerId <= 0 ||
-        teamId <= 0) {
+        teamId == 0) {
       return false;
     }
 
@@ -1703,8 +1991,27 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
       );
     } catch (_) {}
 
-    final ok =
-        await _linkTrainerToTeam(
+    if (profile == 'press_assistant') {
+      final scopeTeamId = teamId == -1 ? 0 : teamId;
+      final ok = await _setPressScope(
+        trainerId: trainerId,
+        teamId: scopeTeamId,
+      );
+      if (!ok) return false;
+
+      if (mounted) {
+        setState(() => _addTrainerOpen = false);
+      }
+
+      await _afterMutation(
+        scopeTeamId == 0
+            ? 'Сотрудник назначен в пресс-службу всех команд'
+            : 'Сотрудник назначен в пресс-службу команды',
+      );
+      return true;
+    }
+
+    final ok = await _linkTrainerToTeam(
       trainerId,
       teamId,
       profile,
@@ -1713,15 +2020,10 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
     if (!ok) return false;
 
     if (mounted) {
-      setState(
-        () => _addTrainerOpen = false,
-      );
+      setState(() => _addTrainerOpen = false);
     }
 
-    await _afterMutation(
-      'Тренер назначен в команду',
-    );
-
+    await _afterMutation('Сотрудник назначен в команду');
     return true;
   }
 
@@ -1789,13 +2091,13 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
                     const _CmrSheetHandle(),
                     _CmrSheetTitle(
                       icon: Icons.person_add_alt_1_rounded,
-                      title: 'Добавить тренера',
+                      title: 'Добавить сотрудника',
                       subtitle: 'Найдите пользователя по email, добавьте в клуб или сразу назначьте в команду.',
                     ),
                     const SizedBox(height: 16),
                     _CmrInput(
                       controller: emailC,
-                      hint: 'Email тренера',
+                      hint: 'Email сотрудника',
                       icon: Icons.alternate_email_rounded,
                       keyboardType: TextInputType.emailAddress,
                       onSubmitted: (_) => search(),
@@ -1877,7 +2179,7 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
         if (!mounted || profile == null) return;
 
         final ok = await _linkTrainerToTeam(trainerId, _teamId(team), profile);
-        if (ok) await _afterMutation('Тренер назначен в команду');
+        if (ok) await _afterMutation('Сотрудник назначен в команду');
       }
     } finally {
       emailC.dispose();
@@ -1918,6 +2220,8 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
 
   Future<bool> _saveTrainerEditProfile({
     required int trainerId,
+    required String firstName,
+    required String lastName,
     required String position,
     required String birthday,
     required String experience,
@@ -1944,6 +2248,8 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
         req.fields['trainer_id'] = '$trainerId';
         req.fields['actor_user_id'] = '$_currentUserId';
         req.fields['actor_role'] = _currentUserRole;
+        req.fields['first_name'] = firstName.trim();
+        req.fields['last_name'] = lastName.trim();
         req.fields['position'] = position.trim();
         req.fields['birthday'] = birthday.trim();
         req.fields['experience'] = experience.trim();
@@ -1959,6 +2265,8 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
             'trainer_id': trainerId,
             'actor_user_id': _currentUserId,
             'actor_role': _currentUserRole,
+            'first_name': firstName.trim(),
+            'last_name': lastName.trim(),
             'position': position.trim(),
             'birthday': birthday.trim(),
             'experience': experience.trim(),
@@ -1983,27 +2291,401 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
   Future<void> _assignTrainer(
     Map<String, dynamic> trainer, {
     bool closeCurrentSheet = false,
+    String initialProfile = 'extra',
   }) async {
     if (!_canManageAllTrainers()) {
       Get.snackbar(
         'Доступ',
-        'Назначать тренеров может только клубный аккаунт.',
+        'Назначать сотрудников может только клубный аккаунт.',
       );
       return;
     }
+
     if (closeCurrentSheet) {
       Navigator.of(context).pop();
-      await Future.delayed(const Duration(milliseconds: 220));
+      await Future<void>.delayed(const Duration(milliseconds: 220));
     }
-    
+
     final trainerId = _trainerId(trainer);
-    if (trainerId <= 0) return;
-    final team = await _pickTeam();
-    if (team == null) return;
-    final profile = await _pickProfileType();
-    if (profile == null) return;
-    final ok = await _linkTrainerToTeam(trainerId, _teamId(team), profile);
-    if (ok) await _afterMutation('Тренер назначен в команду');
+    if (trainerId <= 0 || !mounted) return;
+
+    setState(() {
+      _selectedTrainerKey = _trainerIdentity(trainer);
+      _assigningTrainer = Map<String, dynamic>.from(trainer);
+      _assigningInitialProfile = initialProfile;
+      _addTrainerOpen = false;
+      _editingTrainer = null;
+      _sideChatId = 0;
+      _sideChatUserId = 0;
+      _sideChatName = '';
+    });
+  }
+
+  void _closeTrainerAssignmentPanel() {
+    if (!mounted) return;
+    setState(() => _assigningTrainer = null);
+  }
+
+  Future<bool> _assignTrainerFromRightPanel({
+    required Map<String, dynamic> trainer,
+    required List<int> teamIds,
+    required bool allTeams,
+    required String profile,
+  }) async {
+    final trainerId = _trainerId(trainer);
+    final normalizedProfile = profile.trim().toLowerCase();
+
+    if (trainerId <= 0 || normalizedProfile.isEmpty) {
+      return false;
+    }
+
+    final validTeamIds = teamIds.where((id) => id > 0).toSet().toList();
+    final allClubTeamIds = widget.teams
+        .map(_teamId)
+        .where((id) => id > 0)
+        .toSet()
+        .toList();
+
+    if (!allTeams && validTeamIds.isEmpty) {
+      Get.snackbar('Назначение', 'Выберите хотя бы одну команду');
+      return false;
+    }
+
+    if (normalizedProfile == 'press_assistant') {
+      final ok = await _saveAction(
+        () => _postJson(
+          setPressStaffScopeUrl,
+          <String, dynamic>{
+            'club_id': widget.clubId,
+            'user_id': trainerId,
+            'all_teams': allTeams,
+            'team_ids': allTeams ? <int>[] : validTeamIds,
+          },
+        ),
+      );
+
+      if (!ok) return false;
+
+      if (mounted) {
+        setState(() => _assigningTrainer = null);
+      }
+
+      await _afterMutation(
+        allTeams
+            ? 'Пресс-служба назначена на все команды клуба'
+            : 'Пресс-служба назначена на ${validTeamIds.length} команд(ы)',
+      );
+      return true;
+    }
+
+    final targets = allTeams ? allClubTeamIds : validTeamIds;
+    if (targets.isEmpty) {
+      Get.snackbar('Назначение', 'В клубе нет команд');
+      return false;
+    }
+
+    var successCount = 0;
+    for (final teamId in targets) {
+      final ok = await _linkTrainerToTeam(
+        trainerId,
+        teamId,
+        normalizedProfile,
+      );
+      if (ok) successCount++;
+    }
+
+    if (successCount == 0) return false;
+
+    if (mounted) {
+      setState(() => _assigningTrainer = null);
+    }
+
+    await _afterMutation(
+      successCount == targets.length
+          ? 'Сотрудник назначен: $successCount команд(ы)'
+          : 'Назначено $successCount из ${targets.length} команд',
+    );
+    return true;
+  }
+
+  Future<bool> _updateClubStaffAccountFromRightPanel({
+    required Map<String, dynamic> trainer,
+    required String firstName,
+    required String lastName,
+  }) async {
+    if (!_canManageAllTrainers()) {
+      Get.snackbar(
+        'Доступ',
+        'Изменять данные сотрудников может только администратор клуба.',
+      );
+      return false;
+    }
+
+    final targetUserId = _trainerId(trainer);
+    if (targetUserId <= 0 || _currentUserId <= 0) return false;
+
+    final ok = await _saveAction(
+      () => _postJson(
+        updateClubStaffAccountUrl,
+        <String, dynamic>{
+          'club_id': widget.clubId,
+          'actor_user_id': _currentUserId,
+          'user_id': targetUserId,
+          'first_name': firstName.trim(),
+          'last_name': lastName.trim(),
+        },
+      ),
+    );
+
+    if (!ok) return false;
+
+    if (mounted) {
+      setState(() {
+        _assigningTrainer = <String, dynamic>{
+          ...?_assigningTrainer,
+          'first_name': firstName.trim(),
+          'last_name': lastName.trim(),
+        };
+      });
+    }
+
+    await _load();
+
+    final updated = _trainers.cast<Map<String, dynamic>?>().firstWhere(
+          (item) => item != null && _trainerId(item) == targetUserId,
+          orElse: () => null,
+        );
+
+    if (mounted && updated != null) {
+      setState(() {
+        _assigningTrainer = Map<String, dynamic>.from(updated);
+        _selectedTrainerKey = _trainerIdentity(updated);
+      });
+    }
+
+    Get.snackbar('Готово', 'Имя и фамилия сотрудника сохранены');
+    widget.onChanged?.call();
+    return true;
+  }
+
+  Future<bool> _resetClubStaffPasswordFromRightPanel({
+    required Map<String, dynamic> trainer,
+    required String newPassword,
+  }) async {
+    if (!_canManageAllTrainers()) {
+      Get.snackbar(
+        'Доступ',
+        'Изменять пароль сотрудника может только администратор клуба.',
+      );
+      return false;
+    }
+
+    final targetUserId = _trainerId(trainer);
+    if (targetUserId <= 0 || _currentUserId <= 0) return false;
+
+    final ok = await _saveAction(
+      () => _postJson(
+        resetClubStaffPasswordUrl,
+        <String, dynamic>{
+          'club_id': widget.clubId,
+          'actor_user_id': _currentUserId,
+          'user_id': targetUserId,
+          'new_password': newPassword,
+        },
+      ),
+    );
+
+    if (!ok) return false;
+
+    Get.snackbar('Готово', 'Пароль сотрудника изменён');
+    return true;
+  }
+
+  Future<void> _assignPressAssistant(
+    Map<String, dynamic> trainer,
+  ) async {
+    if (!_canManageAllTrainers()) {
+      Get.snackbar(
+        'Доступ',
+        'Назначать пресс-службу может только клубный аккаунт.',
+      );
+      return;
+    }
+
+    final trainerId = _trainerId(trainer);
+    if (trainerId <= 0) {
+      Get.snackbar('Пресс-служба', 'Не найден ID сотрудника');
+      return;
+    }
+
+    final team = await _pickTeam(
+      title: 'Команда для пресс-службы',
+    );
+    if (!mounted || team == null) return;
+
+    final teamId = _teamId(team);
+    if (teamId <= 0) return;
+
+    final ok = await _setPressScope(
+      trainerId: trainerId,
+      teamId: teamId,
+    );
+
+    if (ok) {
+      await _afterMutation(
+        'Сотрудник назначен в пресс-службу команды «${_teamName(team)}»',
+      );
+    }
+  }
+
+  Future<void> _assignPressAssistantAll(
+    Map<String, dynamic> trainer,
+  ) async {
+    if (!_canManageAllTrainers()) {
+      Get.snackbar(
+        'Доступ',
+        'Назначать пресс-службу может только клубный аккаунт.',
+      );
+      return;
+    }
+
+    final trainerId = _trainerId(trainer);
+    if (trainerId <= 0) {
+      Get.snackbar('Пресс-служба', 'Не найден ID сотрудника');
+      return;
+    }
+
+    final teams = widget.teams.where((team) => _teamId(team) > 0).toList();
+    if (teams.isEmpty) {
+      Get.snackbar('Пресс-служба', 'В клубе нет команд для назначения');
+      return;
+    }
+
+    final confirmed = await _confirm(
+      title: 'Назначить на все команды?',
+      text:
+          '${_trainerName(trainer)} получит доступ пресс-службы ко всем ${teams.length} командам клуба.',
+      confirmText: 'Назначить',
+    );
+    if (confirmed != true) return;
+
+    final ok = await _setPressScope(
+      trainerId: trainerId,
+      teamId: 0,
+    );
+
+    if (ok) {
+      await _afterMutation(
+        'Сотрудник назначен в пресс-службу всех команд',
+      );
+    }
+  }
+
+  Future<void> _openPressAssignmentSheet(
+    Map<String, dynamic> trainer,
+  ) async {
+    if (!_canManageAllTrainers()) return;
+
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _CmrBottomPanel(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const _CmrSheetHandle(),
+            _CmrSheetTitle(
+              icon: Icons.campaign_outlined,
+              title: 'Пресс-служба',
+              subtitle:
+                  '${_trainerName(trainer)} · выберите область назначения',
+            ),
+            const SizedBox(height: 12),
+            _CmrRolePickTile(
+              icon: Icons.groups_2_rounded,
+              title: 'Одна команда',
+              color: _CmrColors.green,
+              onTap: () => Navigator.pop(context, 'one'),
+            ),
+            const SizedBox(height: 8),
+            _CmrRolePickTile(
+              icon: Icons.apartment_rounded,
+              title: 'Все команды клуба',
+              color: _CmrColors.violet,
+              onTap: () => Navigator.pop(context, 'all'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (!mounted || action == null) return;
+    if (action == 'all') {
+      await _assignPressAssistantAll(trainer);
+    } else {
+      await _assignPressAssistant(trainer);
+    }
+  }
+
+  Future<bool> _setPressScope({
+    required int trainerId,
+    required int teamId,
+  }) async {
+    if (!_canManageAllTrainers()) {
+      Get.snackbar(
+        'Доступ',
+        'Назначать пресс-службу может только клубный аккаунт.',
+      );
+      return false;
+    }
+
+    if (trainerId <= 0 || widget.clubId <= 0 || teamId < 0) {
+      return false;
+    }
+
+    return _saveAction(
+      () => _postJson(
+        setPressStaffScopeUrl,
+        <String, dynamic>{
+          'club_id': widget.clubId,
+          'user_id': trainerId,
+          'team_id': teamId,
+        },
+      ),
+    );
+  }
+
+  Future<void> _removePressScope(
+    Map<String, dynamic> trainer,
+  ) async {
+    if (!_canManageAllTrainers()) return;
+
+    final trainerId = _trainerId(trainer);
+    if (trainerId <= 0 || widget.clubId <= 0) return;
+
+    final ok = await _confirm(
+      title: 'Убрать из пресс-службы?',
+      text:
+          '${_trainerName(trainer)} потеряет доступ к добавлению и редактированию новостей клуба. Основная должность сотрудника не изменится.',
+      confirmText: 'Убрать',
+      danger: true,
+    );
+    if (ok != true) return;
+
+    final success = await _saveAction(
+      () => _postJson(
+        removePressStaffUrl,
+        <String, dynamic>{
+          'club_id': widget.clubId,
+          'user_id': trainerId,
+        },
+      ),
+    );
+
+    if (success) {
+      await _afterMutation('Доступ пресс-службы удалён');
+    }
   }
 
   Future<bool> _linkTrainerToTeam(int trainerId, int teamId, String profile) async {
@@ -2242,7 +2924,7 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const _CmrSheetHandle(),
-            _CmrSheetTitle(icon: Icons.badge_rounded, title: 'Роль в команде', subtitle: 'Выберите, как тренер будет отображаться в штабе команды.'),
+            _CmrSheetTitle(icon: Icons.badge_rounded, title: 'Роль в команде', subtitle: 'Выберите роль сотрудника в штабе команды.'),
             const SizedBox(height: 12),
             for (final item in variants)
               Padding(
@@ -2295,6 +2977,10 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
 
 class _TrainerListPanel extends StatelessWidget {
   final String clubName;
+  final String sectionTitle;
+  final String sectionSubtitle;
+  final String searchHint;
+  final bool pressMode;
   final int trainersCount;
   final int visibleCount;
   final int assignedCount;
@@ -2316,6 +3002,10 @@ class _TrainerListPanel extends StatelessWidget {
 
   const _TrainerListPanel({
     required this.clubName,
+    required this.sectionTitle,
+    required this.sectionSubtitle,
+    required this.searchHint,
+    required this.pressMode,
     required this.trainersCount,
     required this.visibleCount,
     required this.assignedCount,
@@ -2354,6 +3044,8 @@ class _TrainerListPanel extends StatelessWidget {
             ),
             child: _TrainerHeader(
               clubName: clubName,
+              title: sectionTitle,
+              subtitle: sectionSubtitle,
               trainersCount: trainersCount,
               visibleCount: visibleCount,
               assignedCount: assignedCount,
@@ -2368,7 +3060,11 @@ class _TrainerListPanel extends StatelessWidget {
           Container(
             padding: EdgeInsets.symmetric(horizontal: mobile ? 10 : 12, vertical: 8),
             color: Colors.transparent,
-            child: _TrainerSearch(controller: searchController, mobile: mobile),
+            child: _TrainerSearch(
+              controller: searchController,
+              mobile: mobile,
+              hint: searchHint,
+            ),
           ),
           Container(
             height: 46,
@@ -2408,6 +3104,7 @@ class _TrainerListPanel extends StatelessWidget {
                           active: active,
                           onTap: () => onOpenTrainer(trainer),
                           mobile: mobile,
+                          pressMode: pressMode,
                         );
                       },
                     ),
@@ -2421,6 +3118,8 @@ class _TrainerListPanel extends StatelessWidget {
 
 class _TrainerHeader extends StatelessWidget {
   final String clubName;
+  final String title;
+  final String subtitle;
   final int trainersCount;
   final int visibleCount;
   final int assignedCount;
@@ -2433,6 +3132,8 @@ class _TrainerHeader extends StatelessWidget {
 
   const _TrainerHeader({
     required this.clubName,
+    required this.title,
+    required this.subtitle,
     required this.trainersCount,
     required this.visibleCount,
     required this.assignedCount,
@@ -2446,7 +3147,9 @@ class _TrainerHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final subtitle = clubName.trim().isEmpty ? 'Специалисты клуба' : clubName;
+    final resolvedSubtitle = subtitle.trim().isEmpty
+        ? (clubName.trim().isEmpty ? 'Специалисты клуба' : clubName)
+        : subtitle;
 
     return Row(
       children: [
@@ -2457,7 +3160,7 @@ class _TrainerHeader extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Тренеры',
+                title,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: mobile
@@ -2466,7 +3169,7 @@ class _TrainerHeader extends StatelessWidget {
               ),
               const SizedBox(height: 3),
               Text(
-                subtitle,
+                resolvedSubtitle,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: _CmrText.muted(mobile ? 12 : 11.5),
@@ -2480,7 +3183,7 @@ class _TrainerHeader extends StatelessWidget {
         ],
         _TrainerIconButton(
           icon: Icons.person_add_alt_1_rounded,
-          tooltip: 'Добавить тренера',
+          tooltip: 'Добавить сотрудника',
           onTap: onAddTrainer,
           emphasized: true,
           compact: true,
@@ -2607,8 +3310,13 @@ class _TrainerIconButton extends StatelessWidget {
 class _TrainerSearch extends StatelessWidget {
   final TextEditingController controller;
   final bool mobile;
+  final String hint;
 
-  const _TrainerSearch({required this.controller, required this.mobile});
+  const _TrainerSearch({
+    required this.controller,
+    required this.mobile,
+    required this.hint,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -2631,8 +3339,8 @@ class _TrainerSearch extends StatelessWidget {
           Expanded(
             child: TextField(
               controller: controller,
-              decoration: const InputDecoration(
-                hintText: 'Поиск тренера',
+              decoration: InputDecoration(
+                hintText: hint,
                 border: InputBorder.none,
                 isDense: true,
               ),
@@ -2678,6 +3386,7 @@ class _TrainerFilterBar extends StatelessWidget {
       _CmrStaffFilter.coaches: const _StaffFilterData('Тренеры', Icons.sports_rounded),
       _CmrStaffFilter.assistants: const _StaffFilterData('Ассистенты', Icons.support_agent_rounded),
       _CmrStaffFilter.doctors: const _StaffFilterData('Медики', Icons.health_and_safety_rounded),
+      _CmrStaffFilter.press: const _StaffFilterData('Пресс-служба', Icons.campaign_outlined),
       _CmrStaffFilter.noTeam: const _StaffFilterData('Без команды', Icons.link_off_rounded),
     };
 
@@ -2777,12 +3486,14 @@ class _TrainerTile extends StatelessWidget {
   final bool active;
   final VoidCallback onTap;
   final bool mobile;
+  final bool pressMode;
 
   const _TrainerTile({
     required this.trainer,
     required this.active,
     required this.onTap,
     required this.mobile,
+    required this.pressMode,
   });
 
   @override
@@ -2793,12 +3504,23 @@ class _TrainerTile extends StatelessWidget {
     final photo = _trainerPhoto(trainer);
     final main = _isMain(trainer);
     final experience = _trainerExperience(trainer);
+    final pressTeams = _trainerPressTeams(trainer);
+    final pressText = pressTeams.isEmpty
+        ? 'Не назначен в пресс-службу'
+        : 'Пресс: ${pressTeams.map(_teamName).join(', ')}';
 
-    final subtitleParts = <String>[
-      main ? 'Главный тренер' : role,
-      team,
-      if (experience.isNotEmpty && !mobile) experience,
-    ].where((e) => e.trim().isNotEmpty).toList();
+    final subtitleParts = pressMode
+        ? <String>[
+            main ? 'Главный тренер' : role,
+            pressText,
+          ]
+        : <String>[
+            main ? 'Главный тренер' : role,
+            team,
+            if (experience.isNotEmpty && !mobile) experience,
+          ];
+    final cleanSubtitleParts =
+        subtitleParts.where((e) => e.trim().isNotEmpty).toList();
 
     return Material(
       color: Colors.transparent,
@@ -2846,7 +3568,7 @@ class _TrainerTile extends StatelessWidget {
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      subtitleParts.join(' · '),
+                      cleanSubtitleParts.join(' · '),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: _CmrText.navSubtitle(active: active).copyWith(
@@ -3156,9 +3878,847 @@ class _CmrTextActionButton extends StatelessWidget {
   }
 }
 
+
+class _TrainerAssignRightPanel extends StatefulWidget {
+  final Map<String, dynamic> trainer;
+  final String clubName;
+  final List<Map<String, dynamic>> teams;
+  final bool saving;
+  final String initialProfile;
+  final VoidCallback onClose;
+  final Future<bool> Function({
+    required String firstName,
+    required String lastName,
+  }) onSaveProfile;
+  final Future<bool> Function({
+    required String newPassword,
+  }) onResetPassword;
+  final Future<bool> Function({
+    required List<int> teamIds,
+    required bool allTeams,
+    required String profile,
+  }) onAssign;
+
+  const _TrainerAssignRightPanel({
+    required this.trainer,
+    required this.clubName,
+    required this.teams,
+    required this.saving,
+    required this.initialProfile,
+    required this.onClose,
+    required this.onSaveProfile,
+    required this.onResetPassword,
+    required this.onAssign,
+  });
+
+  @override
+  State<_TrainerAssignRightPanel> createState() =>
+      _TrainerAssignRightPanelState();
+}
+
+class _TrainerAssignRightPanelState
+    extends State<_TrainerAssignRightPanel> {
+  final Set<int> _teamIds = <int>{};
+  bool _allTeams = false;
+  late String _profile;
+  bool _working = false;
+  bool _savingProfile = false;
+  bool _savingPassword = false;
+  bool _hideNewPassword = true;
+  bool _hideRepeatPassword = true;
+
+  late final TextEditingController _firstNameC;
+  late final TextEditingController _lastNameC;
+  late final TextEditingController _newPasswordC;
+  late final TextEditingController _repeatPasswordC;
+
+  static const roles = <(String, String, IconData, Color)>[
+    (
+      'main',
+      'Главный тренер',
+      Icons.workspace_premium_rounded,
+      _CmrColors.green,
+    ),
+    (
+      'extra',
+      'Тренер / специалист',
+      Icons.sports_rounded,
+      _CmrColors.blue,
+    ),
+    (
+      'assistant',
+      'Ассистент',
+      Icons.support_agent_rounded,
+      _CmrColors.amber,
+    ),
+    (
+      'doctor',
+      'Медик',
+      Icons.health_and_safety_rounded,
+      _CmrColors.red,
+    ),
+    (
+      'manager',
+      'Администратор',
+      Icons.admin_panel_settings_rounded,
+      _CmrColors.muted,
+    ),
+    (
+      'press_assistant',
+      'Пресс-служба',
+      Icons.campaign_outlined,
+      _CmrColors.violet,
+    ),
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _firstNameC = TextEditingController(
+      text: _s(widget.trainer['first_name'] ?? widget.trainer['firstName']),
+    );
+    _lastNameC = TextEditingController(
+      text: _s(widget.trainer['last_name'] ?? widget.trainer['lastName']),
+    );
+    _newPasswordC = TextEditingController();
+    _repeatPasswordC = TextEditingController();
+
+    final requested = widget.initialProfile.trim().toLowerCase();
+    _profile =
+        roles.any((role) => role.$1 == requested) ? requested : 'extra';
+    _syncScopeFromExisting();
+  }
+
+  @override
+  void didUpdateWidget(covariant _TrainerAssignRightPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    final oldId = _id(oldWidget.trainer);
+    final newId = _id(widget.trainer);
+
+    if (oldId != newId) {
+      _firstNameC.text =
+          _s(widget.trainer['first_name'] ?? widget.trainer['firstName']);
+      _lastNameC.text =
+          _s(widget.trainer['last_name'] ?? widget.trainer['lastName']);
+      _newPasswordC.clear();
+      _repeatPasswordC.clear();
+    }
+  }
+
+  @override
+  void dispose() {
+    _firstNameC.dispose();
+    _lastNameC.dispose();
+    _newPasswordC.dispose();
+    _repeatPasswordC.dispose();
+    super.dispose();
+  }
+
+  Future<void> _saveProfile() async {
+    if (_savingProfile || _working || widget.saving) return;
+
+    final firstName = _firstNameC.text.trim();
+    final lastName = _lastNameC.text.trim();
+
+    if (firstName.isEmpty) {
+      Get.snackbar('Профиль', 'Укажите имя');
+      return;
+    }
+    if (lastName.isEmpty) {
+      Get.snackbar('Профиль', 'Укажите фамилию');
+      return;
+    }
+
+    setState(() => _savingProfile = true);
+    try {
+      await widget.onSaveProfile(
+        firstName: firstName,
+        lastName: lastName,
+      );
+    } finally {
+      if (mounted) setState(() => _savingProfile = false);
+    }
+  }
+
+  Future<void> _resetPassword() async {
+    if (_savingPassword || _working || widget.saving) return;
+
+    final newPassword = _newPasswordC.text;
+    final repeatPassword = _repeatPasswordC.text;
+
+    if (newPassword.length < 8) {
+      Get.snackbar(
+        'Пароль',
+        'Новый пароль должен содержать минимум 8 символов',
+      );
+      return;
+    }
+    if (newPassword != repeatPassword) {
+      Get.snackbar('Пароль', 'Пароли не совпадают');
+      return;
+    }
+
+    setState(() => _savingPassword = true);
+    try {
+      final ok = await widget.onResetPassword(
+        newPassword: newPassword,
+      );
+
+      if (ok) {
+        _newPasswordC.clear();
+        _repeatPasswordC.clear();
+      }
+    } finally {
+      if (mounted) setState(() => _savingPassword = false);
+    }
+  }
+
+  InputDecoration _accountInput({
+    required String label,
+    required IconData icon,
+    Widget? suffixIcon,
+  }) {
+    return InputDecoration(
+      labelText: label,
+      prefixIcon: Icon(icon, size: 17),
+      suffixIcon: suffixIcon,
+      filled: true,
+      fillColor: Colors.white,
+      isDense: true,
+      contentPadding: const EdgeInsets.symmetric(
+        horizontal: 10,
+        vertical: 11,
+      ),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: _CmrColors.line),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: _CmrColors.line),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(
+          color: _CmrColors.green,
+          width: 1.2,
+        ),
+      ),
+    );
+  }
+
+  int _id(Map<String, dynamic> value) =>
+      _i(value['id'] ?? value['team_id'] ?? value['teamId']);
+
+  String _name(Map<String, dynamic> value) {
+    final result = _s(
+      value['name'] ?? value['team_name'] ?? value['teamName'],
+    ).trim();
+    return result.isEmpty ? 'Команда' : result;
+  }
+
+  String _roleTitle(String value) {
+    switch (value.trim().toLowerCase()) {
+      case 'main':
+        return 'Главный тренер';
+      case 'assistant':
+        return 'Ассистент';
+      case 'doctor':
+        return 'Медик';
+      case 'manager':
+      case 'admin':
+        return 'Администратор';
+      case 'press_assistant':
+        return 'Пресс-служба';
+      default:
+        return 'Тренер / специалист';
+    }
+  }
+
+  void _syncScopeFromExisting() {
+    _teamIds.clear();
+    _allTeams = false;
+
+    if (_profile == 'press_assistant') {
+      final press = _trainerPressTeams(widget.trainer);
+      if (press.any(
+        (item) => _s(item['scope']).trim().toLowerCase() == 'all',
+      )) {
+        _allTeams = true;
+        return;
+      }
+
+      for (final item in press) {
+        final id = _id(item);
+        if (id > 0) _teamIds.add(id);
+      }
+    } else {
+      for (final item in _trainerTeams(widget.trainer)) {
+        final currentProfile = _s(
+          item['profile'] ??
+              item['link_profile'] ??
+              item['role_code'],
+        ).trim().toLowerCase();
+
+        if (currentProfile == _profile) {
+          final id = _id(item);
+          if (id > 0) _teamIds.add(id);
+        }
+      }
+    }
+
+    if (_teamIds.isEmpty && widget.teams.isNotEmpty) {
+      final firstId = _id(widget.teams.first);
+      if (firstId > 0) _teamIds.add(firstId);
+    }
+  }
+
+  Future<void> _submit() async {
+    if (_working || widget.saving) return;
+    if (!_allTeams && _teamIds.isEmpty) return;
+
+    setState(() => _working = true);
+    try {
+      await widget.onAssign(
+        teamIds: _teamIds.toList(),
+        allTeams: _allTeams,
+        profile: _profile,
+      );
+    } finally {
+      if (mounted) setState(() => _working = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final current = _trainerTeams(widget.trainer);
+    final pressCurrent = _trainerPressTeams(widget.trainer);
+    final trainerName = _trainerName(widget.trainer);
+    final totalTeams = widget.teams.where((team) => _id(team) > 0).length;
+
+    return Container(
+      decoration: _CmrDecor.seamlessPane(),
+      child: ListView(
+        padding: const EdgeInsets.all(14),
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Роль и команды', style: _CmrText.title(20)),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Выберите роль, затем одну, несколько или все команды.',
+                      style: _CmrText.muted(10.4),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                tooltip: 'Закрыть',
+                onPressed: _working ? null : widget.onClose,
+                icon: const Icon(Icons.close_rounded),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.all(11),
+            decoration: _CmrDecor.softCard(radius: 12),
+            child: Row(
+              children: [
+                _CmrAvatar(
+                  photo: _trainerPhoto(widget.trainer),
+                  name: trainerName,
+                  size: 50,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        trainerName,
+                        style: _CmrText.value(12),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        widget.clubName,
+                        style: _CmrText.muted(9.4),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          Text(
+            'Профиль пользователя',
+            style: _CmrText.value(11.2),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Администратор клуба может изменить имя, фамилию и пароль сотрудника.',
+            style: _CmrText.muted(9.3),
+          ),
+          const SizedBox(height: 9),
+          Container(
+            padding: const EdgeInsets.all(11),
+            decoration: _CmrDecor.softCard(radius: 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(
+                  controller: _firstNameC,
+                  textInputAction: TextInputAction.next,
+                  decoration: _accountInput(
+                    label: 'Имя',
+                    icon: Icons.person_outline_rounded,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _lastNameC,
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) {
+                    if (!_savingProfile) _saveProfile();
+                  },
+                  decoration: _accountInput(
+                    label: 'Фамилия',
+                    icon: Icons.badge_outlined,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextFormField(
+                  initialValue: _trainerEmail(widget.trainer),
+                  readOnly: true,
+                  enabled: false,
+                  decoration: _accountInput(
+                    label: 'Email',
+                    icon: Icons.alternate_email_rounded,
+                  ),
+                ),
+                const SizedBox(height: 9),
+                SizedBox(
+                  width: double.infinity,
+                  child: _CmrTextActionButton(
+                    label: _savingProfile
+                        ? 'Сохранение...'
+                        : 'Сохранить имя и фамилию',
+                    color: _CmrColors.greenDark,
+                    onTap: _savingProfile || _working || widget.saving
+                        ? null
+                        : _saveProfile,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.all(11),
+            decoration: _CmrDecor.softCard(radius: 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.password_rounded,
+                      size: 18,
+                      color: _CmrColors.greenDark,
+                    ),
+                    const SizedBox(width: 7),
+                    Text(
+                      'Изменить пароль',
+                      style: _CmrText.value(10.8),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Администратор устанавливает новый пароль без текущего пароля сотрудника.',
+                  style: _CmrText.muted(9.1),
+                ),
+                const SizedBox(height: 9),
+                TextField(
+                  controller: _newPasswordC,
+                  obscureText: _hideNewPassword,
+                  autofillHints: const <String>[AutofillHints.newPassword],
+                  decoration: _accountInput(
+                    label: 'Новый пароль',
+                    icon: Icons.lock_reset_rounded,
+                    suffixIcon: IconButton(
+                      tooltip: _hideNewPassword
+                          ? 'Показать пароль'
+                          : 'Скрыть пароль',
+                      onPressed: () => setState(
+                        () => _hideNewPassword = !_hideNewPassword,
+                      ),
+                      icon: Icon(
+                        _hideNewPassword
+                            ? Icons.visibility_outlined
+                            : Icons.visibility_off_outlined,
+                        size: 17,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _repeatPasswordC,
+                  obscureText: _hideRepeatPassword,
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) {
+                    if (!_savingPassword) _resetPassword();
+                  },
+                  decoration: _accountInput(
+                    label: 'Повторите пароль',
+                    icon: Icons.verified_user_outlined,
+                    suffixIcon: IconButton(
+                      tooltip: _hideRepeatPassword
+                          ? 'Показать пароль'
+                          : 'Скрыть пароль',
+                      onPressed: () => setState(
+                        () => _hideRepeatPassword = !_hideRepeatPassword,
+                      ),
+                      icon: Icon(
+                        _hideRepeatPassword
+                            ? Icons.visibility_outlined
+                            : Icons.visibility_off_outlined,
+                        size: 17,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 9),
+                SizedBox(
+                  width: double.infinity,
+                  child: _CmrTextActionButton(
+                    label: _savingPassword
+                        ? 'Изменение...'
+                        : 'Изменить пароль',
+                    color: _CmrColors.greenDark,
+                    onTap: _savingPassword || _working || widget.saving
+                        ? null
+                        : _resetPassword,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          if (current.isNotEmpty || pressCurrent.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            Text('Текущие назначения', style: _CmrText.value(11.2)),
+            const SizedBox(height: 6),
+            for (final item in current)
+              Container(
+                margin: const EdgeInsets.only(bottom: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 8,
+                ),
+                decoration: _CmrDecor.softCard(radius: 10),
+                child: Row(
+                  children: [
+                    const _CmrGlowDot(color: _CmrColors.green, size: 5),
+                    const SizedBox(width: 7),
+                    Expanded(
+                      child: Text(
+                        _name(item),
+                        style: _CmrText.value(10),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    Text(
+                      _roleTitle(
+                        _s(
+                          item['profile'] ??
+                              item['link_profile'] ??
+                              item['role_code'],
+                        ),
+                      ),
+                      style: _CmrText.muted(9).copyWith(
+                        color: _CmrColors.greenDark,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            if (pressCurrent.isNotEmpty)
+              Container(
+                margin: const EdgeInsets.only(bottom: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 8,
+                ),
+                decoration: _CmrDecor.softCard(radius: 10),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.campaign_outlined,
+                      size: 15,
+                      color: _CmrColors.violet,
+                    ),
+                    const SizedBox(width: 7),
+                    Expanded(
+                      child: Text(
+                        pressCurrent.any(
+                          (item) =>
+                              _s(item['scope']).trim().toLowerCase() == 'all',
+                        )
+                            ? 'Все команды клуба'
+                            : pressCurrent.map(_name).join(', '),
+                        style: _CmrText.value(10),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    Text(
+                      'Пресс-служба',
+                      style: _CmrText.muted(9).copyWith(
+                        color: _CmrColors.violet,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+          const SizedBox(height: 14),
+          Text('Роль', style: _CmrText.value(11.2)),
+          const SizedBox(height: 5),
+          Text(
+            _profile == 'press_assistant'
+                ? 'Пресс-доступ является дополнительным и не заменяет основную должность.'
+                : 'Обычная роль сохраняется в назначении сотрудника на команду.',
+            style: _CmrText.muted(9.3),
+          ),
+          const SizedBox(height: 8),
+          for (final role in roles)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 7),
+              child: Material(
+                color: _profile == role.$1
+                    ? _CmrColors.greenSoft
+                    : Colors.white,
+                borderRadius: BorderRadius.circular(10),
+                child: InkWell(
+                  onTap: _working
+                      ? null
+                      : () {
+                          setState(() {
+                            _profile = role.$1;
+                            _syncScopeFromExisting();
+                          });
+                        },
+                  borderRadius: BorderRadius.circular(10),
+                  child: Container(
+                    constraints: const BoxConstraints(minHeight: 48),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 11,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: _profile == role.$1
+                            ? _CmrColors.green.withOpacity(.35)
+                            : _CmrColors.line,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          role.$3,
+                          size: 18,
+                          color: _profile == role.$1
+                              ? role.$4
+                              : _CmrColors.muted2,
+                        ),
+                        const SizedBox(width: 9),
+                        Expanded(
+                          child: Text(
+                            role.$2,
+                            style: _CmrText.value(10.5),
+                          ),
+                        ),
+                        if (_profile == role.$1)
+                          const Icon(
+                            Icons.check_circle_rounded,
+                            size: 18,
+                            color: _CmrColors.green,
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: Text('Команды', style: _CmrText.value(11.2)),
+              ),
+              Text(
+                _allTeams
+                    ? 'Все $totalTeams'
+                    : 'Выбрано ${_teamIds.length}',
+                style: _CmrText.muted(9.2),
+              ),
+            ],
+          ),
+          const SizedBox(height: 7),
+          Material(
+            color: _allTeams ? _CmrColors.greenSoft : Colors.white,
+            borderRadius: BorderRadius.circular(10),
+            child: InkWell(
+              onTap: _working || totalTeams == 0
+                  ? null
+                  : () {
+                      setState(() {
+                        _allTeams = !_allTeams;
+                        if (_allTeams) _teamIds.clear();
+                      });
+                    },
+              borderRadius: BorderRadius.circular(10),
+              child: Container(
+                constraints: const BoxConstraints(minHeight: 46),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 11,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: _allTeams
+                        ? _CmrColors.green.withOpacity(.35)
+                        : _CmrColors.line,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      _allTeams
+                          ? Icons.check_circle_rounded
+                          : Icons.circle_outlined,
+                      size: 18,
+                      color: _allTeams
+                          ? _CmrColors.green
+                          : _CmrColors.muted2,
+                    ),
+                    const SizedBox(width: 9),
+                    Expanded(
+                      child: Text(
+                        'Все команды клуба',
+                        style: _CmrText.value(10.5),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 7),
+          if (!_allTeams)
+            for (final team in widget.teams)
+              if (_id(team) > 0)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Material(
+                    color: _teamIds.contains(_id(team))
+                        ? _CmrColors.greenSoft
+                        : Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                    child: InkWell(
+                      onTap: _working
+                          ? null
+                          : () {
+                              final id = _id(team);
+                              setState(() {
+                                if (_teamIds.contains(id)) {
+                                  _teamIds.remove(id);
+                                } else {
+                                  _teamIds.add(id);
+                                }
+                              });
+                            },
+                      borderRadius: BorderRadius.circular(10),
+                      child: Container(
+                        constraints: const BoxConstraints(minHeight: 44),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 11,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: _teamIds.contains(_id(team))
+                                ? _CmrColors.green.withOpacity(.35)
+                                : _CmrColors.line,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              _teamIds.contains(_id(team))
+                                  ? Icons.check_box_rounded
+                                  : Icons.check_box_outline_blank_rounded,
+                              size: 18,
+                              color: _teamIds.contains(_id(team))
+                                  ? _CmrColors.green
+                                  : _CmrColors.muted2,
+                            ),
+                            const SizedBox(width: 9),
+                            Expanded(
+                              child: Text(
+                                _name(team),
+                                style: _CmrText.value(10.3),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+          const SizedBox(height: 10),
+          _CmrTextActionButton(
+            label: _working || widget.saving
+                ? 'Сохранение...'
+                : _profile == 'press_assistant'
+                    ? 'Сохранить пресс-доступ'
+                    : 'Назначить · ${_roleTitle(_profile)}',
+            color: _profile == 'press_assistant'
+                ? _CmrColors.violet
+                : _CmrColors.green,
+            onTap: _working ||
+                    widget.saving ||
+                    (!_allTeams && _teamIds.isEmpty)
+                ? null
+                : _submit,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+
 class _TrainerAddRightPanel extends StatefulWidget {
   final String clubName;
   final List<Map<String, dynamic>> teams;
+  final bool pressMode;
   final bool saving;
 
   final int Function(Map<String, dynamic>)
@@ -3193,6 +4753,7 @@ class _TrainerAddRightPanel extends StatefulWidget {
   const _TrainerAddRightPanel({
     required this.clubName,
     required this.teams,
+    required this.pressMode,
     required this.saving,
     required this.trainerIdOf,
     required this.trainerNameOf,
@@ -3231,6 +4792,10 @@ class _TrainerAddRightPanelState
   @override
   void initState() {
     super.initState();
+
+    if (widget.pressMode) {
+      _profile = 'press_assistant';
+    }
 
     if (widget.teams.isNotEmpty) {
       _teamId =
@@ -3318,7 +4883,7 @@ class _TrainerAddRightPanelState
     final trainer = _selected;
 
     if (trainer == null ||
-        _teamId <= 0 ||
+        _teamId == 0 ||
         _working ||
         widget.saving) {
       return;
@@ -3349,6 +4914,8 @@ class _TrainerAddRightPanelState
         return 'Ассистент';
       case 'doctor':
         return 'Медик';
+      case 'press_assistant':
+        return 'Пресс-служба';
       case 'manager':
         return 'Администратор';
       default:
@@ -3392,7 +4959,9 @@ class _TrainerAddRightPanelState
                           CrossAxisAlignment.start,
                       children: <Widget>[
                         Text(
-                          'Добавить тренера',
+                          widget.pressMode
+                              ? 'Добавить в пресс-службу'
+                              : 'Добавить сотрудника',
                           style:
                               _CmrText.title(13),
                         ),
@@ -3458,7 +5027,7 @@ class _TrainerAddRightPanelState
                     decoration:
                         InputDecoration(
                       hintText:
-                          'Email тренера',
+                          'Email сотрудника',
                       hintStyle: AppTypography.formHint(color: _CmrColors.muted2),
                       filled: true,
                       fillColor:
@@ -3523,7 +5092,9 @@ class _TrainerAddRightPanelState
                               .all(18),
                       child: Text(
                         _message.isEmpty
-                            ? 'Введите email пользователя SPORTOTEKA.'
+                            ? (widget.pressMode
+                                ? 'Введите email нового сотрудника. После выбора назначьте его на одну или все команды.'
+                                : 'Введите email пользователя SPORTOTEKA.')
                             : _message,
                         textAlign:
                             TextAlign.center,
@@ -3655,20 +5226,14 @@ class _TrainerAddRightPanelState
                                         ],
                                       ),
                                     ),
-                                    _CmrTextActionButton(
-                                      label:
-                                          'В клуб',
-                                      color:
-                                          _CmrColors
-                                              .greenDark,
-                                      onTap:
-                                          _working
-                                              ? null
-                                              : () =>
-                                                  _addClub(
-                                                    trainer,
-                                                  ),
-                                    ),
+                                    if (!widget.pressMode)
+                                      _CmrTextActionButton(
+                                        label: 'В клуб',
+                                        color: _CmrColors.greenDark,
+                                        onTap: _working
+                                            ? null
+                                            : () => _addClub(trainer),
+                                      ),
                                   ],
                                 ),
                                 if (selected) ...<
@@ -3713,32 +5278,25 @@ class _TrainerAddRightPanelState
                                               8,
                                         ),
                                       ),
-                                      items: widget
-                                          .teams
-                                          .map(
-                                            (team) =>
-                                                DropdownMenuItem<
-                                                    int>(
-                                              value:
-                                                  widget
-                                                      .teamIdOf(
-                                                team,
-                                              ),
-                                              child:
-                                                  Text(
-                                                widget
-                                                    .teamNameOf(
-                                                  team,
-                                                ),
-                                                style:
-                                                    _CmrText
-                                                        .value(
-                                                  9.3,
-                                                ),
-                                              ),
+                                      items: <DropdownMenuItem<int>>[
+                                        if (widget.pressMode)
+                                          DropdownMenuItem<int>(
+                                            value: -1,
+                                            child: Text(
+                                              'Все команды клуба',
+                                              style: _CmrText.value(9.3),
                                             ),
-                                          )
-                                          .toList(),
+                                          ),
+                                        ...widget.teams.map(
+                                          (team) => DropdownMenuItem<int>(
+                                            value: widget.teamIdOf(team),
+                                            child: Text(
+                                              widget.teamNameOf(team),
+                                              style: _CmrText.value(9.3),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                       onChanged:
                                           _working
                                               ? null
@@ -3754,56 +5312,45 @@ class _TrainerAddRightPanelState
                                                   );
                                                 },
                                     ),
-                                  const SizedBox(
-                                    height: 7,
-                                  ),
-                                  Wrap(
-                                    spacing: 5,
-                                    runSpacing: 5,
-                                    children: roles
-                                        .map(
-                                          (role) =>
-                                              _CmrRoleChoice(
-                                            label:
-                                                _roleTitle(
-                                              role,
+                                  const SizedBox(height: 7),
+                                  if (!widget.pressMode)
+                                    Wrap(
+                                      spacing: 5,
+                                      runSpacing: 5,
+                                      children: roles
+                                          .map(
+                                            (role) => _CmrRoleChoice(
+                                              label: _roleTitle(role),
+                                              active: _profile == role,
+                                              onTap: _working
+                                                  ? null
+                                                  : () => setState(
+                                                        () => _profile = role,
+                                                      ),
                                             ),
-                                            active:
-                                                _profile ==
-                                                    role,
-                                            onTap:
-                                                _working
-                                                    ? null
-                                                    : () =>
-                                                        setState(
-                                                      () =>
-                                                          _profile =
-                                                              role,
-                                                    ),
-                                          ),
-                                        )
-                                        .toList(),
-                                  ),
-                                  const SizedBox(
-                                    height: 8,
-                                  ),
+                                          )
+                                          .toList(),
+                                    ),
+                                  const SizedBox(height: 8),
                                   Align(
                                     alignment:
                                         Alignment
                                             .centerRight,
                                     child:
                                         _CmrTextActionButton(
-                                      label:
-                                          _working
-                                              ? 'Назначение...'
+                                      label: _working
+                                          ? 'Назначение...'
+                                          : widget.pressMode
+                                              ? (_teamId == -1
+                                                  ? 'Назначить на все команды'
+                                                  : 'Назначить в пресс-службу')
                                               : 'Назначить в команду',
                                       color:
                                           _CmrColors
                                               .green,
                                       onTap:
                                           _working ||
-                                                  _teamId <=
-                                                      0
+                                                  _teamId == 0
                                               ? null
                                               : _assign,
                                     ),
@@ -3882,6 +5429,357 @@ class _CmrRoleChoice extends StatelessWidget {
     );
   }
 }
+
+
+class _PressServiceDetailPanel extends StatelessWidget {
+  final Map<String, dynamic>? trainer;
+  final String clubName;
+  final int allTeamsCount;
+  final VoidCallback? onManageTeams;
+  final VoidCallback? onRemovePress;
+  final VoidCallback? onOpenProfile;
+
+  const _PressServiceDetailPanel({
+    required this.trainer,
+    required this.clubName,
+    required this.allTeamsCount,
+    required this.onManageTeams,
+    required this.onRemovePress,
+    required this.onOpenProfile,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final t = trainer;
+
+    if (t == null) {
+      return Container(
+        decoration: _CmrDecor.seamlessPane(),
+        padding: const EdgeInsets.all(18),
+        child: const _TrainerEmptyState(
+          title: 'Пресс-служба пока пуста',
+          text:
+              'Новых сотрудников назначайте во вкладке «Все»: выберите человека, роль «Пресс-служба» и нужные команды.',
+          onTap: null,
+        ),
+      );
+    }
+
+    final name = _trainerName(t);
+    final primaryRole = _trainerRole(t);
+    final photo = _trainerPhoto(t);
+    final email = _trainerEmail(t);
+    final phone = _trainerPhone(t);
+    final city = _trainerCity(t);
+    final specialization = _trainerSpecialization(t);
+    final bio = _trainerBio(t);
+    final pressTeams = _trainerPressTeams(t);
+
+    final hasAllTeams = allTeamsCount > 0 &&
+        pressTeams.length >= allTeamsCount;
+
+    final pressScopeText = pressTeams.isEmpty
+        ? 'Не назначен'
+        : hasAllTeams
+            ? 'Все команды клуба'
+            : pressTeams.map(_teamName).join(', ');
+
+    final headerRole = primaryRole.trim().isEmpty ||
+            primaryRole.toLowerCase().contains('пресс')
+        ? 'Пресс-служба'
+        : 'Пресс-служба · $primaryRole';
+
+    return Container(
+      decoration: _CmrDecor.seamlessPane(),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(0),
+        child: ListView(
+          padding: const EdgeInsets.all(14),
+          children: [
+            _TrainerDetailHeader(
+              name: name,
+              role: headerRole,
+              photo: photo,
+              clubName: clubName,
+              main: false,
+            ),
+            const SizedBox(height: 12),
+            if (onOpenProfile != null)
+              _PressOpenWorkProfileButton(
+                email: email,
+                onTap: onOpenProfile!,
+              ),
+            const SizedBox(height: 14),
+            _PressServiceActionsGroup(
+              onManageTeams: onManageTeams,
+              onRemovePress:
+                  pressTeams.isEmpty ? null : onRemovePress,
+            ),
+            const SizedBox(height: 18),
+            _PressMetricsStrip(
+              teams: pressTeams.length,
+              allTeams: hasAllTeams,
+              hasEmail: email.trim().isNotEmpty,
+              hasPhone: phone.trim().isNotEmpty,
+            ),
+            const SizedBox(height: 18),
+            _TrainerDetailSection(
+              title: 'Данные сотрудника',
+              children: [
+                _TrainerDetailRow(
+                  icon: Icons.campaign_outlined,
+                  label: 'Роль',
+                  value: 'Пресс-служба',
+                ),
+                if (primaryRole.trim().isNotEmpty &&
+                    !primaryRole.toLowerCase().contains('пресс'))
+                  _TrainerDetailRow(
+                    icon: Icons.badge_rounded,
+                    label: 'Основная должность',
+                    value: primaryRole,
+                  ),
+                _TrainerDetailRow(
+                  icon: Icons.apartment_rounded,
+                  label: 'Клуб',
+                  value: clubName,
+                ),
+                _TrainerDetailRow(
+                  icon: Icons.groups_2_rounded,
+                  label: 'Пресс-доступ',
+                  value: pressScopeText,
+                ),
+                _TrainerDetailRow(
+                  icon: Icons.location_city_rounded,
+                  label: 'Город',
+                  value: city.isEmpty ? 'Не указан' : city,
+                ),
+                _TrainerDetailRow(
+                  icon: Icons.auto_awesome_rounded,
+                  label: 'Специализация',
+                  value: specialization.isEmpty
+                      ? 'Не указана'
+                      : specialization,
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            _TrainerDetailSection(
+              title: 'Контакты',
+              children: [
+                _TrainerDetailRow(
+                  icon: Icons.mail_outline_rounded,
+                  label: 'Email',
+                  value: email.isEmpty ? 'Не указан' : email,
+                ),
+                _TrainerDetailRow(
+                  icon: Icons.phone_rounded,
+                  label: 'Телефон',
+                  value: phone.isEmpty ? 'Не указан' : phone,
+                ),
+              ],
+            ),
+            if (bio.trim().isNotEmpty) ...[
+              const SizedBox(height: 14),
+              _TrainerCommentBox(
+                title: 'О сотруднике',
+                text: bio,
+              ),
+            ],
+            if (onRemovePress != null) ...[
+              const SizedBox(height: 18),
+              _TrainerQuietDangerAction(
+                icon: Icons.link_off_rounded,
+                text: 'Убрать доступ пресс-службы',
+                color: _CmrColors.red,
+                onTap: pressTeams.isEmpty ? null : onRemovePress,
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PressOpenWorkProfileButton extends StatelessWidget {
+  final String email;
+  final VoidCallback onTap;
+
+  const _PressOpenWorkProfileButton({
+    required this.email,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: _CmrColors.greenSoft,
+      borderRadius: BorderRadius.circular(9),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(9),
+        child: Container(
+          height: 42,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Row(
+            children: [
+              const _CmrDotCluster(
+                color: _CmrColors.green,
+              ),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Открыть профиль сотрудника',
+                      style: _CmrText.value(11.8).copyWith(
+                        color: _CmrColors.greenDark,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      email.trim().isEmpty
+                          ? 'Имя · фамилия · профиль'
+                          : email,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: _CmrText.muted(9.3),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(
+                Icons.chevron_right_rounded,
+                size: 17,
+                color: _CmrColors.greenDark,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PressServiceActionsGroup extends StatelessWidget {
+  final VoidCallback? onManageTeams;
+  final VoidCallback? onRemovePress;
+
+  const _PressServiceActionsGroup({
+    required this.onManageTeams,
+    required this.onRemovePress,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      clipBehavior: Clip.antiAlias,
+      decoration: const BoxDecoration(
+        color: Colors.transparent,
+      ),
+      child: Column(
+        children: [
+          _TrainerInspectorAction(
+            icon: Icons.tune_rounded,
+            title: 'Роль и команды',
+            subtitle: 'Изменить пресс-доступ к командам',
+            onTap: onManageTeams,
+            accent: true,
+          ),
+          _TrainerInspectorAction(
+            icon: Icons.campaign_outlined,
+            title: 'Пресс-служба',
+            subtitle: 'Дополнительная роль, основная должность сохраняется',
+            onTap: null,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PressMetricsStrip extends StatelessWidget {
+  final int teams;
+  final bool allTeams;
+  final bool hasEmail;
+  final bool hasPhone;
+
+  const _PressMetricsStrip({
+    required this.teams,
+    required this.allTeams,
+    required this.hasEmail,
+    required this.hasPhone,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final contacts = (hasEmail ? 1 : 0) + (hasPhone ? 1 : 0);
+    final items = <({String value, String label})>[
+      (
+        value: allTeams ? 'Все' : '$teams',
+        label: 'Команды',
+      ),
+      (
+        value: 'Пресс',
+        label: 'Доступ',
+      ),
+      (
+        value: hasEmail ? 'Да' : 'Нет',
+        label: 'Email',
+      ),
+      (
+        value: '$contacts/2',
+        label: 'Контакты',
+      ),
+    ];
+
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 8,
+        vertical: 14,
+      ),
+      decoration: BoxDecoration(
+        color: _CmrColors.soft,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          for (var i = 0; i < items.length; i++) ...[
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    items[i].value,
+                    style: _CmrText.title(15),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    items[i].label,
+                    style: _CmrText.caption(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+            if (i != items.length - 1)
+              Container(
+                width: 1,
+                height: 28,
+                color: _CmrColors.line,
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 
 class _TrainerDetailPanel extends StatelessWidget {
   final Map<String, dynamic>? trainer;
@@ -4264,7 +6162,7 @@ class _TrainerActionsGroup extends StatelessWidget {
           _TrainerInspectorAction(
             icon: Icons.add_link_rounded,
             title: 'Назначить в команду',
-            subtitle: 'Выбрать команду и роль в штабе',
+            subtitle: 'Команда и роль откроются справа',
             onTap: onAssign,
           ),
         ],
@@ -4969,12 +6867,21 @@ class _TrainerEditSidePanel extends StatefulWidget {
   final Future<Map<String, dynamic>> Function(int trainerId) onLoadProfile;
   final Future<bool> Function({
     required int trainerId,
+    required String firstName,
+    required String lastName,
     required String position,
     required String birthday,
     required String experience,
     required String bio,
     XFile? pickedPhoto,
   }) onSaveProfile;
+  final Future<bool> Function({
+    required String firstName,
+    required String lastName,
+  }) onSaveAccount;
+  final Future<bool> Function({
+    required String newPassword,
+  }) onResetPassword;
   final Future<void> Function() onSaved;
 
   const _TrainerEditSidePanel({
@@ -4983,6 +6890,8 @@ class _TrainerEditSidePanel extends StatefulWidget {
     required this.onClose,
     required this.onLoadProfile,
     required this.onSaveProfile,
+    required this.onSaveAccount,
+    required this.onResetPassword,
     required this.onSaved,
   });
 
@@ -4991,24 +6900,35 @@ class _TrainerEditSidePanel extends StatefulWidget {
 }
 
 class _TrainerEditSidePanelState extends State<_TrainerEditSidePanel> {
+  late final TextEditingController _firstNameC;
+  late final TextEditingController _lastNameC;
   late final TextEditingController _positionC;
   late final TextEditingController _birthdayC;
   late final TextEditingController _experienceC;
   late final TextEditingController _bioC;
+  late final TextEditingController _newPasswordC;
+  late final TextEditingController _repeatPasswordC;
   final ImagePicker _picker = ImagePicker();
 
   XFile? _pickedPhoto;
   String _currentPhoto = '';
   bool _loading = true;
   bool _saving = false;
+  bool _savingPassword = false;
+  bool _hideNewPassword = true;
+  bool _hideRepeatPassword = true;
 
   @override
   void initState() {
     super.initState();
+    _firstNameC = TextEditingController(text: _s(widget.trainer['first_name'] ?? widget.trainer['firstName']));
+    _lastNameC = TextEditingController(text: _s(widget.trainer['last_name'] ?? widget.trainer['lastName']));
     _positionC = TextEditingController(text: _trainerRole(widget.trainer));
     _birthdayC = TextEditingController(text: _trainerBirthday(widget.trainer));
     _experienceC = TextEditingController(text: _trainerExperience(widget.trainer));
     _bioC = TextEditingController(text: _trainerBio(widget.trainer));
+    _newPasswordC = TextEditingController();
+    _repeatPasswordC = TextEditingController();
     _currentPhoto = _trainerPhoto(widget.trainer);
     _load();
   }
@@ -5017,10 +6937,14 @@ class _TrainerEditSidePanelState extends State<_TrainerEditSidePanel> {
   void didUpdateWidget(covariant _TrainerEditSidePanel oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (_trainerIdentityLocal(oldWidget.trainer) != _trainerIdentityLocal(widget.trainer)) {
+      _firstNameC.text = _s(widget.trainer['first_name'] ?? widget.trainer['firstName']);
+      _lastNameC.text = _s(widget.trainer['last_name'] ?? widget.trainer['lastName']);
       _positionC.text = _trainerRole(widget.trainer);
       _birthdayC.text = _trainerBirthday(widget.trainer);
       _experienceC.text = _trainerExperience(widget.trainer);
       _bioC.text = _trainerBio(widget.trainer);
+      _newPasswordC.clear();
+      _repeatPasswordC.clear();
       _currentPhoto = _trainerPhoto(widget.trainer);
       _pickedPhoto = null;
       _loading = true;
@@ -5030,10 +6954,14 @@ class _TrainerEditSidePanelState extends State<_TrainerEditSidePanel> {
 
   @override
   void dispose() {
+    _firstNameC.dispose();
+    _lastNameC.dispose();
     _positionC.dispose();
     _birthdayC.dispose();
     _experienceC.dispose();
     _bioC.dispose();
+    _newPasswordC.dispose();
+    _repeatPasswordC.dispose();
     super.dispose();
   }
 
@@ -5056,6 +6984,8 @@ class _TrainerEditSidePanelState extends State<_TrainerEditSidePanel> {
     try {
       final p = await widget.onLoadProfile(trainerId);
       if (!mounted) return;
+      final firstName = _s(p['first_name'] ?? p['firstName']);
+      final lastName = _s(p['last_name'] ?? p['lastName']);
       final position = _s(p['position'] ?? p['role_title'] ?? p['specialization']);
       final birthday = _s(p['birthday'] ?? p['birth_date'] ?? p['date_birth'] ?? p['dob']);
       final experience = _s(p['experience'] ?? p['experience_text'] ?? p['work_experience']);
@@ -5063,6 +6993,8 @@ class _TrainerEditSidePanelState extends State<_TrainerEditSidePanel> {
       final photo = _normalizeImage(_s(p['photo'] ?? p['photo_url'] ?? p['avatar'] ?? p['avatar_url']));
 
       setState(() {
+        if (firstName.isNotEmpty) _firstNameC.text = firstName;
+        if (lastName.isNotEmpty) _lastNameC.text = lastName;
         if (position.isNotEmpty) _positionC.text = position;
         if (birthday.isNotEmpty) _birthdayC.text = birthday;
         if (experience.isNotEmpty) _experienceC.text = experience;
@@ -5088,9 +7020,34 @@ class _TrainerEditSidePanelState extends State<_TrainerEditSidePanel> {
       return;
     }
 
+    final firstName = _firstNameC.text.trim();
+    final lastName = _lastNameC.text.trim();
+
+    if (firstName.isEmpty) {
+      Get.snackbar('Профиль', 'Укажите имя');
+      return;
+    }
+    if (lastName.isEmpty) {
+      Get.snackbar('Профиль', 'Укажите фамилию');
+      return;
+    }
+
     setState(() => _saving = true);
-    final ok = await widget.onSaveProfile(
+
+    final accountOk = await widget.onSaveAccount(
+      firstName: firstName,
+      lastName: lastName,
+    );
+
+    if (!accountOk) {
+      if (mounted) setState(() => _saving = false);
+      return;
+    }
+
+    final profileOk = await widget.onSaveProfile(
       trainerId: trainerId,
+      firstName: firstName,
+      lastName: lastName,
       position: _positionC.text,
       birthday: _birthdayC.text,
       experience: _experienceC.text,
@@ -5098,12 +7055,113 @@ class _TrainerEditSidePanelState extends State<_TrainerEditSidePanel> {
       pickedPhoto: _pickedPhoto,
     );
 
-    if (ok) {
+    if (profileOk) {
       await widget.onSaved();
       return;
     }
 
     if (mounted) setState(() => _saving = false);
+  }
+
+  Future<void> _resetPassword() async {
+    if (_savingPassword) return;
+
+    final newPassword = _newPasswordC.text;
+    final repeatPassword = _repeatPasswordC.text;
+
+    if (newPassword.length < 8) {
+      Get.snackbar(
+        'Пароль',
+        'Новый пароль должен содержать минимум 8 символов',
+      );
+      return;
+    }
+
+    if (newPassword != repeatPassword) {
+      Get.snackbar('Пароль', 'Пароли не совпадают');
+      return;
+    }
+
+    setState(() => _savingPassword = true);
+    try {
+      final ok = await widget.onResetPassword(
+        newPassword: newPassword,
+      );
+
+      if (ok) {
+        _newPasswordC.clear();
+        _repeatPasswordC.clear();
+      }
+    } finally {
+      if (mounted) setState(() => _savingPassword = false);
+    }
+  }
+
+  Widget _editLabel(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 1, bottom: 6),
+      child: Text(
+        text,
+        style: _CmrText.muted(10.5),
+      ),
+    );
+  }
+
+  Widget _labeledInput({
+    required String label,
+    required TextEditingController controller,
+    required String hint,
+    required IconData icon,
+    int maxLines = 1,
+    Widget? suffix,
+    bool obscureText = false,
+    TextInputAction? textInputAction,
+    ValueChanged<String>? onSubmitted,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _editLabel(label),
+        TextField(
+          controller: controller,
+          maxLines: maxLines,
+          obscureText: obscureText,
+          textInputAction: textInputAction,
+          onSubmitted: onSubmitted,
+          style: AppTypography.formText(color: _CmrColors.text),
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle: AppTypography.formHint(color: _CmrColors.muted2),
+            prefixIcon: Icon(icon, color: _CmrColors.muted, size: 18),
+            suffixIcon: suffix,
+            filled: true,
+            fillColor: _CmrColors.soft,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 14,
+            ),
+            border: OutlineInputBorder(
+              borderRadius:
+                  BorderRadius.circular(_CmrDecor.mobileInnerRadius),
+              borderSide: BorderSide.none,
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius:
+                  BorderRadius.circular(_CmrDecor.mobileInnerRadius),
+              borderSide: BorderSide.none,
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius:
+                  BorderRadius.circular(_CmrDecor.mobileInnerRadius),
+              borderSide: const BorderSide(
+                color: _CmrColors.green,
+                width: 1,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 
   @override
@@ -5180,22 +7238,200 @@ class _TrainerEditSidePanelState extends State<_TrainerEditSidePanel> {
                               const SizedBox(height: 4),
                               Text(role, textAlign: TextAlign.center, style: _CmrText.muted(12.5)),
                               const SizedBox(height: 18),
-                              _CmrInput(controller: _positionC, hint: 'Должность / роль', icon: Icons.badge_rounded),
-                              const SizedBox(height: 10),
                               Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Expanded(child: _CmrInput(controller: _birthdayC, hint: 'Дата рождения', icon: Icons.cake_rounded)),
+                                  Expanded(
+                                    child: _labeledInput(
+                                      label: 'Имя',
+                                      controller: _firstNameC,
+                                      hint: 'Имя',
+                                      icon: Icons.person_outline_rounded,
+                                      textInputAction: TextInputAction.next,
+                                    ),
+                                  ),
                                   const SizedBox(width: 10),
-                                  Expanded(child: _CmrInput(controller: _experienceC, hint: 'Опыт', icon: Icons.workspace_premium_rounded)),
+                                  Expanded(
+                                    child: _labeledInput(
+                                      label: 'Фамилия',
+                                      controller: _lastNameC,
+                                      hint: 'Фамилия',
+                                      icon: Icons.badge_outlined,
+                                      textInputAction: TextInputAction.next,
+                                    ),
+                                  ),
                                 ],
                               ),
                               const SizedBox(height: 10),
-                              _CmrInput(controller: _bioC, hint: 'Описание / биография', icon: Icons.notes_rounded, maxLines: 5),
+                              _editLabel('Email'),
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 14,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: _CmrColors.soft,
+                                  borderRadius: BorderRadius.circular(
+                                    _CmrDecor.mobileInnerRadius,
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.alternate_email_rounded,
+                                      size: 18,
+                                      color: _CmrColors.muted,
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Text(
+                                        _trainerEmail(widget.trainer).isEmpty
+                                            ? 'Email не указан'
+                                            : _trainerEmail(widget.trainer),
+                                        style: _CmrText.value(10.8),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 14),
+                              _labeledInput(
+                                label: 'Должность / роль',
+                                controller: _positionC,
+                                hint: 'Должность / роль',
+                                icon: Icons.badge_rounded,
+                              ),
+                              const SizedBox(height: 10),
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                    child: _labeledInput(
+                                      label: 'Дата рождения',
+                                      controller: _birthdayC,
+                                      hint: 'ГГГГ-ММ-ДД',
+                                      icon: Icons.cake_rounded,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: _labeledInput(
+                                      label: 'Опыт',
+                                      controller: _experienceC,
+                                      hint: 'Опыт',
+                                      icon: Icons.workspace_premium_rounded,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+                              _labeledInput(
+                                label: 'Описание / биография',
+                                controller: _bioC,
+                                hint: 'Описание / биография',
+                                icon: Icons.notes_rounded,
+                                maxLines: 5,
+                              ),
+                              const SizedBox(height: 18),
+                              Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: _CmrDecor.softCard(radius: 12),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        const Icon(
+                                          Icons.password_rounded,
+                                          size: 18,
+                                          color: _CmrColors.greenDark,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          'Изменить пароль',
+                                          style: _CmrText.value(11.2),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'Администратор клуба устанавливает новый пароль сотруднику.',
+                                      style: _CmrText.muted(9.3),
+                                    ),
+                                    const SizedBox(height: 10),
+                                    _labeledInput(
+                                      label: 'Новый пароль',
+                                      controller: _newPasswordC,
+                                      hint: 'Минимум 8 символов',
+                                      icon: Icons.lock_reset_rounded,
+                                      obscureText: _hideNewPassword,
+                                      suffix: IconButton(
+                                        tooltip: _hideNewPassword
+                                            ? 'Показать пароль'
+                                            : 'Скрыть пароль',
+                                        onPressed: () => setState(
+                                          () => _hideNewPassword =
+                                              !_hideNewPassword,
+                                        ),
+                                        icon: Icon(
+                                          _hideNewPassword
+                                              ? Icons.visibility_outlined
+                                              : Icons.visibility_off_outlined,
+                                          size: 17,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    _labeledInput(
+                                      label: 'Повторите пароль',
+                                      controller: _repeatPasswordC,
+                                      hint: 'Повторите новый пароль',
+                                      icon: Icons.verified_user_outlined,
+                                      obscureText: _hideRepeatPassword,
+                                      suffix: IconButton(
+                                        tooltip: _hideRepeatPassword
+                                            ? 'Показать пароль'
+                                            : 'Скрыть пароль',
+                                        onPressed: () => setState(
+                                          () => _hideRepeatPassword =
+                                              !_hideRepeatPassword,
+                                        ),
+                                        icon: Icon(
+                                          _hideRepeatPassword
+                                              ? Icons.visibility_outlined
+                                              : Icons.visibility_off_outlined,
+                                          size: 17,
+                                        ),
+                                      ),
+                                      textInputAction: TextInputAction.done,
+                                      onSubmitted: (_) {
+                                        if (!_savingPassword) {
+                                          _resetPassword();
+                                        }
+                                      },
+                                    ),
+                                    const SizedBox(height: 10),
+                                    SizedBox(
+                                      width: double.infinity,
+                                      child: _CmrTextActionButton(
+                                        label: _savingPassword
+                                            ? 'Изменение...'
+                                            : 'Изменить пароль',
+                                        color: _CmrColors.greenDark,
+                                        onTap: _savingPassword
+                                            ? null
+                                            : _resetPassword,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                               const SizedBox(height: 14),
                               _CmrNotice(
                                 icon: Icons.info_outline_rounded,
-                                title: 'Боковое редактирование',
-                                text: 'Карточка тренера остаётся открытой, а изменения вносятся в отдельной панели справа.',
+                                title: 'Редактирование сотрудника',
+                                text: 'Имя, фамилия, карточка тренера и пароль управляются в этом правом окне.',
                               ),
                             ],
                           ),

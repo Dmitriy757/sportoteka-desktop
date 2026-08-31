@@ -1968,6 +1968,29 @@ class AiTrackingController extends ChangeNotifier {
   bool showPossessionOverlay = true;
   bool showPassNetwork = true;
 
+  void updateDisplay({
+    bool? trails,
+    bool? labels,
+    bool? speed,
+    bool? boundingBoxes,
+    bool? onlySelectedPlayer,
+    bool? ball,
+    bool? ballTrail,
+    bool? possession,
+    bool? passNetwork,
+  }) {
+    if (trails != null) showTrails = trails;
+    if (labels != null) showLabels = labels;
+    if (speed != null) showSpeed = speed;
+    if (boundingBoxes != null) showBoundingBoxes = boundingBoxes;
+    if (onlySelectedPlayer != null) showOnlySelectedPlayer = onlySelectedPlayer;
+    if (ball != null) showBall = ball;
+    if (ballTrail != null) showBallTrail = ballTrail;
+    if (possession != null) showPossessionOverlay = possession;
+    if (passNetwork != null) showPassNetwork = passNetwork;
+    notifyListeners();
+  }
+
   String? currentBallOwnerTrackId;
   String? currentBallOwnerName;
   String? currentBallOwnerTeamTag;
@@ -2065,6 +2088,9 @@ final List<AiPlayerStat> aiPlayerStats = [];
 
         if (isLocked) {
           updateLockedTrack(detections, timeMs);
+        } else {
+          // Даже без ручного lock показываем все текущие detections поверх видео.
+          notifyListeners();
         }
       } catch (e) {
         debugPrint('❌ AI tracking loop error: $e');
@@ -2416,9 +2442,15 @@ aiPlayerStats.clear();
     notifyListeners();
   }
 
+  List<DetectedPlayerBox> get liveDetections =>
+      List<DetectedPlayerBox>.unmodifiable(_lastDetections);
+
+  int get liveDetectionTimeMs => _lastDetectionTimeMs;
+
   void setDetectionsForSelection(List<DetectedPlayerBox> detections, int timeMs) {
     _lastDetections = detections;
     _lastDetectionTimeMs = timeMs;
+    notifyListeners();
   }
 
   void selectTrackByTap(Offset tapPosition) {
@@ -4282,6 +4314,7 @@ class PythonTrackingResult {
   final double? ballConfidence;
   final double? frameWidth;
   final double? frameHeight;
+  final String? error;
 
   const PythonTrackingResult({
     required this.detections,
@@ -4289,17 +4322,20 @@ class PythonTrackingResult {
     this.ballConfidence,
     this.frameWidth,
     this.frameHeight,
+    this.error,
   });
 
   bool get hasBall => ballRect != null;
+  bool get hasError => error != null && error!.trim().isNotEmpty;
 
-  factory PythonTrackingResult.empty() {
-    return const PythonTrackingResult(
-      detections: [],
+  factory PythonTrackingResult.empty([String? error]) {
+    return PythonTrackingResult(
+      detections: const [],
       ballRect: null,
       ballConfidence: null,
       frameWidth: null,
       frameHeight: null,
+      error: error,
     );
   }
 }
@@ -4374,74 +4410,174 @@ class PythonTrackingService {
       final response = await http
           .post(
             Uri.parse(url),
-            headers: {
-              'Content-Type': 'application/json',
-            },
+            headers: const {'Content-Type': 'application/json'},
             body: jsonEncode({
               'video_url': videoUrl,
               'timeMs': timeMs,
+              'time_ms': timeMs,
             }),
           )
-          .timeout(const Duration(seconds: 25));
+          .timeout(const Duration(seconds: 12));
 
       debugPrint('📥 PYTHON STREAM STATUS: ${response.statusCode}');
       debugPrint('📥 PYTHON STREAM BODY: ${response.body}');
 
       if (response.statusCode != 200) {
-        return PythonTrackingResult.empty();
+        return PythonTrackingResult.empty('HTTP ${response.statusCode}');
       }
 
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final decoded = jsonDecode(response.body);
+      if (decoded is! Map) {
+        return PythonTrackingResult.empty('Некорректный JSON детектора');
+      }
 
-      if (data['success'] != true) {
-        debugPrint('❌ PYTHON STREAM success=false: ${data['error']}');
-        return PythonTrackingResult.empty();
+      final data = Map<String, dynamic>.from(decoded);
+      if (data['success'] == false) {
+        return PythonTrackingResult.empty(
+          (data['error'] ?? data['message'] ?? 'success=false').toString(),
+        );
       }
 
       return _parseTrackingResult(data);
+    } on TimeoutException {
+      debugPrint('❌ PYTHON detectFrameFromUrl timeout');
+      return PythonTrackingResult.empty('таймаут сервиса детекции');
     } catch (e) {
       debugPrint('❌ PYTHON detectFrameFromUrl error: $e');
-      return PythonTrackingResult.empty();
+      return PythonTrackingResult.empty(e.toString());
     }
   }
 
-  PythonTrackingResult _parseTrackingResult(Map<String, dynamic> data) {
-    final detectionsRaw = (data['detections'] as List?) ?? const [];
+  PythonTrackingResult _parseTrackingResult(Map<String, dynamic> root) {
+    Map<String, dynamic> data = root;
+    final nested = root['data'];
+    if (nested is Map) {
+      data = <String, dynamic>{...root, ...Map<String, dynamic>.from(nested)};
+    }
 
-    final detections = detectionsRaw
-        .map(
-          (item) => DetectedPlayerBox.fromJson(
-            Map<String, dynamic>.from(item as Map),
-          ),
-        )
-        .toList();
+    List<dynamic> rawItems = const [];
+    for (final key in const ['detections', 'players', 'tracks', 'objects']) {
+      final value = data[key];
+      if (value is List && value.isNotEmpty) {
+        rawItems = value;
+        break;
+      }
+    }
 
+    final detections = <DetectedPlayerBox>[];
     Rect? ballRect;
     double? ballConfidence;
+
+    Rect? rectFromMap(Map<String, dynamic> item) {
+      final bbox = item['bbox'] ?? item['box'];
+      if (bbox is List && bbox.length >= 4) {
+        final a = (bbox[0] as num?)?.toDouble() ?? 0;
+        final b = (bbox[1] as num?)?.toDouble() ?? 0;
+        final c = (bbox[2] as num?)?.toDouble() ?? 0;
+        final d = (bbox[3] as num?)?.toDouble() ?? 0;
+        final bboxMode = (item['bbox_format'] ?? item['box_format'] ?? '').toString().toLowerCase();
+        if (bboxMode.contains('xywh')) {
+          return c > 0 && d > 0 ? Rect.fromLTWH(a, b, c, d) : null;
+        }
+        if (c > a && d > b) return Rect.fromLTRB(a, b, c, d);
+        if (c > 0 && d > 0) return Rect.fromLTWH(a, b, c, d);
+      }
+
+      final left = (item['left'] ?? item['x1'] ?? item['x'] ?? 0);
+      final top = (item['top'] ?? item['y1'] ?? item['y'] ?? 0);
+      final l = left is num ? left.toDouble() : double.tryParse('$left') ?? 0;
+      final t = top is num ? top.toDouble() : double.tryParse('$top') ?? 0;
+
+      final rawRight = item['right'] ?? item['x2'];
+      final rawBottom = item['bottom'] ?? item['y2'];
+      final rawW = item['width'] ?? item['w'];
+      final rawH = item['height'] ?? item['h'];
+      final r = rawRight is num
+          ? rawRight.toDouble()
+          : rawRight != null
+              ? double.tryParse('$rawRight')
+              : null;
+      final b = rawBottom is num
+          ? rawBottom.toDouble()
+          : rawBottom != null
+              ? double.tryParse('$rawBottom')
+              : null;
+      final w = rawW is num ? rawW.toDouble() : rawW != null ? double.tryParse('$rawW') : null;
+      final h = rawH is num ? rawH.toDouble() : rawH != null ? double.tryParse('$rawH') : null;
+
+      final rr = r ?? (w != null ? l + w : l);
+      final bb = b ?? (h != null ? t + h : t);
+      if (rr <= l || bb <= t) return null;
+      return Rect.fromLTRB(l, t, rr, bb);
+    }
+
+    int fallbackId = 1;
+    for (final raw in rawItems) {
+      if (raw is! Map) continue;
+      final item = Map<String, dynamic>.from(raw);
+      final rect = rectFromMap(item);
+      if (rect == null) continue;
+
+      final label = (item['label'] ?? item['class_name'] ?? item['name'] ?? item['class'] ?? 'player')
+          .toString()
+          .toLowerCase();
+      final confidenceRaw = item['confidence'] ?? item['conf'] ?? item['score'] ?? 0;
+      final confidence = confidenceRaw is num
+          ? confidenceRaw.toDouble()
+          : double.tryParse('$confidenceRaw') ?? 0;
+
+      final isBall = label.contains('ball') || label.contains('мяч') || '${item['class_id'] ?? item['classId']}' == '32';
+      if (isBall) {
+        if (ballRect == null || confidence >= (ballConfidence ?? 0)) {
+          ballRect = rect;
+          ballConfidence = confidence;
+        }
+        continue;
+      }
+
+      final rawId = item['id'] ?? item['track_id'] ?? item['trackId'] ?? item['detection_id'];
+      final parsedId = rawId is int
+          ? rawId
+          : rawId is num
+              ? rawId.toInt()
+              : int.tryParse('$rawId') ?? fallbackId;
+      fallbackId += 1;
+
+      final rawClassId = item['classId'] ?? item['class_id'];
+      final classId = rawClassId is int
+          ? rawClassId
+          : rawClassId is num
+              ? rawClassId.toInt()
+              : int.tryParse('$rawClassId');
+
+      detections.add(
+        DetectedPlayerBox(
+          id: parsedId,
+          rect: rect,
+          confidence: confidence,
+          classId: classId,
+          label: label,
+        ),
+      );
+    }
 
     final rawBall = data['ball'];
     if (rawBall is Map) {
       final ballMap = Map<String, dynamic>.from(rawBall);
-
-      final left = (ballMap['left'] ?? ballMap['x'] ?? 0).toDouble();
-      final top = (ballMap['top'] ?? ballMap['y'] ?? 0).toDouble();
-
-      final right = ballMap['right'] != null
-          ? (ballMap['right']).toDouble()
-          : left + (ballMap['width'] ?? 0).toDouble();
-
-      final bottom = ballMap['bottom'] != null
-          ? (ballMap['bottom']).toDouble()
-          : top + (ballMap['height'] ?? 0).toDouble();
-
-      if (right > left && bottom > top) {
-        ballRect = Rect.fromLTRB(left, top, right, bottom);
-        ballConfidence = (ballMap['confidence'] ?? 0).toDouble();
+      final parsed = rectFromMap(ballMap);
+      if (parsed != null) {
+        ballRect = parsed;
+        final rawConfidence = ballMap['confidence'] ?? ballMap['conf'] ?? ballMap['score'];
+        ballConfidence = rawConfidence is num
+            ? rawConfidence.toDouble()
+            : double.tryParse('$rawConfidence') ?? ballConfidence;
       }
     }
 
-    final frameWidth = (data['frame_width'] as num?)?.toDouble();
-    final frameHeight = (data['frame_height'] as num?)?.toDouble();
+    final frameWidthRaw = data['frame_width'] ?? data['frameWidth'] ?? data['width'];
+    final frameHeightRaw = data['frame_height'] ?? data['frameHeight'] ?? data['height'];
+    final frameWidth = frameWidthRaw is num ? frameWidthRaw.toDouble() : double.tryParse('$frameWidthRaw');
+    final frameHeight = frameHeightRaw is num ? frameHeightRaw.toDouble() : double.tryParse('$frameHeightRaw');
 
     return PythonTrackingResult(
       detections: detections,
@@ -4945,6 +5081,7 @@ class PlayerTrackingPainter extends CustomPainter {
   void _paintContent(Canvas canvas, Size size) {
     _drawDangerZones(canvas, size);
     _drawTeamShapes(canvas);
+    _drawLiveDetections(canvas);
 
     for (final track in controller.tracks) {
       final isSelected = controller.selectedTrackId == track.id;
@@ -4970,6 +5107,79 @@ class PlayerTrackingPainter extends CustomPainter {
       _drawLabel(canvas, track, isSelected);
       _drawSpeed(canvas, track, isSelected);
       _drawPredictedRect(canvas, track, isSelected);
+    }
+  }
+
+  void _drawLiveDetections(Canvas canvas) {
+    if (!controller.showBoundingBoxes) return;
+    final detections = controller.liveDetections;
+    if (detections.isEmpty) return;
+
+    final trackRects = controller.tracks
+        .map((track) => track.currentBoundingBox)
+        .whereType<Rect>()
+        .toList();
+
+    for (final detection in detections) {
+      final rect = detection.rect;
+      final duplicate = trackRects.any((tracked) {
+        final intersection = tracked.intersect(rect);
+        if (intersection.isEmpty) return false;
+        final minArea = math.min(tracked.width * tracked.height, rect.width * rect.height);
+        if (minArea <= 0) return false;
+        return (intersection.width * intersection.height) / minArea > 0.62;
+      });
+      if (duplicate) continue;
+
+      final label = (detection.label ?? 'player').toLowerCase();
+      final isKeeper = label.contains('keeper') || label.contains('goalkeeper') || label.contains('врат');
+      final isReferee = label.contains('ref') || label.contains('суд');
+      final color = isKeeper
+          ? const Color(0xFFF59E0B)
+          : isReferee
+              ? const Color(0xFF64748B)
+              : const Color(0xFF00A750);
+
+      final paint = Paint()
+        ..color = color
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.1;
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(rect, const Radius.circular(4)),
+        paint,
+      );
+
+      if (controller.showLabels) {
+        final confidence = detection.confidence > 0
+            ? ' ${(detection.confidence * 100).clamp(0, 100).round()}%'
+            : '';
+        final text = label == 'player' || label.isEmpty
+            ? 'Игрок ${detection.id}$confidence'
+            : '${detection.label} ${detection.id}$confidence';
+        final tp = TextPainter(
+          text: TextSpan(
+            text: text,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          textDirection: TextDirection.ltr,
+          maxLines: 1,
+        )..layout(maxWidth: 180);
+        final labelRect = Rect.fromLTWH(
+          rect.left,
+          math.max(0, rect.top - tp.height - 6),
+          tp.width + 10,
+          tp.height + 6,
+        );
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(labelRect, const Radius.circular(4)),
+          Paint()..color = color.withOpacity(0.92),
+        );
+        tp.paint(canvas, Offset(labelRect.left + 5, labelRect.top + 3));
+      }
     }
   }
 
@@ -7854,12 +8064,13 @@ class _AiAnalyticsPanelWidgetState extends State<AiAnalyticsPanelWidget>
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isWide = constraints.maxWidth >= 920;
-        final hasHeight = constraints.hasBoundedHeight && constraints.maxHeight.isFinite;
+        final inspector = constraints.maxWidth < 760;
+        if (inspector) {
+          return _buildTrackerInspector(summary, live, track);
+        }
 
         final content = Container(
           color: _AiPanelColors.background,
-          padding: const EdgeInsets.fromLTRB(0, 0, 0, 0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -7873,22 +8084,317 @@ class _AiAnalyticsPanelWidgetState extends State<AiAnalyticsPanelWidget>
               const SizedBox(height: 8),
               _buildTabSelector(),
               const SizedBox(height: 8),
-              Expanded(
-                child: isWide
-                    ? _buildWideBody(summary, live, track)
-                    : _buildTabsBody(summary, live, track),
-              ),
+              Expanded(child: _buildWideBody(summary, live, track)),
             ],
           ),
         );
-
-        if (hasHeight) return content;
-
-        return SizedBox(
-          height: isWide ? 820 : 760,
-          child: content,
-        );
+        return content;
       },
+    );
+  }
+
+  Widget _buildTrackerInspector(_AiMatchSummary summary, _AiLiveStats live, PlayerTrack? track) {
+    final running = widget.aiTracking.isRunning || widget.isAiLoading;
+    final selectedName = track?.boundPlayerName.trim().isNotEmpty == true
+        ? track!.boundPlayerName.trim()
+        : 'Все игроки';
+
+    return Container(
+      color: Colors.white,
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 34,
+                      height: 34,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFEAF6EE),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.auto_awesome_rounded, color: _AiPanelColors.green, size: 18),
+                    ),
+                    const SizedBox(width: 9),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Wrap(
+                            spacing: 7,
+                            runSpacing: 4,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              const Text(
+                                'СПОРТОТЕКА ИИ',
+                                style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w900, color: _AiPanelColors.text),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF3FAF5),
+                                  borderRadius: BorderRadius.circular(999),
+                                  border: Border.all(color: const Color(0xFFD7EEE0)),
+                                ),
+                                child: const Text('КОНТЕКСТ', style: TextStyle(fontSize: 9.2, fontWeight: FontWeight.w900, color: _AiPanelColors.greenDark)),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            widget.statusText.isEmpty ? 'Видео · текущий эпизод · выбранные игроки' : widget.statusText,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 10.7, fontWeight: FontWeight.w600, color: _AiPanelColors.textMuted),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: running ? const Color(0xFFF0FAF4) : const Color(0xFFF8FAF9),
+                        borderRadius: BorderRadius.circular(9),
+                        border: Border.all(color: const Color(0xFFE9ECEA)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 7,
+                            height: 7,
+                            decoration: BoxDecoration(
+                              color: running ? _AiPanelColors.green : _AiPanelColors.textMuted,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 5),
+                          Text(running ? 'LIVE' : 'READY', style: const TextStyle(fontSize: 9.4, fontWeight: FontWeight.w900, color: _AiPanelColors.text)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      _inspectorAction(
+                        icon: widget.isAiLoading ? Icons.hourglass_top_rounded : Icons.auto_awesome_rounded,
+                        label: widget.isAiLoading ? 'AI...' : 'Запустить AI',
+                        primary: true,
+                        onTap: widget.isAiLoading ? null : widget.onToggleAi,
+                      ),
+                      const SizedBox(width: 6),
+                      if (widget.onOpenTeamSetup != null) ...[
+                        _inspectorAction(icon: Icons.palette_outlined, label: 'Цвета', onTap: widget.onOpenTeamSetup),
+                        const SizedBox(width: 6),
+                      ],
+                      _inspectorAction(
+                        icon: Icons.local_fire_department_outlined,
+                        label: widget.showHeatmap ? 'Heatmap ON' : 'Heatmap',
+                        onTap: () => widget.onToggleHeatmap(!widget.showHeatmap),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1, color: _AiPanelColors.line),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+            child: _buildTabSelector(),
+          ),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
+              child: TabBarView(
+                controller: _tabController,
+                children: [
+                  _buildInspectorContext(summary, live, selectedName),
+                  _buildEventsTab(summary),
+                  _buildTtdTab(summary),
+                  _buildMapTab(track, live),
+                  _buildPlayersTab(),
+                  _buildAiNotesTab(summary),
+                  _buildExportTab(summary),
+                ],
+              ),
+            ),
+          ),
+          const Divider(height: 1, color: _AiPanelColors.line),
+          _buildPersistentQuestionBar(),
+        ],
+      ),
+    );
+  }
+
+  Widget _inspectorAction({
+    required IconData icon,
+    required String label,
+    VoidCallback? onTap,
+    bool primary = false,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(9),
+      child: Container(
+        height: 36,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        decoration: BoxDecoration(
+          color: primary ? _AiPanelColors.black : Colors.white,
+          borderRadius: BorderRadius.circular(9),
+          border: Border.all(color: primary ? _AiPanelColors.black : _AiPanelColors.line),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 14, color: primary ? Colors.white : _AiPanelColors.green),
+            const SizedBox(width: 6),
+            Text(label, style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: primary ? Colors.white : _AiPanelColors.text)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInspectorContext(_AiMatchSummary summary, _AiLiveStats live, String selectedName) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Column(
+        children: [
+          _inspectorSection(
+            title: 'Качество данных',
+            icon: Icons.verified_user_outlined,
+            children: [
+              _inspectorRow('Детекции игроков', '${widget.aiTracking.liveDetections.length}'),
+              _inspectorRow('Активные треки', '${widget.aiTracking.tracks.length}'),
+              _inspectorRow('Мяч', widget.aiTracking.ballTrack != null ? 'найден' : 'нет данных'),
+              _inspectorRow('Фокус', selectedName),
+            ],
+          ),
+          const SizedBox(height: 8),
+          _inspectorSection(
+            title: 'Что происходит',
+            icon: Icons.query_stats_rounded,
+            children: [
+              _inspectorRow('События', '${summary.eventsCount}'),
+              _inspectorRow('AI ТТД', '${summary.suggestionsCount}'),
+              _inspectorRow('Голы', '${summary.goals}'),
+              _inspectorRow('Передачи', '${summary.passesTotal}'),
+            ],
+          ),
+          const SizedBox(height: 8),
+          _inspectorSection(
+            title: 'Слои на видео',
+            icon: Icons.layers_outlined,
+            children: [
+              _switchRow('Рамки игроков', widget.aiTracking.showBoundingBoxes, (v) => widget.aiTracking.updateDisplay(boundingBoxes: v)),
+              _switchRow('Track ID / подписи', widget.aiTracking.showLabels, (v) => widget.aiTracking.updateDisplay(labels: v)),
+              _switchRow('Траектории', widget.aiTracking.showTrails, (v) => widget.aiTracking.updateDisplay(trails: v)),
+              _switchRow('Мяч', widget.aiTracking.showBall, (v) => widget.aiTracking.updateDisplay(ball: v)),
+              _switchRow('Владение', widget.aiTracking.showPossessionOverlay, (v) => widget.aiTracking.updateDisplay(possession: v)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _inspectorSection({required String title, required IconData icon, required List<Widget> children}) {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _AiPanelColors.line),
+      ),
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+            child: Row(
+              children: [
+                Icon(icon, size: 15, color: _AiPanelColors.green),
+                const SizedBox(width: 7),
+                Expanded(child: Text(title, style: const TextStyle(fontSize: 11.7, fontWeight: FontWeight.w800, color: _AiPanelColors.text))),
+              ],
+            ),
+          ),
+          const Divider(height: 1, color: _AiPanelColors.line),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            child: Column(children: children),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _inspectorRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          Expanded(child: Text(label, style: const TextStyle(fontSize: 10.8, fontWeight: FontWeight.w600, color: _AiPanelColors.textMuted))),
+          const SizedBox(width: 8),
+          Flexible(child: Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.right, style: const TextStyle(fontSize: 10.8, fontWeight: FontWeight.w800, color: _AiPanelColors.text))),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPersistentQuestionBar() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+      child: Row(
+        children: [
+          Expanded(
+            child: Container(
+              height: 42,
+              alignment: Alignment.centerLeft,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(11),
+                border: Border.all(color: _AiPanelColors.line),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.auto_awesome_rounded, size: 15, color: _AiPanelColors.green),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Спросите: почему потеряли мяч, покажи эпизод…',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 10.7, fontWeight: FontWeight.w600, color: _AiPanelColors.textMuted),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 7),
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: const Color(0xFFF3FAF5),
+              borderRadius: BorderRadius.circular(11),
+              border: Border.all(color: const Color(0xFFD7EEE0)),
+            ),
+            child: const Icon(Icons.arrow_upward_rounded, color: _AiPanelColors.green, size: 19),
+          ),
+        ],
+      ),
     );
   }
 
@@ -7897,17 +8403,17 @@ class _AiAnalyticsPanelWidgetState extends State<AiAnalyticsPanelWidget>
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Expanded(
-          flex: 11,
+          flex: 12,
           child: _buildTabsBody(summary, live, track),
         ),
         const SizedBox(width: 10),
         SizedBox(
-          width: 390,
+          width: 380,
           child: Column(
             children: [
-              Expanded(child: _buildMapTab(track, live)),
-              const SizedBox(height: 8),
               _buildAiNotesCompact(summary),
+              const SizedBox(height: 8),
+              Expanded(child: _buildAiAskPanel(summary)),
             ],
           ),
         ),
@@ -7941,7 +8447,7 @@ class _AiAnalyticsPanelWidgetState extends State<AiAnalyticsPanelWidget>
       decoration: BoxDecoration(
         color: _AiPanelColors.surface,
         border: Border.all(color: _AiPanelColors.line),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -7949,37 +8455,54 @@ class _AiAnalyticsPanelWidgetState extends State<AiAnalyticsPanelWidget>
           Row(
             children: [
               Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: _AiPanelColors.black,
-                  borderRadius: BorderRadius.circular(10),
+                width: 42,
+                height: 42,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFEAF6EE),
+                  shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 14),
+                child: const Icon(Icons.auto_awesome_rounded, color: _AiPanelColors.green, size: 20),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'AI Match Center',
-                      style: TextStyle(
-                        fontSize: 12.6,
-                        fontWeight: FontWeight.w900,
-                        color: _AiPanelColors.text,
-                        height: 1.05,
-                      ),
+                    Row(
+                      children: [
+                        const Text(
+                          'СПОРТОТЕКА ИИ',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w900,
+                            color: _AiPanelColors.text,
+                            height: 1.05,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF3FAF5),
+                            borderRadius: BorderRadius.circular(999),
+                            border: Border.all(color: const Color(0xFFD7EEE0)),
+                          ),
+                          child: const Text(
+                            'КОНТЕКСТ',
+                            style: TextStyle(fontSize: 10.2, fontWeight: FontWeight.w900, color: _AiPanelColors.greenDark),
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 3),
+                    const SizedBox(height: 4),
                     Text(
-                      widget.statusText.isEmpty ? 'Авто-ТТД, трекинг, карта поля и тренерские заметки' : widget.statusText,
-                      maxLines: 1,
+                      widget.statusText.isEmpty ? 'Видеоанализ матча · игроки, мяч, события и вопросы по текущему эпизоду' : widget.statusText,
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        fontSize: 11.2,
+                        fontSize: 11.3,
                         color: _AiPanelColors.textMuted,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ],
@@ -7988,20 +8511,20 @@ class _AiAnalyticsPanelWidgetState extends State<AiAnalyticsPanelWidget>
               _statusDot(widget.aiTracking.isRunning || widget.isAiLoading),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           _responsiveWrap(
-            minItemWidth: 118,
+            minItemWidth: 150,
             spacing: 8,
             items: [
               _heroMetric('События', '${summary.eventsCount}', Icons.timeline_rounded, _AiPanelColors.blue),
               _heroMetric('AI ТТД', '${summary.suggestionsCount}', Icons.fact_check_outlined, _AiPanelColors.green),
-              _heroMetric('Голы', '${summary.goals}', Icons.sports_soccer_rounded, _AiPanelColors.red),
-              _heroMetric('Передачи', '${summary.passesTotal}', Icons.compare_arrows_rounded, _AiPanelColors.violet),
+              _heroMetric('Игроки', '${widget.aiTracking.tracks.length}', Icons.groups_rounded, _AiPanelColors.teal),
+              _heroMetric('Мяч', widget.aiTracking.showBall ? 'ON' : 'OFF', Icons.sports_soccer_rounded, _AiPanelColors.red),
               _heroMetric('Heatmap', widget.showHeatmap ? 'ON' : 'OFF', Icons.local_fire_department_rounded, _AiPanelColors.amber),
-              _heroMetric('Трек', selectedName, Icons.person_pin_circle_rounded, _AiPanelColors.teal),
+              _heroMetric('Фокус', selectedName, Icons.person_pin_circle_rounded, _AiPanelColors.violet),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           _teamIdentityStrip(summary),
         ],
       ),
@@ -8250,30 +8773,32 @@ class _AiAnalyticsPanelWidgetState extends State<AiAnalyticsPanelWidget>
 
   Widget _buildTabSelector() {
     return Container(
-      height: 42,
+      height: 40,
       padding: const EdgeInsets.all(3),
       decoration: BoxDecoration(
         color: _AiPanelColors.surface,
         border: Border.all(color: _AiPanelColors.line),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(11),
       ),
       child: TabBar(
         controller: _tabController,
         isScrollable: true,
+        tabAlignment: TabAlignment.start,
         dividerColor: Colors.transparent,
         indicatorSize: TabBarIndicatorSize.tab,
         labelColor: Colors.white,
         unselectedLabelColor: _AiPanelColors.textMuted,
-        labelStyle: const TextStyle(fontSize: 11.2, fontWeight: FontWeight.w900),
-        unselectedLabelStyle: const TextStyle(fontSize: 11.2, fontWeight: FontWeight.w800),
-        indicator: BoxDecoration(color: _AiPanelColors.black, borderRadius: BorderRadius.circular(13)),
+        labelPadding: const EdgeInsets.symmetric(horizontal: 10),
+        labelStyle: const TextStyle(fontSize: 10.6, fontWeight: FontWeight.w900),
+        unselectedLabelStyle: const TextStyle(fontSize: 10.6, fontWeight: FontWeight.w700),
+        indicator: BoxDecoration(color: _AiPanelColors.black, borderRadius: BorderRadius.circular(9)),
         tabs: const [
-          Tab(text: 'Обзор'),
+          Tab(text: 'Контекст'),
           Tab(text: 'События'),
           Tab(text: 'ТТД'),
           Tab(text: 'Карта'),
           Tab(text: 'Игроки'),
-          Tab(text: 'AI заметки'),
+          Tab(text: 'Вопросы'),
           Tab(text: 'Экспорт'),
         ],
       ),
@@ -8333,6 +8858,56 @@ class _AiAnalyticsPanelWidgetState extends State<AiAnalyticsPanelWidget>
                 _infoRow('Дистанция', '${live.totalDistance.toStringAsFixed(1)} м'),
                 _infoRow('Рывки', '${live.sprints}'),
                 _infoRow('Точек трека', '${track?.points.length ?? widget.aiTracking.tracks.fold<int>(0, (s, t) => s + t.points.length)}'),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          _surfaceBlock(
+            title: 'Слои прямо на видео',
+            icon: Icons.layers_outlined,
+            color: _AiPanelColors.violet,
+            child: Column(
+              children: [
+                _switchRow(
+                  'Рамки игроков',
+                  widget.aiTracking.showBoundingBoxes,
+                  (v) => widget.aiTracking.updateDisplay(boundingBoxes: v),
+                ),
+                _switchRow(
+                  'Имена / Track ID',
+                  widget.aiTracking.showLabels,
+                  (v) => widget.aiTracking.updateDisplay(labels: v),
+                ),
+                _switchRow(
+                  'Скорость игрока',
+                  widget.aiTracking.showSpeed,
+                  (v) => widget.aiTracking.updateDisplay(speed: v),
+                ),
+                _switchRow(
+                  'Траектории на видео',
+                  widget.aiTracking.showTrails,
+                  (v) => widget.aiTracking.updateDisplay(trails: v),
+                ),
+                _switchRow(
+                  'Только выбранный игрок',
+                  widget.aiTracking.showOnlySelectedPlayer,
+                  (v) => widget.aiTracking.updateDisplay(onlySelectedPlayer: v),
+                ),
+                _switchRow(
+                  'Мяч',
+                  widget.aiTracking.showBall,
+                  (v) => widget.aiTracking.updateDisplay(ball: v),
+                ),
+                _switchRow(
+                  'След мяча',
+                  widget.aiTracking.showBallTrail,
+                  (v) => widget.aiTracking.updateDisplay(ballTrail: v),
+                ),
+                _switchRow(
+                  'Владение',
+                  widget.aiTracking.showPossessionOverlay,
+                  (v) => widget.aiTracking.updateDisplay(possession: v),
+                ),
               ],
             ),
           ),
@@ -8450,9 +9025,10 @@ class _AiAnalyticsPanelWidgetState extends State<AiAnalyticsPanelWidget>
             width: double.infinity,
             decoration: BoxDecoration(
               color: _AiPanelColors.surface,
-              borderRadius: BorderRadius.circular(22),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: _AiPanelColors.line),
             ),
-            padding: const EdgeInsets.all(10),
+            padding: const EdgeInsets.all(8),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(10),
               child: CustomPaint(
@@ -8520,31 +9096,18 @@ class _AiAnalyticsPanelWidgetState extends State<AiAnalyticsPanelWidget>
         children: [
           _buildAiNotesCompact(summary),
           const SizedBox(height: 8),
+          _buildAiAskPanel(summary, compact: true),
+          const SizedBox(height: 8),
           _surfaceBlock(
-            title: 'DeepSeek / LLM блок — подключим следующим шагом',
+            title: 'Следующий шаг для LLM / Sportoteka AI',
             icon: Icons.smart_toy_outlined,
             color: _AiPanelColors.violet,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _hintLine('AI будет получать JSON матча: события, ТТД, владение, карту, игроки и тренерские заметки.'),
-                _hintLine('На выходе: слабые зоны, ключевые эпизоды, рекомендации по тренировкам и персональные выводы.'),
-                _hintLine('Можно добавить шаблоны: «для тренера», «для игрока», «для руководителя клуба», «кратко в Telegram».')
-              ],
-            ),
-          ),
-          const SizedBox(height: 8),
-          _surfaceBlock(
-            title: 'Идеи для ТОП версии',
-            icon: Icons.workspace_premium_rounded,
-            color: _AiPanelColors.amber,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _hintLine('Авто‑нарезка плейлистов: голы, удары, потери, прессинг, выход из обороны.'),
-                _hintLine('Сравнение двух таймов: темп, владение, зона атак, просадки игрока.'),
-                _hintLine('Индекс риска: игрок часто выпадает из кадра, потеря трека, перегрузка зоны.'),
-                _hintLine('Экспорт: PDF/HTML/CSV + таблица ТТД по игрокам и эпизодам.'),
+                _hintLine('AI будет получать JSON матча: события, ТТД, владение, карту, игроков и заметки тренера.'),
+                _hintLine('На выходе: объяснение эпизода, рекомендации, слабые зоны и задания на тренировку.'),
+                _hintLine('Дальше можно добавить ответы в форматах: для тренера, для игрока, для родителя и для Telegram.')
               ],
             ),
           ),
@@ -8556,22 +9119,94 @@ class _AiAnalyticsPanelWidgetState extends State<AiAnalyticsPanelWidget>
   Widget _buildAiNotesCompact(_AiMatchSummary summary) {
     final quality = summary.avgSuggestionConfidence;
     final qualityText = quality >= 75
-        ? 'AI уверенно распознал события. Можно подтверждать ТТД пачкой.'
+        ? 'Распознавание событий выглядит уверенно. Можно подтверждать подсказки быстрее.'
         : quality > 0
-            ? 'Есть события со средней уверенностью — лучше проверить ключевые моменты.'
-            : 'Запусти AI после настройки цветов команд.';
+            ? 'Есть события со средней уверенностью. Ключевые моменты лучше проверить вручную.'
+            : 'Запусти AI после настройки цветов команд, чтобы начать распознавание.';
 
     return _surfaceBlock(
-      title: 'Заметки от AI',
-      icon: Icons.lightbulb_outline_rounded,
+      title: 'Контекст матча',
+      icon: Icons.verified_user_outlined,
       color: _AiPanelColors.green,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _hintLine(qualityText),
           _hintLine('Найдено: ${summary.eventsCount} событий, ${summary.suggestionsCount} ТТД, ${summary.goals} голов, ${summary.cards} карточек.'),
-          _hintLine('Карта: ${widget.showHeatmap ? 'тепловая карта включена' : 'тепловая карта выключена'}, треков: ${widget.aiTracking.tracks.length}.'),
-          _hintLine('Перед экспортом желательно подтвердить спорные AI‑подсказки вручную.'),
+          _hintLine('YOLO / видео-слои: игроков ${widget.aiTracking.tracks.length}, heatmap ${widget.showHeatmap ? 'включён' : 'выключен'}, мяч ${widget.aiTracking.showBall ? 'виден' : 'скрыт'}.'),
+          _hintLine('Перед экспортом желательно подтвердить спорные AI-подсказки вручную.'),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAiAskPanel(_AiMatchSummary summary, {bool compact = false}) {
+    return _surfaceBlock(
+      title: 'Правый вопросник AI',
+      icon: Icons.chat_bubble_outline_rounded,
+      color: _AiPanelColors.green,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8FAF9),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFE9ECEA)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Что можно спросить',
+                  style: TextStyle(fontSize: 12.2, fontWeight: FontWeight.w800, color: _AiPanelColors.text),
+                ),
+                const SizedBox(height: 8),
+                _hintLine('Почему потеряли мяч в этом эпизоде?'),
+                _hintLine('Покажи момент, где крайний защитник опоздал в перестроении.'),
+                _hintLine('Сделай краткий разбор по выбранному игроку.'),
+                _hintLine('Нарисуй схему и сформулируй подсказку тренеру.'),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            readOnly: true,
+            minLines: compact ? 2 : 3,
+            maxLines: compact ? 2 : 3,
+            decoration: InputDecoration(
+              hintText: 'Спросите: почему потеряли мяч, сделай анализ, нарисуй схему…',
+              hintStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _AiPanelColors.textMuted),
+              filled: true,
+              fillColor: Colors.white,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: Color(0xFFE9ECEA)),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Align(
+            alignment: Alignment.centerRight,
+            child: SizedBox(
+              height: 42,
+              child: ElevatedButton.icon(
+                onPressed: () {},
+                icon: const Icon(Icons.arrow_upward_rounded, size: 18),
+                label: const Text('Скоро подключим'),
+                style: ElevatedButton.styleFrom(
+                  elevation: 0,
+                  backgroundColor: const Color(0xFF00A750),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  textStyle: const TextStyle(fontSize: 11.6, fontWeight: FontWeight.w800),
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -8694,40 +9329,53 @@ class _AiAnalyticsPanelWidgetState extends State<AiAnalyticsPanelWidget>
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(color: _AiPanelColors.surfaceSoft, borderRadius: BorderRadius.circular(14)),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _AiPanelColors.line),
+      ),
       child: Row(
         children: [
           Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(color: item.color.withOpacity(0.12), borderRadius: BorderRadius.circular(12)),
-            child: Icon(item.icon, color: item.color, size: 20),
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: item.color.withOpacity(0.10),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(item.icon, color: item.color, size: 18),
           ),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(item.title, style: const TextStyle(fontSize: 11.2, fontWeight: FontWeight.w900, color: _AiPanelColors.text)),
+                Text(item.title, style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: _AiPanelColors.text)),
                 const SizedBox(height: 2),
                 Text(
                   [item.subtitle, teamName].where((e) => e.trim().isNotEmpty).join(' · '),
-                  style: const TextStyle(fontSize: 11.2, color: _AiPanelColors.textMuted, fontWeight: FontWeight.w700),
+                  style: const TextStyle(fontSize: 10.9, color: _AiPanelColors.textMuted, fontWeight: FontWeight.w600),
                 ),
-                const SizedBox(height: 4),
-                Text('Уверенность ${(item.confidence * 100).round()}%', style: TextStyle(fontSize: 10.6, color: item.color, fontWeight: FontWeight.w800)),
               ],
             ),
           ),
           Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(timeText, style: const TextStyle(fontSize: 10.6, color: _AiPanelColors.textMuted, fontWeight: FontWeight.w800)),
               const SizedBox(height: 4),
-              IconButton(
-                onPressed: () => widget.onJumpToTime(item.timeMs),
-                icon: const Icon(Icons.play_circle_outline_rounded),
-                color: _AiPanelColors.black,
-                tooltip: 'Перейти к моменту',
+              InkWell(
+                onTap: () => widget.onJumpToTime(item.timeMs),
+                borderRadius: BorderRadius.circular(8),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF7FAF8),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFFE9ECEA)),
+                  ),
+                  child: const Icon(Icons.play_arrow_rounded, size: 16, color: _AiPanelColors.text),
+                ),
               ),
             ],
           ),
@@ -8740,7 +9388,11 @@ class _AiAnalyticsPanelWidgetState extends State<AiAnalyticsPanelWidget>
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(color: _AiPanelColors.surfaceSoft, borderRadius: BorderRadius.circular(14)),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _AiPanelColors.line),
+      ),
       child: Column(
         children: [
           Row(
@@ -8751,7 +9403,7 @@ class _AiAnalyticsPanelWidgetState extends State<AiAnalyticsPanelWidget>
                 decoration: BoxDecoration(color: e.team == widget.myTeamTag ? widget.myTeamColor : widget.opponentTeamColor, borderRadius: BorderRadius.circular(3)),
               ),
               const SizedBox(width: 8),
-              Expanded(child: Text(e.playerName, style: const TextStyle(fontSize: 11.2, fontWeight: FontWeight.w900, color: _AiPanelColors.text))),
+              Expanded(child: Text(e.playerName, style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: _AiPanelColors.text))),
               _pill('Рейтинг ${e.rating.toStringAsFixed(1)}', _AiPanelColors.green),
             ],
           ),
@@ -8781,19 +9433,27 @@ class _AiAnalyticsPanelWidgetState extends State<AiAnalyticsPanelWidget>
       decoration: BoxDecoration(
         color: _AiPanelColors.surface,
         border: Border.all(color: _AiPanelColors.line),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(14),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(icon, color: color, size: 15),
+              Container(
+                width: 24,
+                height: 24,
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.10),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(icon, color: color, size: 14),
+              ),
               const SizedBox(width: 8),
-              Expanded(child: Text(title, style: const TextStyle(fontSize: 12.6, fontWeight: FontWeight.w900, color: _AiPanelColors.text))),
+              Expanded(child: Text(title, style: const TextStyle(fontSize: 12.8, fontWeight: FontWeight.w800, color: _AiPanelColors.text))),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           child,
         ],
       ),
@@ -8803,17 +9463,25 @@ class _AiAnalyticsPanelWidgetState extends State<AiAnalyticsPanelWidget>
   Widget _metricCard(String title, String value, String subtitle, IconData icon, Color color) {
     return Container(
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: _AiPanelColors.surface, borderRadius: BorderRadius.circular(16)),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _AiPanelColors.line),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: color, size: 15),
-          const SizedBox(height: 8),
-          Text(title, style: TextStyle(fontSize: 11.2, fontWeight: FontWeight.w800, color: color)),
-          const SizedBox(height: 4),
-          Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w900, color: _AiPanelColors.text)),
-          const SizedBox(height: 2),
-          Text(subtitle, style: const TextStyle(fontSize: 10.6, fontWeight: FontWeight.w700, color: _AiPanelColors.textMuted)),
+          Row(
+            children: [
+              Icon(icon, color: color, size: 15),
+              const SizedBox(width: 6),
+              Expanded(child: Text(title, style: TextStyle(fontSize: 11.2, fontWeight: FontWeight.w800, color: color))),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 16.2, fontWeight: FontWeight.w900, color: _AiPanelColors.text)),
+          const SizedBox(height: 3),
+          Text(subtitle, style: const TextStyle(fontSize: 10.8, fontWeight: FontWeight.w700, color: _AiPanelColors.textMuted)),
         ],
       ),
     );
@@ -8822,18 +9490,30 @@ class _AiAnalyticsPanelWidgetState extends State<AiAnalyticsPanelWidget>
   Widget _heroMetric(String title, String value, IconData icon, Color color) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-      decoration: BoxDecoration(color: color.withOpacity(0.08), borderRadius: BorderRadius.circular(14)),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _AiPanelColors.line),
+      ),
       child: Row(
         children: [
-          Icon(icon, color: color, size: 14),
+          Container(
+            width: 24,
+            height: 24,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.10),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, color: color, size: 14),
+          ),
           const SizedBox(width: 8),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 10.2, fontWeight: FontWeight.w800, color: color)),
+                Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 10.6, fontWeight: FontWeight.w700, color: _AiPanelColors.textMuted)),
                 const SizedBox(height: 2),
-                Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w900, color: _AiPanelColors.text)),
+                Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12.8, fontWeight: FontWeight.w900, color: _AiPanelColors.text)),
               ],
             ),
           ),
@@ -8845,10 +9525,14 @@ class _AiAnalyticsPanelWidgetState extends State<AiAnalyticsPanelWidget>
   Widget _miniStat(String title, String value) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-      decoration: BoxDecoration(color: _AiPanelColors.surface, borderRadius: BorderRadius.circular(12)),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _AiPanelColors.line),
+      ),
       child: Column(
         children: [
-          Text(title, style: const TextStyle(fontSize: 10, color: _AiPanelColors.textMuted, fontWeight: FontWeight.w800), textAlign: TextAlign.center),
+          Text(title, style: const TextStyle(fontSize: 10, color: _AiPanelColors.textMuted, fontWeight: FontWeight.w700), textAlign: TextAlign.center),
           const SizedBox(height: 4),
           Text(value, style: const TextStyle(fontSize: 11.2, color: _AiPanelColors.text, fontWeight: FontWeight.w900), textAlign: TextAlign.center),
         ],
@@ -8862,20 +9546,21 @@ class _AiAnalyticsPanelWidgetState extends State<AiAnalyticsPanelWidget>
       opacity: disabled ? 0.55 : 1,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(10),
         child: Container(
           height: 40,
           padding: const EdgeInsets.symmetric(horizontal: 12),
           decoration: BoxDecoration(
-            color: filled ? _AiPanelColors.black : color.withOpacity(0.09),
-            borderRadius: BorderRadius.circular(8),
+            color: filled ? _AiPanelColors.black : Colors.white,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: filled ? _AiPanelColors.black : _AiPanelColors.line),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(icon, size: 15, color: filled ? Colors.white : color),
               const SizedBox(width: 6),
-              Text(label, style: TextStyle(fontSize: 11.2, fontWeight: FontWeight.w900, color: filled ? Colors.white : color)),
+              Text(label, style: TextStyle(fontSize: 11.2, fontWeight: FontWeight.w800, color: filled ? Colors.white : _AiPanelColors.text)),
             ],
           ),
         ),
@@ -11073,76 +11758,83 @@ class PlayersListWidget extends StatelessWidget {
     }).toList();
 
     return Container(
-      width: 260,
-      padding: const EdgeInsets.all(10),
+      width: double.infinity,
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE9ECEA)),
       ),
       child: Column(
         children: [
-          // ========== ИЗМЕНЕННЫЙ ЗАГОЛОВОК С КНОПКОЙ ==========
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
+            padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
             child: Row(
               children: [
                 const Expanded(
                   child: Text(
-                    "Игроки матча",
+                    "Игроки",
                     style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w900,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF171B18),
                     ),
                   ),
                 ),
-                // Кнопка выбора состава
                 if (onSelectMatchPlayers != null)
-                  Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      onTap: onSelectMatchPlayers,
-                      borderRadius: BorderRadius.circular(10),
-                      child: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF2563EB).withOpacity(0.08),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: const Icon(
-                          Icons.groups_rounded,
-                          size: 18,
-                          color: Color(0xFF2563EB),
-                        ),
+                  InkWell(
+                    onTap: onSelectMatchPlayers,
+                    borderRadius: BorderRadius.circular(10),
+                    child: Container(
+                      height: 34,
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF7FAF8),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFFE9ECEA)),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.groups_rounded, size: 16, color: Color(0xFF00A750)),
+                          SizedBox(width: 6),
+                          Text(
+                            'Состав',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF171B18),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
               ],
             ),
           ),
-          // ===================================================
-          const SizedBox(height: 8),
-          TextField(
-            controller: searchController,
-            decoration: InputDecoration(
-              hintText: "Поиск игрока",
-              prefixIcon: const Icon(Icons.search_rounded, size: 18),
-              isDense: true,
-              filled: true,
-              fillColor: const Color(0xFFF8FAFC),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none,
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+            child: TextField(
+              controller: searchController,
+              decoration: InputDecoration(
+                hintText: "Поиск игрока",
+                prefixIcon: const Icon(Icons.search_rounded, size: 18, color: Color(0xFF66716A)),
+                isDense: true,
+                filled: true,
+                fillColor: Colors.white,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: Color(0xFFE9ECEA)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: Color(0xFF00A750)),
+                ),
               ),
             ),
           ),
-          const SizedBox(height: 8),
+          const Divider(height: 1, color: Color(0xFFE9ECEA)),
           Expanded(
             child: filteredPlayers.isEmpty
                 ? const Center(
@@ -11150,13 +11842,15 @@ class PlayersListWidget extends StatelessWidget {
                       "Игроки не найдены",
                       style: TextStyle(
                         fontSize: 13,
-                        color: Color(0xFF64748B),
+                        color: Color(0xFF66716A),
                         fontWeight: FontWeight.w600,
                       ),
                     ),
                   )
-                : ListView.builder(
+                : ListView.separated(
+                    padding: const EdgeInsets.all(10),
                     itemCount: filteredPlayers.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 6),
                     itemBuilder: (_, i) {
                       final player = filteredPlayers[i];
                       final selected = selectedPlayer != null &&
@@ -11183,58 +11877,53 @@ class PlayersListWidget extends StatelessWidget {
                         onTap: () => onPlayerSelected(player),
                         borderRadius: BorderRadius.circular(12),
                         child: Container(
-                          margin: const EdgeInsets.only(bottom: 6),
-                          padding: const EdgeInsets.all(8),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
                           decoration: BoxDecoration(
-                            color: selected
-                                ? const Color(0xFFEAF2FF)
-                                : const Color(0xFFF8FAFC),
+                            color: selected ? const Color(0xFFF3FAF5) : Colors.white,
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
                               color: selected
-                                  ? const Color(0xFF2563EB)
-                                  : Colors.transparent,
-                              width: 1.2,
+                                  ? const Color(0xFF00A750)
+                                  : const Color(0xFFE9ECEA),
                             ),
                           ),
                           child: Row(
                             children: [
                               CircleAvatar(
                                 radius: 18,
-                                backgroundColor: const Color(0xFFE5E7EB),
+                                backgroundColor: const Color(0xFFF1F5F3),
                                 backgroundImage:
                                     hasPhoto ? NetworkImage(photo) : null,
                                 child: !hasPhoto
                                     ? Text(
                                         initials,
-                                        style: const TextStyle(fontSize: 12),
+                                        style: const TextStyle(fontSize: 12, color: Color(0xFF171B18)),
                                       )
                                     : null,
                               ),
-                              const SizedBox(width: 8),
+                              const SizedBox(width: 10),
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
                                       "$lastName $firstName".trim(),
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w800,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      number.isNotEmpty
-                                          ? "$position • №$number"
-                                          : position,
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       style: const TextStyle(
-                                        fontSize: 11,
-                                        color: Color(0xFF64748B),
+                                        fontSize: 13.2,
+                                        fontWeight: FontWeight.w800,
+                                        color: Color(0xFF171B18),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      number.isNotEmpty ? "$position · №$number" : position,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontSize: 11.4,
+                                        color: Color(0xFF66716A),
                                         fontWeight: FontWeight.w600,
                                       ),
                                     ),
@@ -17857,43 +18546,40 @@ class _EpisodeTtdDetailScreenState extends State<EpisodeTtdDetailScreen>
   return Container(
     decoration: BoxDecoration(
       color: _EpisodeColors.panel,
-      borderRadius: BorderRadius.circular(28),
-      border: Border.all(color: _EpisodeColors.border),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.black.withOpacity(0.05),
-          blurRadius: 16,
-          offset: const Offset(0, 8),
-        ),
-      ],
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: const Color(0xFFE9ECEA)),
     ),
     child: Column(
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(18, 16, 16, 14),
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
           child: Row(
             children: [
               Container(
-                width: 36,
-                height: 36,
+                width: 32,
+                height: 32,
                 decoration: BoxDecoration(
                   color: color.withOpacity(0.08),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(icon, size: 18, color: color),
+                child: Icon(icon, size: 17, color: color),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 10),
               Expanded(
                 child: Text(
                   title,
-                  style: AppTypography.screenTitle(color: _EpisodeColors.text),
+                  style: AppTypography.custom(
+                    size: 14.6,
+                    weight: FontWeight.w800,
+                    color: const Color(0xFF171B18),
+                  ),
                 ),
               ),
               if (trailing != null) trailing,
             ],
           ),
         ),
-        Container(height: 1, color: _EpisodeColors.border),
+        const Divider(height: 1, color: Color(0xFFE9ECEA)),
         Expanded(child: child),
       ],
     ),
@@ -23448,15 +24134,8 @@ class _TeamVideoAnalysisScreenState extends State<TeamVideoAnalysisScreen>
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x0B000000),
-            blurRadius: 18,
-            offset: Offset(0, 8),
-          ),
-        ],
+        color: FeedPalette.surface,
+        borderRadius: BorderRadius.circular(14),
       ),
       child: Row(
         children: [
@@ -23479,10 +24158,10 @@ class _TeamVideoAnalysisScreenState extends State<TeamVideoAnalysisScreen>
                   title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: _VideoT.body(
+                    10.8,
                     color: FeedPalette.textMuted,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
+                    weight: FontWeight.w500,
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -23490,22 +24169,19 @@ class _TeamVideoAnalysisScreenState extends State<TeamVideoAnalysisScreen>
                   value,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: AppTypography.metricStrong(
                     color: FeedPalette.text,
-                    fontSize: 20,
-                    height: 1,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  ).copyWith(fontSize: 20, height: 1),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   subtitle,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: _VideoT.body(
+                    10.2,
                     color: FeedPalette.textMuted,
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w500,
+                    weight: FontWeight.w500,
                   ),
                 ),
               ],
@@ -23523,18 +24199,8 @@ class _TeamVideoAnalysisScreenState extends State<TeamVideoAnalysisScreen>
     required Widget child,
   }) {
     return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x0B000000),
-            blurRadius: 18,
-            offset: Offset(0, 8),
-          ),
-        ],
-      ),
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      color: Colors.white,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -23559,10 +24225,9 @@ class _TeamVideoAnalysisScreenState extends State<TeamVideoAnalysisScreen>
                       title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: _VideoT.title(
+                        13.0,
                         color: FeedPalette.text,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
                       ),
                     ),
                     const SizedBox(height: 3),
@@ -23570,10 +24235,10 @@ class _TeamVideoAnalysisScreenState extends State<TeamVideoAnalysisScreen>
                       subtitle,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: _VideoT.body(
+                        10.2,
                         color: FeedPalette.textMuted,
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w500,
+                        weight: FontWeight.w500,
                       ),
                     ),
                   ],
@@ -23598,12 +24263,9 @@ class _TeamVideoAnalysisScreenState extends State<TeamVideoAnalysisScreen>
       ),
       child: Text(
         text,
-        style: const TextStyle(
+        style: AppTypography.secondary(
           color: FeedPalette.textMuted,
-          fontSize: 12,
-          height: 1.35,
-          fontWeight: FontWeight.w500,
-        ),
+        ).copyWith(height: 1.32),
       ),
     );
   }
@@ -24283,7 +24945,7 @@ class _TeamVideoAnalysisScreenState extends State<TeamVideoAnalysisScreen>
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.of(context).size.width;
-    final isPhone = width < 700;
+    final isPhone = width < 760;
     final isTablet = width >= 900;
 
     final body = DefaultTextStyle(
@@ -24972,7 +25634,7 @@ class _CmrVideoAnalysisPanelState extends State<CmrVideoAnalysisPanel> {
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.of(context).size.width;
-    final isPhone = width < 700;
+    final isPhone = width < 760;
 
     if (loading) {
       return _LoadingCard(teamName: _displayTeamName, isPhone: isPhone);
@@ -26473,6 +27135,11 @@ class VideoMatchReviewScreen extends StatefulWidget {
   /// потому что используется общий нижний плеер экрана матча.
   final bool showInternalVideoControls;
 
+  /// true — VideoMatchReviewScreen работает только как движок рабочей сцены.
+  /// Внешний TeamMatchVideoWorkspaceScreen рисует единственный Tracker-shell:
+  /// навигацию, шапку и нижний timeline. Это убирает дубли интерфейса.
+  final bool externalWorkspaceShell;
+
   const VideoMatchReviewScreen({
     super.key,
     required this.matchId,
@@ -26483,10 +27150,11 @@ class VideoMatchReviewScreen extends StatefulWidget {
     required this.videoUrl,
     this.videoId = 0,
     this.embedded = false,
-    this.forceLandscape = true,
+    this.forceLandscape = false,
     this.railOnLeft = false,
     this.playbackController,
     this.showInternalVideoControls = true,
+    this.externalWorkspaceShell = false,
   });
 
   @override
@@ -26532,6 +27200,27 @@ class VideoMatchReviewPlaybackController extends ChangeNotifier {
   double speed = 1.0;
   ReviewOverlayPanel activePanel = ReviewOverlayPanel.none;
   int tabIndex = 0;
+  bool tacticalReviewEnabled = false;
+
+  // Состояние AI вынесено наружу для нового единого Tracker-shell.
+  // Сам AI по-прежнему живёт в VideoMatchReviewScreen и работает на том же
+  // видео/timeline — наружу отдаём только состояние и команды управления.
+  bool aiRunning = false;
+  bool aiLoading = false;
+  double aiProgress = 0.0;
+  String aiStatusText = '';
+  int aiEventsCount = 0;
+  int aiSuggestionsCount = 0;
+  int playersCount = 0;
+  int trackedPlayersCount = 0;
+  int episodesCount = 0;
+
+  // Маркеры общей временной шкалы нового workspace. Они берутся из того же
+  // движка, поэтому AI-события, TTD-подсказки и ручные эпизоды всегда
+  // синхронизированы с одним видеоплеером.
+  List<int> aiEventTimesMs = const <int>[];
+  List<int> aiSuggestionTimesMs = const <int>[];
+  List<int> episodeTimesMs = const <int>[];
 
   bool get attached => _state != null;
 
@@ -26546,6 +27235,19 @@ class VideoMatchReviewPlaybackController extends ChangeNotifier {
       isReady = false;
       isPlaying = false;
       activePanel = ReviewOverlayPanel.none;
+      tacticalReviewEnabled = false;
+      aiRunning = false;
+      aiLoading = false;
+      aiProgress = 0.0;
+      aiStatusText = '';
+      aiEventsCount = 0;
+      aiSuggestionsCount = 0;
+      playersCount = 0;
+      trackedPlayersCount = 0;
+      episodesCount = 0;
+      aiEventTimesMs = const <int>[];
+      aiSuggestionTimesMs = const <int>[];
+      episodeTimesMs = const <int>[];
       notifyListeners();
     }
   }
@@ -26563,6 +27265,42 @@ class VideoMatchReviewPlaybackController extends ChangeNotifier {
     final nextFullscreen = state._isVideoFullscreen || state._fullscreenRouteOpen;
     final nextPanel = state._activeOverlayPanel;
     final nextTab = state._tabController.index;
+    final nextTacticalReview = state._coachBoardEnabled;
+    final nextAiRunning = state._aiTracking.isRunning;
+    final nextAiLoading = state._aiLoading;
+    final nextAiProgress = state._aiUploadProgress.clamp(0.0, 1.0).toDouble();
+    final nextAiStatusText = state._aiStatusText;
+    final nextAiEventsCount = state._aiTracking.autoEvents.length;
+    final nextAiSuggestionsCount = state._aiTracking.ttdSuggestions.length;
+    final nextPlayersCount = state._matchPlayers.isNotEmpty
+        ? state._matchPlayers.length
+        : state._players.length;
+    final nextTrackedPlayersCount = state._aiTracking.tracks.length;
+    final nextEpisodesCount = state._episodes.length;
+    final nextAiEventTimesMs = state._aiTracking.autoEvents
+        .map((event) => event.timeMs)
+        .where((time) => time >= 0)
+        .toSet()
+        .toList()
+      ..sort();
+    final nextAiSuggestionTimesMs = state._aiTracking.ttdSuggestions
+        .map((item) => item.timeMs)
+        .where((time) => time >= 0)
+        .toSet()
+        .toList()
+      ..sort();
+    final nextEpisodeTimesMs = state._episodes
+        .map((episode) {
+          final raw = episode['timecode_seconds'] ??
+              episode['video_time_seconds'] ??
+              episode['time_seconds'];
+          final seconds = raw is num ? raw.toDouble() : double.tryParse('$raw') ?? 0.0;
+          return (seconds * 1000).round();
+        })
+        .where((time) => time >= 0)
+        .toSet()
+        .toList()
+      ..sort();
 
     final changed = position != nextPosition ||
         duration != nextDuration ||
@@ -26571,7 +27309,20 @@ class VideoMatchReviewPlaybackController extends ChangeNotifier {
         speed != nextSpeed ||
         isFullscreen != nextFullscreen ||
         activePanel != nextPanel ||
-        tabIndex != nextTab;
+        tabIndex != nextTab ||
+        tacticalReviewEnabled != nextTacticalReview ||
+        aiRunning != nextAiRunning ||
+        aiLoading != nextAiLoading ||
+        (aiProgress - nextAiProgress).abs() > 0.001 ||
+        aiStatusText != nextAiStatusText ||
+        aiEventsCount != nextAiEventsCount ||
+        aiSuggestionsCount != nextAiSuggestionsCount ||
+        playersCount != nextPlayersCount ||
+        trackedPlayersCount != nextTrackedPlayersCount ||
+        episodesCount != nextEpisodesCount ||
+        !listEquals(aiEventTimesMs, nextAiEventTimesMs) ||
+        !listEquals(aiSuggestionTimesMs, nextAiSuggestionTimesMs) ||
+        !listEquals(episodeTimesMs, nextEpisodeTimesMs);
 
     position = nextPosition;
     duration = nextDuration;
@@ -26581,6 +27332,19 @@ class VideoMatchReviewPlaybackController extends ChangeNotifier {
     isFullscreen = nextFullscreen;
     activePanel = nextPanel;
     tabIndex = nextTab;
+    tacticalReviewEnabled = nextTacticalReview;
+    aiRunning = nextAiRunning;
+    aiLoading = nextAiLoading;
+    aiProgress = nextAiProgress;
+    aiStatusText = nextAiStatusText;
+    aiEventsCount = nextAiEventsCount;
+    aiSuggestionsCount = nextAiSuggestionsCount;
+    playersCount = nextPlayersCount;
+    trackedPlayersCount = nextTrackedPlayersCount;
+    episodesCount = nextEpisodesCount;
+    aiEventTimesMs = List<int>.unmodifiable(nextAiEventTimesMs);
+    aiSuggestionTimesMs = List<int>.unmodifiable(nextAiSuggestionTimesMs);
+    episodeTimesMs = List<int>.unmodifiable(nextEpisodeTimesMs);
 
     if (changed) notifyListeners();
   }
@@ -26635,12 +27399,111 @@ class VideoMatchReviewPlaybackController extends ChangeNotifier {
     final state = _state;
     if (state == null) return;
     state._tabController.animateTo(0);
+    state.setState(() {
+      state._activeOverlayPanel = ReviewOverlayPanel.none;
+      if (state._coachBoardEnabled) state._coachBoardEnabled = false;
+    });
+    _syncFromState();
+  }
+
+  void openMap() {
+    final state = _state;
+    if (state == null) return;
+    state.setState(() {
+      state._activeOverlayPanel = ReviewOverlayPanel.none;
+      state._coachBoardEnabled = false;
+    });
+    state._tabController.animateTo(2);
+    _syncFromState();
+  }
+
+  void openEpisodes() {
+    final state = _state;
+    if (state == null) return;
+    state._tabController.animateTo(0);
+    state.setState(() {
+      state._activeOverlayPanel = ReviewOverlayPanel.episodes;
+      state._coachBoardEnabled = false;
+    });
+    _syncFromState();
+  }
+
+  void openPlayers() {
+    final state = _state;
+    if (state == null) return;
+    state._tabController.animateTo(0);
+    state.setState(() {
+      state._activeOverlayPanel = ReviewOverlayPanel.players;
+      state._coachBoardEnabled = false;
+    });
+    _syncFromState();
+  }
+
+  void openTtd() {
+    final state = _state;
+    if (state == null) return;
+    state._tabController.animateTo(0);
+    state.setState(() {
+      state._activeOverlayPanel = ReviewOverlayPanel.ttd;
+      state._coachBoardEnabled = false;
+    });
+    _syncFromState();
+  }
+
+  void openAiVideo() {
+    final state = _state;
+    if (state == null) return;
+    // AI — часть той же видеосцены. При открытии сразу запускаем локальный
+    // YOLO-overlay: рамки игроков/мяча и Track ID появляются поверх видео,
+    // а тяжёлый серверный анализ событий/TTD запускается отдельно.
+    state._tabController.animateTo(0);
+    state.setState(() {
+      state._activeOverlayPanel = ReviewOverlayPanel.analytics;
+      state._coachBoardEnabled = false;
+    });
+    unawaited(state._ensureYoloOverlayRunning());
+    _syncFromState();
+  }
+
+  /// Старое имя оставлено для совместимости.
+  void openAi() => openAiVideo();
+
+  Future<void> startAiAnalysis() async {
+    final state = _state;
+    if (state == null || state._aiLoading) return;
+    // YOLO должен быть видим сразу на видео, независимо от того, завершился
+    // ли полный серверный анализ матча.
+    await state._ensureYoloOverlayRunning();
+    await state._startServerAiAnalysis();
+    _syncFromState();
+  }
+
+  void toggleTacticalReview({bool? forceEnabled}) {
+    final state = _state;
+    if (state == null) return;
+    // Не меняем сцену скрыто. Разбор должен включаться поверх той сцены,
+    // которую видит тренер: видео или 3D-карта.
+    final shouldEnable = forceEnabled ?? !state._coachBoardEnabled;
+    if (state._coachBoardEnabled != shouldEnable) {
+      if (state._controller.value.isInitialized) {
+        state._controller.pause();
+      }
+      state.setState(() {
+        state._activeOverlayPanel = ReviewOverlayPanel.none;
+        state._coachBoardEnabled = shouldEnable;
+        state._showOverlayUi = true;
+      });
+    }
     _syncFromState();
   }
 
   void openReport() {
     final state = _state;
     if (state == null) return;
+    state.setState(() {
+      state._activeOverlayPanel = ReviewOverlayPanel.none;
+      state._coachBoardEnabled = false;
+    });
     state._tabController.animateTo(1);
     _syncFromState();
   }
@@ -27407,11 +28270,16 @@ String? _buildLocalVideoPathFromUrl(String? url) {
 Future<void> _startServerAiAnalysis() async {
   if (_aiLoading) return;
 
+  // Визуальный детектор запускается сразу и независимо от тяжёлого анализа
+  // матча. Поэтому bbox/мяч появляются поверх видео до завершения job.
+  unawaited(_ensureYoloOverlayRunning());
+
   if (mounted) {
     setState(() {
       _aiLoading = true;
       _aiStatusText = 'Запуск AI анализа...';
     });
+    _notifyPlaybackBridge();
   }
 
   try {
@@ -27431,6 +28299,7 @@ debugPrint('STEP 1 createdJobId = $createdJobId');
           _aiStatusText =
               'Ошибка запуска AI: ${_aiServerController.errorText ?? 'unknown'}';
         });
+        _notifyPlaybackBridge();
       }
       return;
     }
@@ -27464,6 +28333,7 @@ debugPrint('STEP 2 tracking=${identityHashCode(_aiTracking)}');
           _aiStatusText =
               'Не удалось запустить обработку: ${_aiServerController.errorText ?? 'unknown'}';
         });
+        _notifyPlaybackBridge();
       }
       return;
     }
@@ -27501,6 +28371,7 @@ debugPrint('STEP 3 AFTER APPLY aiMatchStats = ${_aiTracking.aiMatchStats}');
         _aiLoading = false;
         _aiStatusText = 'AI готов: $eventsCount событий, $ttdCount ТТД';
       });
+      _notifyPlaybackBridge();
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -27529,6 +28400,7 @@ debugPrint('STEP 3 AFTER APPLY aiMatchStats = ${_aiTracking.aiMatchStats}');
         _aiLoading = false;
         _aiStatusText = 'Ошибка AI: $e';
       });
+      _notifyPlaybackBridge();
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -27558,6 +28430,9 @@ int _aiSafeCount(dynamic value) {
 void _onVideoPositionChanged() {
   if (!mounted) return;
   if (!_useServerAi) return;
+  // Пока работает локальный YOLO-overlay, не подменяем его редкими server
+  // frame-packets: сервер отвечает за события/TTD, YOLO — за живые рамки.
+  if (_aiTracking.isRunning) return;
   if (!_aiServerController.hasJob) return;
   if (!_controller.value.isInitialized) return;
 
@@ -27672,6 +28547,7 @@ void _onAiServerControllerChanged() {
           'AI кадр ${Formatters.formatDuration(Duration(milliseconds: packet.timeMs))}: ${packet.tracks.length} игроков';
     }
   });
+  _notifyPlaybackBridge();
 }
 
 void _applyServerPacketToOverlay(AiFramePacket packet) {
@@ -28058,6 +28934,17 @@ double _estimateMetersPerPixel(double y) {
 
 
   bool _showHeatmap = false;
+
+  // Tracker-parity map camera for video analysis. The same AI tracks that are
+  // drawn over the video are projected onto this scene.
+  bool _reviewPitch3d = true;
+  double _reviewPitchYaw = 0.0;
+  double _reviewPitchTilt = -0.34;
+  double _reviewPitchScale = 0.96;
+  bool _reviewMapShowTrails = true;
+  bool _reviewMapShowPassNetwork = true;
+  bool _reviewMapShowAveragePositions = false;
+
   bool _coachBoardEnabled = false;
   TacticalToolType _coachTool = TacticalToolType.passArrow;
   Color _coachDrawColor = const Color(0xFFFFD166);
@@ -28389,10 +29276,16 @@ double _adaptiveGap(double screenWidth) {
           tabIndex: 0,
         ),
         _ReviewNavItem(
-          title: 'Отчёт',
-          shortTitle: 'Отчёт',
-          icon: Icons.assessment_outlined,
-          tabIndex: 1,
+          title: '3D-карта',
+          shortTitle: 'Карта',
+          icon: Icons.view_in_ar_rounded,
+          tabIndex: 2,
+        ),
+        _ReviewNavItem(
+          title: 'Разбор',
+          shortTitle: 'Разбор',
+          icon: Icons.draw_rounded,
+          tabIndex: -1,
         ),
         _ReviewNavItem(
           title: 'TTD',
@@ -28422,17 +29315,25 @@ double _adaptiveGap(double screenWidth) {
           tabIndex: 0,
           panel: ReviewOverlayPanel.analytics,
         ),
+        _ReviewNavItem(
+          title: 'Отчёт',
+          shortTitle: 'Отчёт',
+          icon: Icons.assessment_outlined,
+          tabIndex: 1,
+        ),
       ];
 
-  Color get _reviewCmrGreen => const Color(0xFF28A86B);
-  Color get _reviewCmrGreenSoft => const Color(0xFFEAF7F0);
-  Color get _reviewCmrSurface => const Color(0xFFF7F9F8);
-  Color get _reviewCmrLine => const Color(0xFFE8EEE9);
-  Color get _reviewCmrInk => const Color(0xFF111827);
-  Color get _reviewCmrMuted => const Color(0xFF667085);
+  Color get _reviewCmrGreen => const Color(0xFF00A750);
+  Color get _reviewCmrGreenSoft => const Color(0xFFF3FAF6);
+  Color get _reviewCmrSurface => const Color(0xFFF7F8F7);
+  Color get _reviewCmrLine => const Color(0xFFE9ECEA);
+  Color get _reviewCmrInk => const Color(0xFF0B0F14);
+  Color get _reviewCmrMuted => const Color(0xFF5F6670);
 
   String get _currentReviewSectionTitle {
     if (_tabController.index == 1) return 'Отчёт по видеоанализу';
+    if (_tabController.index == 2) return '3D-карта матча';
+    if (_coachBoardEnabled) return 'Тактический разбор';
     switch (_activeOverlayPanel) {
       case ReviewOverlayPanel.ttd:
         return 'Быстрые TTD-действия';
@@ -28441,33 +29342,51 @@ double _adaptiveGap(double screenWidth) {
       case ReviewOverlayPanel.episodes:
         return 'Эпизоды и таймкоды';
       case ReviewOverlayPanel.analytics:
-        return 'AI-анализ видео';
+        return 'AI-видеоразбор';
       case ReviewOverlayPanel.none:
         return 'Видеоразбор матча';
     }
   }
 
   bool _isReviewNavActive(_ReviewNavItem item) {
+    if (item.tabIndex == -1) {
+      return _tabController.index == 0 && _coachBoardEnabled;
+    }
     if (item.panel != ReviewOverlayPanel.none) {
       return _tabController.index == 0 && _activeOverlayPanel == item.panel;
     }
     if (item.tabIndex == 0) {
-      return _tabController.index == 0 && _activeOverlayPanel == ReviewOverlayPanel.none;
+      return _tabController.index == 0 &&
+          _activeOverlayPanel == ReviewOverlayPanel.none &&
+          !_coachBoardEnabled;
     }
     return _tabController.index == item.tabIndex;
   }
 
   void _openReviewNavItem(_ReviewNavItem item) {
     _showOverlay();
+
+    if (item.tabIndex == -1) {
+      if (_tabController.index != 0) _tabController.animateTo(0);
+      setState(() => _activeOverlayPanel = ReviewOverlayPanel.none);
+      _toggleCoachBoard();
+      _notifyPlaybackBridge();
+      return;
+    }
+
     if (item.tabIndex != null && _tabController.index != item.tabIndex) {
       _tabController.animateTo(item.tabIndex!);
     }
 
     setState(() {
+      if (_coachBoardEnabled && item.tabIndex != 0) {
+        _coachBoardEnabled = false;
+      }
       if (item.panel == ReviewOverlayPanel.none) {
         _activeOverlayPanel = ReviewOverlayPanel.none;
       } else {
         _activeOverlayPanel = item.panel;
+        _coachBoardEnabled = false;
       }
       _showRightRail = true;
       _showTopCompactBar = true;
@@ -28477,6 +29396,35 @@ double _adaptiveGap(double screenWidth) {
   }
 
   Widget _buildVideoCanvas() {
+    if (widget.externalWorkspaceShell) {
+      return AnimatedBuilder(
+        animation: _tabController,
+        builder: (context, _) {
+          final showReport = _tabController.index == 1;
+          final showMap = _tabController.index == 2;
+          return AnimatedSwitcher(
+            duration: const Duration(milliseconds: 160),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeOutCubic,
+            child: KeyedSubtree(
+              key: ValueKey(
+                'video-review-external-${_tabController.index}-${_activeOverlayPanel.index}-${_coachBoardEnabled ? 1 : 0}',
+              ),
+              child: showReport
+                  ? _buildModernReportsTab()
+                  : showMap
+                      ? _buildReview3DMapSurface()
+                      : _buildReviewVideoSurface(
+                          showActionRail: false,
+                          showInnerHeader: false,
+                          showInternalTimeline: false,
+                        ),
+            ),
+          );
+        },
+      );
+    }
+
     if (_isVideoFullscreen) {
       return _buildReviewVideoSurface(
         showActionRail: true,
@@ -28488,7 +29436,7 @@ double _adaptiveGap(double screenWidth) {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final compact = constraints.maxWidth < 760;
+        final compact = constraints.maxWidth < 860;
 
         final workspace = Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -28502,6 +29450,7 @@ double _adaptiveGap(double screenWidth) {
                 animation: _tabController,
                 builder: (context, _) {
                   final showReport = _tabController.index == 1;
+                  final showMap = _tabController.index == 2;
                   return AnimatedSwitcher(
                     duration: const Duration(milliseconds: 160),
                     switchInCurve: Curves.easeOutCubic,
@@ -28510,13 +29459,14 @@ double _adaptiveGap(double screenWidth) {
                       key: ValueKey('video-review-cmr-${_tabController.index}-${_activeOverlayPanel.index}'),
                       child: showReport
                           ? _buildModernReportsTab()
-                          : _buildReviewVideoSurface(
-                              showActionRail: false,
-                              showInnerHeader: false,
-                              // CMR: убираем внутреннюю верхнюю timeline-полоску.
-                              // Нижний control bar ниже остаётся, поэтому плеер не дублируется.
-                              showInternalTimeline: false,
-                            ),
+                          : showMap
+                              ? _buildReview3DMapSurface()
+                              : _buildReviewVideoSurface(
+                                  showActionRail: false,
+                                  showInnerHeader: false,
+                                  // CMR: один нижний control bar без дублей.
+                                  showInternalTimeline: false,
+                                ),
                     ),
                   );
                 },
@@ -28559,6 +29509,285 @@ double _adaptiveGap(double screenWidth) {
     );
   }
 
+  Widget _buildReview3DMapSurface() {
+    final tracks = List<PlayerTrack>.from(_aiTracking.tracks);
+    final selectedTrack = _aiTracking.selectedTrack;
+    final heatmapPoints = selectedTrack?.points ??
+        tracks.expand((track) => track.points).toList(growable: false);
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 700;
+        final camera = Matrix4.identity()
+          ..setEntry(3, 2, _reviewPitch3d ? 0.00135 : 0.0)
+          ..rotateX(_reviewPitch3d ? _reviewPitchTilt : 0.0)
+          ..rotateZ(_reviewPitch3d ? _reviewPitchYaw : 0.0)
+          ..scale(_reviewPitchScale);
+
+        final pitch = Stack(
+          fit: StackFit.expand,
+          children: [
+            CustomPaint(
+              painter: StandardPitchPainter(
+                tracks: tracks,
+                heatmapPoints: heatmapPoints,
+                averagePositions: _aiTracking.aiAveragePositions,
+                passNetwork: _aiTracking.aiPassNetwork,
+                selectedTrackId:
+                    selectedTrack?.id ?? _aiTracking.selectedTrackId,
+                myTeamTag: _sideTagToString(_myTeamConfig.sideTag),
+                showHeatmap: _showHeatmap,
+                showTrails: _reviewMapShowTrails,
+                showAveragePositions: _reviewMapShowAveragePositions,
+                showPassNetwork: _reviewMapShowPassNetwork,
+                myTeamColor: _myTeamConfig.primaryColor,
+                opponentTeamColor: _opponentTeamConfig.primaryColor,
+              ),
+              child: const SizedBox.expand(),
+            ),
+            _buildCoachDrawingCanvasOnly(),
+          ],
+        );
+
+        return Container(
+          color: Colors.white,
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    compact ? 8 : 18,
+                    compact ? 54 : 18,
+                    compact ? 8 : 104,
+                    compact ? 74 : 18,
+                  ),
+                  child: Center(
+                    child: Transform(
+                      alignment: Alignment.center,
+                      transform: camera,
+                      child: AspectRatio(
+                        aspectRatio: 1.60,
+                        child: pitch,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                left: compact ? 8 : 16,
+                top: compact ? 8 : 16,
+                right: compact ? 8 : 116,
+                child: _buildReviewMapLayerBar(compact: compact),
+              ),
+              Positioned(
+                right: compact ? 8 : 16,
+                bottom: compact ? 8 : 16,
+                child: _buildReviewMapCameraControl(compact: compact),
+              ),
+              if (_coachBoardEnabled)
+                Positioned(
+                  left: compact ? 8 : 16,
+                  right: compact ? 8 : 116,
+                  bottom: compact ? 64 : 16,
+                  child: _buildCoachBoardToolbar(),
+                ),
+              if (tracks.isEmpty)
+                Center(
+                  child: IgnorePointer(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 10,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(.92),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        'Карта готова. Точки появятся после AI-трекинга.',
+                        textAlign: TextAlign.center,
+                        style: AppTypography.secondary(
+                          color: ReviewUiPalette.textMuted,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildCoachDrawingCanvasOnly() {
+    if (!_coachBoardEnabled && _coachAnnotations.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final size = Size(constraints.maxWidth, constraints.maxHeight);
+        final items = <TacticalAnnotation>[
+          ..._coachAnnotations,
+          if (_coachDraftAnnotation != null) _coachDraftAnnotation!,
+        ];
+        return GestureDetector(
+          behavior: _coachBoardEnabled
+              ? HitTestBehavior.opaque
+              : HitTestBehavior.translucent,
+          onTapDown: _coachBoardEnabled
+              ? (details) => _handleCoachTapDown(details, size)
+              : null,
+          onPanStart: _coachBoardEnabled
+              ? (details) => _handleCoachPanStart(details, size)
+              : null,
+          onPanUpdate: _coachBoardEnabled
+              ? (details) => _handleCoachPanUpdate(details, size)
+              : null,
+          onPanEnd: _coachBoardEnabled ? _handleCoachPanEnd : null,
+          child: CustomPaint(
+            painter: TacticalAnnotationPainter(items: items),
+            child: const SizedBox.expand(),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildReviewMapLayerBar({required bool compact}) {
+    final controls = <Widget>[
+      _reviewMapPill(
+        icon: Icons.view_in_ar_rounded,
+        label: _reviewPitch3d ? '3D PRO' : '2D',
+        active: _reviewPitch3d,
+        onTap: () => setState(() => _reviewPitch3d = !_reviewPitch3d),
+      ),
+      _reviewMapPill(
+        icon: Icons.route_rounded,
+        label: 'Маршрут',
+        active: _reviewMapShowTrails,
+        onTap: () =>
+            setState(() => _reviewMapShowTrails = !_reviewMapShowTrails),
+      ),
+      _reviewMapPill(
+        icon: Icons.local_fire_department_outlined,
+        label: 'Тепло',
+        active: _showHeatmap,
+        onTap: () => setState(() => _showHeatmap = !_showHeatmap),
+      ),
+      _reviewMapPill(
+        icon: Icons.hub_outlined,
+        label: 'Передачи',
+        active: _reviewMapShowPassNetwork,
+        onTap: () => setState(
+          () => _reviewMapShowPassNetwork = !_reviewMapShowPassNetwork,
+        ),
+      ),
+      _reviewMapPill(
+        icon: Icons.center_focus_strong_outlined,
+        label: 'Позиции',
+        active: _reviewMapShowAveragePositions,
+        onTap: () => setState(
+          () => _reviewMapShowAveragePositions =
+              !_reviewMapShowAveragePositions,
+        ),
+      ),
+      _reviewMapPill(
+        icon: Icons.draw_rounded,
+        label: 'Разбор',
+        active: _coachBoardEnabled,
+        onTap: _toggleCoachBoard,
+      ),
+    ];
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      physics: const BouncingScrollPhysics(),
+      child: Row(
+        children: [
+          for (int i = 0; i < controls.length; i++) ...[
+            controls[i],
+            if (i != controls.length - 1) const SizedBox(width: 6),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _reviewMapPill({
+    required IconData icon,
+    required String label,
+    required bool active,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: active ? ReviewUiPalette.greenSoft : ReviewUiPalette.panelSoft,
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          height: 36,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                size: 16,
+                color: active
+                    ? ReviewUiPalette.primary
+                    : ReviewUiPalette.textMuted,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: AppTypography.captionMedium(
+                  color: active
+                      ? ReviewUiPalette.primary2
+                      : ReviewUiPalette.textMuted,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildReviewMapCameraControl({required bool compact}) {
+    return _VideoTrackerCameraControl(
+      compact: compact,
+      onOrbitDelta: (delta) {
+        if (!_reviewPitch3d) return;
+        setState(() {
+          _reviewPitchYaw += delta.dx * .0084;
+          _reviewPitchTilt = (_reviewPitchTilt - delta.dy * .0065)
+              .clamp(-.70, -.10)
+              .toDouble();
+        });
+      },
+      onZoomIn: () => setState(() {
+        _reviewPitchScale =
+            (_reviewPitchScale + .08).clamp(.96, 1.38).toDouble();
+      }),
+      onZoomOut: () => setState(() {
+        _reviewPitchScale =
+            (_reviewPitchScale - .08).clamp(.96, 1.38).toDouble();
+      }),
+      onReset: _resetReviewPitchCamera,
+    );
+  }
+
+  void _resetReviewPitchCamera() {
+    setState(() {
+      _reviewPitchYaw = 0.0;
+      _reviewPitchTilt = -0.34;
+      _reviewPitchScale = 0.96;
+    });
+  }
+
   Widget _buildReviewWindowChrome({required bool compact}) {
     final selectedEpisodeId = _selectedEpisode != null ? _i(_selectedEpisode!['id']) : null;
     final title = _displayMatchTitle.trim().isEmpty ? 'Видеоанализ матча' : _displayMatchTitle.trim();
@@ -28592,16 +29821,15 @@ double _adaptiveGap(double screenWidth) {
               ),
               const SizedBox(width: 10),
             ] else ...[
-              Row(
-                children: const [
-                  _ReviewMacWindowDot(color: Color(0xFFFF5F57)),
-                  SizedBox(width: 7),
-                  _ReviewMacWindowDot(color: Color(0xFFFFBD2E)),
-                  SizedBox(width: 7),
-                  _ReviewMacWindowDot(color: Color(0xFF28C840)),
-                ],
+              Container(
+                width: 4,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: _reviewCmrGreen,
+                  borderRadius: BorderRadius.circular(99),
+                ),
               ),
-              const SizedBox(width: 14),
+              const SizedBox(width: 10),
             ],
             Container(
               width: compact ? 38 : 42,
@@ -28937,13 +30165,9 @@ double _adaptiveGap(double screenWidth) {
                   _currentReviewSectionTitle,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Color(0xFF0B0F14),
-                    fontSize: 12.4,
-                    fontWeight: FontWeight.w700,
-                    height: 1.05,
-                    letterSpacing: -.18,
-                  ),
+                  style: AppTypography.sectionTitle(
+                    color: ReviewUiPalette.text,
+                  ).copyWith(fontSize: 12.4, height: 1.05),
                 ),
                 const SizedBox(height: 3),
                 Text(
@@ -28955,13 +30179,9 @@ double _adaptiveGap(double screenWidth) {
                   ].join(' • '),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Color(0xFF6B7280),
-                    fontSize: 9.8,
-                    fontWeight: FontWeight.w600,
-                    height: 1.05,
-                    letterSpacing: -.05,
-                  ),
+                  style: AppTypography.caption(
+                    color: ReviewUiPalette.textMuted,
+                  ).copyWith(fontSize: 9.8, height: 1.05),
                 ),
               ],
             ),
@@ -29032,11 +30252,12 @@ double _adaptiveGap(double screenWidth) {
                           const SizedBox(width: 7),
                           Text(
                             item.shortTitle,
-                            style: TextStyle(
-                              color: active ? _reviewCmrInk : _reviewCmrMuted,
-                              fontSize: 11.5,
-                              fontWeight: active ? FontWeight.w900 : FontWeight.w800,
-                            ),
+                            style: active
+                                ? AppTypography.action(color: _reviewCmrInk)
+                                    .copyWith(fontSize: 11.2)
+                                : AppTypography.secondaryMedium(
+                                    color: _reviewCmrMuted,
+                                  ).copyWith(fontSize: 11.0),
                           ),
                         ],
                       ),
@@ -29154,14 +30375,21 @@ double _adaptiveGap(double screenWidth) {
       child: LayoutBuilder(
         builder: (context, constraints) {
           final totalWidth = constraints.maxWidth;
-          final railWidth = showActionRail ? _adaptiveRailWidth(totalWidth) : 0.0;
-          final panelWidth = panelOpen ? _adaptivePanelWidth(totalWidth) : 0.0;
+          final compactSurface = totalWidth < 760;
+          final railWidth = showActionRail && !compactSurface
+              ? _adaptiveRailWidth(totalWidth)
+              : 0.0;
+          final panelWidth = panelOpen
+              ? (compactSurface ? totalWidth : _adaptivePanelWidth(totalWidth))
+              : 0.0;
           final gap = _isVideoFullscreen ? 0.0 : _adaptiveGap(totalWidth);
-          final railGap = showActionRail ? gap : 0.0;
-          final videoWidth = totalWidth -
-              railWidth -
-              railGap -
-              (panelOpen ? panelWidth + gap : 0);
+          final railGap = showActionRail && !compactSurface ? gap : 0.0;
+          final videoWidth = compactSurface
+              ? totalWidth
+              : totalWidth -
+                  railWidth -
+                  railGap -
+                  (panelOpen ? panelWidth + gap : 0);
 
           final rail = SizedBox(
             width: railWidth,
@@ -29178,20 +30406,7 @@ double _adaptiveGap(double screenWidth) {
             child: Container(
               decoration: BoxDecoration(
                 color: ReviewUiPalette.panel,
-                borderRadius: BorderRadius.circular(_isVideoFullscreen ? 0 : 14),
-                border: Border.all(
-                  color: _isVideoFullscreen ? Colors.transparent : ReviewUiPalette.line,
-                  width: 1,
-                ),
-                boxShadow: _isVideoFullscreen
-                    ? const []
-                    : [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.035),
-                          blurRadius: 18,
-                          offset: const Offset(0, 10),
-                        ),
-                      ],
+                borderRadius: BorderRadius.circular(_isVideoFullscreen ? 0 : 12),
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(_isVideoFullscreen ? 0 : 14),
@@ -29238,6 +30453,32 @@ double _adaptiveGap(double screenWidth) {
               ),
             ),
           );
+
+          if (compactSurface) {
+            // Portrait/mobile: видео не сжимаем случайным flex-отношением.
+            // Держим понятную 16:9 сцену сверху, а инспектор получает всё
+            // оставшееся место. Так AI/TTD/Эпизоды остаются полноценными.
+            final maxHeight = constraints.maxHeight.isFinite
+                ? constraints.maxHeight
+                : MediaQuery.of(context).size.height;
+            final desiredVideoHeight = (totalWidth * 9 / 16)
+                .clamp(180.0, panelOpen ? maxHeight * .50 : maxHeight)
+                .toDouble();
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (panelOpen)
+                  SizedBox(height: desiredVideoHeight, child: video)
+                else
+                  Expanded(child: video),
+                if (panelOpen) ...[
+                  SizedBox(height: gap),
+                  Expanded(child: panel),
+                ],
+              ],
+            );
+          }
 
           return Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -29329,6 +30570,13 @@ Widget _buildReviewWorkspaceHeader() {
           icon: Icons.play_circle_outline_rounded,
           selected: _tabController.index == 0,
           onTap: () => _tabController.animateTo(0),
+        ),
+        const SizedBox(width: 8),
+        _buildWorkspaceTabButton(
+          title: 'Карта',
+          icon: Icons.view_in_ar_rounded,
+          selected: _tabController.index == 2,
+          onTap: () => _tabController.animateTo(2),
         ),
         const SizedBox(width: 8),
         _buildWorkspaceTabButton(
@@ -30286,6 +31534,16 @@ Widget _buildAiAnalysisSection() {
           ),
           const SizedBox(width: 4),
           _buildTopTabButton(
+            title: 'Карта',
+            icon: Icons.view_in_ar_rounded,
+            selected: _tabController.index == 2,
+            onTap: () {
+              _tabController.animateTo(2);
+              _showOverlay();
+            },
+          ),
+          const SizedBox(width: 4),
+          _buildTopTabButton(
             title: 'Отчёт',
             icon: Icons.analytics_outlined,
             selected: _tabController.index == 1,
@@ -31008,6 +32266,9 @@ Widget _buildQuickSingleValueBubble({
   bool _ttdPanelMessageIsError = false;
   String _ttdSection = 'main';
   String _quickTtdSection = 'main';
+  // В едином workspace TTD больше не подменяется одним quick-dock.
+  // Тренер может переключаться между быстрым вводом и полным редактором.
+  bool _ttdInspectorQuickMode = true;
   String _eventType = "goal";
   int _rating = 5;
   bool _isPositive = true;
@@ -31088,15 +32349,6 @@ void dispose() {
   _tapMarkerTimer?.cancel();
   _overlayAutoHideTimer?.cancel();
 
-  if (!widget.embedded && widget.forceLandscape) {
-    SystemChrome.setPreferredOrientations(const [
-      DeviceOrientation.portraitUp,
-      DeviceOrientation.portraitDown,
-      DeviceOrientation.landscapeLeft,
-      DeviceOrientation.landscapeRight,
-    ]);
-  }
-
   _controller.dispose();
   _noteCtrl.dispose();
   _titleCtrl.dispose();
@@ -31116,18 +32368,11 @@ void _initializeServices() {
       PythonTrackingService(baseUrl: ApiConstants.aiBaseUrl);
 }
 void _setupControllers() {
-  _tabController = TabController(length: 2, vsync: this)
+  _tabController = TabController(length: 3, vsync: this)
     ..addListener(() {
       _notifyPlaybackBridge();
       if (mounted) setState(() {});
     });
-
-  if (!widget.embedded && widget.forceLandscape) {
-    SystemChrome.setPreferredOrientations(const [
-      DeviceOrientation.landscapeLeft,
-      DeviceOrientation.landscapeRight,
-    ]);
-  }
 
   _controller = VideoPlayerController.networkUrl(Uri.parse(widget.videoUrl))
     ..initialize().then((_) {
@@ -33144,7 +34389,8 @@ Future<List<DetectedPlayerBox>> _detectPlayersForFrame(
     debugPrint('🎬 detectFrame start: timeMs=$timeMs');
 
     if (mounted) {
-      setState(() => _aiStatusText = 'AI: анализ кадра...');
+      setState(() => _aiStatusText = 'Детектор: анализ кадра...');
+      _notifyPlaybackBridge();
     }
 
     final result = await _pythonTrackingService.detectFrameFromUrl(
@@ -33152,9 +34398,48 @@ Future<List<DetectedPlayerBox>> _detectPlayersForFrame(
       timeMs: timeMs,
     );
 
-    debugPrint('✅ detectFrameFromUrl result: ${result.detections.length} detections');
+    if (result.hasError) {
+      if (mounted) {
+        setState(() => _aiStatusText = 'Детектор недоступен: ${result.error}');
+        _notifyPlaybackBridge();
+      }
+      return const [];
+    }
 
-    if (result.ballRect != null) {
+    var detections = result.detections;
+
+    // Если Python прислал bbox в размере исходного кадра, переводим их в
+    // analysis-space клиента (обычно 640px по ширине), чтобы painter не сдвигал рамки.
+    final fw = result.frameWidth;
+    final fh = result.frameHeight;
+    if (fw != null && fh != null && fw > 0 && fh > 0) {
+      final target = _analysisFrameSize();
+      final sx = target.width / fw;
+      final sy = target.height / fh;
+      detections = detections
+          .map((d) => DetectedPlayerBox(
+                id: d.id,
+                rect: Rect.fromLTRB(
+                  d.rect.left * sx,
+                  d.rect.top * sy,
+                  d.rect.right * sx,
+                  d.rect.bottom * sy,
+                ),
+                confidence: d.confidence,
+                classId: d.classId,
+                label: d.label,
+              ))
+          .toList();
+
+      if (result.ballRect != null) {
+        final b = result.ballRect!;
+        _aiTracking.updateBall(
+          rect: Rect.fromLTRB(b.left * sx, b.top * sy, b.right * sx, b.bottom * sy),
+          timeMs: timeMs,
+          confidence: result.ballConfidence ?? 1.0,
+        );
+      }
+    } else if (result.ballRect != null) {
       _aiTracking.updateBall(
         rect: result.ballRect!,
         timeMs: timeMs,
@@ -33162,35 +34447,77 @@ Future<List<DetectedPlayerBox>> _detectPlayersForFrame(
       );
     }
 
-    // Store the overlay size for later use if needed
-    if (overlaySize != null) {
-      _lastAiOverlaySize = overlaySize;
-    }
-    if (fit != null) {
-      _lastAiOverlayFit = fit;
-    }
+    if (overlaySize != null) _lastAiOverlaySize = overlaySize;
+    if (fit != null) _lastAiOverlayFit = fit;
+
+    _aiTracking.setDetectionsForSelection(detections, timeMs);
 
     if (mounted) {
       setState(() {
-        _aiStatusText = result.ballRect != null
-            ? 'AI: ${result.detections.length} players + ball'
-            : 'AI: ${result.detections.length} players';
+        final ballText = result.ballRect != null ? ' · мяч' : '';
+        _aiStatusText = detections.isEmpty
+            ? 'Детектор: объектов на кадре не найдено'
+            : 'Детектор: ${detections.length} игроков$ballText';
       });
+      _notifyPlaybackBridge();
     }
 
-    return result.detections;
+    return detections;
   } catch (e, st) {
     debugPrint('❌ _detectPlayersForFrame error: $e');
     debugPrint('$st');
 
     if (mounted) {
-      setState(() => _aiStatusText = 'AI error');
+      setState(() => _aiStatusText = 'Ошибка детектора: $e');
+      _notifyPlaybackBridge();
     }
 
     return const [];
   } finally {
     _aiFrameProcessing = false;
   }
+}
+
+Future<void> _ensureYoloOverlayRunning() async {
+  if (!_videoReady || !_controller.value.isInitialized) return;
+  if (_aiTracking.isRunning) return;
+
+  final overlaySize = _lastAiOverlaySize;
+  if (overlaySize == null || overlaySize.width <= 0 || overlaySize.height <= 0) {
+    if (mounted) {
+      setState(() => _aiStatusText = 'YOLO: подготовка видеосцены...');
+      _notifyPlaybackBridge();
+    }
+    return;
+  }
+
+  final timeMs = _controller.value.position.inMilliseconds;
+  final detections = await _detectPlayersForFrame(
+    timeMs,
+    overlaySize: overlaySize,
+    fit: _lastAiOverlayFit,
+  );
+  if (!mounted) return;
+
+  // _detectPlayersForFrame уже сохранил detections в controller и вызвал repaint.
+  _aiTracking.sampleMs = 550;
+  _aiTracking.startLoop(
+    frameDetector: (frameMs) => _detectPlayersForFrame(
+      frameMs,
+      overlaySize: overlaySize,
+      fit: _lastAiOverlayFit,
+    ),
+    currentTimeMs: _currentVideoTimeMs,
+  );
+
+  setState(() {
+    _aiStatusText = detections.isEmpty
+        ? (_aiStatusText.startsWith('Детектор недоступен')
+            ? _aiStatusText
+            : 'Детектор: поиск игроков и мяча...')
+        : 'Детектор: ${detections.length} игроков • live overlay';
+  });
+  _notifyPlaybackBridge();
 }
 
 void _toggleAiTracking() {
@@ -33883,35 +35210,35 @@ Future<void> _saveQuickTtd(
       useRootNavigator: true,
       barrierLabel: title,
       barrierDismissible: true,
-      barrierColor: Colors.black.withOpacity(0.22),
-      transitionDuration: const Duration(milliseconds: 220),
+      barrierColor: Colors.black.withOpacity(0.12),
+      transitionDuration: const Duration(milliseconds: 200),
       pageBuilder: (context, animation, secondaryAnimation) {
         final media = MediaQuery.of(context);
         final panelWidth =
-            width > media.size.width - 32 ? media.size.width - 32 : width;
+            width > media.size.width - 20 ? media.size.width - 20 : width;
 
         return SafeArea(
           child: Align(
             alignment: Alignment.centerRight,
             child: Padding(
-              padding: const EdgeInsets.only(top: 12, right: 12, bottom: 12),
+              padding: const EdgeInsets.only(top: 8, right: 8, bottom: 8),
               child: Material(
                 color: Colors.transparent,
                 child: Container(
                   width: panelWidth,
-                  height: media.size.height - 24,
+                  height: media.size.height - 16,
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(28),
+                    borderRadius: BorderRadius.circular(20),
                     color: Colors.white,
                     border: Border.all(
-                      color: const Color(0xFFE2E8F0),
-                      width: 1.2,
+                      color: const Color(0xFFE9ECEA),
+                      width: 1,
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.16),
-                        blurRadius: 30,
-                        offset: const Offset(-8, 10),
+                        color: Colors.black.withOpacity(0.08),
+                        blurRadius: 18,
+                        offset: const Offset(-4, 6),
                       ),
                     ],
                   ),
@@ -33922,17 +35249,17 @@ Future<void> _saveQuickTtd(
                         subtitle: subtitle,
                         icon: icon,
                       ),
-                      const Divider(height: 1),
+                      const Divider(height: 1, color: Color(0xFFE9ECEA)),
                       Expanded(
                         child: ClipRRect(
                           borderRadius: const BorderRadius.vertical(
-                            bottom: Radius.circular(28),
+                            bottom: Radius.circular(20),
                           ),
                           child: Container(
                             width: double.infinity,
-                            color: const Color(0xFFF8FBFF),
+                            color: Colors.white,
                             child: SingleChildScrollView(
-                              padding: const EdgeInsets.fromLTRB(14, 14, 14, 20),
+                              padding: const EdgeInsets.fromLTRB(12, 12, 12, 14),
                               child: child,
                             ),
                           ),
@@ -33956,7 +35283,7 @@ Future<void> _saveQuickTtd(
           opacity: curved,
           child: SlideTransition(
             position: Tween<Offset>(
-              begin: const Offset(0.12, 0),
+              begin: const Offset(0.06, 0),
               end: Offset.zero,
             ).animate(curved),
             child: child,
@@ -33966,44 +35293,49 @@ Future<void> _saveQuickTtd(
     );
   }
 
-  
- 
   Widget _buildSidePanelHeader({
     required String title,
     required String subtitle,
     required IconData icon,
   }) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(18, 16, 12, 14),
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
       child: Row(
         children: [
           Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: const Color(0xFF1F7A4D).withOpacity(0.10),
-              borderRadius: BorderRadius.circular(14),
+            width: 38,
+            height: 38,
+            decoration: const BoxDecoration(
+              color: Color(0xFFEAF6EE),
+              shape: BoxShape.circle,
             ),
-            child: Icon(icon, color: const Color(0xFF1F7A4D), size: 22),
+            child: Icon(icon, color: const Color(0xFF00A750), size: 20),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   title,
-                  style: AppTypography.screenTitle(color: const Color(0xFF0F172A)),
+                  style: AppTypography.custom(
+                    size: 15.5,
+                    weight: FontWeight.w800,
+                    color: const Color(0xFF171B18),
+                    height: 1.05,
+                  ),
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 3),
                 Text(
                   subtitle,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                    color: Color(0xFF64748B),
+                  style: AppTypography.custom(
+                    size: 11.4,
+                    weight: FontWeight.w500,
+                    color: const Color(0xFF66716A),
+                    height: 1.1,
                   ),
                 ),
               ],
@@ -34011,19 +35343,19 @@ Future<void> _saveQuickTtd(
           ),
           InkWell(
             onTap: () => Get.back(),
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(12),
             child: Container(
-              width: 42,
-              height: 42,
+              width: 38,
+              height: 38,
               decoration: BoxDecoration(
-                color: const Color(0xFFF1F5F9),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFE9ECEA)),
               ),
               child: const Icon(
                 Icons.close_rounded,
                 size: 20,
-                color: Color(0xFF334155),
+                color: Color(0xFF4B5563),
               ),
             ),
           ),
@@ -34655,6 +35987,10 @@ Widget _buildVideoSection() {
               constraints.maxWidth,
               constraints.maxHeight,
             );
+            // Сохраняем реальную геометрию видеосцены. Она нужна YOLO для
+            // немедленного старта без предварительного тапа по игроку.
+            _lastAiOverlaySize = overlaySize;
+            _lastAiOverlayFit = BoxFit.contain;
 
             return GestureDetector(
               behavior: HitTestBehavior.opaque,
@@ -34784,14 +36120,7 @@ Widget _buildCoachBoardToolbar() {
     decoration: BoxDecoration(
       color: Colors.white.withOpacity(0.94),
       borderRadius: BorderRadius.circular(18),
-      border: Border.all(color: const Color(0xFFE2E8F0)),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.black.withOpacity(0.14),
-          blurRadius: 28,
-          offset: const Offset(0, 12),
-        ),
-      ],
+      border: Border.all(color: ReviewUiPalette.line),
     ),
     child: Row(
       children: [
@@ -35043,30 +36372,7 @@ Widget _coachSmallIcon(IconData icon, VoidCallback onTap) {
 }
 
 Widget _buildPlayersPanelWithBottomSelection() {
-  return Column(
-    children: [
-      Expanded(
-        child: _buildPlayersSidePanel(),
-      ),
-      const SizedBox(height: 10),
-      SizedBox(
-        width: double.infinity,
-        child: ElevatedButton.icon(
-          onPressed: _openMatchPlayersSelection,
-          icon: const Icon(Icons.group_add_rounded),
-          label: const Text('Выбрать игроков матча'),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF1F7A4D),
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(vertical: 14),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-          ),
-        ),
-      ),
-    ],
-  );
+  return _buildPlayersSidePanel();
 }
 
   Widget _buildEpisodesPanelWrapper() {
@@ -37638,35 +38944,13 @@ if (_showAiPanelInline) ...[
       );
 
     case ReviewOverlayPanel.ttd:
-  return Padding(
-  padding: const EdgeInsets.all(12),
-  child: _buildQuickTtdDockCompact(),
-);
-      return SingleChildScrollView(
-        padding: const EdgeInsets.all(12),
-        child: TtdPanelWidget(
-          selectedPlayer: _selectedPlayer,
-          selectedEpisode: _selectedEpisode,
-          quickSaving: _quickSaving,
-          saving: _saving,
-          noteCtrl: _noteCtrl,
-          message: _ttdPanelMessage,
-          isMessageError: _ttdPanelMessageIsError,
-          ttdSection: _ttdSection,
-          onSectionChanged: (section) => setState(() => _ttdSection = section),
-          onSaveEvent: _saveEvent,
-          onSaveQuickTtd: _saveQuickTtd,
-          onSaveSingleTtd: _saveSingleTtd,
-          successCounters: _currentTtdSuccessCounters(),
-          failCounters: _currentTtdFailCounters(),
-          singleCounters: _currentTtdSingleCounters(),
-          currentRating: _currentTtdRating(),
-        ),
-      );
+      return _buildUnifiedTtdInspector();
 
     case ReviewOverlayPanel.analytics:
-      return SingleChildScrollView(
-        padding: const EdgeInsets.all(12),
+      // AI остаётся инспектором ВИДЕО, а не отдельным экраном: само видео,
+      // bounding boxes, треки, heatmap и timeline продолжают быть видимыми.
+      return Padding(
+        padding: const EdgeInsets.all(10),
         child: AiAnalyticsPanelWidget(
           aiTracking: _aiTracking,
           showHeatmap: _showHeatmap,
@@ -37696,6 +38980,107 @@ if (_showAiPanelInline) ...[
       return const SizedBox.shrink();
   }
 }
+
+  Widget _buildUnifiedTtdInspector() {
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+          color: Colors.white,
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'TTD матча',
+                  style: AppTypography.sectionTitle(color: ReviewUiPalette.text)
+                      .copyWith(fontSize: 13.2),
+                ),
+              ),
+              _buildTtdInspectorModeButton(
+                title: 'Быстро',
+                icon: Icons.bolt_rounded,
+                selected: _ttdInspectorQuickMode,
+                onTap: () => setState(() => _ttdInspectorQuickMode = true),
+              ),
+              const SizedBox(width: 6),
+              _buildTtdInspectorModeButton(
+                title: 'Полный',
+                icon: Icons.tune_rounded,
+                selected: !_ttdInspectorQuickMode,
+                onTap: () => setState(() => _ttdInspectorQuickMode = false),
+              ),
+            ],
+          ),
+        ),
+        Container(height: 1, color: ReviewUiPalette.line),
+        Expanded(
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 160),
+            child: _ttdInspectorQuickMode
+                ? Padding(
+                    key: const ValueKey('ttd-quick'),
+                    padding: const EdgeInsets.all(10),
+                    child: _buildQuickTtdDockCompact(),
+                  )
+                : Padding(
+                    key: const ValueKey('ttd-full'),
+                    padding: const EdgeInsets.all(10),
+                    child: TtdPanelWidget(
+                      selectedPlayer: _selectedPlayer,
+                      selectedEpisode: _selectedEpisode,
+                      quickSaving: _quickSaving,
+                      saving: _saving,
+                      noteCtrl: _noteCtrl,
+                      message: _ttdPanelMessage,
+                      isMessageError: _ttdPanelMessageIsError,
+                      ttdSection: _ttdSection,
+                      onSectionChanged: (section) => setState(() => _ttdSection = section),
+                      onSaveEvent: _saveEvent,
+                      onSaveQuickTtd: _saveQuickTtd,
+                      onSaveSingleTtd: _saveSingleTtd,
+                      successCounters: _currentTtdSuccessCounters(),
+                      failCounters: _currentTtdFailCounters(),
+                      singleCounters: _currentTtdSingleCounters(),
+                      currentRating: _currentTtdRating(),
+                    ),
+                  ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTtdInspectorModeButton({
+    required String title,
+    required IconData icon,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: selected ? ReviewUiPalette.greenSoft : ReviewUiPalette.panelSoft,
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 14, color: selected ? ReviewUiPalette.primary : ReviewUiPalette.textMuted),
+              const SizedBox(width: 5),
+              Text(
+                title,
+                style: AppTypography.action(
+                  color: selected ? ReviewUiPalette.text : ReviewUiPalette.textMuted,
+                ).copyWith(fontSize: 10.3),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
     Widget _buildBottomCenterProToolbar() {
     return AnimatedPositioned(
@@ -38325,9 +39710,6 @@ if (_showAiPanelInline) ...[
   
     @override
   Widget build(BuildContext context) {
-    final isLandscape =
-        MediaQuery.of(context).orientation == Orientation.landscape;
-
     Widget loadingBody() {
       return const ColoredBox(
         color: Color(0xFFF4F7FA),
@@ -38380,7 +39762,256 @@ if (_showAiPanelInline) ...[
     return withTypography(
       Scaffold(
         backgroundColor: Colors.white,
-        body: isLandscape ? reviewBody() : _buildFallbackPortrait(),
+        body: reviewBody(),
+      ),
+    );
+  }
+ }
+
+class _VideoTrackerCameraControl extends StatelessWidget {
+  const _VideoTrackerCameraControl({
+    required this.onOrbitDelta,
+    required this.onZoomIn,
+    required this.onZoomOut,
+    required this.onReset,
+    required this.compact,
+  });
+
+  final ValueChanged<Offset> onOrbitDelta;
+  final VoidCallback onZoomIn;
+  final VoidCallback onZoomOut;
+  final VoidCallback onReset;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    if (compact) {
+      return Container(
+        padding: const EdgeInsets.all(5),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(.96),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: ReviewUiPalette.line),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _VideoTrackerCameraRoundButton(
+              icon: Icons.remove_rounded,
+              tooltip: 'Отдалить',
+              onTap: onZoomOut,
+              compact: true,
+            ),
+            const SizedBox(width: 5),
+            _VideoTrackerOrbitPad(
+              onOrbitDelta: onOrbitDelta,
+              onReset: onReset,
+              size: 50,
+            ),
+            const SizedBox(width: 5),
+            _VideoTrackerCameraRoundButton(
+              icon: Icons.add_rounded,
+              tooltip: 'Приблизить',
+              onTap: onZoomIn,
+              compact: true,
+            ),
+            const SizedBox(width: 5),
+            _VideoTrackerCameraRoundButton(
+              icon: Icons.center_focus_strong_rounded,
+              tooltip: 'Сбросить камеру',
+              onTap: onReset,
+              compact: true,
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _VideoTrackerCameraRoundButton(
+              icon: Icons.add_rounded,
+              tooltip: 'Приблизить',
+              onTap: onZoomIn,
+            ),
+            const SizedBox(height: 5),
+            _VideoTrackerCameraRoundButton(
+              icon: Icons.remove_rounded,
+              tooltip: 'Отдалить',
+              onTap: onZoomOut,
+            ),
+            const SizedBox(height: 5),
+            _VideoTrackerCameraRoundButton(
+              icon: Icons.center_focus_strong_rounded,
+              tooltip: 'Сбросить камеру',
+              onTap: onReset,
+              compact: true,
+            ),
+          ],
+        ),
+        const SizedBox(width: 7),
+        _VideoTrackerOrbitPad(
+          onOrbitDelta: onOrbitDelta,
+          onReset: onReset,
+          size: 78,
+        ),
+      ],
+    );
+  }
+}
+
+class _VideoTrackerOrbitPad extends StatefulWidget {
+  const _VideoTrackerOrbitPad({
+    required this.onOrbitDelta,
+    required this.onReset,
+    required this.size,
+  });
+
+  final ValueChanged<Offset> onOrbitDelta;
+  final VoidCallback onReset;
+  final double size;
+
+  @override
+  State<_VideoTrackerOrbitPad> createState() => _VideoTrackerOrbitPadState();
+}
+
+class _VideoTrackerOrbitPadState extends State<_VideoTrackerOrbitPad> {
+  Offset _thumb = Offset.zero;
+
+  void _updateThumb(Offset local) {
+    final center = Offset(widget.size / 2, widget.size / 2);
+    var delta = local - center;
+    final maxRadius = widget.size <= 54 ? 12.0 : 20.0;
+    if (delta.distance > maxRadius) {
+      delta = Offset.fromDirection(delta.direction, maxRadius);
+    }
+    setState(() => _thumb = delta);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message:
+          'Тяните внутри круга: влево/вправо — поворот, вверх/вниз — камера',
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onDoubleTap: widget.onReset,
+        onPanStart: (details) => _updateThumb(details.localPosition),
+        onPanUpdate: (details) {
+          _updateThumb(details.localPosition);
+          widget.onOrbitDelta(details.delta);
+        },
+        onPanEnd: (_) => setState(() => _thumb = Offset.zero),
+        onPanCancel: () => setState(() => _thumb = Offset.zero),
+        child: Container(
+          width: widget.size,
+          height: widget.size,
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(.94),
+            shape: BoxShape.circle,
+            border: Border.all(color: ReviewUiPalette.line, width: 1),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(.12),
+                blurRadius: 12,
+                spreadRadius: -4,
+                offset: const Offset(0, 5),
+              ),
+            ],
+          ),
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Positioned(
+                top: widget.size <= 54 ? 2 : 6,
+                child: const Icon(Icons.keyboard_arrow_up_rounded,
+                    size: 17, color: ReviewUiPalette.textSubtle),
+              ),
+              Positioned(
+                bottom: widget.size <= 54 ? 2 : 6,
+                child: const Icon(Icons.keyboard_arrow_down_rounded,
+                    size: 17, color: ReviewUiPalette.textSubtle),
+              ),
+              Positioned(
+                left: widget.size <= 54 ? 2 : 6,
+                child: const Icon(Icons.keyboard_arrow_left_rounded,
+                    size: 17, color: ReviewUiPalette.textSubtle),
+              ),
+              Positioned(
+                right: widget.size <= 54 ? 2 : 6,
+                child: const Icon(Icons.keyboard_arrow_right_rounded,
+                    size: 17, color: ReviewUiPalette.textSubtle),
+              ),
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 70),
+                transform: Matrix4.translationValues(_thumb.dx, _thumb.dy, 0),
+                width: widget.size <= 54 ? 22 : 30,
+                height: widget.size <= 54 ? 22 : 30,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: ReviewUiPalette.primary,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 2),
+                  boxShadow: [
+                    BoxShadow(
+                      color: ReviewUiPalette.primary.withOpacity(.24),
+                      blurRadius: 8,
+                      spreadRadius: -2,
+                    ),
+                  ],
+                ),
+                child: Icon(Icons.open_with_rounded,
+                    size: widget.size <= 54 ? 11 : 14, color: Colors.white),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _VideoTrackerCameraRoundButton extends StatelessWidget {
+  const _VideoTrackerCameraRoundButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+    this.compact = false,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final size = compact ? 34.0 : 38.0;
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: Colors.white.withOpacity(.94),
+        shape: const CircleBorder(),
+        child: InkWell(
+          onTap: onTap,
+          customBorder: const CircleBorder(),
+          child: Container(
+            width: size,
+            height: size,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: ReviewUiPalette.line),
+            ),
+            child: Icon(icon,
+                size: compact ? 16 : 18, color: ReviewUiPalette.textMuted),
+          ),
+        ),
       ),
     );
   }

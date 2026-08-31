@@ -239,7 +239,7 @@ class TrackerLivePanel extends StatefulWidget {
 }
 
 class _TrackerLivePanelState extends State<TrackerLivePanel>
-    with AutomaticKeepAliveClientMixin, WidgetsBindingObserver {
+    with AutomaticKeepAliveClientMixin, WidgetsBindingObserver, TickerProviderStateMixin {
   static const int _maxMonitorPlayers = 32;
   static final Map<String, Set<int>> _persistedMonitorPlayerIds = <String, Set<int>>{};
   static final Map<String, bool> _persistedMonitorManualTouched = <String, bool>{};
@@ -248,6 +248,8 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
 
   final List<String> _logs = <String>[];
   final Map<String, _RuntimeTrack> _tracks = <String, _RuntimeTrack>{};
+  final _RuntimeMotionCache _runtimeMotionCache = _RuntimeMotionCache();
+  late final AnimationController _runtimeMotionController;
   List<TrackerLiveSessionModel> _sessions = <TrackerLiveSessionModel>[];
   final List<TrackerLiveEventModel> _liveEvents = <TrackerLiveEventModel>[];
   final Map<int, Map<String, dynamic>> _liveEventSummaryByPlayer =
@@ -446,9 +448,24 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
     _persistedMonitorManualTouched[key] = _monitorManualSelectionTouched;
   }
 
+  void _pulseRuntimeMotion() {
+    if (!mounted) return;
+    _runtimeMotionController.forward(from: 0);
+  }
+
+  bool get _runtimeMotionEnabled =>
+      _running &&
+      !_liveTacticalReviewMode &&
+      _liveReviewTeamTimeMs == null &&
+      _liveReviewTimeMs == null;
+
   @override
   void initState() {
     super.initState();
+    _runtimeMotionController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 820),
+    );
     _running = widget.initialLiveRunning;
     _myLiveSessionId = widget.initialLiveSessionId;
     if (_running) {
@@ -478,6 +495,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
 
   @override
   void dispose() {
+    _runtimeMotionController.dispose();
     _persistMonitorSelection();
     _liveTacticalReviewSaveTimer?.cancel();
     unawaited(_flushLiveTacticalReviewSave());
@@ -928,6 +946,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
   // Device bindings, BLE readiness and monitor selections stay intact; only
   // runtime session data is reset after a new Live session is created.
   void _resetRuntimeTelemetryForNewLive() {
+    _runtimeMotionCache.clear();
     _tracks.clear();
     _sessions = <TrackerLiveSessionModel>[];
     _liveEvents.clear();
@@ -1095,6 +1114,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
       if (restoreRunning && !_blockServerAutoRestoreAfterPlayerPick) {
         _restoreRunningLiveIfNeeded(nextSessions);
       }
+      _pulseRuntimeMotion();
       setState(() {
         _sessions = nextSessions;
         _recordTeamLoadSnapshot();
@@ -1173,6 +1193,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
     if (restoreRunning && !_blockServerAutoRestoreAfterPlayerPick) {
       _restoreRunningLiveIfNeeded(next);
     }
+    _pulseRuntimeMotion();
     setState(() {
       _sessions = next;
       _recordTeamLoadSnapshot();
@@ -1305,6 +1326,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
       _selectedLiveEventId = null;
       _showLoadHotPoints = true;
     });
+    _pulseRuntimeMotion();
   }
 
   String _liveClockLabel(int timeMs) {
@@ -1511,6 +1533,7 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
       _liveReviewTeamTimeMs = null;
       _selectedLiveEventId = null;
     });
+    _pulseRuntimeMotion();
   }
 
   ({int startMs, int endMs}) _playerLiveTimelineRange(
@@ -2354,6 +2377,9 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
     }
 
     _log('LOCAL ${_lastLocalMetrics}; reason=$_lastZeroReason');
+    if (stat.acceptedForMetrics && stat.distanceDeltaM > 0.01) {
+      _pulseRuntimeMotion();
+    }
     if (mounted) setState(() {});
 
     await _savePoint(
@@ -7445,6 +7471,8 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                                 child: CustomPaint(
                                   painter: _RuntimeFieldPainter(
                                     field: widget.selectedField,
+                                    motionCache: _runtimeMotionEnabled ? _runtimeMotionCache : null,
+                                    repaint: _runtimeMotionController,
                                     tracks: tracks,
                                     focusedTrackKey: focusedTrack?.key,
                                     showVectors: _showVectors,
@@ -9457,6 +9485,8 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
               child: CustomPaint(
                 painter: _RuntimeFieldPainter(
                   field: widget.selectedField,
+                  motionCache: _runtimeMotionEnabled ? _runtimeMotionCache : null,
+                  repaint: _runtimeMotionController,
                   tracks: tracks,
                   showVectors: false,
                   showHeatmap: true,
@@ -11021,6 +11051,8 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                   child: CustomPaint(
                     painter: _RuntimeFieldPainter(
                       field: widget.selectedField,
+                      motionCache: _runtimeMotionEnabled ? _runtimeMotionCache : null,
+                      repaint: _runtimeMotionController,
                       tracks: tracks,
                       focusedTrackKey: focusedTrack?.key,
                       showVectors: _showVectors,
@@ -11073,8 +11105,8 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
 
     return AnimatedPositioned(
       key: ValueKey<String>('phone_field_avatar_${track.key}'),
-      duration: const Duration(milliseconds: 420),
-      curve: Curves.easeOutCubic,
+      duration: const Duration(milliseconds: 780),
+      curve: Curves.easeInOutCubic,
       left: left,
       top: top,
       width: markerSize,
@@ -16672,6 +16704,8 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                   child: CustomPaint(
                     painter: _RuntimeFieldPainter(
                       field: widget.selectedField,
+                      motionCache: _runtimeMotionEnabled ? _runtimeMotionCache : null,
+                      repaint: _runtimeMotionController,
                       tracks: tracks,
                       showVectors: _showVectors,
                       showHeatmap: _showHeatmap,
@@ -16718,8 +16752,8 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                     cursorTimeMs: _liveTacticalReviewMode
                         ? _liveReviewTeamTimeMs
                         : null,
-                    live: !_liveTacticalReviewMode,
-                    followLatest: !_liveTacticalReviewMode,
+                    live: _runtimeMotionEnabled,
+                    followLatest: _runtimeMotionEnabled,
                     interactive: !_liveTacticalReviewMode,
                     perspective3d: _liveMapProPerspective3d,
                     field: widget.selectedField,
@@ -17653,8 +17687,8 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
 
     return AnimatedPositioned(
       key: ValueKey<String>('live_map_pro_${track.key}'),
-      duration: const Duration(milliseconds: 360),
-      curve: Curves.easeOutCubic,
+      duration: const Duration(milliseconds: 780),
+      curve: Curves.easeInOutCubic,
       left: left,
       top: top,
       width: totalWidth,
@@ -19676,6 +19710,8 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                   ? CustomPaint(
                       painter: _RuntimeFieldPainter(
                           field: widget.selectedField,
+                          motionCache: _runtimeMotionEnabled ? _runtimeMotionCache : null,
+                          repaint: _runtimeMotionController,
                           tracks: hasTrack
                               ? <_RuntimeTrack>[track]
                               : const <_RuntimeTrack>[],
@@ -21320,6 +21356,8 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                       child: CustomPaint(
                         painter: _RuntimeFieldPainter(
                           field: widget.selectedField,
+                          motionCache: _runtimeMotionEnabled ? _runtimeMotionCache : null,
+                          repaint: _runtimeMotionController,
                           tracks: _tracks.values.toList(),
                           showVectors: _showVectors,
                           showHeatmap: _showHeatmap,
@@ -22153,6 +22191,8 @@ class _TrackerLivePanelState extends State<TrackerLivePanel>
                           child: CustomPaint(
                             painter: _RuntimeFieldPainter(
                               field: widget.selectedField,
+                              motionCache: _runtimeMotionEnabled ? _runtimeMotionCache : null,
+                              repaint: _runtimeMotionController,
                               tracks: tracks,
                               showVectors: _showVectors,
                               showHeatmap: _showHeatmap,
@@ -23958,10 +23998,83 @@ class _LiveTacticalSnapshot {
 }
 
 
+class _RuntimeVisualCoordinate {
+  const _RuntimeVisualCoordinate(this.lat, this.lon);
+
+  final double lat;
+  final double lon;
+}
+
+class _RuntimeMotionState {
+  _RuntimeMotionState({
+    required this.fromLat,
+    required this.fromLon,
+    required this.targetLat,
+    required this.targetLon,
+    required this.startedAtMs,
+  });
+
+  double fromLat;
+  double fromLon;
+  double targetLat;
+  double targetLon;
+  int startedAtMs;
+}
+
+class _RuntimeMotionCache {
+  static const int _durationMs = 780;
+  final Map<String, _RuntimeMotionState> _states = <String, _RuntimeMotionState>{};
+
+  void clear() => _states.clear();
+
+  _RuntimeVisualCoordinate resolve(_RuntimeTrack track, int nowMs) {
+    final last = track.points.last;
+    var state = _states[track.key];
+    if (state == null) {
+      state = _RuntimeMotionState(
+        fromLat: last.lat,
+        fromLon: last.lon,
+        targetLat: last.lat,
+        targetLon: last.lon,
+        startedAtMs: nowMs,
+      );
+      _states[track.key] = state;
+      return _RuntimeVisualCoordinate(last.lat, last.lon);
+    }
+
+    final targetChanged =
+        (state.targetLat - last.lat).abs() > 0.000000001 ||
+        (state.targetLon - last.lon).abs() > 0.000000001;
+    if (targetChanged) {
+      final current = _interpolate(state, nowMs);
+      state.fromLat = current.lat;
+      state.fromLon = current.lon;
+      state.targetLat = last.lat;
+      state.targetLon = last.lon;
+      state.startedAtMs = nowMs;
+    }
+    return _interpolate(state, nowMs);
+  }
+
+  _RuntimeVisualCoordinate _interpolate(_RuntimeMotionState state, int nowMs) {
+    final raw = ((nowMs - state.startedAtMs) / _durationMs)
+        .clamp(0.0, 1.0)
+        .toDouble();
+    // smoothstep: мягкий старт и остановка без изменения реальной GPS-точки.
+    final t = raw * raw * (3.0 - 2.0 * raw);
+    return _RuntimeVisualCoordinate(
+      state.fromLat + (state.targetLat - state.fromLat) * t,
+      state.fromLon + (state.targetLon - state.fromLon) * t,
+    );
+  }
+}
+
 class _RuntimeFieldPainter extends CustomPainter {
   _RuntimeFieldPainter({
     required this.field,
     required this.tracks,
+    this.motionCache,
+    Listenable? repaint,
     this.focusedTrackKey,
     this.showVectors = true,
     this.showHeatmap = true,
@@ -23978,10 +24091,11 @@ class _RuntimeFieldPainter extends CustomPainter {
     this.tacticalSnapshot,
     this.warningEvents = const <TrackerLiveEventModel>[],
     this.selectedWarningEventId,
-  });
+  }) : super(repaint: repaint);
 
   final TrackerFieldModel? field;
   final List<_RuntimeTrack> tracks;
+  final _RuntimeMotionCache? motionCache;
   final String? focusedTrackKey;
   final bool showVectors;
   final bool showHeatmap;
@@ -24879,7 +24993,7 @@ class _RuntimeFieldPainter extends CustomPainter {
       final last = track.points.last;
       // Как в аналитике: давно пропавшего игрока не тянем в командную форму.
       if (newest > 0 && newest - last.timeMs > 15000) continue;
-      positions.add(_project(last, pitch, bounds));
+      positions.add(_projectTrackCurrent(track, pitch, bounds));
     }
     if (positions.length < 3) return;
     final hull = _runtimeConvexHull(positions);
@@ -24921,8 +25035,7 @@ class _RuntimeFieldPainter extends CustomPainter {
   }) {
     if (track.points.length < 2 || track.lastDeltaM <= 0.25) return;
 
-    final last = track.points.last;
-    final pos = _project(last, pitch, bounds);
+    final pos = _projectTrackCurrent(track, pitch, bounds);
     final angle = track.headingDeg * math.pi / 180.0;
     final length = (24 + track.speedKmh * 1.4).clamp(24.0, 62.0);
     final end = Offset(
@@ -24957,8 +25070,7 @@ class _RuntimeFieldPainter extends CustomPainter {
     _MapBounds bounds, {
     required bool focused,
   }) {
-    final last = track.points.last;
-    final pos = _project(last, pitch, bounds);
+    final pos = _projectTrackCurrent(track, pitch, bounds);
     final color = focused ? _OF.green : _trackAccentColor(track);
     final coreRadius = focused ? 11.5 : 8.0;
 
@@ -24998,7 +25110,7 @@ class _RuntimeFieldPainter extends CustomPainter {
 
   void _drawPlayerLabel(
       Canvas canvas, Rect pitch, _RuntimeTrack track, _MapBounds bounds) {
-    final pos = _project(track.points.last, pitch, bounds);
+    final pos = _projectTrackCurrent(track, pitch, bounds);
     final label =
         '${track.playerName} · ${track.speedKmh.toStringAsFixed(1)} км/ч';
 
@@ -25065,11 +25177,35 @@ class _RuntimeFieldPainter extends CustomPainter {
     tp.paint(canvas, Offset(bg.left + 9, bg.top + 4));
   }
 
+  Offset _projectTrackCurrent(
+    _RuntimeTrack track,
+    Rect pitch,
+    _MapBounds bounds,
+  ) {
+    final current = motionCache?.resolve(
+      track,
+      DateTime.now().millisecondsSinceEpoch,
+    );
+    if (current == null) {
+      return _project(track.points.last, pitch, bounds);
+    }
+    return _projectLatLon(current.lat, current.lon, pitch, bounds);
+  }
+
   Offset _project(_RuntimePoint p, Rect pitch, _MapBounds bounds) {
+    return _projectLatLon(p.lat, p.lon, pitch, bounds);
+  }
+
+  Offset _projectLatLon(
+    double latitude,
+    double longitude,
+    Rect pitch,
+    _MapBounds bounds,
+  ) {
     final projected = TrackerPitchProjector.projectGps(
       field,
-      latitude: p.lat,
-      longitude: p.lon,
+      latitude: latitude,
+      longitude: longitude,
     );
     if (projected != null && projected.isInside) {
       return Offset(
@@ -25083,10 +25219,14 @@ class _RuntimeFieldPainter extends CustomPainter {
 
     final nx = lonRange < 0.000001
         ? 0.5
-        : ((p.lon - bounds.minLon) / lonRange).clamp(0.035, 0.965).toDouble();
+        : ((longitude - bounds.minLon) / lonRange)
+            .clamp(0.035, 0.965)
+            .toDouble();
     final ny = latRange < 0.000001
         ? 0.5
-        : ((p.lat - bounds.minLat) / latRange).clamp(0.035, 0.965).toDouble();
+        : ((latitude - bounds.minLat) / latRange)
+            .clamp(0.035, 0.965)
+            .toDouble();
 
     return Offset(
       pitch.left + nx * pitch.width,

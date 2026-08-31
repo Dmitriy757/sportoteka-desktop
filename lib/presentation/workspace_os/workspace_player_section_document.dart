@@ -36,6 +36,7 @@ class WorkspacePlayerSectionDocument extends StatefulWidget {
     this.record,
     this.recordTitle,
     this.onRefresh,
+    this.currentUserId = 0,
   });
 
   final Map<String, dynamic> player;
@@ -46,6 +47,7 @@ class WorkspacePlayerSectionDocument extends StatefulWidget {
   final Map<String, dynamic>? record;
   final String? recordTitle;
   final Future<void> Function()? onRefresh;
+  final int currentUserId;
 
   @override
   State<WorkspacePlayerSectionDocument> createState() =>
@@ -174,6 +176,7 @@ class _WorkspacePlayerSectionDocumentState
   }
 
   String get _noteStorageKey => _recordIdentity?.key ?? _legacyNoteStorageKey;
+  String get _notePendingStorageKey => '${_noteStorageKey}_workspace_sync_pending_v1';
 
   String get _serverParentKey {
     final identity = _recordIdentity;
@@ -198,7 +201,10 @@ class _WorkspacePlayerSectionDocumentState
   @override
   void initState() {
     super.initState();
-    _serverStorage = WorkspaceServerStorage(clubId: widget.clubId);
+    _serverStorage = WorkspaceServerStorage(
+      clubId: widget.clubId,
+      userId: widget.currentUserId,
+    );
     _load();
   }
 
@@ -213,6 +219,7 @@ class _WorkspacePlayerSectionDocumentState
       if (note.isEmpty && _legacyNoteStorageKey != _noteStorageKey) {
         note = prefs.getString(_legacyNoteStorageKey) ?? '';
       }
+      final notePendingSync = prefs.getBool(_notePendingStorageKey) ?? false;
       var recordAttachments = <Map<String, dynamic>>[];
       var recordDocuments = <Map<String, dynamic>>[];
       if (widget.record != null) {
@@ -232,6 +239,28 @@ class _WorkspacePlayerSectionDocumentState
       final server = _serverStorage;
       if (server != null) {
         try {
+          if (notePendingSync) {
+            final pendingNode = WorkspaceFinderNode(
+              id: _noteStorageKey,
+              title: _effectiveRecordTitle,
+              subtitle: 'Рабочий документ игрока',
+              kind: WorkspaceFinderNodeKind.note,
+              parentId: _serverParentKey,
+              updatedAt: DateTime.now(),
+            );
+            await server.syncNodeDocument(node: pendingNode, body: note);
+            final pendingIdentity = _recordIdentity;
+            if (pendingIdentity != null) {
+              await server.linkDocument(
+                documentKey: _noteStorageKey,
+                entityType: pendingIdentity.type,
+                entityId: pendingIdentity.id,
+                sectionKey: widget.section.name,
+                title: _effectiveRecordTitle,
+              );
+            }
+            await prefs.setBool(_notePendingStorageKey, false);
+          }
           var snapshot = await server.load();
           final canonicalServerBody = snapshot.noteBodies[_noteStorageKey];
           if (canonicalServerBody != null && canonicalServerBody.isNotEmpty) {
@@ -250,8 +279,7 @@ class _WorkspacePlayerSectionDocumentState
               parentId: _serverParentKey,
               createdAt: DateTime.now(),
             );
-            await server.createNode(node);
-            await server.saveDocument(clientUid: node.id, title: node.title, body: note);
+            await server.syncNodeDocument(node: node, body: note, createHint: true);
             snapshot = await server.load();
           }
           final serverBody = snapshot.noteBodies[_noteStorageKey];
@@ -267,6 +295,47 @@ class _WorkspacePlayerSectionDocumentState
             );
           }
           if (widget.record != null) {
+            var syncedPendingChild = false;
+            for (var i = 0; i < recordDocuments.length; i++) {
+              final document = recordDocuments[i];
+              if (document['_workspace_pending_sync'] != true) continue;
+              final childId = '${document['id'] ?? ''}'.trim();
+              if (childId.isEmpty) continue;
+              final childTitle = '${document['title'] ?? 'Документ'}'.trim();
+              final childNode = WorkspaceFinderNode(
+                id: childId,
+                title: childTitle.isEmpty ? 'Документ' : childTitle,
+                subtitle: 'Материал · $_effectiveRecordTitle',
+                kind: WorkspaceFinderNodeKind.note,
+                parentId: _serverParentKey,
+                createdAt: DateTime.tryParse('${document['created_at'] ?? ''}'),
+                updatedAt: DateTime.tryParse('${document['updated_at'] ?? ''}') ?? DateTime.now(),
+              );
+              await server.syncNodeDocument(
+                node: childNode,
+                body: '${document['body'] ?? ''}',
+              );
+              final childIdentity = _recordIdentity;
+              if (childIdentity != null) {
+                await server.linkDocument(
+                  documentKey: childId,
+                  entityType: childIdentity.type,
+                  entityId: childIdentity.id,
+                  sectionKey: widget.section.name,
+                  title: childNode.title,
+                );
+              }
+              recordDocuments[i] = <String, dynamic>{
+                ...document,
+                '_workspace_server': true,
+                '_workspace_pending_sync': false,
+              };
+              syncedPendingChild = true;
+            }
+            if (syncedPendingChild) {
+              await prefs.setString(_recordDocumentsStorageKey, jsonEncode(recordDocuments));
+              snapshot = await server.load();
+            }
             final mergedDocuments = <String, Map<String, dynamic>>{
               for (final row in recordDocuments)
                 if ('${row['id'] ?? ''}'.trim().isNotEmpty)
@@ -278,6 +347,8 @@ class _WorkspacePlayerSectionDocumentState
                   node.kind == WorkspaceFinderNodeKind.note &&
                   node.id != _noteStorageKey,
             )) {
+              final localChild = mergedDocuments[node.id];
+              if (localChild?['_workspace_pending_sync'] == true) continue;
               mergedDocuments[node.id] = <String, dynamic>{
                 'id': node.id,
                 'title': node.title,
@@ -366,6 +437,7 @@ class _WorkspacePlayerSectionDocumentState
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_noteStorageKey, body);
+    await prefs.setBool(_notePendingStorageKey, true);
     final server = _serverStorage;
     if (server != null) {
       try {
@@ -377,21 +449,8 @@ class _WorkspacePlayerSectionDocumentState
           parentId: _serverParentKey,
           updatedAt: DateTime.now(),
         );
-        if (_serverAvailable) {
-          try {
-            await server.updateNode(node);
-          } catch (_) {
-            await server.createNode(node);
-          }
-        } else {
-          try {
-            await server.createNode(node);
-          } catch (_) {
-            await server.updateNode(node);
-          }
-          _serverAvailable = true;
-        }
-        await server.saveDocument(clientUid: node.id, title: node.title, body: body);
+        await server.syncNodeDocument(node: node, body: body);
+        _serverAvailable = true;
         final identity = _recordIdentity;
         if (identity != null) {
           await server.linkDocument(
@@ -402,8 +461,11 @@ class _WorkspacePlayerSectionDocumentState
             title: node.title,
           );
         }
-      } catch (_) {
+        await prefs.setBool(_notePendingStorageKey, false);
+      } catch (e) {
         _serverAvailable = false;
+        if (mounted) setState(() => _workspaceNote = body);
+        throw Exception('Документ сохранён локально, но серверная синхронизация не выполнена: $e');
       }
     }
     if (mounted) setState(() => _workspaceNote = body);
@@ -817,10 +879,15 @@ class _WorkspacePlayerSectionDocumentState
       'created_at': now.toIso8601String(),
       'updated_at': now.toIso8601String(),
       '_workspace_record_document': true,
+      '_workspace_pending_sync': true,
     };
     setState(() => _recordDocuments = <Map<String, dynamic>>[document, ..._recordDocuments]);
     await _persistRecordDocuments();
-    await _syncRecordDocument(document, create: true);
+    try {
+      await _syncRecordDocument(document, create: true);
+    } catch (_) {
+      // Keep the local copy open; the first edit retries server synchronization.
+    }
     if (mounted) await _openRecordDocument(document);
   }
 
@@ -871,12 +938,39 @@ class _WorkspacePlayerSectionDocumentState
           'body': body,
           'updated_at': now,
           '_workspace_record_document': true,
+          '_workspace_pending_sync': true,
         };
         return updated!;
       }).toList();
     });
     await _persistRecordDocuments();
     if (updated != null) await _syncRecordDocument(updated!, create: false);
+  }
+
+  Future<void> _markRecordDocumentSynced(String id) async {
+    if (id.isEmpty) return;
+    if (mounted) {
+      setState(() {
+        _recordDocuments = _recordDocuments.map((row) {
+          if ('${row['id'] ?? ''}' != id) return row;
+          return <String, dynamic>{
+            ...row,
+            '_workspace_server': true,
+            '_workspace_pending_sync': false,
+          };
+        }).toList();
+      });
+    } else {
+      _recordDocuments = _recordDocuments.map((row) {
+        if ('${row['id'] ?? ''}' != id) return row;
+        return <String, dynamic>{
+          ...row,
+          '_workspace_server': true,
+          '_workspace_pending_sync': false,
+        };
+      }).toList();
+    }
+    await _persistRecordDocuments();
   }
 
   Future<void> _syncRecordDocument(
@@ -898,19 +992,10 @@ class _WorkspacePlayerSectionDocumentState
       updatedAt: DateTime.now(),
     );
     try {
-      if (create) {
-        await server.createNode(node);
-      } else {
-        try {
-          await server.updateNode(node);
-        } catch (_) {
-          await server.createNode(node);
-        }
-      }
-      await server.saveDocument(
-        clientUid: id,
-        title: node.title,
+      await server.syncNodeDocument(
+        node: node,
         body: '${document['body'] ?? ''}',
+        createHint: create,
       );
       final identity = _recordIdentity;
       if (identity != null) {
@@ -923,8 +1008,10 @@ class _WorkspacePlayerSectionDocumentState
         );
       }
       _serverAvailable = true;
-    } catch (_) {
+      await _markRecordDocumentSynced(id);
+    } catch (e) {
       _serverAvailable = false;
+      throw Exception('Документ сохранён локально, но серверная синхронизация не выполнена: $e');
     }
   }
 
