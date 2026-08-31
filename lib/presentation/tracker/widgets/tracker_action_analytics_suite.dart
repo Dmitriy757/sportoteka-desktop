@@ -17929,9 +17929,15 @@ class _MapTabState extends State<_MapTab> {
                     activityFilter: _activityFilter,
                     showSprintArrows: widget.showSprintArrows,
                     mapRotationDeg: widget.mapRotationDeg,
-                    cursorPoint: _cursorPoint,
+                    cursorPoint: null,
                     ghostPoint: _personalGhostPoint,
                   ),
+                  cursorPoint: widget.heatMode ? null : _cursorPoint,
+                  cursorProjectionPoints:
+                      visiblePoints.isNotEmpty ? visiblePoints : playerPoints,
+                  cursorField: widget.field,
+                  cursorMapRotationDeg: widget.mapRotationDeg,
+                  smoothCursorMotion: _playing,
                   onTapDown: widget.heatMode
                       ? null
                       : (localPosition, mapSize) {
@@ -17980,6 +17986,8 @@ class _MapTabState extends State<_MapTab> {
                   showPlayers: true,
                   showLabels: true,
                   showTrace: true,
+                  smoothPlayerMotion: _playing,
+                  playerMotionDurationMs: 210,
                 ),
         ),
         if (!widget.heatMode)
@@ -21388,6 +21396,7 @@ class _ExpandedMovementInspectorState extends State<_ExpandedMovementInspector> 
                             pitWallPoints: telemetryPitMarkers,
                             pitWallAlertCount: telemetryAlerts.length,
                             pitWallConfidence: telemetryConfidence.score,
+                            smoothPlayback: _playing,
                           )
                         : _PitchViewport(
                             painter: _ActionPitchPainter(
@@ -21410,7 +21419,7 @@ class _ExpandedMovementInspectorState extends State<_ExpandedMovementInspector> 
                               // остаётся маршрут + отдельные метки Replay-журнала.
                               showTrackDots: _filter != 'all',
                               mapRotationDeg: widget.mapRotationDeg,
-                              cursorPoint: cursorPoint,
+                              cursorPoint: null,
                               ghostPoint: telemetryGhost,
                               sectorMetrics: _sectorOverlay
                                   ? telemetrySectors
@@ -21424,6 +21433,11 @@ class _ExpandedMovementInspectorState extends State<_ExpandedMovementInspector> 
                               selectedMarkerTimeMs:
                                   _selectedPoint?.timeMs ?? 0,
                             ),
+                            cursorPoint: _heatMode ? null : cursorPoint,
+                            cursorProjectionPoints: points,
+                            cursorField: widget.field,
+                            cursorMapRotationDeg: widget.mapRotationDeg,
+                            smoothCursorMotion: _playing,
                             onTapDown: _heatMode
                                 ? null
                                 : (position, size) {
@@ -21471,6 +21485,8 @@ class _ExpandedMovementInspectorState extends State<_ExpandedMovementInspector> 
                             routeWindowMs: _matchMode || geoTracks.length > 1
                                 ? 30000
                                 : null,
+                            smoothPlayerMotion: _playing,
+                            playerMotionDurationMs: 210,
                                 ),
                               ),
                             ),
@@ -22986,6 +23002,7 @@ class _MatchPlaybackField extends StatelessWidget {
     this.pitWallPoints = const <ActionTrackerGpsPoint>[],
     this.pitWallAlertCount = 0,
     this.pitWallConfidence = 0,
+    this.smoothPlayback = false,
   });
 
   final List<ActionTrackerGpsPoint> points;
@@ -23015,6 +23032,7 @@ class _MatchPlaybackField extends StatelessWidget {
   final List<ActionTrackerGpsPoint> pitWallPoints;
   final int pitWallAlertCount;
   final double pitWallConfidence;
+  final bool smoothPlayback;
 
   @override
   Widget build(BuildContext context) {
@@ -23339,7 +23357,12 @@ class _MatchPlaybackField extends StatelessWidget {
         .clamp(0.0, math.max(0.0, size.height - 66))
         .toDouble();
 
-    return Positioned(
+    return AnimatedPositioned(
+      key: ValueKey<int>(frame.player.id),
+      duration: smoothPlayback
+          ? const Duration(milliseconds: 210)
+          : Duration.zero,
+      curve: Curves.linear,
       left: left,
       top: top,
       width: markerWidth,
@@ -28536,6 +28559,22 @@ ActionTrackerGpsPoint? _movementPointAtProgress(
   if (points.isEmpty) return null;
   final targetProgress = progress.clamp(range.start, range.end).toDouble();
   final targetTime = _movementTimeAtProgress(points, targetProgress);
+
+  // Для личного Replay/одного трека возвращаем реальную промежуточную
+  // координату внутри GPS-сегмента. Так курсор в режимах Маршрут/Тепло и Ghost
+  // движется так же плавно, как аватары в режиме Матч.
+  final timed = points.where((point) => point.timeMs > 0).toList(growable: false);
+  final playerIds = timed
+      .map((point) => point.playerId ?? 0)
+      .where((id) => id > 0)
+      .toSet();
+  if (timed.length >= 2 && playerIds.length <= 1) {
+    final series = List<ActionTrackerGpsPoint>.from(timed)
+      ..sort((a, b) => a.timeMs.compareTo(b.timeMs));
+    final sample = _matchInterpolatedPoint(series, targetTime);
+    if (sample != null) return sample.point;
+  }
+
   ActionTrackerGpsPoint? best;
   var bestDelta = 1 << 62;
   for (final p in points) {
@@ -29742,15 +29781,96 @@ class _AnalyticsCameraRoundButton extends StatelessWidget {
 }
 
 class _PitchViewport extends StatelessWidget {
-  const _PitchViewport({required this.painter, this.onTapDown});
+  const _PitchViewport({
+    required this.painter,
+    this.onTapDown,
+    this.cursorPoint,
+    this.cursorProjectionPoints = const <ActionTrackerGpsPoint>[],
+    this.cursorField,
+    this.cursorMapRotationDeg = 0,
+    this.smoothCursorMotion = false,
+  });
+
   final CustomPainter painter;
   final void Function(Offset localPosition, Size paintSize)? onTapDown;
+  final ActionTrackerGpsPoint? cursorPoint;
+  final List<ActionTrackerGpsPoint> cursorProjectionPoints;
+  final TrackerFieldModel? cursorField;
+  final double cursorMapRotationDeg;
+  final bool smoothCursorMotion;
+
+  Widget _cursorMarker(Size size) {
+    final point = cursorPoint;
+    if (point == null || cursorProjectionPoints.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    final bounds = _Bounds.fromGps(cursorProjectionPoints);
+    final useFieldProjection =
+        _shouldUseFieldProjection(cursorProjectionPoints, cursorField);
+    var position = _matchProjectPoint(
+      point,
+      size,
+      bounds,
+      cursorField,
+      useFieldProjection,
+    );
+    if (cursorMapRotationDeg.abs() > .1) {
+      position = _rotateMatchPoint(position, size, cursorMapRotationDeg);
+    }
+    const markerSize = 22.0;
+    return AnimatedPositioned(
+      duration: smoothCursorMotion
+          ? const Duration(milliseconds: 210)
+          : Duration.zero,
+      curve: Curves.linear,
+      left: (position.dx - markerSize / 2)
+          .clamp(0.0, math.max(0.0, size.width - markerSize))
+          .toDouble(),
+      top: (position.dy - markerSize / 2)
+          .clamp(0.0, math.max(0.0, size.height - markerSize))
+          .toDouble(),
+      width: markerSize,
+      height: markerSize,
+      child: IgnorePointer(
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Container(
+              width: 22,
+              height: 22,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(.92),
+                shape: BoxShape.circle,
+              ),
+            ),
+            Container(
+              width: 16,
+              height: 16,
+              decoration: BoxDecoration(
+                color: _AA.green.withOpacity(.18),
+                shape: BoxShape.circle,
+              ),
+            ),
+            Container(
+              width: 10,
+              height: 10,
+              decoration: const BoxDecoration(
+                color: _AA.green,
+                shape: BoxShape.circle,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(builder: (context, constraints) {
       final frame = _analyticsPitchFrame(
           Size(constraints.maxWidth, constraints.maxHeight));
+      final paintSize = Size(frame.width, frame.height);
       final pitch = Positioned(
         left: frame.left,
         top: frame.top,
@@ -29758,7 +29878,14 @@ class _PitchViewport extends StatelessWidget {
         height: frame.height,
         child: ClipRRect(
           borderRadius: BorderRadius.circular(_AA.tabletInnerRadius),
-          child: CustomPaint(painter: painter, child: const SizedBox.expand()),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              CustomPaint(painter: painter, child: const SizedBox.expand()),
+              if (cursorPoint != null && cursorProjectionPoints.isNotEmpty)
+                _cursorMarker(paintSize),
+            ],
+          ),
         ),
       );
       final content = Stack(children: [pitch]);
@@ -29766,10 +29893,10 @@ class _PitchViewport extends StatelessWidget {
       return GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTapDown: (details) {
-          final p = details.localPosition - frame.topLeft;
-          if (p.dx < 0 || p.dy < 0 || p.dx > frame.width || p.dy > frame.height)
-            return;
-          onTapDown!(p, frame.size);
+          final local = details.localPosition;
+          final inside = frame.contains(local);
+          if (!inside) return;
+          onTapDown!(local - frame.topLeft, paintSize);
         },
         child: content,
       );

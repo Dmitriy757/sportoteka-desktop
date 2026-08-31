@@ -74,8 +74,9 @@ CallKitParams _sportotekaCallKitParams(Map<String, dynamic> data) {
       isShowLogo: false,
       isShowCallID: false,
       ringtonePath: 'ringtone_default',
+      backgroundColor: '#000000',
       actionColor: '#00A750',
-      textColor: '#0B0F14',
+      textColor: '#FFFFFF',
       incomingCallNotificationChannelName: 'Входящие звонки SPORTOTEKA',
       missedCallNotificationChannelName: 'Пропущенные звонки SPORTOTEKA',
       isShowFullLockedScreen: true,
@@ -153,34 +154,85 @@ Future<bool> _sportotekaCallIsStillRinging({
   }
 }
 
+Future<void> _sportotekaEndLifecycleCall(
+  Map<String, dynamic> data,
+) async {
+  final callId = _sportotekaPushInt(data['call_id']);
+
+  if (callId <= 0) return;
+
+  final rawUuid = '${data['uuid'] ?? ''}'.trim();
+
+  final uuid = rawUuid.isNotEmpty ? rawUuid : _sportotekaCallUuid(callId);
+
+  try {
+    if (Platform.isAndroid) {
+      // SPORTOTEKA поддерживает один активный вызов.
+      // На locked Android endAllCalls надёжнее очищает
+      // full-screen Activity + Telecom Connection.
+      await FlutterCallkitIncoming.endAllCalls();
+    } else {
+      await FlutterCallkitIncoming.endCall(
+        uuid,
+      );
+    }
+
+    debugPrint(
+      '[PUSH] CALL LIFECYCLE native ended '
+      'callId=$callId uuid=$uuid '
+      'event=${data['event']}',
+    );
+  } catch (e) {
+    debugPrint(
+      '[PUSH] CALL LIFECYCLE end error '
+      'callId=$callId error=$e',
+    );
+  }
+}
+
 @pragma('vm:entry-point')
 Future<void> sportotekaFirebaseMessagingBackgroundHandler(
   RemoteMessage message,
 ) async {
   await Firebase.initializeApp();
 
-  final data = Map<String, dynamic>.from(message.data);
+  final data = Map<String, dynamic>.from(
+    message.data,
+  );
 
-  if ('${data['type'] ?? ''}' != 'incoming_call') {
+  final type = '${data['type'] ?? ''}'.trim();
+
+  // Тихая серверная команда:
+  // другой участник уже отменил/отклонил/завершил вызов.
+  if (type == 'call_lifecycle') {
+    await _sportotekaEndLifecycleCall(
+      data,
+    );
     return;
   }
 
+  if (type != 'incoming_call') {
+    return;
+  }
+
+  // iOS получает настоящий входящий звонок
+  // прежде всего через PushKit.
   if (!Platform.isAndroid) {
     return;
   }
 
-  final callId = _sportotekaPushInt(data['call_id']);
+  final callId = _sportotekaPushInt(
+    data['call_id'],
+  );
 
-  final userId = _sportotekaPushInt(data['callee_id']);
+  final userId = _sportotekaPushInt(
+    data['callee_id'],
+  );
 
   if (callId <= 0) {
     return;
   }
 
-  // КРИТИЧНО:
-  // FCM может доставить старый incoming_call после того,
-  // как звонок уже принят/завершён.
-  // Такой пакет больше НЕ должен поднимать экран звонка.
   final ringing = await _sportotekaCallIsStillRinging(
     callId: callId,
     userId: userId,
@@ -374,6 +426,11 @@ class PushService with WidgetsBindingObserver {
     FirebaseMessaging.onMessage.listen((msg) async {
       _log('FCM FOREGROUND: ${msg.data}');
 
+      if (_isCallLifecycle(msg.data)) {
+        await _handleCallLifecycle(msg.data);
+        return;
+      }
+
       if (_isIncomingCall(msg.data)) {
         await _handleIncomingCall(msg.data, showDialog: true);
         return;
@@ -420,6 +477,11 @@ class PushService with WidgetsBindingObserver {
   }
 
   Future<void> _handleRemoteMessage(RemoteMessage msg) async {
+    if (_isCallLifecycle(msg.data)) {
+      await _handleCallLifecycle(msg.data);
+      return;
+    }
+
     if (_isIncomingCall(msg.data)) {
       await _handleIncomingCall(msg.data, showDialog: true);
       return;
@@ -434,8 +496,59 @@ class PushService with WidgetsBindingObserver {
     });
   }
 
-  bool _isIncomingCall(Map<String, dynamic> data) {
+  bool _isCallLifecycle(
+    Map<String, dynamic> data,
+  ) {
+    return (data['type'] ?? '').toString() == 'call_lifecycle';
+  }
+
+  bool _isIncomingCall(
+    Map<String, dynamic> data,
+  ) {
     return (data['type'] ?? '').toString() == 'incoming_call';
+  }
+
+  Future<void> _handleCallLifecycle(
+    Map<String, dynamic> data,
+  ) async {
+    final callId = _sportotekaPushInt(
+      data['call_id'],
+    );
+
+    if (callId <= 0) return;
+
+    final event = '${data['event'] ?? ''}'.trim().toLowerCase();
+
+    _log(
+      'CALL LIFECYCLE '
+      'callId=$callId event=$event',
+    );
+
+    // Сначала немедленно убираем системный
+    // ringing/ongoing CallKit UI.
+    await _sportotekaEndLifecycleCall(
+      data,
+    );
+
+    // Если открыт наш foreground-dialog
+    // именно этого звонка — закрываем и его.
+    if (_visibleCallId == callId) {
+      _visibleCallId = null;
+
+      if (Get.isDialogOpen == true) {
+        Get.back<void>();
+      }
+    }
+
+    // Если медиасессия уже успела стартовать,
+    // завершаем её сразу, не ждём 2-секундного polling.
+    final session = CallSessionService.instance;
+
+    if (session.callId == callId) {
+      try {
+        await session.disconnect();
+      } catch (_) {}
+    }
   }
 
   Future<void> _requestPermission() async {

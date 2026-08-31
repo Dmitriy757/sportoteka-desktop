@@ -21,12 +21,17 @@ import 'package:sportoteka/core/theme/app_typography.dart';
 import 'package:sportoteka/presentation/workspace_os/sportoteka_workspace_icons.dart';
 import 'package:sportoteka/presentation/workspace_os/workspace_entity_records.dart';
 import 'package:sportoteka/core/utils/pref_utils.dart';
+import 'package:sportoteka/core/subscription/subscription_access.dart';
+import 'package:sportoteka/core/subscription/subscription_service.dart';
+import 'package:sportoteka/presentation/subscription/subscription_screen.dart';
 import 'package:sportoteka/presentation/team_video_analysis/match_video_player_screen.dart';
 import 'package:sportoteka/presentation/team_video_analysis/video_match_review_screen.dart';
+import 'package:sportoteka/presentation/team_video_analysis/team_match_video_workspace_screen.dart';
 import 'package:sportoteka/presentation/advanced_video_analysis/advanced_video_analysis_screen.dart';
 import 'package:sportoteka/presentation/advanced_video_analysis/models/analysis_result.dart';
 import 'package:sportoteka/presentation/advanced_video_analysis/models/player_detection.dart';
 import 'package:sportoteka/presentation/match_live/match_live_screen.dart';
+import 'package:sportoteka/presentation/training_graphics/tg_analytics_overlay.dart';
 
 class TeamMatchDetailScreen extends StatefulWidget {
   static const int overviewTabIndex = 0;
@@ -104,7 +109,8 @@ void showTeamMatchDetailCmrWindow(
 }) {
   OverlayState? overlay;
   try {
-    overlay = Navigator.of(context, rootNavigator: true).overlay ?? Overlay.maybeOf(context);
+    overlay = Navigator.of(context, rootNavigator: true).overlay ??
+        Overlay.maybeOf(context);
   } catch (_) {
     overlay = Overlay.maybeOf(context);
   }
@@ -181,14 +187,16 @@ void showTeamMatchDetailCmrWindow(
               : position.dy
                   .clamp(
                     media.padding.top + 14.0,
-                    max(media.padding.top + 14.0, screen.height - height - 14.0),
+                    max(media.padding.top + 14.0,
+                        screen.height - height - 14.0),
                   )
                   .toDouble();
 
       if (minimized) {
         return Positioned(
           left: 18,
-          bottom: media.padding.bottom + (tabletWorkspace ? workspaceBottomMenuSpace + 10 : 18),
+          bottom: media.padding.bottom +
+              (tabletWorkspace ? workspaceBottomMenuSpace + 10 : 18),
           child: Material(
             color: Colors.transparent,
             child: InkWell(
@@ -215,7 +223,8 @@ void showTeamMatchDetailCmrWindow(
                 child: const Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.sports_soccer_rounded, color: Color(0xFF00A750), size: 17),
+                    Icon(Icons.sports_soccer_rounded,
+                        color: Color(0xFF00A750), size: 17),
                     SizedBox(width: 8),
                     Text(
                       'Матч',
@@ -236,7 +245,9 @@ void showTeamMatchDetailCmrWindow(
       final headerTitle = 'Матчи';
       final headerSubtitle = (teamName ?? '').trim().isNotEmpty
           ? teamName!.trim()
-          : ((clubName ?? '').trim().isNotEmpty ? clubName!.trim() : 'Разбор матча');
+          : ((clubName ?? '').trim().isNotEmpty
+              ? clubName!.trim()
+              : 'Разбор матча');
 
       return Positioned(
         left: left,
@@ -249,13 +260,16 @@ void showTeamMatchDetailCmrWindow(
             clipBehavior: Clip.antiAlias,
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(maximized ? 0 : (tabletWorkspace ? 22 : 28)),
-              border: maximized ? null : Border.all(color: const Color(0xFFE3EAE7)),
+              borderRadius: BorderRadius.circular(
+                  maximized ? 0 : (tabletWorkspace ? 22 : 28)),
+              border:
+                  maximized ? null : Border.all(color: const Color(0xFFE3EAE7)),
               boxShadow: maximized
                   ? null
                   : [
                       BoxShadow(
-                        color: Colors.black.withOpacity(tabletWorkspace ? .10 : .16),
+                        color: Colors.black
+                            .withOpacity(tabletWorkspace ? .10 : .16),
                         blurRadius: tabletWorkspace ? 28 : 44,
                         offset: Offset(0, tabletWorkspace ? 12 : 22),
                       ),
@@ -276,7 +290,8 @@ void showTeamMatchDetailCmrWindow(
                     padding: const EdgeInsets.symmetric(horizontal: 12),
                     decoration: const BoxDecoration(
                       color: Colors.white,
-                      border: Border(bottom: BorderSide(color: Color(0xFFE9EEF0))),
+                      border:
+                          Border(bottom: BorderSide(color: Color(0xFFE9EEF0))),
                     ),
                     child: Row(
                       children: [
@@ -296,7 +311,9 @@ void showTeamMatchDetailCmrWindow(
                         ),
                         const SizedBox(width: 7),
                         _TeamMatchCmrWindowButton(
-                          icon: maximized ? Icons.close_fullscreen_rounded : Icons.open_in_full_rounded,
+                          icon: maximized
+                              ? Icons.close_fullscreen_rounded
+                              : Icons.open_in_full_rounded,
                           tooltip: maximized ? 'Вернуть размер' : 'Развернуть',
                           onTap: () {
                             maximized = !maximized;
@@ -312,7 +329,8 @@ void showTeamMatchDetailCmrWindow(
                             color: const Color(0xFFF3F6F9),
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          child: const Icon(Icons.sports_soccer_rounded, color: Color(0xFF1F2937), size: 16),
+                          child: const Icon(Icons.sports_soccer_rounded,
+                              color: Color(0xFF1F2937), size: 16),
                         ),
                         const SizedBox(width: 10),
                         Expanded(
@@ -331,7 +349,9 @@ void showTeamMatchDetailCmrWindow(
                                 headerSubtitle,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: _TeamMatchUiText.body(10.5, color: const Color(0xFF667085), weight: FontWeight.w600),
+                                style: _TeamMatchUiText.body(10.5,
+                                    color: const Color(0xFF667085),
+                                    weight: FontWeight.w600),
                               ),
                             ],
                           ),
@@ -373,7 +393,9 @@ class _TeamMatchUiText {
     'Arial',
   ];
 
-  static TextStyle title(double size, {Color color = const Color(0xFF0B0F14)}) => AppTypography.custom(
+  static TextStyle title(double size,
+          {Color color = const Color(0xFF0B0F14)}) =>
+      AppTypography.custom(
         size: size,
         color: color,
         weight: FontWeight.w600,
@@ -381,7 +403,10 @@ class _TeamMatchUiText {
         height: 1.08,
       );
 
-  static TextStyle body(double size, {Color color = const Color(0xFF374151), FontWeight weight = FontWeight.w600}) => AppTypography.custom(
+  static TextStyle body(double size,
+          {Color color = const Color(0xFF374151),
+          FontWeight weight = FontWeight.w600}) =>
+      AppTypography.custom(
         size: size,
         color: color,
         weight: weight,
@@ -389,7 +414,9 @@ class _TeamMatchUiText {
         height: 1.22,
       );
 
-  static TextStyle action({Color color = const Color(0xFF0B0F14), double size = 12.2}) => AppTypography.action(
+  static TextStyle action(
+          {Color color = const Color(0xFF0B0F14), double size = 12.2}) =>
+      AppTypography.action(
         color: color,
       ).copyWith(fontSize: size);
 
@@ -458,6 +485,71 @@ class _TeamMatchCmrWindowButton extends StatelessWidget {
   }
 }
 
+class _VideoTacticalReviewApi {
+  static const String _base = 'https://sportotekaapp.ru/api/tracker';
+
+  Future<List<Map<String, dynamic>>?> load({required String scopeKey}) async {
+    final uri = Uri.parse('$_base/get_tracker_tactical_review.php').replace(
+      queryParameters: <String, String>{'scope_key': scopeKey},
+    );
+    final response = await http.get(uri, headers: const {
+      'Accept': 'application/json'
+    }).timeout(const Duration(seconds: 12));
+    if (response.statusCode == 404) return null;
+    if (response.statusCode != 200) {
+      throw Exception('VIDEO_REVIEW GET HTTP ${response.statusCode}');
+    }
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map || decoded['review'] is! Map) return null;
+    final review = Map<String, dynamic>.from(decoded['review'] as Map);
+    dynamic raw =
+        review['annotations'] ?? review['annotations_json'] ?? const [];
+    if (raw is String && raw.trim().isNotEmpty) {
+      raw = jsonDecode(raw);
+    }
+    if (raw is! List) return const <Map<String, dynamic>>[];
+    return raw
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList(growable: false);
+  }
+
+  Future<void> save({
+    required String scopeKey,
+    required int clubId,
+    required int teamId,
+    required int createdBy,
+    required int endMs,
+    required String title,
+    required List<Map<String, dynamic>> annotations,
+  }) async {
+    final response = await http
+        .put(
+          Uri.parse('$_base/save_tracker_tactical_review.php'),
+          headers: const {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json; charset=utf-8',
+          },
+          body: jsonEncode(<String, dynamic>{
+            'scope_key': scopeKey,
+            'club_id': clubId,
+            'team_id': teamId,
+            'session_id': null,
+            'player_id': null,
+            'created_by': createdBy,
+            'title': title,
+            'start_ms': null,
+            'end_ms': endMs > 0 ? endMs : null,
+            'annotations': annotations,
+          }),
+        )
+        .timeout(const Duration(seconds: 12));
+    if (response.statusCode != 200) {
+      throw Exception('VIDEO_REVIEW PUT HTTP ${response.statusCode}');
+    }
+  }
+}
+
 class _AiPlayerMotion {
   final Offset position;
   final double timeMs;
@@ -472,7 +564,13 @@ class _AiPlayerMotion {
   });
 }
 
-enum _MatchRightPanelMode { none, editor, uploadFull, uploadHighlight, documents }
+enum _MatchRightPanelMode {
+  none,
+  editor,
+  uploadFull,
+  uploadHighlight,
+  documents
+}
 
 class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
     with SingleTickerProviderStateMixin {
@@ -501,31 +599,35 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
   int _coachId = 0;
   int _workspaceClubId = 0;
   String teamName = "Моя команда";
-  
-  
+
   Map<String, dynamic> _extractTeamColors() {
-  // Пытаемся получить цвета из данных матча
-  // Если нет - используем стандартные
-  final homeColor = _s(match?["home_team_color"]).isNotEmpty
-      ? _s(match?["home_team_color"])
-      : "#00A750"; // Зеленый - ваша команда
-  
-  final awayColor = _s(match?["away_team_color"]).isNotEmpty
-      ? _s(match?["away_team_color"])
-      : "#FF4444"; // Красный - соперник
+    // Пытаемся получить цвета из данных матча
+    // Если нет - используем стандартные
+    final homeColor = _s(match?["home_team_color"]).isNotEmpty
+        ? _s(match?["home_team_color"])
+        : "#00A750"; // Зеленый - ваша команда
 
-  // Определяем, какая команда играет дома
-  final isHome = _s(match?["our_team"]).isNotEmpty;
+    final awayColor = _s(match?["away_team_color"]).isNotEmpty
+        ? _s(match?["away_team_color"])
+        : "#FF4444"; // Красный - соперник
 
-  return {
-    'home': isHome ? homeColor : awayColor,
-    'away': isHome ? awayColor : homeColor,
-  };
-}
+    // Определяем, какая команда играет дома
+    final isHome = _s(match?["our_team"]).isNotEmpty;
 
-
+    return {
+      'home': isHome ? homeColor : awayColor,
+      'away': isHome ? awayColor : homeColor,
+    };
+  }
 
   Map<String, dynamic>? match;
+
+  SubscriptionAccess _matchSubscription = SubscriptionAccess.free();
+  bool _matchSubscriptionLoaded = false;
+  bool _matchSubscriptionLoading = false;
+
+  bool get _canUseMatchVideoAnalysis =>
+      _matchSubscription.has('club_video_analysis');
 
   final ChunkUploadService _chunkUploadService = ChunkUploadService();
 
@@ -544,6 +646,23 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
   bool _bottomVideoLoading = false;
   double _matchPlaybackSpeed = 1.0;
   final List<Map<String, dynamic>> _localVideoNotes = [];
+
+  // Video Match Review: тот же тактический слой, что используется в Tracker.
+  // Рисунки живут поверх видео/карты и привязаны к текущему времени записи.
+  late final TgAnalyticsOverlayController _videoReviewController;
+  final _VideoTacticalReviewApi _videoReviewApi = _VideoTacticalReviewApi();
+  Timer? _videoReviewSaveTimer;
+  List<Map<String, dynamic>>? _pendingVideoReviewAnnotations;
+  String? _pendingVideoReviewScopeKey;
+  int _videoReviewRevision = 0;
+  int _videoReviewSavedRevision = 0;
+  int _videoReviewLoadToken = 0;
+  bool _videoReviewMode = false;
+  bool _videoReviewSaving = false;
+  String _videoAnalysisStage = 'video'; // video | map
+  String _videoAnalysisInspector = 'events'; // events | players | ai
+  bool _videoMapPerspective3d = true;
+  int? _selectedVideoAnalysisVideoId;
 
   // Live AI telemetry: эти данные приходят от встроенного AI-видеоанализа
   // и оживляют «Обзор» матча: мини-карту, скорость, спринты, нагрузку и события.
@@ -615,15 +734,22 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
     var requestedInitialTab = widget.initialTabIndex;
     final initialArgs = Get.arguments;
     if (initialArgs is Map) {
-      requestedInitialTab = int.tryParse('${initialArgs['initial_tab_index'] ?? initialArgs['tab_index'] ?? requestedInitialTab}') ?? requestedInitialTab;
+      requestedInitialTab = int.tryParse(
+              '${initialArgs['initial_tab_index'] ?? initialArgs['tab_index'] ?? requestedInitialTab}') ??
+          requestedInitialTab;
     }
     final initialTab = requestedInitialTab.clamp(0, 6).toInt();
-    _tabController = TabController(length: 7, initialIndex: initialTab, vsync: this);
+    _tabController =
+        TabController(length: 7, initialIndex: initialTab, vsync: this);
     _tabController.addListener(() {
       if (mounted) setState(() {});
     });
     _scrollController.addListener(_onScroll);
     _readArgs();
+    _videoReviewController = TgAnalyticsOverlayController(
+      sessionKey: _videoReviewScopeKey(),
+      onMutation: _queueVideoReviewSave,
+    );
     _init();
   }
 
@@ -631,10 +757,12 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
     _coachId = await PrefUtils.getUserId() ?? 0;
     _workspaceClubId = widget.clubId ?? (await PrefUtils.getUserClubId() ?? 0);
     await load();
+    await _loadMatchSubscription();
     if (_workspaceClubId <= 0) {
       _workspaceClubId = _i(match?["club_id"] ?? match?["clubId"]);
     }
     await _loadTtdReport();
+    await _loadVideoReviewForCurrentMatch();
   }
 
   void _readArgs() {
@@ -659,7 +787,8 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
         match = Map<String, dynamic>.from(argMatch);
       }
 
-      matchId = int.tryParse((args["match_id"] ?? matchId).toString()) ?? matchId;
+      matchId =
+          int.tryParse((args["match_id"] ?? matchId).toString()) ?? matchId;
       teamId = int.tryParse((args["team_id"] ?? teamId).toString()) ?? teamId;
       teamName = (args["team_name"] ?? teamName).toString();
 
@@ -709,6 +838,9 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
     _aiReviewPlayback.dispose();
     _embeddedAiPlayback.dispose();
     _embeddedMainVideoPlayback.dispose();
+    _videoReviewSaveTimer?.cancel();
+    unawaited(_flushVideoReviewSave());
+    _videoReviewController.dispose();
     _hideUploadingDialog();
 
     super.dispose();
@@ -852,10 +984,16 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
     final rowId = _playerId(row);
     final rowName = _playerName(row).toLowerCase();
 
-    for (final list in [ttdPlayers, playerVideoTotals, mainReport, passReport]) {
+    for (final list in [
+      ttdPlayers,
+      playerVideoTotals,
+      mainReport,
+      passReport
+    ]) {
       for (final item in list) {
         final sameId = rowId.isNotEmpty && _playerId(item) == rowId;
-        final sameName = rowName.isNotEmpty && _playerName(item).toLowerCase() == rowName;
+        final sameName =
+            rowName.isNotEmpty && _playerName(item).toLowerCase() == rowName;
         if (sameId || sameName) {
           final url = fromMap(item);
           if (url != null) return url;
@@ -872,12 +1010,14 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
     }
 
     final matchPlayers = ((match?["players"] as List?) ?? const [])
-        .map((e) => e is Map ? Map<String, dynamic>.from(e) : <String, dynamic>{})
+        .map((e) =>
+            e is Map ? Map<String, dynamic>.from(e) : <String, dynamic>{})
         .toList();
 
     for (final item in matchPlayers) {
       final sameId = rowId.isNotEmpty && _playerId(item) == rowId;
-      final sameName = rowName.isNotEmpty && _playerName(item).toLowerCase() == rowName;
+      final sameName =
+          rowName.isNotEmpty && _playerName(item).toLowerCase() == rowName;
       if (sameId || sameName) {
         final url = fromMap(item);
         if (url != null) return url;
@@ -888,7 +1028,13 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
   }
 
   String _playerId(Map<String, dynamic> row) {
-    for (final key in ["player_id", "id", "user_id", "athlete_id", "student_id"]) {
+    for (final key in [
+      "player_id",
+      "id",
+      "user_id",
+      "athlete_id",
+      "student_id"
+    ]) {
       final value = _s(row[key]);
       if (value.isNotEmpty && value != "0" && value.toLowerCase() != "null") {
         return value;
@@ -906,7 +1052,13 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
     final last = _s(row["last_name"] ?? row["lastname"]);
     final full = "$first $last".trim();
     if (full.isNotEmpty) return full;
-    for (final key in ["player_name", "fullName", "full_name", "name", "title"]) {
+    for (final key in [
+      "player_name",
+      "fullName",
+      "full_name",
+      "name",
+      "title"
+    ]) {
       final value = _s(row[key]);
       if (value.isNotEmpty) return value;
     }
@@ -929,14 +1081,16 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
 
     final nestedPlayer = row["player"];
     if (nestedPlayer is Map) {
-      final nestedId = _playerId(Map<String, dynamic>.from(nestedPlayer)).trim();
+      final nestedId =
+          _playerId(Map<String, dynamic>.from(nestedPlayer)).trim();
       if (nestedId.isNotEmpty) return "id:$nestedId";
     }
 
     final name = _playerName(row).trim().toLowerCase();
     if (name.isNotEmpty && name != "игрок") return "name:$name";
 
-    final number = _s(row["number"] ?? row["player_number"] ?? row["shirt_number"]).trim();
+    final number =
+        _s(row["number"] ?? row["player_number"] ?? row["shirt_number"]).trim();
     if (number.isNotEmpty) return "number:$number";
 
     return "row:${row.hashCode}";
@@ -966,10 +1120,12 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
     };
 
     for (final key in keys) {
-      result[key] = rows.fold<int>(0, (sum, row) => sum + _mainTtdValue(row, key));
+      result[key] =
+          rows.fold<int>(0, (sum, row) => sum + _mainTtdValue(row, key));
     }
 
-    result["ttd_total"] = rows.fold<int>(0, (sum, row) => sum + _mainTtdTotal(row));
+    result["ttd_total"] =
+        rows.fold<int>(0, (sum, row) => sum + _mainTtdTotal(row));
 
     var effectSum = 0.0;
     var effectCount = 0;
@@ -980,7 +1136,8 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
         effectCount++;
       }
     }
-    result["effect_percent"] = effectCount == 0 ? 0 : (effectSum / effectCount).toStringAsFixed(1);
+    result["effect_percent"] =
+        effectCount == 0 ? 0 : (effectSum / effectCount).toStringAsFixed(1);
     return result;
   }
 
@@ -1026,7 +1183,16 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
         total += _numericValue(byCode["fail"]);
       }
 
-      for (final nested in ["success", "fail", "single", "totals", "metrics", "items", "actions", "ttd"]) {
+      for (final nested in [
+        "success",
+        "fail",
+        "single",
+        "totals",
+        "metrics",
+        "items",
+        "actions",
+        "ttd"
+      ]) {
         total += _valueFromNested(map[nested], key);
       }
 
@@ -1038,10 +1204,15 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
       for (final item in raw) {
         if (item is Map) {
           final map = Map<String, dynamic>.from(item);
-          final code = _s(map["code"] ?? map["key"] ?? map["type"] ?? map["action"] ?? map["action_code"]);
+          final code = _s(map["code"] ??
+              map["key"] ??
+              map["type"] ??
+              map["action"] ??
+              map["action_code"]);
           final title = _s(map["title"] ?? map["name"] ?? map["label"]);
           final aliases = _mainTtdAliases[key] ?? const <String>[];
-          final matches = code == key || aliases.contains(code) || aliases.contains(title);
+          final matches =
+              code == key || aliases.contains(code) || aliases.contains(title);
           if (matches) {
             total += _numericValue(map["total"]);
             total += _numericValue(map["count"]);
@@ -1061,14 +1232,39 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
   }
 
   static const Map<String, List<String>> _mainTtdAliases = {
-    "feint_dribble": ["dribble", "feint", "обводки", "финты", "Обводки / финты"],
-    "shot_on_goal": ["shots", "shot", "shots_on_goal", "удары", "Удары по воротам"],
-    "tackle_duel": ["tackles", "duels", "tackle", "отборы", "единоборства", "Отборы / единоборства"],
+    "feint_dribble": [
+      "dribble",
+      "feint",
+      "обводки",
+      "финты",
+      "Обводки / финты"
+    ],
+    "shot_on_goal": [
+      "shots",
+      "shot",
+      "shots_on_goal",
+      "удары",
+      "Удары по воротам"
+    ],
+    "tackle_duel": [
+      "tackles",
+      "duels",
+      "tackle",
+      "отборы",
+      "единоборства",
+      "Отборы / единоборства"
+    ],
     "interception": ["interceptions", "перехваты", "Перехваты"],
     "recovery": ["recoveries", "подборы", "Подборы"],
     "header_play": ["headers", "header", "игра головой", "Игра головой"],
     "throw_ins": ["throw_in", "throwins", "вбрасывания", "Вбрасывания"],
-    "pass_avp": ["avp", "key_pass", "key_passes", "острые передачи", "Острые передачи"],
+    "pass_avp": [
+      "avp",
+      "key_pass",
+      "key_passes",
+      "острые передачи",
+      "Острые передачи"
+    ],
   };
 
   int _mainTtdValue(Map<String, dynamic> row, String key) {
@@ -1081,7 +1277,16 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
       total += _numericValue(row[alias]);
     }
 
-    for (final nested in ["success", "fail", "single", "totals", "metrics", "items", "actions", "ttd"]) {
+    for (final nested in [
+      "success",
+      "fail",
+      "single",
+      "totals",
+      "metrics",
+      "items",
+      "actions",
+      "ttd"
+    ]) {
       total += _valueFromNested(row[nested], key);
     }
 
@@ -1089,7 +1294,10 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
   }
 
   int _mainTtdTotal(Map<String, dynamic> row) {
-    final direct = _numericValue(row["ttd_total"] ?? row["total_ttd"] ?? row["total"] ?? row["actions_total"]);
+    final direct = _numericValue(row["ttd_total"] ??
+        row["total_ttd"] ??
+        row["total"] ??
+        row["actions_total"]);
     if (direct > 0) return direct;
 
     const mainKeys = [
@@ -1123,7 +1331,10 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
   }
 
   int _goalkeeperTotal(Map<String, dynamic> row) {
-    final direct = _numericValue(row["ttd_total"] ?? row["total_ttd"] ?? row["total"] ?? row["actions_total"]);
+    final direct = _numericValue(row["ttd_total"] ??
+        row["total_ttd"] ??
+        row["total"] ??
+        row["actions_total"]);
     if (direct > 0) return direct;
 
     const keys = [
@@ -1146,7 +1357,16 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
     var total = 0;
     for (final key in keys) {
       total += _numericValue(row[key]);
-      for (final nested in ["success", "fail", "single", "totals", "metrics", "items", "actions", "ttd"]) {
+      for (final nested in [
+        "success",
+        "fail",
+        "single",
+        "totals",
+        "metrics",
+        "items",
+        "actions",
+        "ttd"
+      ]) {
         total += _valueFromNested(row[nested], key);
       }
     }
@@ -1289,12 +1509,14 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
 
         // Поддержка альтернативных ключей от API: match_videos / data.videos.
         final separatedMatchVideos = data["match_videos"];
-        if ((loadedMatch["videos"] is! List || (loadedMatch["videos"] as List).isEmpty) &&
+        if ((loadedMatch["videos"] is! List ||
+                (loadedMatch["videos"] as List).isEmpty) &&
             separatedMatchVideos is List) {
           loadedMatch["videos"] = separatedMatchVideos;
         }
         final nestedData = data["data"];
-        if ((loadedMatch["videos"] is! List || (loadedMatch["videos"] as List).isEmpty) &&
+        if ((loadedMatch["videos"] is! List ||
+                (loadedMatch["videos"] as List).isEmpty) &&
             nestedData is Map &&
             nestedData["videos"] is List) {
           loadedMatch["videos"] = nestedData["videos"];
@@ -1359,10 +1581,9 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
               .map((e) => Map<String, dynamic>.from(e))
               .toList();
 
-          goalkeeperReport =
-              ((data["goalkeeper_report"] as List?) ?? const [])
-                  .map((e) => Map<String, dynamic>.from(e))
-                  .toList();
+          goalkeeperReport = ((data["goalkeeper_report"] as List?) ?? const [])
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList();
 
           playerVideoTotals =
               ((data["player_video_totals"] as List?) ?? const [])
@@ -1472,8 +1693,6 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
     }
   }
 
-
-
   String get _currentMatchActionTitle {
     final explicit = _s(match?["title"] ?? match?["match_title"]);
     if (explicit.isNotEmpty) return explicit;
@@ -1493,7 +1712,8 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: const [
-              Icon(Icons.more_horiz_rounded, color: Color(0xFF344054), size: 18),
+              Icon(Icons.more_horiz_rounded,
+                  color: Color(0xFF344054), size: 18),
               SizedBox(width: 7),
               Text(
                 'Действия',
@@ -1558,7 +1778,8 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
                   ),
                   title: Text(
                     'Переименовать матч',
-                    style: AppTypography.menuTitle(color: const Color(0xFF111827)),
+                    style:
+                        AppTypography.menuTitle(color: const Color(0xFF111827)),
                   ),
                   subtitle: Text(
                     _currentMatchActionTitle,
@@ -1571,24 +1792,32 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
                   },
                 ),
                 ListTile(
-                  leading: const Icon(Icons.edit_note_rounded, color: Color(0xFF28A86B)),
+                  leading: const Icon(Icons.edit_note_rounded,
+                      color: Color(0xFF28A86B)),
                   title: Text(
                     'Редактировать данные матча',
-                    style: AppTypography.menuTitle(color: const Color(0xFF111827)),
+                    style:
+                        AppTypography.menuTitle(color: const Color(0xFF111827)),
                   ),
-                  subtitle: Text('Турнир, дата, стадион, статистика', style: AppTypography.caption(color: const Color(0xFF758079))),
+                  subtitle: Text('Турнир, дата, стадион, статистика',
+                      style: AppTypography.caption(
+                          color: const Color(0xFF758079))),
                   onTap: () {
                     Navigator.of(sheetContext).pop();
                     _openMatchInfoEditorSheet();
                   },
                 ),
                 ListTile(
-                  leading: const Icon(Icons.folder_copy_outlined, color: Color(0xFF28A86B)),
+                  leading: const Icon(Icons.folder_copy_outlined,
+                      color: Color(0xFF28A86B)),
                   title: Text(
                     'Документы и заметки',
-                    style: AppTypography.menuTitle(color: const Color(0xFF111827)),
+                    style:
+                        AppTypography.menuTitle(color: const Color(0xFF111827)),
                   ),
-                  subtitle: Text('Материалы матча и общая рабочая заметка', style: AppTypography.caption(color: const Color(0xFF758079))),
+                  subtitle: Text('Материалы матча и общая рабочая заметка',
+                      style: AppTypography.caption(
+                          color: const Color(0xFF758079))),
                   onTap: () {
                     Navigator.of(sheetContext).pop();
                     _openMatchDocumentsWorkspace();
@@ -1596,10 +1825,12 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
                 ),
                 const Divider(height: 14),
                 ListTile(
-                  leading: const Icon(Icons.delete_forever_outlined, color: Colors.red),
+                  leading: const Icon(Icons.delete_forever_outlined,
+                      color: Colors.red),
                   title: const Text(
                     'Удалить матч',
-                    style: TextStyle(color: Colors.red, fontWeight: FontWeight.w600),
+                    style: TextStyle(
+                        color: Colors.red, fontWeight: FontWeight.w600),
                   ),
                   subtitle: const Text('Матч будет удалён полностью'),
                   onTap: () {
@@ -1825,131 +2056,137 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
   }
 
   Widget _buildHeaderCard() {
-  final title = _s(match?["title"]).isEmpty ? "Матч" : _s(match?["title"]);
-  final eventType = _eventTypeLabel(_s(match?["event_type"]));
-  final competition = _s(match?["competition_name"]);
-  final date = _s(match?["match_date"]).isEmpty
-      ? _s(match?["info_date"])
-      : _s(match?["match_date"]);
+    final title = _s(match?["title"]).isEmpty ? "Матч" : _s(match?["title"]);
+    final eventType = _eventTypeLabel(_s(match?["event_type"]));
+    final competition = _s(match?["competition_name"]);
+    final date = _s(match?["match_date"]).isEmpty
+        ? _s(match?["info_date"])
+        : _s(match?["match_date"]);
 
-  final ourTeam =
-      _s(match?["our_team"]).isEmpty ? teamName : _s(match?["our_team"]);
-  final opponent =
-      _s(match?["opponent"]).isEmpty ? "Соперник" : _s(match?["opponent"]);
+    final ourTeam =
+        _s(match?["our_team"]).isEmpty ? teamName : _s(match?["our_team"]);
+    final opponent =
+        _s(match?["opponent"]).isEmpty ? "Соперник" : _s(match?["opponent"]);
 
-  final ourScore =
-      _s(match?["our_score"]).isEmpty ? "0" : _s(match?["our_score"]);
-  final oppScore = _s(match?["opponent_score"]).isEmpty
-      ? "0"
-      : _s(match?["opponent_score"]);
+    final ourScore =
+        _s(match?["our_score"]).isEmpty ? "0" : _s(match?["our_score"]);
+    final oppScore = _s(match?["opponent_score"]).isEmpty
+        ? "0"
+        : _s(match?["opponent_score"]);
 
-  // Рассчитываем высоту динамически
-  double headerHeight = 0;
-  if (_isHeaderVisible) {
-    headerHeight = 200; // базовая высота
-    if (competition.isNotEmpty || date.isNotEmpty) {
-      headerHeight += 40; // добавляем на дополнительный ряд
+    // Рассчитываем высоту динамически
+    double headerHeight = 0;
+    if (_isHeaderVisible) {
+      headerHeight = 200; // базовая высота
+      if (competition.isNotEmpty || date.isNotEmpty) {
+        headerHeight += 40; // добавляем на дополнительный ряд
+      }
+      if (title.length > 30) {
+        headerHeight += 20; // на длинный заголовок
+      }
     }
-    if (title.length > 30) {
-      headerHeight += 20; // на длинный заголовок
-    }
-  }
 
-  return AnimatedContainer(
-    duration: const Duration(milliseconds: 220),
-    curve: Curves.easeOut,
-    height: _isHeaderVisible ? headerHeight : 0,
-    margin: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-    child: _isHeaderVisible
-        ? _matteSurface(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        title,
-                        style: _TeamMatchUiText.screenTitle(),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    if (eventType.isNotEmpty)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: softAccent,
-                          borderRadius: BorderRadius.circular(20),
-                          
-                        ),
-                        child: Text(
-                          eventType,
-                          style: AppTypography.badge(color: primary),
-                        ),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Expanded(
-                      child: _buildScoreBlock(ourTeam, ourScore, isHome: true),
-                    ),
-                    Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 8),
-                      child: Text(
-                        ":",
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w600,
-                          color: textSecondary,
-                        ),
-                      ),
-                    ),
-                    Expanded(
-                      child: _buildScoreBlock(opponent, oppScore, isHome: false),
-                    ),
-                  ],
-                ),
-                if (competition.isNotEmpty || date.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOut,
+      height: _isHeaderVisible ? headerHeight : 0,
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+      child: _isHeaderVisible
+          ? _matteSurface(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      if (competition.isNotEmpty)
-                        _buildInfoChip(
-                          icon: Icons.emoji_events_outlined,
-                          text: competition,
+                      Expanded(
+                        child: Text(
+                          title,
+                          style: _TeamMatchUiText.screenTitle(),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                      if (date.isNotEmpty)
-                        _buildInfoChip(
-                          icon: Icons.calendar_today_outlined,
-                          text: date,
+                      ),
+                      const SizedBox(width: 8),
+                      if (eventType.isNotEmpty)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: softAccent,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            eventType,
+                            style: AppTypography.badge(color: primary),
+                          ),
                         ),
                     ],
                   ),
+                  const SizedBox(height: 10),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Expanded(
+                        child:
+                            _buildScoreBlock(ourTeam, ourScore, isHome: true),
+                      ),
+                      Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 8),
+                        child: Text(
+                          ":",
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w600,
+                            color: textSecondary,
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child:
+                            _buildScoreBlock(opponent, oppScore, isHome: false),
+                      ),
+                    ],
+                  ),
+                  if (competition.isNotEmpty || date.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
+                        if (competition.isNotEmpty)
+                          _buildInfoChip(
+                            icon: Icons.emoji_events_outlined,
+                            text: competition,
+                          ),
+                        if (date.isNotEmpty)
+                          _buildInfoChip(
+                            icon: Icons.calendar_today_outlined,
+                            text: date,
+                          ),
+                      ],
+                    ),
+                  ],
                 ],
-              ],
-            ),
-          )
-        : null,
-  );
-}
+              ),
+            )
+          : null,
+    );
+  }
 
   Widget _buildOverviewScoreCard({bool compact = false}) {
-    final ourTeam = _s(match?["our_team"]).isEmpty ? teamName : _s(match?["our_team"]);
-    final opponent = _s(match?["opponent"]).isEmpty ? "Соперник" : _s(match?["opponent"]);
-    final ourScore = _s(match?["our_score"]).isEmpty ? "0" : _s(match?["our_score"]);
-    final oppScore = _s(match?["opponent_score"]).isEmpty ? "0" : _s(match?["opponent_score"]);
+    final ourTeam =
+        _s(match?["our_team"]).isEmpty ? teamName : _s(match?["our_team"]);
+    final opponent =
+        _s(match?["opponent"]).isEmpty ? "Соперник" : _s(match?["opponent"]);
+    final ourScore =
+        _s(match?["our_score"]).isEmpty ? "0" : _s(match?["our_score"]);
+    final oppScore = _s(match?["opponent_score"]).isEmpty
+        ? "0"
+        : _s(match?["opponent_score"]);
 
     return Container(
       width: double.infinity,
@@ -1983,7 +2220,6 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
             decoration: BoxDecoration(
               color: softAccent,
               borderRadius: BorderRadius.circular(999),
-              
             ),
             child: Text(
               '$ourScore : $oppScore',
@@ -2046,7 +2282,6 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
       decoration: BoxDecoration(
         color: isHome ? primary.withOpacity(0.09) : const Color(0xFFFFFFFF),
         borderRadius: BorderRadius.circular(16),
-        
       ),
       child: Column(
         children: [
@@ -2082,7 +2317,6 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
       decoration: BoxDecoration(
         color: cardBg,
         borderRadius: BorderRadius.circular(16),
-        
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -2135,7 +2369,6 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
             decoration: BoxDecoration(
               color: color.withOpacity(0.10),
               shape: BoxShape.circle,
-              
             ),
             child: Icon(icon, size: 20, color: color),
           ),
@@ -2167,7 +2400,6 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
       decoration: BoxDecoration(
         color: color.withOpacity(0.075),
         borderRadius: BorderRadius.circular(20),
-        
       ),
       child: Row(
         children: [
@@ -2177,7 +2409,6 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
             decoration: BoxDecoration(
               color: Colors.white.withOpacity(0.85),
               shape: BoxShape.circle,
-              
             ),
             child: Icon(icon, color: color, size: 20),
           ),
@@ -2286,17 +2517,41 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
       children: [
         Row(
           children: [
-            Expanded(child: _overviewMetricTile(label: items[0].label, value: items[0].value, icon: items[0].icon, color: items[0].color, hint: items[0].hint)),
+            Expanded(
+                child: _overviewMetricTile(
+                    label: items[0].label,
+                    value: items[0].value,
+                    icon: items[0].icon,
+                    color: items[0].color,
+                    hint: items[0].hint)),
             const SizedBox(width: 10),
-            Expanded(child: _overviewMetricTile(label: items[1].label, value: items[1].value, icon: items[1].icon, color: items[1].color, hint: items[1].hint)),
+            Expanded(
+                child: _overviewMetricTile(
+                    label: items[1].label,
+                    value: items[1].value,
+                    icon: items[1].icon,
+                    color: items[1].color,
+                    hint: items[1].hint)),
           ],
         ),
         const SizedBox(height: 10),
         Row(
           children: [
-            Expanded(child: _overviewMetricTile(label: items[2].label, value: items[2].value, icon: items[2].icon, color: items[2].color, hint: items[2].hint)),
+            Expanded(
+                child: _overviewMetricTile(
+                    label: items[2].label,
+                    value: items[2].value,
+                    icon: items[2].icon,
+                    color: items[2].color,
+                    hint: items[2].hint)),
             const SizedBox(width: 10),
-            Expanded(child: _overviewMetricTile(label: items[3].label, value: items[3].value, icon: items[3].icon, color: items[3].color, hint: items[3].hint)),
+            Expanded(
+                child: _overviewMetricTile(
+                    label: items[3].label,
+                    value: items[3].value,
+                    icon: items[3].icon,
+                    color: items[3].color,
+                    hint: items[3].hint)),
           ],
         ),
       ],
@@ -2310,20 +2565,19 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(24),
-
       ),
       child: TabBar(
         controller: _tabController,
         isScrollable: true,
         indicatorSize: TabBarIndicatorSize.tab,
         labelPadding: const EdgeInsets.symmetric(horizontal: 12),
-        indicatorPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+        indicatorPadding:
+            const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
         splashBorderRadius: BorderRadius.circular(18),
         overlayColor: WidgetStateProperty.all(Colors.transparent),
         indicator: BoxDecoration(
           color: primary.withOpacity(0.08),
           borderRadius: BorderRadius.circular(16),
-          
         ),
         labelColor: primary,
         unselectedLabelColor: textSecondary,
@@ -2451,7 +2705,8 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
                   .copyWith(fontWeight: FontWeight.w500),
               decoration: InputDecoration(
                 hintText: hint,
-                hintStyle: _TeamMatchUiText.formHint(color: textSecondary.withOpacity(.55)),
+                hintStyle: _TeamMatchUiText.formHint(
+                    color: textSecondary.withOpacity(.55)),
                 contentPadding: EdgeInsets.symmetric(
                   horizontal: 14,
                   vertical: maxLines > 1 ? 14 : 12,
@@ -2628,8 +2883,11 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
         style: TextStyle(color: textPrimary, fontWeight: FontWeight.w600),
         decoration: InputDecoration(
           hintText: hint,
-          hintStyle: TextStyle(color: textSecondary.withOpacity(.65), fontWeight: FontWeight.w600),
-          prefixIcon: Icon(Icons.search_rounded, size: 20, color: textSecondary),
+          hintStyle: TextStyle(
+              color: textSecondary.withOpacity(.65),
+              fontWeight: FontWeight.w600),
+          prefixIcon:
+              Icon(Icons.search_rounded, size: 20, color: textSecondary),
           suffixIcon: _search.isEmpty
               ? null
               : IconButton(
@@ -2637,12 +2895,14 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
                     _searchCtrl.clear();
                     setState(() => _search = '');
                   },
-                  icon: Icon(Icons.close_rounded, size: 18, color: textSecondary),
+                  icon:
+                      Icon(Icons.close_rounded, size: 18, color: textSecondary),
                 ),
           border: InputBorder.none,
           enabledBorder: InputBorder.none,
           focusedBorder: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         ),
       ),
     );
@@ -2753,15 +3013,21 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
             runSpacing: 8,
             children: [
               if (competition.isNotEmpty)
-                _CmrMiniPill(icon: Icons.emoji_events_outlined, text: competition),
+                _CmrMiniPill(
+                    icon: Icons.emoji_events_outlined, text: competition),
               if (date.isNotEmpty)
                 _CmrMiniPill(icon: Icons.calendar_today_outlined, text: date),
               if (tour.isNotEmpty)
                 _CmrMiniPill(icon: Icons.flag_outlined, text: tour),
               if (stadium.isNotEmpty)
                 _CmrMiniPill(icon: Icons.stadium_outlined, text: stadium),
-              if (competition.isEmpty && date.isEmpty && tour.isEmpty && stadium.isEmpty)
-                _CmrMiniPill(icon: Icons.info_outline_rounded, text: 'Заполните данные матча'),
+              if (competition.isEmpty &&
+                  date.isEmpty &&
+                  tour.isEmpty &&
+                  stadium.isEmpty)
+                _CmrMiniPill(
+                    icon: Icons.info_outline_rounded,
+                    text: 'Заполните данные матча'),
             ],
           ),
           if (description.isNotEmpty) ...[
@@ -2842,7 +3108,8 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
                       ? 2
                       : 1;
           final spacing = isNarrow ? 8.0 : 10.0;
-          final width = (constraints.maxWidth - spacing * (columns - 1)) / columns;
+          final width =
+              (constraints.maxWidth - spacing * (columns - 1)) / columns;
 
           return Wrap(
             spacing: spacing,
@@ -2875,7 +3142,6 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(14),
-
                 ),
                 child: Icon(action.icon, color: primary, size: 20),
               ),
@@ -2913,7 +3179,6 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(14),
-                  
                 ),
                 child: Icon(action.icon, color: primary, size: 20),
               ),
@@ -2946,7 +3211,8 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
                   ],
                 ),
               ),
-              Icon(Icons.chevron_right_rounded, color: primary.withOpacity(0.65), size: 20),
+              Icon(Icons.chevron_right_rounded,
+                  color: primary.withOpacity(0.65), size: 20),
             ],
           );
 
@@ -2962,7 +3228,6 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
           padding: EdgeInsets.all(dense ? 12 : 13),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(20),
-            
           ),
           child: content,
         ),
@@ -2980,7 +3245,9 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
       ),
       _OverviewMetricData(
         label: 'В створ',
-        value: _s(_shotsOnTargetCtrl.text).isEmpty ? '—' : _s(_shotsOnTargetCtrl.text),
+        value: _s(_shotsOnTargetCtrl.text).isEmpty
+            ? '—'
+            : _s(_shotsOnTargetCtrl.text),
         icon: Icons.adjust_rounded,
         color: _overviewAccent(1),
       ),
@@ -3014,7 +3281,8 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
       title: 'Матчевые показатели',
       subtitle: 'быстрая сводка для тренера после игры',
       trailing: Tooltip(
-        message: 'Данные можно изменить через кнопку редактирования в карточке матча.',
+        message:
+            'Данные можно изменить через кнопку редактирования в карточке матча.',
         child: Icon(Icons.help_outline_rounded, size: 18, color: textSecondary),
       ),
       child: Column(
@@ -3029,7 +3297,8 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
                   color: softAccent,
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(Icons.query_stats_rounded, size: 18, color: primary),
+                child:
+                    Icon(Icons.query_stats_rounded, size: 18, color: primary),
               ),
               const SizedBox(width: 8),
               Expanded(
@@ -3047,9 +3316,14 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
           const SizedBox(height: 10),
           LayoutBuilder(
             builder: (context, constraints) {
-              final columns = constraints.maxWidth > 980 ? 6 : constraints.maxWidth > 620 ? 3 : 2;
+              final columns = constraints.maxWidth > 980
+                  ? 6
+                  : constraints.maxWidth > 620
+                      ? 3
+                      : 2;
               final spacing = 10.0;
-              final itemWidth = (constraints.maxWidth - spacing * (columns - 1)) / columns;
+              final itemWidth =
+                  (constraints.maxWidth - spacing * (columns - 1)) / columns;
               return Wrap(
                 spacing: spacing,
                 runSpacing: spacing,
@@ -3073,7 +3347,6 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
       decoration: BoxDecoration(
         color: const Color(0xFFF6F8FA),
         borderRadius: BorderRadius.circular(17),
-        
       ),
       child: Row(
         children: [
@@ -3083,7 +3356,6 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(12),
-              
             ),
             child: Icon(item.icon, color: item.color, size: 17),
           ),
@@ -3151,7 +3423,8 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
                 return Container(
                   decoration: const BoxDecoration(
                     color: Color(0xFFF6F8FA),
-                    borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+                    borderRadius:
+                        BorderRadius.vertical(top: Radius.circular(28)),
                   ),
                   child: Column(
                     children: [
@@ -3179,7 +3452,6 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
                               decoration: BoxDecoration(
                                 color: const Color(0xFFF2F7F4),
                                 borderRadius: BorderRadius.circular(16),
-                                
                               ),
                               child: const Icon(
                                 Icons.edit_calendar_rounded,
@@ -3259,7 +3531,8 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
                                     foregroundColor: const Color(0xFF101828),
                                     side: BorderSide.none,
                                     backgroundColor: const Color(0xFFF6F8FA),
-                                    padding: const EdgeInsets.symmetric(vertical: 14),
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 14),
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(16),
                                     ),
@@ -3286,14 +3559,21 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
                                       ? const SizedBox(
                                           width: 18,
                                           height: 18,
-                                          child: CircularProgressIndicator(strokeWidth: 2),
+                                          child: CircularProgressIndicator(
+                                              strokeWidth: 2),
                                         )
                                       : const Icon(Icons.check_rounded),
-                                  label: FittedBox(fit: BoxFit.scaleDown, child: Text(saving ? 'Сохраняем...' : 'Сохранить', maxLines: 1, overflow: TextOverflow.ellipsis)),
+                                  label: FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      child: Text(
+                                          saving ? 'Сохраняем...' : 'Сохранить',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis)),
                                   style: FilledButton.styleFrom(
                                     backgroundColor: const Color(0xFF1F7A4D),
                                     foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(vertical: 14),
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 14),
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(16),
                                     ),
@@ -3322,12 +3602,15 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
 
   Widget _buildMatchInfoEditorFields({required bool isPhone}) {
     final fields = [
-      _EditorFieldBlock(title: 'Турнир / первенство', controller: _competitionCtrl),
-      _EditorFieldBlock(title: 'Дата', controller: _dateCtrl, hint: 'ГГГГ-ММ-ДД'),
+      _EditorFieldBlock(
+          title: 'Турнир / первенство', controller: _competitionCtrl),
+      _EditorFieldBlock(
+          title: 'Дата', controller: _dateCtrl, hint: 'ГГГГ-ММ-ДД'),
       _EditorFieldBlock(title: 'Тур / этап', controller: _tourCtrl),
       _EditorFieldBlock(title: 'Стадион', controller: _stadiumCtrl),
       _EditorFieldBlock(title: 'Судьи', controller: _refereesCtrl),
-      _EditorFieldBlock(title: 'Примечания', controller: _notesCtrl, maxLines: 3),
+      _EditorFieldBlock(
+          title: 'Примечания', controller: _notesCtrl, maxLines: 3),
     ];
 
     return Column(
@@ -3399,18 +3682,27 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
           subtitle: 'быстрые числовые показатели для отчёта',
           child: LayoutBuilder(
             builder: (context, constraints) {
-              final columns = constraints.maxWidth > 760 ? 3 : constraints.maxWidth > 460 ? 2 : 1;
+              final columns = constraints.maxWidth > 760
+                  ? 3
+                  : constraints.maxWidth > 460
+                      ? 2
+                      : 1;
               final items = [
                 _EditorFieldBlock(title: 'Удары', controller: _shotsCtrl),
-                _EditorFieldBlock(title: 'Удары в створ', controller: _shotsOnTargetCtrl),
+                _EditorFieldBlock(
+                    title: 'Удары в створ', controller: _shotsOnTargetCtrl),
                 _EditorFieldBlock(title: 'Угловые', controller: _cornersCtrl),
                 _EditorFieldBlock(title: 'Офсайды', controller: _offsidesCtrl),
-                _EditorFieldBlock(title: 'Владение, %', controller: _possessionCtrl),
-                _EditorFieldBlock(title: 'Жёлтые карточки', controller: _yellowCtrl),
-                _EditorFieldBlock(title: 'Красные карточки', controller: _redCtrl),
+                _EditorFieldBlock(
+                    title: 'Владение, %', controller: _possessionCtrl),
+                _EditorFieldBlock(
+                    title: 'Жёлтые карточки', controller: _yellowCtrl),
+                _EditorFieldBlock(
+                    title: 'Красные карточки', controller: _redCtrl),
               ];
               final spacing = 10.0;
-              final itemWidth = (constraints.maxWidth - spacing * (columns - 1)) / columns;
+              final itemWidth =
+                  (constraints.maxWidth - spacing * (columns - 1)) / columns;
 
               return Wrap(
                 spacing: spacing,
@@ -3453,7 +3745,6 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -3487,12 +3778,14 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
     return _buildSectionCard(
       title: 'Редактирование матча',
       subtitle: 'данные матча, статистика и комментарий тренера',
-      child: _buildMatchInfoEditorFields(isPhone: MediaQuery.of(context).size.width < 600),
+      child: _buildMatchInfoEditorFields(
+          isPhone: MediaQuery.of(context).size.width < 600),
     );
   }
 
   Widget _reportRowMain(Map<String, dynamic> row) {
-    final playerName = _s(row["player_name"]).isEmpty ? "Игрок" : _s(row["player_name"]);
+    final playerName =
+        _s(row["player_name"]).isEmpty ? "Игрок" : _s(row["player_name"]);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -3500,7 +3793,6 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -3525,7 +3817,8 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
             children: [
               Expanded(child: _smallBadge("Отборы", _s(row["tackle_duel"]))),
               const SizedBox(width: 8),
-              Expanded(child: _smallBadge("Перехваты", _s(row["interception"]))),
+              Expanded(
+                  child: _smallBadge("Перехваты", _s(row["interception"]))),
             ],
           ),
           const SizedBox(height: 8),
@@ -3617,7 +3910,8 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
       children: [
         _buildSectionCard(
           title: "Основные ТТД",
-          subtitle: "Список игроков. Детальная карточка открывается в модальном окне.",
+          subtitle:
+              "Список игроков. Детальная карточка открывается в модальном окне.",
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -3648,7 +3942,9 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
     if (!mounted) return;
 
     final title = isSummary ? "Суммарные ТТД команды" : _playerName(row);
-    final subtitle = isSummary ? "Общая картина по матчу" : "Индивидуальная карточка действий";
+    final subtitle = isSummary
+        ? "Общая картина по матчу"
+        : "Индивидуальная карточка действий";
 
     await showModalBottomSheet<void>(
       context: context,
@@ -3668,7 +3964,6 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(22),
-                
               ),
               child: Column(
                 children: [
@@ -3683,7 +3978,8 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
                                 color: softAccent,
                                 borderRadius: BorderRadius.circular(17),
                               ),
-                              child: Icon(Icons.groups_2_outlined, color: primary, size: 25),
+                              child: Icon(Icons.groups_2_outlined,
+                                  color: primary, size: 25),
                             )
                           : _PlayerAvatar(
                               imageUrl: _playerPhotoUrl(row),
@@ -3769,7 +4065,6 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(22),
-                
               ),
               child: Column(
                 children: [
@@ -3856,7 +4151,8 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
     );
   }
 
-  Widget _buildMainTtdPlayerList(List<Map<String, dynamic>> rows, {bool compact = false}) {
+  Widget _buildMainTtdPlayerList(List<Map<String, dynamic>> rows,
+      {bool compact = false}) {
     final selectedKey = _selectedMainTtdPlayerKey;
     final summaryActive = selectedKey == null;
     final summaryRow = _summaryMainTtdRow(rows);
@@ -3864,7 +4160,8 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
     final playerButtons = rows.map((row) {
       final key = _mainTtdPlayerKey(row);
       final name = _playerName(row);
-      final position = _translatePosition(_s(row["group_key"] ?? row["position"] ?? row["role"]));
+      final position = _translatePosition(
+          _s(row["group_key"] ?? row["position"] ?? row["role"]));
       return _mainTtdPlayerButton(
         title: name,
         subtitle: position,
@@ -3927,7 +4224,8 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
       final index = entry.key;
       final row = entry.value;
       final key = _mainTtdPlayerKey(row);
-      final active = _selectedGoalkeeperKey == key || (_selectedGoalkeeperKey == null && index == 0);
+      final active = _selectedGoalkeeperKey == key ||
+          (_selectedGoalkeeperKey == null && index == 0);
 
       return _mainTtdPlayerButton(
         title: _playerName(row),
@@ -3955,7 +4253,8 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
       child: compact
           ? Column(children: listChildren)
           : SizedBox(
-              height: min(330.0, max(120.0, goalkeeperReport.length * 76.0 + 20.0)),
+              height:
+                  min(330.0, max(120.0, goalkeeperReport.length * 76.0 + 20.0)),
               child: Container(
                 padding: const EdgeInsets.all(9),
                 decoration: BoxDecoration(
@@ -3993,7 +4292,6 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
-            
           ),
           child: Row(
             children: [
@@ -4005,7 +4303,8 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
                         color: softAccent,
                         borderRadius: BorderRadius.circular(14),
                       ),
-                      child: Icon(Icons.groups_2_outlined, color: primary, size: 22),
+                      child: Icon(Icons.groups_2_outlined,
+                          color: primary, size: 22),
                     )
                   : _PlayerAvatar(
                       imageUrl: imageUrl,
@@ -4071,26 +4370,37 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
     bool showHeader = true,
   }) {
     final title = isSummary ? "Суммарные ТТД команды" : _playerName(row);
-    final subtitle = isSummary ? "Общая картина по матчу" : "Индивидуальная карточка действий";
+    final subtitle = isSummary
+        ? "Общая картина по матчу"
+        : "Индивидуальная карточка действий";
 
     final metrics = LayoutBuilder(
       builder: (context, c) {
         final twoCols = c.maxWidth > 520;
         final children = [
-          _ttdMetricCard("Обводки", "${_mainTtdValue(row, "feint_dribble")}", Icons.directions_run_rounded),
-          _ttdMetricCard("Удары", "${_mainTtdValue(row, "shot_on_goal")}", Icons.sports_soccer_rounded),
-          _ttdMetricCard("Отборы", "${_mainTtdValue(row, "tackle_duel")}", Icons.shield_outlined),
-          _ttdMetricCard("Перехваты", "${_mainTtdValue(row, "interception")}", Icons.swap_horiz_rounded),
-          _ttdMetricCard("Подборы", "${_mainTtdValue(row, "recovery")}", Icons.restart_alt_rounded),
-          _ttdMetricCard("Игра головой", "${_mainTtdValue(row, "header_play")}", Icons.sports_handball_outlined),
-          _ttdMetricCard("Вбрасывания", "${_mainTtdValue(row, "throw_ins")}", Icons.north_east_rounded),
-          _ttdMetricCard("Острые пасы", "${_mainTtdValue(row, "pass_avp")}", Icons.trending_up_rounded),
+          _ttdMetricCard("Обводки", "${_mainTtdValue(row, "feint_dribble")}",
+              Icons.directions_run_rounded),
+          _ttdMetricCard("Удары", "${_mainTtdValue(row, "shot_on_goal")}",
+              Icons.sports_soccer_rounded),
+          _ttdMetricCard("Отборы", "${_mainTtdValue(row, "tackle_duel")}",
+              Icons.shield_outlined),
+          _ttdMetricCard("Перехваты", "${_mainTtdValue(row, "interception")}",
+              Icons.swap_horiz_rounded),
+          _ttdMetricCard("Подборы", "${_mainTtdValue(row, "recovery")}",
+              Icons.restart_alt_rounded),
+          _ttdMetricCard("Игра головой", "${_mainTtdValue(row, "header_play")}",
+              Icons.sports_handball_outlined),
+          _ttdMetricCard("Вбрасывания", "${_mainTtdValue(row, "throw_ins")}",
+              Icons.north_east_rounded),
+          _ttdMetricCard("Острые пасы", "${_mainTtdValue(row, "pass_avp")}",
+              Icons.trending_up_rounded),
         ];
 
         if (!twoCols) {
           return Column(
             children: children
-                .map((e) => Padding(padding: const EdgeInsets.only(bottom: 8), child: e))
+                .map((e) => Padding(
+                    padding: const EdgeInsets.only(bottom: 8), child: e))
                 .toList(),
           );
         }
@@ -4114,9 +4424,9 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
                 decoration: BoxDecoration(
                   color: softAccent,
                   borderRadius: BorderRadius.circular(16),
-                  
                 ),
-                child: Icon(Icons.analytics_outlined, color: primary, size: flatMobile ? 24 : 28),
+                child: Icon(Icons.analytics_outlined,
+                    color: primary, size: flatMobile ? 24 : 28),
               )
             : _PlayerAvatar(
                 imageUrl: _playerPhotoUrl(row),
@@ -4158,9 +4468,13 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
 
     final totals = Row(
       children: [
-        Expanded(child: _smallBadge("Итого", "${_mainTtdTotal(row)}", color: primary)),
+        Expanded(
+            child:
+                _smallBadge("Итого", "${_mainTtdTotal(row)}", color: primary)),
         const SizedBox(width: 8),
-        Expanded(child: _smallBadge("Эффективность", "${_s(row["effect_percent"])}%", color: const Color(0xFF101828))),
+        Expanded(
+            child: _smallBadge("Эффективность", "${_s(row["effect_percent"])}%",
+                color: const Color(0xFF101828))),
       ],
     );
 
@@ -4173,7 +4487,6 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(18),
-          
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -4195,7 +4508,6 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(22),
-
       ),
       child: Column(
         children: [
@@ -4225,7 +4537,6 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
       decoration: BoxDecoration(
         color: const Color(0xFFF6F8FA),
         borderRadius: BorderRadius.circular(16),
-        
       ),
       child: Row(
         children: [
@@ -4235,7 +4546,6 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(12),
-              
             ),
             child: Icon(icon, size: 18, color: primary),
           ),
@@ -4267,7 +4577,8 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
   }
 
   Widget _reportRowPass(Map<String, dynamic> row) {
-    final playerName = _s(row["player_name"]).isEmpty ? "Игрок" : _s(row["player_name"]);
+    final playerName =
+        _s(row["player_name"]).isEmpty ? "Игрок" : _s(row["player_name"]);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -4275,7 +4586,6 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -4290,11 +4600,14 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
           const SizedBox(height: 10),
           Row(
             children: [
-              Expanded(child: _smallBadge("Вперёд к.", _s(row["forward_short"]))),
+              Expanded(
+                  child: _smallBadge("Вперёд к.", _s(row["forward_short"]))),
               const SizedBox(width: 8),
-              Expanded(child: _smallBadge("Вперёд с.", _s(row["forward_medium"]))),
+              Expanded(
+                  child: _smallBadge("Вперёд с.", _s(row["forward_medium"]))),
               const SizedBox(width: 8),
-              Expanded(child: _smallBadge("Вперёд д.", _s(row["forward_long"]))),
+              Expanded(
+                  child: _smallBadge("Вперёд д.", _s(row["forward_long"]))),
             ],
           ),
           const SizedBox(height: 8),
@@ -4302,7 +4615,8 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
             children: [
               Expanded(child: _smallBadge("Поперёк к.", _s(row["side_short"]))),
               const SizedBox(width: 8),
-              Expanded(child: _smallBadge("Поперёк с.", _s(row["side_medium"]))),
+              Expanded(
+                  child: _smallBadge("Поперёк с.", _s(row["side_medium"]))),
               const SizedBox(width: 8),
               Expanded(child: _smallBadge("Поперёк д.", _s(row["side_long"]))),
             ],
@@ -4348,14 +4662,17 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
     final selectedRow = _selectedGoalkeeperKey == null
         ? goalkeeperReport.first
         : goalkeeperReport.cast<Map<String, dynamic>?>().firstWhere(
-              (row) => row != null && _mainTtdPlayerKey(row) == _selectedGoalkeeperKey,
+              (row) =>
+                  row != null &&
+                  _mainTtdPlayerKey(row) == _selectedGoalkeeperKey,
               orElse: () => goalkeeperReport.first,
             )!;
 
     if (compact || goalkeeperReport.length == 1) {
       return _buildSectionCard(
         title: "Вратарская статистика",
-        subtitle: "Та же логика: выбираем вратаря и смотрим действия в компактной карточке",
+        subtitle:
+            "Та же логика: выбираем вратаря и смотрим действия в компактной карточке",
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -4375,9 +4692,11 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
                       child: _mainTtdPlayerButton(
                         title: _playerName(row),
                         subtitle: "вратарь",
-                        active: _selectedGoalkeeperKey == key || (_selectedGoalkeeperKey == null && index == 0),
+                        active: _selectedGoalkeeperKey == key ||
+                            (_selectedGoalkeeperKey == null && index == 0),
                         imageUrl: _playerPhotoUrl(row),
-                        onTap: () => setState(() => _selectedGoalkeeperKey = key),
+                        onTap: () =>
+                            setState(() => _selectedGoalkeeperKey = key),
                         total: _goalkeeperTotal(row),
                       ),
                     );
@@ -4398,7 +4717,8 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
     final h = 330.0;
     return _buildSectionCard(
       title: "Вратарская статистика",
-      subtitle: "Слева список вратарей, справа зафиксированная карточка действий",
+      subtitle:
+          "Слева список вратарей, справа зафиксированная карточка действий",
       child: SizedBox(
         height: h,
         child: Row(
@@ -4412,7 +4732,6 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
                 decoration: BoxDecoration(
                   color: const Color(0xFFF6F8FA),
                   borderRadius: BorderRadius.circular(18),
-                  
                 ),
                 child: Scrollbar(
                   thumbVisibility: false,
@@ -4427,9 +4746,11 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
                       return _mainTtdPlayerButton(
                         title: _playerName(row),
                         subtitle: "вратарь",
-                        active: _selectedGoalkeeperKey == key || (_selectedGoalkeeperKey == null && index == 0),
+                        active: _selectedGoalkeeperKey == key ||
+                            (_selectedGoalkeeperKey == null && index == 0),
                         imageUrl: _playerPhotoUrl(row),
-                        onTap: () => setState(() => _selectedGoalkeeperKey = key),
+                        onTap: () =>
+                            setState(() => _selectedGoalkeeperKey = key),
                         total: _goalkeeperTotal(row),
                       );
                     },
@@ -4451,21 +4772,48 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
   }
 
   Widget _goalkeeperTile(Map<String, dynamic> row, {bool showHeader = true}) {
-    final playerName = _s(row["player_name"]).isEmpty ? "Вратарь" : _s(row["player_name"]);
+    final playerName =
+        _s(row["player_name"]).isEmpty ? "Вратарь" : _s(row["player_name"]);
     final total = _goalkeeperTotal(row);
-    final effect = _s(row["effect_percent"]).isEmpty ? "0" : _s(row["effect_percent"]);
+    final effect =
+        _s(row["effect_percent"]).isEmpty ? "0" : _s(row["effect_percent"]);
 
     final items = [
       _ttdMetricCard("Сейвы", _s(row["saves"]), Icons.sports_handball_outlined),
-      _ttdMetricCard("Пропущено", _s(row["conceded"]), Icons.remove_circle_outline_rounded),
-      _ttdMetricCard("Ввод рукой", _s(row["hand_distribution"]), Icons.pan_tool_alt_outlined),
-      _ttdMetricCard("Выходы", _s(row["coming_out"]), Icons.open_in_full_rounded),
-      _ttdMetricCard("Ближний бой", _s(row["close_combat"]), Icons.shield_outlined),
-      _ttdMetricCard("Перехваты", _s(row["interceptions"]).isEmpty ? _s(row["interceptions_gk"]) : _s(row["interceptions"]), Icons.swap_horiz_rounded),
-      _ttdMetricCard("Вне штрафной", _s(row["outside_box"]), Icons.crop_free_rounded),
-      _ttdMetricCard("Пас короткий", _s(row["pass_short"]).isEmpty ? _s(row["gk_pass_short"]) : _s(row["pass_short"]), Icons.short_text_rounded),
-      _ttdMetricCard("Пас средний", _s(row["pass_medium"]).isEmpty ? _s(row["gk_pass_medium"]) : _s(row["pass_medium"]), Icons.horizontal_rule_rounded),
-      _ttdMetricCard("Пас длинный", _s(row["pass_long"]).isEmpty ? _s(row["gk_pass_long"]) : _s(row["pass_long"]), Icons.trending_flat_rounded),
+      _ttdMetricCard("Пропущено", _s(row["conceded"]),
+          Icons.remove_circle_outline_rounded),
+      _ttdMetricCard("Ввод рукой", _s(row["hand_distribution"]),
+          Icons.pan_tool_alt_outlined),
+      _ttdMetricCard(
+          "Выходы", _s(row["coming_out"]), Icons.open_in_full_rounded),
+      _ttdMetricCard(
+          "Ближний бой", _s(row["close_combat"]), Icons.shield_outlined),
+      _ttdMetricCard(
+          "Перехваты",
+          _s(row["interceptions"]).isEmpty
+              ? _s(row["interceptions_gk"])
+              : _s(row["interceptions"]),
+          Icons.swap_horiz_rounded),
+      _ttdMetricCard(
+          "Вне штрафной", _s(row["outside_box"]), Icons.crop_free_rounded),
+      _ttdMetricCard(
+          "Пас короткий",
+          _s(row["pass_short"]).isEmpty
+              ? _s(row["gk_pass_short"])
+              : _s(row["pass_short"]),
+          Icons.short_text_rounded),
+      _ttdMetricCard(
+          "Пас средний",
+          _s(row["pass_medium"]).isEmpty
+              ? _s(row["gk_pass_medium"])
+              : _s(row["pass_medium"]),
+          Icons.horizontal_rule_rounded),
+      _ttdMetricCard(
+          "Пас длинный",
+          _s(row["pass_long"]).isEmpty
+              ? _s(row["gk_pass_long"])
+              : _s(row["pass_long"]),
+          Icons.trending_flat_rounded),
     ];
 
     return Container(
@@ -4474,7 +4822,6 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
-
       ),
       child: Column(
         children: [
@@ -4516,7 +4863,8 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
                 const SizedBox(width: 8),
                 _smallBadge("Итого", "$total", color: primary),
                 const SizedBox(width: 8),
-                _smallBadge("Эффект", "$effect%", color: const Color(0xFF1F7A4D)),
+                _smallBadge("Эффект", "$effect%",
+                    color: const Color(0xFF1F7A4D)),
               ],
             ),
             const SizedBox(height: 14),
@@ -4538,320 +4886,322 @@ class _TeamMatchDetailScreenState extends State<TeamMatchDetailScreen>
     );
   }
 
-  List<_PlayerMetricItem> _buildMetricsFromVideoTotals(Map<String, dynamic> row) {
-  final success = Map<String, dynamic>.from(row["success"] ?? {});
-  final fail = Map<String, dynamic>.from(row["fail"] ?? {});
-  final single = Map<String, dynamic>.from(row["single"] ?? {});
+  List<_PlayerMetricItem> _buildMetricsFromVideoTotals(
+      Map<String, dynamic> row) {
+    final success = Map<String, dynamic>.from(row["success"] ?? {});
+    final fail = Map<String, dynamic>.from(row["fail"] ?? {});
+    final single = Map<String, dynamic>.from(row["single"] ?? {});
 
-  // Расширенный маппинг для всех метрик
-  final metricTitles = <String, String>{
-    // Полевые игроки
-    'feint_dribble': 'Обводки / финты',
-    'shot_on_goal': 'Удары по воротам',
-    'tackle_duel': 'Отборы / единоборства',
-    'interception': 'Перехваты',
-    'recovery': 'Подборы',
-    'header_play': 'Игра головой',
-    'throw_ins': 'Вбрасывания',
-    'pass_avp': 'Острые передачи',
-    // Передачи
-    'forward_short': 'Передачи вперёд короткие',
-    'forward_medium': 'Передачи вперёд средние',
-    'forward_long': 'Передачи вперёд длинные',
-    'side_short': 'Передачи поперёк короткие',
-    'side_medium': 'Передачи поперёк средние',
-    'side_long': 'Передачи поперёк длинные',
-    'back_short': 'Передачи назад короткие',
-    'back_medium': 'Передачи назад средние',
-    'back_long': 'Передачи назад длинные',
-    // Вратарь
-    'hand_distribution': 'Ввод мяча рукой',
-    'coming_out': 'Игра на выходах',
-    'close_combat': 'Ближний бой',
-    'interceptions_gk': 'Перехваты вратаря',
-    'interceptions': 'Перехваты вратаря',
-    'outside_box': 'Игра за штрафной',
-    'pass_short': 'Передачи вратаря короткие',
-    'pass_medium': 'Передачи вратаря средние',
-    'pass_long': 'Передачи вратаря длинные',
-    'gk_pass_short': 'Передачи вратаря короткие',
-    'gk_pass_medium': 'Передачи вратаря средние',
-    'gk_pass_long': 'Передачи вратаря длинные',
-    // Общие для всех
-    'saves': 'Сейвы',
-    'conceded': 'Пропущенные голы',
-    'goal': 'Голы',
-    'assist': 'Голевые передачи',
-    'yellow_card': 'Жёлтые карточки',
-    'red_card': 'Красные карточки',
-    'foul': 'Фолы',
-    'foul_on': 'Фолы на себе',
-    'offside': 'Офсайды',
-    'corner': 'Угловые',
-    'free_kick': 'Штрафные удары',
-    'penalty': 'Пенальти',
-  };
+    // Расширенный маппинг для всех метрик
+    final metricTitles = <String, String>{
+      // Полевые игроки
+      'feint_dribble': 'Обводки / финты',
+      'shot_on_goal': 'Удары по воротам',
+      'tackle_duel': 'Отборы / единоборства',
+      'interception': 'Перехваты',
+      'recovery': 'Подборы',
+      'header_play': 'Игра головой',
+      'throw_ins': 'Вбрасывания',
+      'pass_avp': 'Острые передачи',
+      // Передачи
+      'forward_short': 'Передачи вперёд короткие',
+      'forward_medium': 'Передачи вперёд средние',
+      'forward_long': 'Передачи вперёд длинные',
+      'side_short': 'Передачи поперёк короткие',
+      'side_medium': 'Передачи поперёк средние',
+      'side_long': 'Передачи поперёк длинные',
+      'back_short': 'Передачи назад короткие',
+      'back_medium': 'Передачи назад средние',
+      'back_long': 'Передачи назад длинные',
+      // Вратарь
+      'hand_distribution': 'Ввод мяча рукой',
+      'coming_out': 'Игра на выходах',
+      'close_combat': 'Ближний бой',
+      'interceptions_gk': 'Перехваты вратаря',
+      'interceptions': 'Перехваты вратаря',
+      'outside_box': 'Игра за штрафной',
+      'pass_short': 'Передачи вратаря короткие',
+      'pass_medium': 'Передачи вратаря средние',
+      'pass_long': 'Передачи вратаря длинные',
+      'gk_pass_short': 'Передачи вратаря короткие',
+      'gk_pass_medium': 'Передачи вратаря средние',
+      'gk_pass_long': 'Передачи вратаря длинные',
+      // Общие для всех
+      'saves': 'Сейвы',
+      'conceded': 'Пропущенные голы',
+      'goal': 'Голы',
+      'assist': 'Голевые передачи',
+      'yellow_card': 'Жёлтые карточки',
+      'red_card': 'Красные карточки',
+      'foul': 'Фолы',
+      'foul_on': 'Фолы на себе',
+      'offside': 'Офсайды',
+      'corner': 'Угловые',
+      'free_kick': 'Штрафные удары',
+      'penalty': 'Пенальти',
+    };
 
-  final items = <_PlayerMetricItem>[];
+    final items = <_PlayerMetricItem>[];
 
-  // Собираем все ключи из success, fail и single
-  final allKeys = <String>{};
-  allKeys.addAll(success.keys);
-  allKeys.addAll(fail.keys);
-  allKeys.addAll(single.keys);
+    // Собираем все ключи из success, fail и single
+    final allKeys = <String>{};
+    allKeys.addAll(success.keys);
+    allKeys.addAll(fail.keys);
+    allKeys.addAll(single.keys);
 
-  for (final code in allKeys) {
-    final s = _i(success[code]);
-    final f = _i(fail[code]);
-    final singleValue = _i(single[code]);
-    
-    // Пропускаем нулевые значения
-    if (s + f + singleValue <= 0) continue;
+    for (final code in allKeys) {
+      final s = _i(success[code]);
+      final f = _i(fail[code]);
+      final singleValue = _i(single[code]);
 
-    // Получаем название или используем сам код с преобразованием
-    String title = metricTitles[code] ?? _normalizeKey(code);
-    
-    if (singleValue > 0) {
-      items.add(
-        _PlayerMetricItem(
-          code: code,
-          title: title,
-          success: singleValue,
-          fail: 0,
+      // Пропускаем нулевые значения
+      if (s + f + singleValue <= 0) continue;
+
+      // Получаем название или используем сам код с преобразованием
+      String title = metricTitles[code] ?? _normalizeKey(code);
+
+      if (singleValue > 0) {
+        items.add(
+          _PlayerMetricItem(
+            code: code,
+            title: title,
+            success: singleValue,
+            fail: 0,
+          ),
+        );
+      } else {
+        items.add(
+          _PlayerMetricItem(
+            code: code,
+            title: title,
+            success: s,
+            fail: f,
+          ),
+        );
+      }
+    }
+
+    items.sort((a, b) => b.total.compareTo(a.total));
+    return items;
+  }
+
+// Вспомогательная функция для преобразования snake_case в читаемый текст
+  String _normalizeKey(String key) {
+    // Разбиваем по подчёркиваниям
+    final parts = key.split('_');
+
+    // Словарь для перевода отдельных слов
+    const wordMap = {
+      'gk': 'вратаря',
+      'pass': 'передачи',
+      'short': 'короткие',
+      'medium': 'средние',
+      'long': 'длинные',
+      'forward': 'вперёд',
+      'back': 'назад',
+      'side': 'поперёк',
+      'hand': 'рукой',
+      'distribution': 'ввод',
+      'coming': 'выходы',
+      'out': 'игра',
+      'close': 'ближний',
+      'combat': 'бой',
+      'interceptions': 'перехваты',
+      'outside': 'вне',
+      'box': 'штрафной',
+      'feint': 'обводки',
+      'dribble': 'финты',
+      'shot': 'удары',
+      'goal': 'ворота',
+      'tackle': 'отборы',
+      'duel': 'единоборства',
+      'interception': 'перехваты',
+      'recovery': 'подборы',
+      'header': 'игра',
+      'play': 'головой',
+      'throw': 'вбрасывания',
+      'ins': 'ауты',
+      'avp': 'острые',
+      'saves': 'сейвы',
+      'conceded': 'пропущенные',
+    };
+
+    // Переводим каждую часть
+    final translatedParts = parts.map((part) {
+      return wordMap[part.toLowerCase()] ?? part;
+    }).toList();
+
+    // Собираем обратно с заглавной буквы
+    String result = translatedParts.join(' ');
+    if (result.isNotEmpty) {
+      result = result[0].toUpperCase() + result.substring(1);
+    }
+
+    return result;
+  }
+
+  Widget _playerTotalsTile(Map<String, dynamic> row) {
+    final playerName =
+        _s(row["player_name"]).isEmpty ? "Игрок" : _s(row["player_name"]);
+    final groupKey = _s(row["group_key"]);
+
+    // Переводим амплуа игрока
+    String position = _translatePosition(groupKey);
+
+    final metrics = _buildMetricsFromVideoTotals(row);
+
+    int totalSuccess = 0;
+    int totalFail = 0;
+    for (final m in metrics) {
+      totalSuccess += m.success;
+      totalFail += m.fail;
+    }
+    final total = totalSuccess + totalFail;
+    final efficiency = total > 0 ? (totalSuccess / total) * 100 : 0.0;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: ExpansionTile(
+        tilePadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+        childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+        leading: _PlayerAvatar(
+          imageUrl: _playerPhotoUrl(row),
+          name: playerName,
+          primary: primary,
+          size: 46,
         ),
-      );
-    } else {
-      items.add(
-        _PlayerMetricItem(
-          code: code,
-          title: title,
-          success: s,
-          fail: f,
+        title: Text(
+          playerName,
+          style: const TextStyle(
+            fontWeight: FontWeight.w600,
+          ),
         ),
-      );
+        subtitle: Text(
+          position,
+          style: TextStyle(
+            color: textSecondary,
+            fontWeight: FontWeight.w600,
+            fontSize: 12,
+          ),
+        ),
+        children: [
+          Row(
+            children: [
+              Expanded(child: _smallBadge("Всего", '$total')),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _smallBadge(
+                  "Успешно",
+                  '$totalSuccess',
+                  color: Colors.green,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _smallBadge(
+                  "Ошибки",
+                  '$totalFail',
+                  color: Colors.red,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (metrics.isEmpty)
+            Text(
+              "Нет детальных метрик",
+              style: TextStyle(color: textSecondary),
+            )
+          else
+            ...metrics.map((m) {
+              final eff = m.total > 0 ? (m.success / m.total) * 100 : 0.0;
+              return Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF6F8FA),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      m.title,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(child: _smallBadge("Всего", '${m.total}')),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: _smallBadge(
+                            "Успешно",
+                            '${m.success}',
+                            color: Colors.green,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: _smallBadge(
+                            "Ошибка",
+                            '${m.fail}',
+                            color: Colors.red,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(999),
+                      child: LinearProgressIndicator(
+                        value: (eff / 100).clamp(0.0, 1.0),
+                        minHeight: 8,
+                        backgroundColor: const Color(0xFFD7E8DE),
+                        valueColor: AlwaysStoppedAnimation<Color>(primary),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Эффективность: ${eff.toStringAsFixed(1)}%',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: textSecondary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+        ],
+      ),
+    );
+  }
+
+// Функция для перевода амплуа игрока
+  String _translatePosition(String key) {
+    switch (key.toUpperCase()) {
+      case 'GK':
+        return 'Вратарь';
+      case 'DEF':
+        return 'Защитник';
+      case 'MID':
+        return 'Полузащитник';
+      case 'FWD':
+        return 'Нападающий';
+      default:
+        return key.isEmpty ? 'Игрок' : key;
     }
   }
 
-  items.sort((a, b) => b.total.compareTo(a.total));
-  return items;
-}
-
-// Вспомогательная функция для преобразования snake_case в читаемый текст
-String _normalizeKey(String key) {
-  // Разбиваем по подчёркиваниям
-  final parts = key.split('_');
-  
-  // Словарь для перевода отдельных слов
-  const wordMap = {
-    'gk': 'вратаря',
-    'pass': 'передачи',
-    'short': 'короткие',
-    'medium': 'средние',
-    'long': 'длинные',
-    'forward': 'вперёд',
-    'back': 'назад',
-    'side': 'поперёк',
-    'hand': 'рукой',
-    'distribution': 'ввод',
-    'coming': 'выходы',
-    'out': 'игра',
-    'close': 'ближний',
-    'combat': 'бой',
-    'interceptions': 'перехваты',
-    'outside': 'вне',
-    'box': 'штрафной',
-    'feint': 'обводки',
-    'dribble': 'финты',
-    'shot': 'удары',
-    'goal': 'ворота',
-    'tackle': 'отборы',
-    'duel': 'единоборства',
-    'interception': 'перехваты',
-    'recovery': 'подборы',
-    'header': 'игра',
-    'play': 'головой',
-    'throw': 'вбрасывания',
-    'ins': 'ауты',
-    'avp': 'острые',
-    'saves': 'сейвы',
-    'conceded': 'пропущенные',
-  };
-  
-  // Переводим каждую часть
-  final translatedParts = parts.map((part) {
-    return wordMap[part.toLowerCase()] ?? part;
-  }).toList();
-  
-  // Собираем обратно с заглавной буквы
-  String result = translatedParts.join(' ');
-  if (result.isNotEmpty) {
-    result = result[0].toUpperCase() + result.substring(1);
-  }
-  
-  return result;
-}
- Widget _playerTotalsTile(Map<String, dynamic> row) {
-  final playerName = _s(row["player_name"]).isEmpty ? "Игрок" : _s(row["player_name"]);
-  final groupKey = _s(row["group_key"]);
-  
-  // Переводим амплуа игрока
-  String position = _translatePosition(groupKey);
-  
-  final metrics = _buildMetricsFromVideoTotals(row);
-
-  int totalSuccess = 0;
-  int totalFail = 0;
-  for (final m in metrics) {
-    totalSuccess += m.success;
-    totalFail += m.fail;
-  }
-  final total = totalSuccess + totalFail;
-  final efficiency = total > 0 ? (totalSuccess / total) * 100 : 0.0;
-
-  return Container(
-    margin: const EdgeInsets.only(bottom: 12),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(16),
-
-    ),
-    child: ExpansionTile(
-      tilePadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-      childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-      leading: _PlayerAvatar(
-        imageUrl: _playerPhotoUrl(row),
-        name: playerName,
-        primary: primary,
-        size: 46,
-      ),
-      title: Text(
-        playerName,
-        style: const TextStyle(
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-      subtitle: Text(
-        position,
-        style: TextStyle(
-          color: textSecondary,
-          fontWeight: FontWeight.w600,
-          fontSize: 12,
-        ),
-      ),
-      children: [
-        Row(
-          children: [
-            Expanded(child: _smallBadge("Всего", '$total')),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _smallBadge(
-                "Успешно",
-                '$totalSuccess',
-                color: Colors.green,
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _smallBadge(
-                "Ошибки",
-                '$totalFail',
-                color: Colors.red,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        if (metrics.isEmpty)
-          Text(
-            "Нет детальных метрик",
-            style: TextStyle(color: textSecondary),
-          )
-        else
-          ...metrics.map((m) {
-            final eff = m.total > 0 ? (m.success / m.total) * 100 : 0.0;
-            return Container(
-              margin: const EdgeInsets.only(bottom: 10),
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF6F8FA),
-                borderRadius: BorderRadius.circular(14),
-                
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    m.title,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(child: _smallBadge("Всего", '${m.total}')),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: _smallBadge(
-                          "Успешно",
-                          '${m.success}',
-                          color: Colors.green,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: _smallBadge(
-                          "Ошибка",
-                          '${m.fail}',
-                          color: Colors.red,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(999),
-                    child: LinearProgressIndicator(
-                      value: (eff / 100).clamp(0.0, 1.0),
-                      minHeight: 8,
-                      backgroundColor: const Color(0xFFD7E8DE),
-                      valueColor: AlwaysStoppedAnimation<Color>(primary),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Эффективность: ${eff.toStringAsFixed(1)}%',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: textSecondary,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }),
-      ],
-    ),
-  );
-}
-
-// Функция для перевода амплуа игрока
-String _translatePosition(String key) {
-  switch (key.toUpperCase()) {
-    case 'GK':
-      return 'Вратарь';
-    case 'DEF':
-      return 'Защитник';
-    case 'MID':
-      return 'Полузащитник';
-    case 'FWD':
-      return 'Нападающий';
-    default:
-      return key.isEmpty ? 'Игрок' : key;
-  }
-}
   String _episodeField(Map<String, dynamic> row, List<String> keys) {
     for (final key in keys) {
       final value = _s(row[key]);
@@ -4907,10 +5257,20 @@ String _translatePosition(String key) {
     final direct = _imageFromKeys(episode, imageKeys);
     if (direct != null) return direct;
 
-    for (final nestedKey in ["episode", "event", "clip", "video", "media", "file", "preview", "thumbnail"]) {
+    for (final nestedKey in [
+      "episode",
+      "event",
+      "clip",
+      "video",
+      "media",
+      "file",
+      "preview",
+      "thumbnail"
+    ]) {
       final nested = episode[nestedKey];
       if (nested is Map) {
-        final nestedUrl = _imageFromKeys(Map<String, dynamic>.from(nested), imageKeys);
+        final nestedUrl =
+            _imageFromKeys(Map<String, dynamic>.from(nested), imageKeys);
         if (nestedUrl != null) return nestedUrl;
       }
     }
@@ -4918,7 +5278,8 @@ String _translatePosition(String key) {
     return null;
   }
 
-  Widget _episodePreview(String imageUrl, {required String title, required String videoUrl}) {
+  Widget _episodePreview(String imageUrl,
+      {required String title, required String videoUrl}) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(18),
       child: Stack(
@@ -4933,7 +5294,8 @@ String _translatePosition(String key) {
               width: double.infinity,
               color: softAccent,
               alignment: Alignment.center,
-              child: Icon(Icons.image_not_supported_outlined, color: primary, size: 28),
+              child: Icon(Icons.image_not_supported_outlined,
+                  color: primary, size: 28),
             ),
           ),
           Positioned.fill(
@@ -4958,12 +5320,14 @@ String _translatePosition(String key) {
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(999),
                 child: InkWell(
-                  onTap: () => _watchVideo(videoUrl, title: title.isEmpty ? "Эпизод матча" : title),
+                  onTap: () => _watchVideo(videoUrl,
+                      title: title.isEmpty ? "Эпизод матча" : title),
                   borderRadius: BorderRadius.circular(999),
                   child: SizedBox(
                     width: 42,
                     height: 42,
-                    child: Icon(Icons.play_arrow_rounded, color: primary, size: 26),
+                    child: Icon(Icons.play_arrow_rounded,
+                        color: primary, size: 26),
                   ),
                 ),
               ),
@@ -4987,8 +5351,10 @@ String _translatePosition(String key) {
       "type_title",
       "type",
     ]);
-    final note = _episodeField(episode, ["note", "comment", "description", "text"]);
-    final playerName = player.isEmpty ? _playerName(episode) : _playerName(player);
+    final note =
+        _episodeField(episode, ["note", "comment", "description", "text"]);
+    final playerName =
+        player.isEmpty ? _playerName(episode) : _playerName(player);
     final photoUrl = _playerPhotoUrl(player.isEmpty ? episode : player);
     final previewUrl = _episodeImageUrl(episode);
 
@@ -5007,13 +5373,17 @@ String _translatePosition(String key) {
       "sec",
     ]);
     final period = _episodeField(episode, ["period", "half", "time_part"]);
-    final result = _episodeField(episode, ["result", "outcome", "status", "is_success"]);
-    final videoUrl = _episodeField(episode, ["video_url", "clip_url", "file_url", "url"]);
+    final result =
+        _episodeField(episode, ["result", "outcome", "status", "is_success"]);
+    final videoUrl =
+        _episodeField(episode, ["video_url", "clip_url", "file_url", "url"]);
 
     String timeLabel = '';
     if (minute.isNotEmpty && second.isNotEmpty) {
       final sec = int.tryParse(second);
-      timeLabel = sec == null ? '$minute:$second' : '$minute:${sec.toString().padLeft(2, '0')}';
+      timeLabel = sec == null
+          ? '$minute:$second'
+          : '$minute:${sec.toString().padLeft(2, '0')}';
     } else if (minute.isNotEmpty) {
       timeLabel = "$minute мин";
     } else {
@@ -5023,7 +5393,8 @@ String _translatePosition(String key) {
     final chips = <Widget>[
       if (timeLabel.isNotEmpty) _episodeChip(Icons.schedule_rounded, timeLabel),
       if (period.isNotEmpty) _episodeChip(Icons.sports_soccer_rounded, period),
-      if (result.isNotEmpty) _episodeChip(Icons.check_circle_outline_rounded, result),
+      if (result.isNotEmpty)
+        _episodeChip(Icons.check_circle_outline_rounded, result),
     ];
 
     return Container(
@@ -5088,7 +5459,8 @@ String _translatePosition(String key) {
                 const SizedBox(width: 8),
                 InkWell(
                   borderRadius: BorderRadius.circular(14),
-                  onTap: () => _watchVideo(videoUrl, title: title.isEmpty ? "Эпизод матча" : title),
+                  onTap: () => _watchVideo(videoUrl,
+                      title: title.isEmpty ? "Эпизод матча" : title),
                   child: Container(
                     width: 38,
                     height: 38,
@@ -5214,7 +5586,15 @@ String _translatePosition(String key) {
       final player = e["player"] is Map
           ? Map<String, dynamic>.from(e["player"])
           : <String, dynamic>{};
-      final title = _episodeField(e, ["event_title", "title", "action_title", "action", "ttd_title", "type_title", "type"]);
+      final title = _episodeField(e, [
+        "event_title",
+        "title",
+        "action_title",
+        "action",
+        "ttd_title",
+        "type_title",
+        "type"
+      ]);
       final note = _episodeField(e, ["note", "comment", "description", "text"]);
       final playerName = player.isEmpty ? _playerName(e) : _playerName(player);
 
@@ -5225,7 +5605,8 @@ String _translatePosition(String key) {
 
     return ListView(
       controller: _scrollController,
-      padding: EdgeInsets.fromLTRB(isPhone ? 8 : 16, isPhone ? 8 : 16, isPhone ? 8 : 16, isPhone ? 96 : 16),
+      padding: EdgeInsets.fromLTRB(isPhone ? 8 : 16, isPhone ? 8 : 16,
+          isPhone ? 8 : 16, isPhone ? 96 : 16),
       children: [
         _buildSectionCard(
           title: "Эпизоды матча",
@@ -5236,7 +5617,8 @@ String _translatePosition(String key) {
               _searchField(hint: "Поиск по эпизодам, заметкам, игрокам..."),
               const SizedBox(height: 14),
               if (filtered.isEmpty)
-                _emptyState("Эпизоды не найдены", icon: Icons.movie_filter_outlined)
+                _emptyState("Эпизоды не найдены",
+                    icon: Icons.movie_filter_outlined)
               else
                 _responsiveGrid(
                   minItemWidth: 360,
@@ -5250,7 +5632,158 @@ String _translatePosition(String key) {
     );
   }
 
+  int _subscriptionClubId() {
+    final fromWidget = widget.clubId ?? 0;
+    if (fromWidget > 0) return fromWidget;
+
+    final fromMatch = _i(
+      match?['club_id'] ??
+          match?['clubId'] ??
+          match?['owner_club_id'] ??
+          match?['ownerClubId'],
+    );
+
+    return fromMatch > 0 ? fromMatch : 0;
+  }
+
+  Future<void> _loadMatchSubscription() async {
+    if (_matchSubscriptionLoading) return;
+
+    final clubId = _subscriptionClubId();
+
+    if (clubId <= 0) {
+      if (!mounted) return;
+      setState(() {
+        _matchSubscription = SubscriptionAccess.free();
+        _matchSubscriptionLoaded = true;
+      });
+      return;
+    }
+
+    _matchSubscriptionLoading = true;
+
+    try {
+      final access = await SubscriptionService.getUserSubscription(
+        userId: clubId,
+        role: 'club',
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _matchSubscription = access;
+        _matchSubscriptionLoaded = true;
+      });
+    } catch (_) {
+      if (!mounted) return;
+
+      setState(() {
+        _matchSubscription = SubscriptionAccess.free();
+        _matchSubscriptionLoaded = true;
+      });
+    } finally {
+      _matchSubscriptionLoading = false;
+    }
+  }
+
+  void _openMatchVideoSubscription() {
+    Get.to(
+      () => const SubscriptionScreen(
+        source: 'match_video',
+        titleHint: 'Видео матчей',
+      ),
+    );
+  }
+
+  void _showMatchVideoSubscriptionMessage() {
+    Get.snackbar(
+      'Доступ по подписке',
+      'Видео матчей доступно с тарифа «Аналитика + AI»',
+      snackPosition: SnackPosition.BOTTOM,
+      margin: const EdgeInsets.all(12),
+      duration: const Duration(seconds: 5),
+      mainButton: TextButton(
+        onPressed: _openMatchVideoSubscription,
+        child: const Text('Подать заявку'),
+      ),
+    );
+  }
+
+  Future<bool> _requireMatchVideoSubscription() async {
+    if (!_matchSubscriptionLoaded) {
+      await _loadMatchSubscription();
+    }
+
+    if (_canUseMatchVideoAnalysis) return true;
+
+    _showMatchVideoSubscriptionMessage();
+    return false;
+  }
+
+  Widget _buildMatchVideoSubscriptionLocked() {
+    return _buildSectionCard(
+      title: 'Видеоанализ ИИ',
+      subtitle: 'Доступ по подписке',
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(22),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: borderColor),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(
+                color: softAccent,
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: Icon(
+                Icons.lock_outline_rounded,
+                color: primary,
+                size: 27,
+              ),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              'Видео матчей доступно с тарифа «Аналитика + AI»',
+              style: TextStyle(
+                color: textPrimary,
+                fontSize: 18,
+                fontWeight: FontWeight.w900,
+                height: 1.15,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Матч, результат, ТТД и заметки остаются доступны. '
+              'Загрузка видео и ИИ-разбор открываются после подключения тарифа.',
+              style: TextStyle(
+                color: textSecondary,
+                fontSize: 13.2,
+                fontWeight: FontWeight.w700,
+                height: 1.35,
+              ),
+            ),
+            const SizedBox(height: 16),
+            _proOutlineButton(
+              icon: Icons.workspace_premium_outlined,
+              text: 'Подать заявку на подписку',
+              onTap: _openMatchVideoSubscription,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _showUploadVideoSheet(String type) async {
+    if (!await _requireMatchVideoSubscription()) return;
+
     _selectedUploadVideoPath = null;
     _selectedUploadVideoName = null;
     _selectedUploadVideoSize = null;
@@ -5269,7 +5802,8 @@ String _translatePosition(String key) {
       return;
     }
 
-    final overlay = _rootOverlayState() ?? Overlay.of(context, rootOverlay: true);
+    final overlay =
+        _rootOverlayState() ?? Overlay.of(context, rootOverlay: true);
     final closed = Completer<void>();
     late OverlayEntry entry;
     bool localSaving = false;
@@ -5373,12 +5907,15 @@ String _translatePosition(String key) {
             final size = media.size;
             final isCompact = size.width < 680;
             final isHighlight = type == "highlight";
-            final title = isHighlight ? "Загрузка нарезки" : "Загрузка видео матча";
+            final title =
+                isHighlight ? "Загрузка нарезки" : "Загрузка видео матча";
             final subtitle = isHighlight
                 ? "Добавьте короткий фрагмент для разбора эпизода"
                 : "Добавьте полную запись игры для просмотра и AI-разбора";
-            final dialogWidth = isCompact ? size.width - 20 : min(620.0, size.width - 48);
-            final dialogMaxHeight = max(420.0, size.height - (isCompact ? 22 : 72));
+            final dialogWidth =
+                isCompact ? size.width - 20 : min(620.0, size.width - 48);
+            final dialogMaxHeight =
+                max(420.0, size.height - (isCompact ? 22 : 72));
 
             return Material(
               color: Colors.black.withOpacity(0.34),
@@ -5394,13 +5931,15 @@ String _translatePosition(String key) {
                       insetPadding: EdgeInsets.zero,
                       backgroundColor: Colors.transparent,
                       child: ClipRRect(
-                        borderRadius: BorderRadius.circular(isCompact ? 24 : 28),
+                        borderRadius:
+                            BorderRadius.circular(isCompact ? 24 : 28),
                         child: Container(
                           color: Colors.white,
                           child: Column(
                             children: [
                               Padding(
-                                padding: const EdgeInsets.fromLTRB(16, 16, 10, 10),
+                                padding:
+                                    const EdgeInsets.fromLTRB(16, 16, 10, 10),
                                 child: Row(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
@@ -5422,7 +5961,8 @@ String _translatePosition(String key) {
                                     const SizedBox(width: 12),
                                     Expanded(
                                       child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                         children: [
                                           Text(
                                             title,
@@ -5449,7 +5989,9 @@ String _translatePosition(String key) {
                                     ),
                                     IconButton(
                                       tooltip: 'Закрыть',
-                                      onPressed: localSaving ? null : closeUploadWindow,
+                                      onPressed: localSaving
+                                          ? null
+                                          : closeUploadWindow,
                                       icon: const Icon(Icons.close_rounded),
                                     ),
                                   ],
@@ -5469,11 +6011,13 @@ String _translatePosition(String key) {
                                       subtitle: _selectedUploadVideoPath == null
                                           ? 'MP4, MOV, M4V или AVI с устройства'
                                           : 'Файл выбран и готов к загрузке',
-                                      buttonText: _selectedUploadVideoPath == null
-                                          ? 'Выбрать видео'
-                                          : 'Заменить видео',
+                                      buttonText:
+                                          _selectedUploadVideoPath == null
+                                              ? 'Выбрать видео'
+                                              : 'Заменить видео',
                                       icon: Icons.video_file_outlined,
-                                      selected: _selectedUploadVideoPath != null,
+                                      selected:
+                                          _selectedUploadVideoPath != null,
                                       fileName: _selectedUploadVideoName,
                                       fileSize: _selectedUploadVideoSize,
                                       onTap: localSaving ? null : pickVideo,
@@ -5484,11 +6028,13 @@ String _translatePosition(String key) {
                                       subtitle: _selectedUploadThumbPath == null
                                           ? 'Необязательно: картинка для красивой карточки видео'
                                           : 'Превью выбрано для карточки видео',
-                                      buttonText: _selectedUploadThumbPath == null
-                                          ? 'Выбрать превью'
-                                          : 'Заменить превью',
+                                      buttonText:
+                                          _selectedUploadThumbPath == null
+                                              ? 'Выбрать превью'
+                                              : 'Заменить превью',
                                       icon: Icons.image_outlined,
-                                      selected: _selectedUploadThumbPath != null,
+                                      selected:
+                                          _selectedUploadThumbPath != null,
                                       fileName: _selectedUploadThumbName,
                                       fileSize: _selectedUploadThumbSize,
                                       onTap: localSaving ? null : pickThumb,
@@ -5501,21 +6047,27 @@ String _translatePosition(String key) {
                                         borderRadius: BorderRadius.circular(20),
                                       ),
                                       child: Row(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                         children: [
                                           Container(
                                             width: 34,
                                             height: 34,
                                             decoration: BoxDecoration(
                                               color: Colors.white,
-                                              borderRadius: BorderRadius.circular(13),
+                                              borderRadius:
+                                                  BorderRadius.circular(13),
                                             ),
-                                            child: Icon(Icons.restart_alt_rounded, color: primary, size: 19),
+                                            child: Icon(
+                                                Icons.restart_alt_rounded,
+                                                color: primary,
+                                                size: 19),
                                           ),
                                           const SizedBox(width: 10),
                                           Expanded(
                                             child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
                                               children: [
                                                 Text(
                                                   'Загрузка по частям',
@@ -5547,22 +6099,28 @@ String _translatePosition(String key) {
                               SafeArea(
                                 top: false,
                                 child: Container(
-                                  padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
+                                  padding:
+                                      const EdgeInsets.fromLTRB(14, 10, 14, 14),
                                   color: Colors.white,
                                   child: Row(
                                     children: [
                                       Expanded(
                                         child: OutlinedButton(
-                                          onPressed: localSaving ? null : closeUploadWindow,
+                                          onPressed: localSaving
+                                              ? null
+                                              : closeUploadWindow,
                                           style: OutlinedButton.styleFrom(
                                             foregroundColor: textSecondary,
                                             side: BorderSide.none,
                                             backgroundColor: softSurface,
-                                            padding: const EdgeInsets.symmetric(vertical: 14),
+                                            padding: const EdgeInsets.symmetric(
+                                                vertical: 14),
                                             shape: RoundedRectangleBorder(
-                                              borderRadius: BorderRadius.circular(16),
+                                              borderRadius:
+                                                  BorderRadius.circular(16),
                                             ),
-                                            textStyle: const TextStyle(fontWeight: FontWeight.w600),
+                                            textStyle: const TextStyle(
+                                                fontWeight: FontWeight.w600),
                                           ),
                                           child: const Text('Отмена'),
                                         ),
@@ -5574,8 +6132,10 @@ String _translatePosition(String key) {
                                           onPressed: localSaving
                                               ? null
                                               : () async {
-                                                  if (_selectedUploadVideoPath == null ||
-                                                      _selectedUploadVideoPath!.isEmpty) {
+                                                  if (_selectedUploadVideoPath ==
+                                                          null ||
+                                                      _selectedUploadVideoPath!
+                                                          .isEmpty) {
                                                     Get.snackbar(
                                                       "Видео",
                                                       "Сначала выберите файл для загрузки",
@@ -5583,8 +6143,10 @@ String _translatePosition(String key) {
                                                     return;
                                                   }
 
-                                                  final videoFile = File(_selectedUploadVideoPath!);
-                                                  if (!await videoFile.exists()) {
+                                                  final videoFile = File(
+                                                      _selectedUploadVideoPath!);
+                                                  if (!await videoFile
+                                                      .exists()) {
                                                     Get.snackbar(
                                                       "Ошибка",
                                                       "Выбранный файл не найден",
@@ -5592,12 +6154,17 @@ String _translatePosition(String key) {
                                                     return;
                                                   }
 
-                                                  final thumbFile = _selectedUploadThumbPath != null &&
-                                                          _selectedUploadThumbPath!.isNotEmpty
-                                                      ? File(_selectedUploadThumbPath!)
-                                                      : null;
+                                                  final thumbFile =
+                                                      _selectedUploadThumbPath !=
+                                                                  null &&
+                                                              _selectedUploadThumbPath!
+                                                                  .isNotEmpty
+                                                          ? File(
+                                                              _selectedUploadThumbPath!)
+                                                          : null;
 
-                                                  setSB(() => localSaving = true);
+                                                  setSB(
+                                                      () => localSaving = true);
                                                   closeUploadWindow();
 
                                                   await _uploadVideoWithChunks(
@@ -5610,16 +6177,20 @@ String _translatePosition(String key) {
                                               ? const SizedBox(
                                                   width: 18,
                                                   height: 18,
-                                                  child: CircularProgressIndicator(
+                                                  child:
+                                                      CircularProgressIndicator(
                                                     strokeWidth: 2,
                                                     color: Colors.white,
                                                   ),
                                                 )
-                                              : const Icon(Icons.cloud_upload_rounded),
+                                              : const Icon(
+                                                  Icons.cloud_upload_rounded),
                                           label: FittedBox(
                                             fit: BoxFit.scaleDown,
                                             child: Text(
-                                              localSaving ? "Подготовка..." : "Загрузить",
+                                              localSaving
+                                                  ? "Подготовка..."
+                                                  : "Загрузить",
                                               maxLines: 1,
                                               overflow: TextOverflow.ellipsis,
                                             ),
@@ -5627,11 +6198,14 @@ String _translatePosition(String key) {
                                           style: FilledButton.styleFrom(
                                             backgroundColor: primary,
                                             foregroundColor: Colors.white,
-                                            padding: const EdgeInsets.symmetric(vertical: 14),
+                                            padding: const EdgeInsets.symmetric(
+                                                vertical: 14),
                                             shape: RoundedRectangleBorder(
-                                              borderRadius: BorderRadius.circular(16),
+                                              borderRadius:
+                                                  BorderRadius.circular(16),
                                             ),
-                                            textStyle: const TextStyle(fontWeight: FontWeight.w600),
+                                            textStyle: const TextStyle(
+                                                fontWeight: FontWeight.w600),
                                           ),
                                         ),
                                       ),
@@ -5657,7 +6231,6 @@ String _translatePosition(String key) {
     await closed.future;
   }
 
-
   Widget _buildEmbeddedVideoOnlySurface() {
     final content = ColoredBox(color: Colors.white, child: _buildVideosTab());
     if (widget.onClose == null) return content;
@@ -5675,7 +6248,8 @@ String _translatePosition(String key) {
       subtitle: 'Общие материалы матча · синхронизируются с Workspace OS',
       icon: Icons.folder_copy_outlined,
       child: _embeddedMainNoteOpen
-          ? _buildInlineMatchMainNote(onClose: () => setState(() => _embeddedMainNoteOpen = false))
+          ? _buildInlineMatchMainNote(
+              onClose: () => setState(() => _embeddedMainNoteOpen = false))
           : _buildDocumentsNotesTab(),
     );
   }
@@ -5753,7 +6327,8 @@ String _translatePosition(String key) {
                         title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: AppTypography.sectionTitle(color: const Color(0xFF101814)),
+                        style: AppTypography.sectionTitle(
+                            color: const Color(0xFF101814)),
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -5774,7 +6349,8 @@ String _translatePosition(String key) {
             IconButton(
               tooltip: 'Закрыть',
               onPressed: onClose,
-              icon: const Icon(Icons.close_rounded, size: 19, color: Color(0xFF667085)),
+              icon: const Icon(Icons.close_rounded,
+                  size: 19, color: Color(0xFF667085)),
             ),
         ],
       ),
@@ -5799,7 +6375,8 @@ String _translatePosition(String key) {
                 backgroundColor: const Color(0xFFF7F9F8),
                 padding: const EdgeInsets.symmetric(vertical: 12),
               ),
-              child: Text('Отмена', style: AppTypography.action(color: const Color(0xFF667085))),
+              child: Text('Отмена',
+                  style: AppTypography.action(color: const Color(0xFF667085))),
             ),
           ),
           const SizedBox(width: 8),
@@ -5813,10 +6390,17 @@ String _translatePosition(String key) {
                       await widget.onSaved?.call();
                     },
               icon: saving
-                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white))
                   : const Icon(Icons.check_rounded, size: 18),
-              label: Text(saving ? 'Сохраняем...' : 'Сохранить', style: AppTypography.action(color: Colors.white)),
-              style: FilledButton.styleFrom(backgroundColor: const Color(0xFF0B8F55), padding: const EdgeInsets.symmetric(vertical: 12)),
+              label: Text(saving ? 'Сохраняем...' : 'Сохранить',
+                  style: AppTypography.action(color: Colors.white)),
+              style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFF0B8F55),
+                  padding: const EdgeInsets.symmetric(vertical: 12)),
             ),
           ),
         ],
@@ -5826,7 +6410,8 @@ String _translatePosition(String key) {
 
   Widget _buildMatchProfileRightPanel() {
     final mode = _rightPanelMode;
-    final isUpload = mode == _MatchRightPanelMode.uploadFull || mode == _MatchRightPanelMode.uploadHighlight;
+    final isUpload = mode == _MatchRightPanelMode.uploadFull ||
+        mode == _MatchRightPanelMode.uploadHighlight;
     final isHighlight = mode == _MatchRightPanelMode.uploadHighlight;
     final title = mode == _MatchRightPanelMode.editor
         ? 'Редактирование матча'
@@ -5858,11 +6443,13 @@ String _translatePosition(String key) {
       footer = _rightPanelEditFooter();
     } else if (mode == _MatchRightPanelMode.documents) {
       child = _embeddedMainNoteOpen
-          ? _buildInlineMatchMainNote(onClose: () => setState(() => _embeddedMainNoteOpen = false))
+          ? _buildInlineMatchMainNote(
+              onClose: () => setState(() => _embeddedMainNoteOpen = false))
           : _buildDocumentsNotesTab();
     } else if (isUpload) {
       child = _buildVideoUploadRightPanel(isHighlight: isHighlight);
-      footer = _rightPanelUploadFooter(type: isHighlight ? 'highlight' : 'full');
+      footer =
+          _rightPanelUploadFooter(type: isHighlight ? 'highlight' : 'full');
     } else {
       child = const SizedBox.shrink();
     }
@@ -5882,7 +6469,8 @@ String _translatePosition(String key) {
               title: title,
               subtitle: subtitle,
               icon: icon,
-              onClose: () => setState(() => _rightPanelMode = _MatchRightPanelMode.none),
+              onClose: () =>
+                  setState(() => _rightPanelMode = _MatchRightPanelMode.none),
             ),
             Expanded(child: child),
             if (footer != null) footer,
@@ -5903,9 +6491,16 @@ String _translatePosition(String key) {
         children: [
           Expanded(
             child: OutlinedButton(
-              onPressed: saving ? null : () => setState(() => _rightPanelMode = _MatchRightPanelMode.none),
-              style: OutlinedButton.styleFrom(foregroundColor: const Color(0xFF667085), side: BorderSide.none, backgroundColor: const Color(0xFFF7F9F8)),
-              child: Text('Отмена', style: AppTypography.action(color: const Color(0xFF667085))),
+              onPressed: saving
+                  ? null
+                  : () => setState(
+                      () => _rightPanelMode = _MatchRightPanelMode.none),
+              style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF667085),
+                  side: BorderSide.none,
+                  backgroundColor: const Color(0xFFF7F9F8)),
+              child: Text('Отмена',
+                  style: AppTypography.action(color: const Color(0xFF667085))),
             ),
           ),
           const SizedBox(width: 8),
@@ -5916,13 +6511,21 @@ String _translatePosition(String key) {
                   ? null
                   : () async {
                       await _saveAll();
-                      if (mounted) setState(() => _rightPanelMode = _MatchRightPanelMode.none);
+                      if (mounted)
+                        setState(
+                            () => _rightPanelMode = _MatchRightPanelMode.none);
                     },
               icon: saving
-                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white))
                   : const Icon(Icons.check_rounded, size: 18),
-              label: Text(saving ? 'Сохраняем...' : 'Сохранить', style: AppTypography.action(color: Colors.white)),
-              style: FilledButton.styleFrom(backgroundColor: const Color(0xFF0B8F55)),
+              label: Text(saving ? 'Сохраняем...' : 'Сохранить',
+                  style: AppTypography.action(color: Colors.white)),
+              style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFF0B8F55)),
             ),
           ),
         ],
@@ -5956,7 +6559,8 @@ String _translatePosition(String key) {
 
   Future<void> _pickRightVideoThumb() async {
     try {
-      final x = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 85, maxWidth: 1400);
+      final x = await ImagePicker().pickImage(
+          source: ImageSource.gallery, imageQuality: 85, maxWidth: 1400);
       if (x == null) return;
       final file = File(x.path);
       final size = await file.length();
@@ -5977,8 +6581,12 @@ String _translatePosition(String key) {
       children: [
         _uploadPickerCard(
           title: 'Видео файл',
-          subtitle: _selectedUploadVideoPath == null ? 'MP4, MOV, M4V или AVI' : 'Файл выбран и готов к загрузке',
-          buttonText: _selectedUploadVideoPath == null ? 'Выбрать видео' : 'Заменить видео',
+          subtitle: _selectedUploadVideoPath == null
+              ? 'MP4, MOV, M4V или AVI'
+              : 'Файл выбран и готов к загрузке',
+          buttonText: _selectedUploadVideoPath == null
+              ? 'Выбрать видео'
+              : 'Заменить видео',
           icon: Icons.video_file_outlined,
           selected: _selectedUploadVideoPath != null,
           fileName: _selectedUploadVideoName,
@@ -5988,8 +6596,12 @@ String _translatePosition(String key) {
         const SizedBox(height: 10),
         _uploadPickerCard(
           title: 'Превью',
-          subtitle: _selectedUploadThumbPath == null ? 'Необязательно · изображение для карточки' : 'Превью выбрано',
-          buttonText: _selectedUploadThumbPath == null ? 'Выбрать превью' : 'Заменить превью',
+          subtitle: _selectedUploadThumbPath == null
+              ? 'Необязательно · изображение для карточки'
+              : 'Превью выбрано',
+          buttonText: _selectedUploadThumbPath == null
+              ? 'Выбрать превью'
+              : 'Заменить превью',
           icon: Icons.image_outlined,
           selected: _selectedUploadThumbPath != null,
           fileName: _selectedUploadThumbName,
@@ -5999,7 +6611,9 @@ String _translatePosition(String key) {
         const SizedBox(height: 12),
         Container(
           padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(color: const Color(0xFFF7FAF8), borderRadius: BorderRadius.circular(12)),
+          decoration: BoxDecoration(
+              color: const Color(0xFFF7FAF8),
+              borderRadius: BorderRadius.circular(12)),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -6010,7 +6624,8 @@ String _translatePosition(String key) {
                   isHighlight
                       ? 'Нарезка будет привязана к этому матчу и сразу появится в разделе видео.'
                       : 'Большие записи загружаются по частям. После загрузки видео сразу появится в матче и в Video Center OS.',
-                  style: AppTypography.secondary(color: const Color(0xFF667085)),
+                  style:
+                      AppTypography.secondary(color: const Color(0xFF667085)),
                 ),
               ),
             ],
@@ -6023,14 +6638,23 @@ String _translatePosition(String key) {
   Widget _rightPanelUploadFooter({required String type}) {
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-      decoration: const BoxDecoration(color: Colors.white, border: Border(top: BorderSide(color: Color(0xFFE9ECEA)))),
+      decoration: const BoxDecoration(
+          color: Colors.white,
+          border: Border(top: BorderSide(color: Color(0xFFE9ECEA)))),
       child: Row(
         children: [
           Expanded(
             child: OutlinedButton(
-              onPressed: uploadingVideo ? null : () => setState(() => _rightPanelMode = _MatchRightPanelMode.none),
-              style: OutlinedButton.styleFrom(foregroundColor: const Color(0xFF667085), side: BorderSide.none, backgroundColor: const Color(0xFFF7F9F8)),
-              child: Text('Отмена', style: AppTypography.action(color: const Color(0xFF667085))),
+              onPressed: uploadingVideo
+                  ? null
+                  : () => setState(
+                      () => _rightPanelMode = _MatchRightPanelMode.none),
+              style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF667085),
+                  side: BorderSide.none,
+                  backgroundColor: const Color(0xFFF7F9F8)),
+              child: Text('Отмена',
+                  style: AppTypography.action(color: const Color(0xFF667085))),
             ),
           ),
           const SizedBox(width: 8),
@@ -6045,15 +6669,26 @@ String _translatePosition(String key) {
                         Get.snackbar('Видео', 'Выбранный файл не найден');
                         return;
                       }
-                      final thumb = _selectedUploadThumbPath?.isNotEmpty == true ? File(_selectedUploadThumbPath!) : null;
-                      await _uploadVideoWithChunks(type: type, video: video, thumbnail: thumb);
-                      if (mounted) setState(() => _rightPanelMode = _MatchRightPanelMode.none);
+                      final thumb = _selectedUploadThumbPath?.isNotEmpty == true
+                          ? File(_selectedUploadThumbPath!)
+                          : null;
+                      await _uploadVideoWithChunks(
+                          type: type, video: video, thumbnail: thumb);
+                      if (mounted)
+                        setState(
+                            () => _rightPanelMode = _MatchRightPanelMode.none);
                     },
               icon: uploadingVideo
-                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white))
                   : const Icon(Icons.cloud_upload_outlined, size: 18),
-              label: Text(uploadingVideo ? 'Загрузка...' : 'Загрузить', style: AppTypography.action(color: Colors.white)),
-              style: FilledButton.styleFrom(backgroundColor: const Color(0xFF0B8F55)),
+              label: Text(uploadingVideo ? 'Загрузка...' : 'Загрузить',
+                  style: AppTypography.action(color: Colors.white)),
+              style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFF0B8F55)),
             ),
           ),
         ],
@@ -6081,7 +6716,6 @@ String _translatePosition(String key) {
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(22),
-            
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -6095,7 +6729,6 @@ String _translatePosition(String key) {
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(15),
-                      
                     ),
                     child: Icon(icon, color: primary, size: 22),
                   ),
@@ -6136,7 +6769,6 @@ String _translatePosition(String key) {
                     decoration: BoxDecoration(
                       color: selected ? primary : Colors.white,
                       shape: BoxShape.circle,
-                      
                     ),
                     child: Icon(
                       selected ? Icons.check_rounded : Icons.add_rounded,
@@ -6150,11 +6782,11 @@ String _translatePosition(String key) {
                 const SizedBox(height: 12),
                 Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(16),
-                    
                   ),
                   child: Row(
                     children: [
@@ -6197,13 +6829,14 @@ String _translatePosition(String key) {
                 decoration: BoxDecoration(
                   color: selected ? Colors.white : primary,
                   borderRadius: BorderRadius.circular(14),
-                  
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(
-                      selected ? Icons.swap_horiz_rounded : Icons.file_upload_outlined,
+                      selected
+                          ? Icons.swap_horiz_rounded
+                          : Icons.file_upload_outlined,
                       color: selected ? primary : Colors.white,
                       size: 18,
                     ),
@@ -6225,7 +6858,6 @@ String _translatePosition(String key) {
       ),
     );
   }
-
 
   Map<String, dynamic> _mapFromAny(dynamic value) {
     if (value is Map<String, dynamic>) return value;
@@ -6327,7 +6959,8 @@ String _translatePosition(String key) {
       'video_type': type,
       'file_name': fileName.isNotEmpty ? fileName : video.uri.pathSegments.last,
       'video_url': _normalizeUrl(url) ?? url,
-      if (thumbUrl.isNotEmpty) 'thumbnail_url': _normalizeUrl(thumbUrl) ?? thumbUrl,
+      if (thumbUrl.isNotEmpty)
+        'thumbnail_url': _normalizeUrl(thumbUrl) ?? thumbUrl,
       'file_size': size > 0 ? size : video.lengthSync(),
       'created_at': DateTime.now().toIso8601String().substring(0, 19),
       'uploaded_at': DateTime.now().toIso8601String().substring(0, 19),
@@ -6377,6 +7010,8 @@ String _translatePosition(String key) {
     required File video,
     File? thumbnail,
   }) async {
+    if (!await _requireMatchVideoSubscription()) return;
+
     if (matchId <= 0) {
       Get.snackbar("Ошибка", "Некорректный match_id");
       return;
@@ -6395,7 +7030,8 @@ String _translatePosition(String key) {
     await Future.delayed(const Duration(milliseconds: 100));
 
     try {
-      final notes = type == "highlight" ? "Видео момента" : "Полное видео матча";
+      final notes =
+          type == "highlight" ? "Видео момента" : "Полное видео матча";
 
       final result = await _chunkUploadService.uploadVideoInChunks(
         videoFile: video,
@@ -6519,7 +7155,8 @@ String _translatePosition(String key) {
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 520),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 12),
                     decoration: BoxDecoration(
                       color: backgroundColor ?? const Color(0xFF101828),
                       borderRadius: BorderRadius.circular(18),
@@ -6575,7 +7212,8 @@ String _translatePosition(String key) {
                           borderRadius: BorderRadius.circular(999),
                           child: const Padding(
                             padding: EdgeInsets.all(5),
-                            child: Icon(Icons.close_rounded, color: Colors.white, size: 18),
+                            child: Icon(Icons.close_rounded,
+                                color: Colors.white, size: 18),
                           ),
                         ),
                       ],
@@ -6603,10 +7241,17 @@ String _translatePosition(String key) {
         useRootNavigator: true,
         builder: (_) => AlertDialog(
           title: const Text('Удалить видео?'),
-          content: Text('Будет удалено только это видео:\n\n$fileName\n\nСам матч останется без изменений.'),
+          content: Text(
+              'Будет удалено только это видео:\n\n$fileName\n\nСам матч останется без изменений.'),
           actions: [
-            TextButton(onPressed: () => Navigator.of(context, rootNavigator: true).pop(false), child: const Text('Отмена')),
-            FilledButton(onPressed: () => Navigator.of(context, rootNavigator: true).pop(true), child: const Text('Удалить')),
+            TextButton(
+                onPressed: () =>
+                    Navigator.of(context, rootNavigator: true).pop(false),
+                child: const Text('Отмена')),
+            FilledButton(
+                onPressed: () =>
+                    Navigator.of(context, rootNavigator: true).pop(true),
+                child: const Text('Удалить')),
           ],
         ),
       );
@@ -6656,7 +7301,8 @@ String _translatePosition(String key) {
                               color: const Color(0xFFFFE9E7),
                               borderRadius: BorderRadius.circular(17),
                             ),
-                            child: const Icon(Icons.delete_outline_rounded, color: Color(0xFFD92D20)),
+                            child: const Icon(Icons.delete_outline_rounded,
+                                color: Color(0xFFD92D20)),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
@@ -6712,24 +7358,32 @@ String _translatePosition(String key) {
                                 foregroundColor: const Color(0xFF475467),
                                 side: BorderSide.none,
                                 backgroundColor: const Color(0xFFF2F4F7),
-                                padding: const EdgeInsets.symmetric(vertical: 14),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 14),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16)),
                               ),
-                              child: const Text('Отмена', style: TextStyle(fontWeight: FontWeight.w600)),
+                              child: const Text('Отмена',
+                                  style:
+                                      TextStyle(fontWeight: FontWeight.w600)),
                             ),
                           ),
                           const SizedBox(width: 10),
                           Expanded(
                             child: FilledButton.icon(
                               onPressed: () => close(true),
-                              icon: const Icon(Icons.delete_outline_rounded, size: 18),
+                              icon: const Icon(Icons.delete_outline_rounded,
+                                  size: 18),
                               label: const Text('Удалить'),
                               style: FilledButton.styleFrom(
                                 backgroundColor: const Color(0xFFD92D20),
                                 foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(vertical: 14),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                                textStyle: const TextStyle(fontWeight: FontWeight.w600),
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 14),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16)),
+                                textStyle: const TextStyle(
+                                    fontWeight: FontWeight.w600),
                               ),
                             ),
                           ),
@@ -6755,7 +7409,8 @@ String _translatePosition(String key) {
   }) {
     _hideUploadingDialog();
 
-    final overlay = _rootOverlayState() ?? Overlay.of(context, rootOverlay: true);
+    final overlay =
+        _rootOverlayState() ?? Overlay.of(context, rootOverlay: true);
 
     _uploadProgressOverlay = OverlayEntry(
       builder: (overlayContext) {
@@ -6824,7 +7479,8 @@ String _translatePosition(String key) {
                                 value: normalized <= 0 ? 0 : normalized,
                                 minHeight: 10,
                                 backgroundColor: const Color(0xFFD7E8DE),
-                                valueColor: AlwaysStoppedAnimation<Color>(primary),
+                                valueColor:
+                                    AlwaysStoppedAnimation<Color>(primary),
                               ),
                             ),
                             const SizedBox(height: 10),
@@ -6845,7 +7501,8 @@ String _translatePosition(String key) {
                                 ),
                                 const SizedBox(width: 10),
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 10, vertical: 6),
                                   decoration: BoxDecoration(
                                     color: softAccent,
                                     borderRadius: BorderRadius.circular(999),
@@ -6880,213 +7537,468 @@ String _translatePosition(String key) {
   // ============================================================
 // МЕТОД ДЛЯ ОТКРЫТИЯ ВИДЕО В CMR-ОКНЕ
 // ============================================================
-void _openVideoPlayerCmrWindow(String videoUrl, {String? title}) {
-  final resolvedTitle = (title ?? _matchTitleForReview()).trim().isEmpty
-      ? 'Видео матча'
-      : (title ?? _matchTitleForReview()).trim();
-  final overlay = _rootOverlayState();
+  void _openVideoPlayerCmrWindow(String videoUrl, {String? title}) {
+    final resolvedTitle = (title ?? _matchTitleForReview()).trim().isEmpty
+        ? 'Видео матча'
+        : (title ?? _matchTitleForReview()).trim();
+    final overlay = _rootOverlayState();
 
-  if (overlay == null) {
-    Get.to(
-      () => MatchVideoPlayerScreen(
-        videoUrl: videoUrl,
-        title: resolvedTitle,
-      ),
-    );
-    return;
-  }
+    if (overlay == null) {
+      Get.to(
+        () => MatchVideoPlayerScreen(
+          videoUrl: videoUrl,
+          title: resolvedTitle,
+        ),
+      );
+      return;
+    }
 
-  // ← ВЕСЬ ЭТОТ КОД ДОЛЖЕН БЫТЬ ЗДЕСЬ, ВНУТРИ МЕТОДА!
-  late OverlayEntry entry;
-  Offset position = const Offset(82, 54);
-  bool minimized = false;
-  bool maximized = false;
-  bool closed = false;
+    // ← ВЕСЬ ЭТОТ КОД ДОЛЖЕН БЫТЬ ЗДЕСЬ, ВНУТРИ МЕТОДА!
+    late OverlayEntry entry;
+    Offset position = const Offset(82, 54);
+    bool minimized = false;
+    bool maximized = false;
+    bool closed = false;
 
-  void closeWindow() {
-    if (closed) return;
-    closed = true;
-    entry.remove();
-  }
+    void closeWindow() {
+      if (closed) return;
+      closed = true;
+      entry.remove();
+    }
 
-  entry = OverlayEntry(
-    builder: (overlayContext) {
-      final media = MediaQuery.of(overlayContext);
-      final screen = media.size;
-      final compact = screen.width < 720;
-      final double width = maximized
-          ? screen.width - 20
-          : compact
-              ? screen.width - 16
-              : min(1120.0, max(760.0, screen.width * .76));
-      final double height = maximized
-          ? screen.height - media.padding.top - media.padding.bottom - 20
-          : compact
-              ? screen.height - media.padding.top - media.padding.bottom - 20
-              : min(720.0, max(500.0, screen.height * .74));
-      final double left = maximized || compact
-          ? (compact ? 8.0 : 10.0)
-          : position.dx.clamp(12.0, max(12.0, screen.width - width - 12.0)).toDouble();
-      final double top = maximized || compact
-          ? media.padding.top + (compact ? 8.0 : 10.0)
-          : position.dy
-              .clamp(
-                media.padding.top + 12.0,
-                max(media.padding.top + 12.0, screen.height - height - 12.0),
-              )
-              .toDouble();
+    entry = OverlayEntry(
+      builder: (overlayContext) {
+        final media = MediaQuery.of(overlayContext);
+        final screen = media.size;
+        final compact = screen.width < 720;
+        final double width = maximized
+            ? screen.width - 20
+            : compact
+                ? screen.width - 16
+                : min(1120.0, max(760.0, screen.width * .76));
+        final double height = maximized
+            ? screen.height - media.padding.top - media.padding.bottom - 20
+            : compact
+                ? screen.height - media.padding.top - media.padding.bottom - 20
+                : min(720.0, max(500.0, screen.height * .74));
+        final double left = maximized || compact
+            ? (compact ? 8.0 : 10.0)
+            : position.dx
+                .clamp(12.0, max(12.0, screen.width - width - 12.0))
+                .toDouble();
+        final double top = maximized || compact
+            ? media.padding.top + (compact ? 8.0 : 10.0)
+            : position.dy
+                .clamp(
+                  media.padding.top + 12.0,
+                  max(media.padding.top + 12.0, screen.height - height - 12.0),
+                )
+                .toDouble();
 
-      if (minimized) {
+        if (minimized) {
+          return Positioned(
+            left: 18,
+            bottom: media.padding.bottom + 18,
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () {
+                  minimized = false;
+                  entry.markNeedsBuild();
+                },
+                borderRadius: BorderRadius.circular(18),
+                child: Container(
+                  height: 40,
+                  padding: const EdgeInsets.symmetric(horizontal: 13),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: const Color(0xFFE5ECE8)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(.10),
+                        blurRadius: 22,
+                        offset: const Offset(0, 10),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.play_circle_outline_rounded,
+                          color: Color(0xFF00A750), size: 16),
+                      const SizedBox(width: 8),
+                      Text(
+                        resolvedTitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Color(0xFF111827),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          );
+        }
+
         return Positioned(
-          left: 18,
-          bottom: media.padding.bottom + 18,
+          left: left,
+          top: top,
+          width: width,
+          height: height,
           child: Material(
             color: Colors.transparent,
-            child: InkWell(
-              onTap: () {
-                minimized = false;
-                entry.markNeedsBuild();
-              },
-              borderRadius: BorderRadius.circular(18),
-              child: Container(
-                height: 40,
-                padding: const EdgeInsets.symmetric(horizontal: 13),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: const Color(0xFFE5ECE8)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(.10),
-                      blurRadius: 22,
-                      offset: const Offset(0, 10),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.play_circle_outline_rounded, color: Color(0xFF00A750), size: 16),
-                    const SizedBox(width: 8),
-                    Text(
-                      resolvedTitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Color(0xFF111827),
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
+            child: Container(
+              clipBehavior: Clip.antiAlias,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius:
+                    BorderRadius.circular(compact || maximized ? 18 : 24),
+                border: Border.all(color: const Color(0xFFE3EAE7)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(.16),
+                    blurRadius: 44,
+                    offset: const Offset(0, 22),
+                  ),
+                ],
+              ),
+              child: Column(
+                children: [
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onPanUpdate: maximized || compact
+                        ? null
+                        : (details) {
+                            position += details.delta;
+                            entry.markNeedsBuild();
+                          },
+                    child: Container(
+                      height: 42,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        border: Border(
+                            bottom: BorderSide(color: Color(0xFFE8EEE9))),
+                      ),
+                      child: Row(
+                        children: [
+                          _TeamMatchCmrWindowButton(
+                              icon: Icons.close_rounded,
+                              tooltip: 'Закрыть',
+                              onTap: closeWindow),
+                          const SizedBox(width: 7),
+                          _TeamMatchCmrWindowButton(
+                            icon: Icons.remove_rounded,
+                            tooltip: 'Свернуть',
+                            onTap: () {
+                              minimized = true;
+                              entry.markNeedsBuild();
+                            },
+                          ),
+                          const SizedBox(width: 7),
+                          _TeamMatchCmrWindowButton(
+                            icon: maximized
+                                ? Icons.close_fullscreen_rounded
+                                : Icons.open_in_full_rounded,
+                            tooltip:
+                                maximized ? 'Вернуть размер' : 'Развернуть',
+                            onTap: () {
+                              maximized = !maximized;
+                              entry.markNeedsBuild();
+                            },
+                          ),
+                          const SizedBox(width: 15),
+                          Container(
+                            width: 31,
+                            height: 31,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF3F6F9),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(Icons.play_circle_outline_rounded,
+                                color: Color(0xFF1F2937), size: 16),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Видео матча',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: _TeamMatchUiText.title(13.0),
+                                ),
+                                const SizedBox(height: 3),
+                                Text(
+                                  resolvedTitle,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: _TeamMatchUiText.body(10.4,
+                                      color: const Color(0xFF667085),
+                                      weight: FontWeight.w600),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                  Expanded(
+                    child: ClipRect(
+                      child: MatchVideoPlayerScreen(
+                        videoUrl: videoUrl,
+                        title: resolvedTitle,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
         );
-      }
+      },
+    );
 
-      return Positioned(
-        left: left,
-        top: top,
-        width: width,
-        height: height,
-        child: Material(
-          color: Colors.transparent,
+    overlay.insert(entry);
+  } // ← ЗАКРЫВАЮЩАЯ СКОБКА МЕТОДА _openVideoPlayerCmrWindow
+
+// ============================================================
+// МЕТОД ДЛЯ ПРОСМОТРА ВИДЕО
+// ============================================================
+  void _watchVideo(String videoUrl, {String? title}) {
+    final normalized = _normalizeUrl(videoUrl) ?? "";
+    if (normalized.isEmpty) {
+      Get.snackbar("Видео", "URL отсутствует");
+      return;
+    }
+
+    _openVideoPlayerCmrWindow(
+      normalized,
+      title: title ?? _matchTitleForReview(),
+    );
+  }
+
+  Map<String, dynamic> _analysisParamsForVideo(Map<String, dynamic> video,
+      {String? fallbackUrl}) {
+    final rawUrl = _s(video["video_url"]).isNotEmpty
+        ? _s(video["video_url"])
+        : (_s(video["file_url"]).isNotEmpty
+            ? _s(video["file_url"])
+            : (fallbackUrl ?? ''));
+    final normalized = _normalizeUrl(rawUrl) ?? '';
+    final resolvedTeamId =
+        teamId > 0 ? teamId : (widget.teamId ?? _i(match?["team_id"]));
+    final resolvedTeamName = teamName.trim().isNotEmpty
+        ? teamName.trim()
+        : ((widget.teamName ?? '').trim().isNotEmpty
+            ? widget.teamName!.trim()
+            : 'Команда');
+    final players = ((match?["players"] as List?) ?? [])
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
+
+    return {
+      'sourceMode': 'recording',
+      'matchId': matchId,
+      'clubId': widget.clubId ?? _i(match?["club_id"]),
+      'teamId': resolvedTeamId,
+      'fieldId': _i(match?["field_id"]),
+      'coachId': _coachId,
+      'videoUrl': normalized,
+      'teamName': resolvedTeamName,
+      'matchTitle': _matchTitleForReview(),
+      'videoId': _i(video["id"]),
+      'teamColors': _extractTeamColors(),
+      'sessionIds': _analysisTrackerSessionIds(),
+      'players': players.map((player) {
+        return {
+          'id': player['id'],
+          'number': player['number'],
+          'name': _playerName(player),
+          'position': player['position'],
+        };
+      }).toList(),
+    };
+  }
+
+  List<int> _analysisTrackerSessionIds() {
+    final raw = match?["tracker_session_ids"] ??
+        match?["tracker_sessions"] ??
+        match?["session_ids"] ??
+        match?["tracker_session_id"];
+    final values = raw is List ? raw : _s(raw).replaceAll(';', ',').split(',');
+    return values
+        .map((value) => int.tryParse(_s(value)) ?? 0)
+        .where((value) => value > 0)
+        .toSet()
+        .toList();
+  }
+
+  Future<void> _openMatchLive({Map<String, dynamic>? video}) async {
+    final params = _analysisParamsForVideo(video ?? const <String, dynamic>{});
+    await MatchLiveScreen.open(context, params: params, initialMode: 'live');
+  }
+
+  void _openMatchRecordingAnalysis() {
+    final video = _primaryAiVideo();
+    if (video == null) {
+      _openMatchDetailTab(4);
+      Get.snackbar(
+        'Анализ записи',
+        'Сначала загрузите полное видео матча',
+      );
+      return;
+    }
+    _openMatchDetailTab(5);
+  }
+
+// ============================================================
+// МЕТОД ДЛЯ ОТКРЫТИЯ AI-АНАЛИЗА
+// ============================================================
+  Future<void> _openMatchVideoAnalysis(Map<String, dynamic> video) async {
+    if (!await _requireMatchVideoSubscription()) return;
+
+    final analysisParams = _analysisParamsForVideo(video);
+    final normalized = _s(analysisParams['videoUrl']);
+
+    if (normalized.isEmpty) {
+      Get.snackbar("Внимание", "Видео матча отсутствует");
+      return;
+    }
+    if (!mounted) return;
+
+    // Новый единый путь: старые embedded AI/Video ветки больше не являются
+    // основным пользовательским маршрутом. Они остаются только для legacy/OS.
+    await Navigator.of(context, rootNavigator: true).push(
+      MaterialPageRoute<void>(
+        builder: (_) => TeamMatchVideoWorkspaceScreen(
+          matchId: matchId,
+          teamId: teamId,
+          clubId: widget.clubId ?? _i(match?['club_id']),
+          teamName: teamName,
+          clubName: widget.clubName ?? '',
+          initialMatch:
+              match == null ? null : Map<String, dynamic>.from(match!),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openMatchVideoAnalysisFullscreen(
+      Map<String, dynamic> video) async {
+    // Даже legacy-кнопка fullscreen теперь ведёт в единую рабочую область.
+    // Так пользователь больше не попадает во второй AdvancedVideoAnalysis UI.
+    await _openMatchVideoAnalysis(video);
+  }
+
+// ============================================================
+// МЕТОД ДЛЯ ОТКРЫТИЯ CMR-ОКНА С AI-АНАЛИЗОМ
+// ============================================================
+  Future<void> _openAiReviewCmrWindow() async {
+    if (!await _requireMatchVideoSubscription()) return;
+
+    final video = _primaryAiVideo();
+    if (video == null) {
+      Get.snackbar('Ошибка', 'Сначала загрузите видео матча');
+      return;
+    }
+    _openMatchVideoAnalysis(video);
+  } // ← ЗАКРЫТИЕ МЕТОДА
+
+// ============================================================
+// МЕТОД ДЛЯ ПОКАЗА ДЕТАЛЕЙ ВИДЕО (Overlay)
+// ============================================================
+  void _showVideoDetailsOverlay(
+    Map<String, dynamic> video, {
+    required String title,
+    required bool canAnalyze,
+  }) {
+    final overlay = _rootOverlayState();
+    if (overlay == null) {
+      _showRootBanner(
+        'Видео',
+        'Не удалось открыть детали поверх экрана',
+        icon: Icons.info_outline_rounded,
+      );
+      return;
+    }
+
+    final fileName = _s(video['file_name']).isNotEmpty
+        ? _s(video['file_name'])
+        : (_s(video['title']).isNotEmpty ? _s(video['title']) : title);
+    final videoUrl = _s(video['video_url']).isNotEmpty
+        ? _s(video['video_url'])
+        : _s(video['file_url']);
+    final meta = _videoMeta(video);
+
+    late OverlayEntry entry;
+
+    void close() {
+      if (entry.mounted) entry.remove();
+    }
+
+    Widget action({
+      required IconData icon,
+      required String label,
+      required Color accent,
+      required VoidCallback onTap,
+      bool danger = false,
+    }) {
+      return Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(14),
           child: Container(
-            clipBehavior: Clip.antiAlias,
+            height: 42,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
             decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(compact || maximized ? 18 : 24),
-              border: Border.all(color: const Color(0xFFE3EAE7)),
+              color: danger
+                  ? const Color(0xFFFEF2F2)
+                  : Colors.white.withOpacity(.90),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color:
+                    danger ? const Color(0xFFFECACA) : accent.withOpacity(.16),
+                width: 1,
+              ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(.16),
-                  blurRadius: 44,
-                  offset: const Offset(0, 22),
+                  color: Colors.black.withOpacity(.035),
+                  blurRadius: 14,
+                  spreadRadius: -10,
+                  offset: const Offset(0, 8),
                 ),
               ],
             ),
-            child: Column(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onPanUpdate: maximized || compact
-                      ? null
-                      : (details) {
-                          position += details.delta;
-                          entry.markNeedsBuild();
-                        },
-                  child: Container(
-                    height: 42,
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    decoration: const BoxDecoration(
-                      color: Colors.white,
-                      border: Border(bottom: BorderSide(color: Color(0xFFE8EEE9))),
-                    ),
-                    child: Row(
-                      children: [
-                        _TeamMatchCmrWindowButton(icon: Icons.close_rounded, tooltip: 'Закрыть', onTap: closeWindow),
-                        const SizedBox(width: 7),
-                        _TeamMatchCmrWindowButton(
-                          icon: Icons.remove_rounded,
-                          tooltip: 'Свернуть',
-                          onTap: () {
-                            minimized = true;
-                            entry.markNeedsBuild();
-                          },
-                        ),
-                        const SizedBox(width: 7),
-                        _TeamMatchCmrWindowButton(
-                          icon: maximized ? Icons.close_fullscreen_rounded : Icons.open_in_full_rounded,
-                          tooltip: maximized ? 'Вернуть размер' : 'Развернуть',
-                          onTap: () {
-                            maximized = !maximized;
-                            entry.markNeedsBuild();
-                          },
-                        ),
-                        const SizedBox(width: 15),
-                        Container(
-                          width: 31,
-                          height: 31,
-                          alignment: Alignment.center,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF3F6F9),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: const Icon(Icons.play_circle_outline_rounded, color: Color(0xFF1F2937), size: 16),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Видео матча',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: _TeamMatchUiText.title(13.0),
-                              ),
-                              const SizedBox(height: 3),
-                              Text(
-                                resolvedTitle,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: _TeamMatchUiText.body(10.4, color: const Color(0xFF667085), weight: FontWeight.w600),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                Expanded(
-                  child: ClipRect(
-                    child: MatchVideoPlayerScreen(
-                      videoUrl: videoUrl,
-                      title: resolvedTitle,
+                Icon(icon,
+                    color: danger ? const Color(0xFFDC2626) : accent, size: 17),
+                const SizedBox(width: 7),
+                Flexible(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: _TeamMatchUiText.action(
+                      color: danger
+                          ? const Color(0xFFDC2626)
+                          : const Color(0xFF0B0F14),
+                      size: 11.6,
                     ),
                   ),
                 ),
@@ -7095,408 +8007,155 @@ void _openVideoPlayerCmrWindow(String videoUrl, {String? title}) {
           ),
         ),
       );
-    },
-  );
+    }
 
-  overlay.insert(entry);
-}  // ← ЗАКРЫВАЮЩАЯ СКОБКА МЕТОДА _openVideoPlayerCmrWindow
+    entry = OverlayEntry(
+      builder: (overlayContext) {
+        final media = MediaQuery.of(overlayContext);
+        final screen = media.size;
+        final isPhone = screen.width < 640;
 
-// ============================================================
-// МЕТОД ДЛЯ ПРОСМОТРА ВИДЕО
-// ============================================================
-void _watchVideo(String videoUrl, {String? title}) {
-  final normalized = _normalizeUrl(videoUrl) ?? "";
-  if (normalized.isEmpty) {
-    Get.snackbar("Видео", "URL отсутствует");
-    return;
-  }
-
-  _openVideoPlayerCmrWindow(
-    normalized,
-    title: title ?? _matchTitleForReview(),
-  );
-}
-
-Map<String, dynamic> _analysisParamsForVideo(Map<String, dynamic> video, {String? fallbackUrl}) {
-  final rawUrl = _s(video["video_url"]).isNotEmpty
-      ? _s(video["video_url"])
-      : (_s(video["file_url"]).isNotEmpty ? _s(video["file_url"]) : (fallbackUrl ?? ''));
-  final normalized = _normalizeUrl(rawUrl) ?? '';
-  final resolvedTeamId = teamId > 0 ? teamId : (widget.teamId ?? _i(match?["team_id"]));
-  final resolvedTeamName = teamName.trim().isNotEmpty
-      ? teamName.trim()
-      : ((widget.teamName ?? '').trim().isNotEmpty ? widget.teamName!.trim() : 'Команда');
-  final players = ((match?["players"] as List?) ?? [])
-      .whereType<Map>()
-      .map((e) => Map<String, dynamic>.from(e))
-      .toList();
-
-  return {
-    'sourceMode': 'recording',
-    'matchId': matchId,
-    'clubId': widget.clubId ?? _i(match?["club_id"]),
-    'teamId': resolvedTeamId,
-    'fieldId': _i(match?["field_id"]),
-    'coachId': _coachId,
-    'videoUrl': normalized,
-    'teamName': resolvedTeamName,
-    'matchTitle': _matchTitleForReview(),
-    'videoId': _i(video["id"]),
-    'teamColors': _extractTeamColors(),
-    'sessionIds': _analysisTrackerSessionIds(),
-    'players': players.map((player) {
-      return {
-        'id': player['id'],
-        'number': player['number'],
-        'name': _playerName(player),
-        'position': player['position'],
-      };
-    }).toList(),
-  };
-}
-
-List<int> _analysisTrackerSessionIds() {
-  final raw = match?["tracker_session_ids"] ??
-      match?["tracker_sessions"] ??
-      match?["session_ids"] ??
-      match?["tracker_session_id"];
-  final values = raw is List ? raw : _s(raw).replaceAll(';', ',').split(',');
-  return values
-      .map((value) => int.tryParse(_s(value)) ?? 0)
-      .where((value) => value > 0)
-      .toSet()
-      .toList();
-}
-
-Future<void> _openMatchLive({Map<String, dynamic>? video}) async {
-  final params = _analysisParamsForVideo(video ?? const <String, dynamic>{});
-  await MatchLiveScreen.open(context, params: params, initialMode: 'live');
-}
-
-void _openMatchRecordingAnalysis() {
-  final video = _primaryAiVideo();
-  if (video == null) {
-    _openMatchDetailTab(4);
-    Get.snackbar(
-      'Анализ записи',
-      'Сначала загрузите полное видео матча',
-    );
-    return;
-  }
-  _openMatchDetailTab(5);
-}
-
-// ============================================================
-// МЕТОД ДЛЯ ОТКРЫТИЯ AI-АНАЛИЗА
-// ============================================================
-Future<void> _openMatchVideoAnalysis(Map<String, dynamic> video) async {
-  final analysisParams = _analysisParamsForVideo(video);
-  final normalized = _s(analysisParams['videoUrl']);
-
-  if (normalized.isEmpty) {
-    Get.snackbar("Внимание", "Видео матча отсутствует");
-    return;
-  }
-
-  if (!mounted) return;
-
-  await showAdvancedVideoAnalysisWindow(
-    context,
-    analysisParams,
-    externalPlaybackController: _embeddedAiPlayback,
-    // В полном окне Advanced Video оставляем controls: пользователь должен
-    // иметь возможность остановить/запустить видео прямо там. В маленькой
-    // карточке обзора controls всё равно скрыты.
-    hideControls: false,
-  );
-}
-
-// ============================================================
-// МЕТОД ДЛЯ ОТКРЫТИЯ CMR-ОКНА С AI-АНАЛИЗОМ
-// ============================================================
-void _openAiReviewCmrWindow() {
-  final video = _primaryAiVideo();
-  if (video == null) {
-    Get.snackbar('Ошибка', 'Сначала загрузите видео матча');
-    return;
-  }
-  _openMatchVideoAnalysis(video);
-}  // ← ЗАКРЫТИЕ МЕТОДА
-
-
-// ============================================================
-// МЕТОД ДЛЯ ПОКАЗА ДЕТАЛЕЙ ВИДЕО (Overlay)
-// ============================================================
-void _showVideoDetailsOverlay(
-  Map<String, dynamic> video, {
-  required String title,
-  required bool canAnalyze,
-}) {
-  final overlay = _rootOverlayState();
-  if (overlay == null) {
-    _showRootBanner(
-      'Видео',
-      'Не удалось открыть детали поверх экрана',
-      icon: Icons.info_outline_rounded,
-    );
-    return;
-  }
-
-  final fileName = _s(video['file_name']).isNotEmpty
-      ? _s(video['file_name'])
-      : (_s(video['title']).isNotEmpty ? _s(video['title']) : title);
-  final videoUrl = _s(video['video_url']).isNotEmpty
-      ? _s(video['video_url'])
-      : _s(video['file_url']);
-  final meta = _videoMeta(video);
-
-  late OverlayEntry entry;
-
-  void close() {
-    if (entry.mounted) entry.remove();
-  }
-
-  Widget action({
-    required IconData icon,
-    required String label,
-    required Color accent,
-    required VoidCallback onTap,
-    bool danger = false,
-  }) {
-    return Material(
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(14),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Container(
-          height: 42,
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          decoration: BoxDecoration(
-            color: danger ? const Color(0xFFFEF2F2) : Colors.white.withOpacity(.90),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: danger ? const Color(0xFFFECACA) : accent.withOpacity(.16),
-              width: 1,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(.035),
-                blurRadius: 14,
-                spreadRadius: -10,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, color: danger ? const Color(0xFFDC2626) : accent, size: 17),
-              const SizedBox(width: 7),
-              Flexible(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: _TeamMatchUiText.action(
-                    color: danger ? const Color(0xFFDC2626) : const Color(0xFF0B0F14),
-                    size: 11.6,
+        return Material(
+          color: Colors.black.withOpacity(.24),
+          child: SafeArea(
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: close,
+                    child: const SizedBox.expand(),
                   ),
                 ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  entry = OverlayEntry(
-    builder: (overlayContext) {
-      final media = MediaQuery.of(overlayContext);
-      final screen = media.size;
-      final isPhone = screen.width < 640;
-
-      return Material(
-        color: Colors.black.withOpacity(.24),
-        child: SafeArea(
-          child: Stack(
-            children: [
-              Positioned.fill(
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: close,
-                  child: const SizedBox.expand(),
-                ),
-              ),
-              Center(
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(maxWidth: isPhone ? screen.width - 28 : 460),
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 14),
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: Colors.white.withOpacity(.86), width: 1),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(.14),
-                          blurRadius: 38,
-                          spreadRadius: -16,
-                          offset: const Offset(0, 22),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Container(
-                              width: 38,
-                              height: 38,
-                              alignment: Alignment.center,
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFF3FBF7),
-                                borderRadius: BorderRadius.circular(14),
-                                border: Border.all(color: const Color(0xFFDCEFE5)),
+                Center(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                        maxWidth: isPhone ? screen.width - 28 : 460),
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 14),
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(
+                            color: Colors.white.withOpacity(.86), width: 1),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(.14),
+                            blurRadius: 38,
+                            spreadRadius: -16,
+                            offset: const Offset(0, 22),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                width: 38,
+                                height: 38,
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF3FBF7),
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(
+                                      color: const Color(0xFFDCEFE5)),
+                                ),
+                                child: const Icon(Icons.video_file_outlined,
+                                    color: Color(0xFF00A750), size: 19),
                               ),
-                              child: const Icon(Icons.video_file_outlined, color: Color(0xFF00A750), size: 19),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Детали видео',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: _TeamMatchUiText.title(15.2),
+                                    ),
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      meta.isEmpty ? 'Файл матча' : meta,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: _TeamMatchUiText.body(
+                                        11,
+                                        color: const Color(0xFF6B7280),
+                                        weight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              _TeamMatchCmrWindowButton(
+                                icon: Icons.close_rounded,
+                                tooltip: 'Закрыть',
+                                onTap: close,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF8F9FA),
+                              borderRadius: BorderRadius.circular(16),
                             ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  title.isEmpty ? fileName : title,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: _TeamMatchUiText.title(13.2),
+                                ),
+                                if (fileName.trim().isNotEmpty &&
+                                    fileName != title) ...[
+                                  const SizedBox(height: 5),
                                   Text(
-                                    'Детали видео',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: _TeamMatchUiText.title(15.2),
-                                  ),
-                                  const SizedBox(height: 3),
-                                  Text(
-                                    meta.isEmpty ? 'Файл матча' : meta,
+                                    fileName,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: _TeamMatchUiText.body(
-                                      11,
+                                      10.8,
                                       color: const Color(0xFF6B7280),
                                       weight: FontWeight.w500,
                                     ),
                                   ),
                                 ],
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            _TeamMatchCmrWindowButton(
-                              icon: Icons.close_rounded,
-                              tooltip: 'Закрыть',
-                              onTap: close,
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF8F9FA),
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                title.isEmpty ? fileName : title,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: _TeamMatchUiText.title(13.2),
-                              ),
-                              if (fileName.trim().isNotEmpty && fileName != title) ...[
-                                const SizedBox(height: 5),
-                                Text(
-                                  fileName,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: _TeamMatchUiText.body(
-                                    10.8,
-                                    color: const Color(0xFF6B7280),
-                                    weight: FontWeight.w500,
-                                  ),
-                                ),
                               ],
-                            ],
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 12),
-                        if (isPhone)
-                          Column(
-                            children: [
-                              action(
-                                icon: Icons.visibility_outlined,
-                                label: 'Смотреть',
-                                accent: primary,
-                                onTap: videoUrl.trim().isEmpty
-                                    ? () {
-                                        close();
-                                        _showRootBanner('Видео', 'Ссылка на видео отсутствует');
-                                      }
-                                    : () {
-                                        close();
-                                        _watchVideo(videoUrl, title: title);
-                                      },
-                              ),
-                              if (canAnalyze) ...[
-                                const SizedBox(height: 8),
+                          const SizedBox(height: 12),
+                          if (isPhone)
+                            Column(
+                              children: [
                                 action(
-                                  icon: Icons.analytics_outlined,
-                                  label: 'ИИ-анализ',
-                                  accent: const Color(0xFF2563EB),
-                                  onTap: () {
-                                    close();
-                                    _openMatchVideoAnalysis(video);
-                                  },
-                                ),
-                              ],
-                              const SizedBox(height: 8),
-                              action(
-                                icon: Icons.delete_outline_rounded,
-                                label: 'Удалить',
-                                accent: const Color(0xFFDC2626),
-                                danger: true,
-                                onTap: () {
-                                  close();
-                                  _deleteVideo(video);
-                                },
-                              ),
-                            ],
-                          )
-                        else
-                          Row(
-                            children: [
-                              Expanded(
-                                child: action(
                                   icon: Icons.visibility_outlined,
                                   label: 'Смотреть',
                                   accent: primary,
                                   onTap: videoUrl.trim().isEmpty
                                       ? () {
                                           close();
-                                          _showRootBanner('Видео', 'Ссылка на видео отсутствует');
+                                          _showRootBanner('Видео',
+                                              'Ссылка на видео отсутствует');
                                         }
                                       : () {
                                           close();
                                           _watchVideo(videoUrl, title: title);
                                         },
                                 ),
-                              ),
-                              if (canAnalyze) ...[
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: action(
+                                if (canAnalyze) ...[
+                                  const SizedBox(height: 8),
+                                  action(
                                     icon: Icons.analytics_outlined,
                                     label: 'ИИ-анализ',
                                     accent: const Color(0xFF2563EB),
@@ -7505,11 +8164,9 @@ void _showVideoDetailsOverlay(
                                       _openMatchVideoAnalysis(video);
                                     },
                                   ),
-                                ),
-                              ],
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: action(
+                                ],
+                                const SizedBox(height: 8),
+                                action(
                                   icon: Icons.delete_outline_rounded,
                                   label: 'Удалить',
                                   accent: const Color(0xFFDC2626),
@@ -7519,122 +8176,173 @@ void _showVideoDetailsOverlay(
                                     _deleteVideo(video);
                                   },
                                 ),
-                              ),
-                            ],
-                          ),
-                      ],
+                              ],
+                            )
+                          else
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: action(
+                                    icon: Icons.visibility_outlined,
+                                    label: 'Смотреть',
+                                    accent: primary,
+                                    onTap: videoUrl.trim().isEmpty
+                                        ? () {
+                                            close();
+                                            _showRootBanner('Видео',
+                                                'Ссылка на видео отсутствует');
+                                          }
+                                        : () {
+                                            close();
+                                            _watchVideo(videoUrl, title: title);
+                                          },
+                                  ),
+                                ),
+                                if (canAnalyze) ...[
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: action(
+                                      icon: Icons.analytics_outlined,
+                                      label: 'ИИ-анализ',
+                                      accent: const Color(0xFF2563EB),
+                                      onTap: () {
+                                        close();
+                                        _openMatchVideoAnalysis(video);
+                                      },
+                                    ),
+                                  ),
+                                ],
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: action(
+                                    icon: Icons.delete_outline_rounded,
+                                    label: 'Удалить',
+                                    accent: const Color(0xFFDC2626),
+                                    danger: true,
+                                    onTap: () {
+                                      close();
+                                      _deleteVideo(video);
+                                    },
+                                  ),
+                                ),
+                              ],
+                            ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-      );
-    },
-  );
+        );
+      },
+    );
 
-  overlay.insert(entry);
-}  // ← ЗАКРЫВАЮЩАЯ СКОБКА МЕТОДА _showVideoDetailsOverlay
+    overlay.insert(entry);
+  } // ← ЗАКРЫВАЮЩАЯ СКОБКА МЕТОДА _showVideoDetailsOverlay
 
 // ============================================================
 // МЕТОД ДЛЯ УДАЛЕНИЯ ВИДЕО
 // ============================================================
-Future<void> _deleteVideo(Map<String, dynamic> video) async {
-  final videoId = int.tryParse('${video["id"] ?? 0}') ?? 0;
-  final videoUrl = _s(video["video_url"]).isNotEmpty
-      ? _s(video["video_url"])
-      : _s(video["file_url"]);
-  final fileName = _s(video["file_name"]).isNotEmpty
-      ? _s(video["file_name"])
-      : (_s(video["title"]).isNotEmpty ? _s(video["title"]) : "Видео матча");
+  Future<void> _deleteVideo(Map<String, dynamic> video) async {
+    final videoId = int.tryParse('${video["id"] ?? 0}') ?? 0;
+    final videoUrl = _s(video["video_url"]).isNotEmpty
+        ? _s(video["video_url"])
+        : _s(video["file_url"]);
+    final fileName = _s(video["file_name"]).isNotEmpty
+        ? _s(video["file_name"])
+        : (_s(video["title"]).isNotEmpty ? _s(video["title"]) : "Видео матча");
 
-  if (videoId <= 0 && videoUrl.trim().isEmpty) {
-    _showRootBanner(
-      "Ошибка",
-      "Не найден id или ссылка видео для удаления",
-      backgroundColor: const Color(0xFFD92D20),
-      icon: Icons.error_outline_rounded,
-    );
-    return;
-  }
-
-  final confirmed = await _confirmDeleteVideoOverlay(fileName);
-  if (confirmed != true) return;
-
-  try {
-    final payload = {
-      "video_id": videoId,
-      "id": videoId,
-      "match_video_id": videoId,
-      "match_id": matchId,
-      "team_id": teamId,
-      "video_url": videoUrl,
-      "file_url": videoUrl,
-    };
-
-    http.Response resp = await http
-        .post(
-          Uri.parse(deleteVideoUrl),
-          headers: const {"Content-Type": "application/json; charset=utf-8"},
-          body: jsonEncode(payload),
-        )
-        .timeout(const Duration(seconds: 20));
-
-    Map<String, dynamic> data = _decodeResponse(resp);
-
-    if (!(data["success"] == true || data["status"] == "success") && resp.statusCode >= 400) {
-      resp = await http
-          .post(
-            Uri.parse(deleteVideoUrl),
-            body: payload.map((key, value) => MapEntry(key, '$value')),
-          )
-          .timeout(const Duration(seconds: 20));
-      data = _decodeResponse(resp);
-    }
-
-    if (data["success"] == true || data["status"] == "success") {
-      final current = match;
-      if (current != null) {
-        final list = ((current["videos"] as List?) ?? const [])
-            .map((e) => Map<String, dynamic>.from(e as Map))
-            .where((e) {
-              final currentId = int.tryParse('${e["id"] ?? 0}') ?? 0;
-              final currentUrl = _s(e["video_url"]).isNotEmpty ? _s(e["video_url"]) : _s(e["file_url"]);
-              if (videoId > 0 && currentId == videoId) return false;
-              if (videoUrl.trim().isNotEmpty && currentUrl == videoUrl) return false;
-              return true;
-            })
-            .toList();
-        current["videos"] = list;
-        if (mounted) setState(() => match = current);
-      }
-
-      _clearAnalysisVideoControllers();
+    if (videoId <= 0 && videoUrl.trim().isEmpty) {
       _showRootBanner(
-        "Видео удалено",
-        "Матч остался без изменений",
-        backgroundColor: primary,
-        icon: Icons.check_circle_outline_rounded,
-      );
-      await load();
-    } else {
-      _showRootBanner(
-        "Ошибка удаления",
-        data["message"]?.toString() ?? "Не удалось удалить видео",
+        "Ошибка",
+        "Не найден id или ссылка видео для удаления",
         backgroundColor: const Color(0xFFD92D20),
         icon: Icons.error_outline_rounded,
       );
+      return;
     }
-  } catch (e) {
-    _showRootBanner(
-      "Ошибка сети",
-      "Не удалось удалить видео: $e",
-      backgroundColor: const Color(0xFFD92D20),
-      icon: Icons.wifi_off_rounded,
-    );
-  }
-}  // ← ЗАКРЫВАЮЩАЯ СКОБКА МЕТОДА _deleteVideo
+
+    final confirmed = await _confirmDeleteVideoOverlay(fileName);
+    if (confirmed != true) return;
+
+    try {
+      final payload = {
+        "video_id": videoId,
+        "id": videoId,
+        "match_video_id": videoId,
+        "match_id": matchId,
+        "team_id": teamId,
+        "video_url": videoUrl,
+        "file_url": videoUrl,
+      };
+
+      http.Response resp = await http
+          .post(
+            Uri.parse(deleteVideoUrl),
+            headers: const {"Content-Type": "application/json; charset=utf-8"},
+            body: jsonEncode(payload),
+          )
+          .timeout(const Duration(seconds: 20));
+
+      Map<String, dynamic> data = _decodeResponse(resp);
+
+      if (!(data["success"] == true || data["status"] == "success") &&
+          resp.statusCode >= 400) {
+        resp = await http
+            .post(
+              Uri.parse(deleteVideoUrl),
+              body: payload.map((key, value) => MapEntry(key, '$value')),
+            )
+            .timeout(const Duration(seconds: 20));
+        data = _decodeResponse(resp);
+      }
+
+      if (data["success"] == true || data["status"] == "success") {
+        final current = match;
+        if (current != null) {
+          final list = ((current["videos"] as List?) ?? const [])
+              .map((e) => Map<String, dynamic>.from(e as Map))
+              .where((e) {
+            final currentId = int.tryParse('${e["id"] ?? 0}') ?? 0;
+            final currentUrl = _s(e["video_url"]).isNotEmpty
+                ? _s(e["video_url"])
+                : _s(e["file_url"]);
+            if (videoId > 0 && currentId == videoId) return false;
+            if (videoUrl.trim().isNotEmpty && currentUrl == videoUrl)
+              return false;
+            return true;
+          }).toList();
+          current["videos"] = list;
+          if (mounted) setState(() => match = current);
+        }
+
+        _clearAnalysisVideoControllers();
+        _showRootBanner(
+          "Видео удалено",
+          "Матч остался без изменений",
+          backgroundColor: primary,
+          icon: Icons.check_circle_outline_rounded,
+        );
+        await load();
+      } else {
+        _showRootBanner(
+          "Ошибка удаления",
+          data["message"]?.toString() ?? "Не удалось удалить видео",
+          backgroundColor: const Color(0xFFD92D20),
+          icon: Icons.error_outline_rounded,
+        );
+      }
+    } catch (e) {
+      _showRootBanner(
+        "Ошибка сети",
+        "Не удалось удалить видео: $e",
+        backgroundColor: const Color(0xFFD92D20),
+        icon: Icons.wifi_off_rounded,
+      );
+    }
+  } // ← ЗАКРЫВАЮЩАЯ СКОБКА МЕТОДА _deleteVideo
 
   Widget _videoAddButton({
     required String label,
@@ -7652,7 +8360,6 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
           padding: const EdgeInsets.symmetric(horizontal: 13),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(15),
-            
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -7686,21 +8393,26 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
 
     return ListView(
       controller: _scrollController,
-      padding: EdgeInsets.fromLTRB(isPhone ? 8 : 16, isPhone ? 8 : 16, isPhone ? 8 : 16, isPhone ? 96 : 16),
+      padding: EdgeInsets.fromLTRB(isPhone ? 8 : 16, isPhone ? 8 : 16,
+          isPhone ? 8 : 16, isPhone ? 96 : 16),
       children: [
         _buildSectionCard(
           title: "Нарезка моментов",
-          subtitle: "Короткие фрагменты игры для разбора — в таком же компактном виде, как видео матча",
+          subtitle:
+              "Короткие фрагменты игры для разбора — в таком же компактном виде, как видео матча",
           trailing: _videoAddButton(
             label: uploadingVideo ? "Загрузка..." : "Добавить",
             icon: Icons.video_library_outlined,
-            onTap: uploadingVideo ? null : () => _showUploadVideoSheet("highlight"),
+            onTap: uploadingVideo
+                ? null
+                : () => _showUploadVideoSheet("highlight"),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               if (videos.isEmpty)
-                _emptyState("Видеонарезок пока нет", icon: Icons.video_collection_outlined)
+                _emptyState("Видеонарезок пока нет",
+                    icon: Icons.video_collection_outlined)
               else
                 _responsiveGrid(
                   minItemWidth: 300,
@@ -7733,12 +8445,12 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
     );
   }
 
-
   Widget _buildInlineMatchMainNote({required VoidCallback onClose}) {
     final resolvedClubId = _workspaceClubId > 0
         ? _workspaceClubId
         : (widget.clubId ?? _i(match?["club_id"] ?? match?["clubId"]));
-    final resolvedMatchId = matchId > 0 ? matchId : _i(match?["match_id"] ?? match?["id"]);
+    final resolvedMatchId =
+        matchId > 0 ? matchId : _i(match?["match_id"] ?? match?["id"]);
     return WorkspaceEntityRecordDocument(
       ownerTitle: _currentMatchActionTitle,
       sectionTitle: 'Документы и заметки',
@@ -7748,7 +8460,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
       properties: <WorkspaceEntityProperty>[
         WorkspaceEntityProperty('Матч', _currentMatchActionTitle),
         if (_s(match?['match_date'] ?? match?['info_date']).isNotEmpty)
-          WorkspaceEntityProperty('Дата', _s(match?['match_date'] ?? match?['info_date'])),
+          WorkspaceEntityProperty(
+              'Дата', _s(match?['match_date'] ?? match?['info_date'])),
       ],
       noteKey: 'match:$resolvedMatchId',
       entityType: 'match',
@@ -7763,7 +8476,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
     final resolvedClubId = _workspaceClubId > 0
         ? _workspaceClubId
         : (widget.clubId ?? _i(match?["club_id"] ?? match?["clubId"]));
-    final resolvedMatchId = matchId > 0 ? matchId : _i(match?["match_id"] ?? match?["id"]);
+    final resolvedMatchId =
+        matchId > 0 ? matchId : _i(match?["match_id"] ?? match?["id"]);
 
     if (resolvedMatchId <= 0) {
       return Center(
@@ -7782,22 +8496,31 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
         <String, dynamic>{
           'id': 'match-note:$resolvedMatchId',
           'title': 'Заметка матча',
-          'description': 'Общая редактируемая заметка · синхронизируется с Workspace OS',
-          'updated_at': _s(match?['updated_at'] ?? match?['match_date'] ?? match?['info_date']),
+          'description':
+              'Общая редактируемая заметка · синхронизируется с Workspace OS',
+          'updated_at': _s(match?['updated_at'] ??
+              match?['match_date'] ??
+              match?['info_date']),
           '_workspace_match_main_note': true,
         },
       ],
-      titleFor: (row) => _s(row['title']).isEmpty ? 'Материал матча' : _s(row['title']),
-      subtitleFor: (row) => _s(row['description'] ?? row['notes'] ?? row['comment']),
-      dateFor: (row) => _s(row['updated_at'] ?? row['created_at'] ?? row['date']),
+      titleFor: (row) =>
+          _s(row['title']).isEmpty ? 'Материал матча' : _s(row['title']),
+      subtitleFor: (row) =>
+          _s(row['description'] ?? row['notes'] ?? row['comment']),
+      dateFor: (row) =>
+          _s(row['updated_at'] ?? row['created_at'] ?? row['date']),
       propertiesFor: (row) => <WorkspaceEntityProperty>[
         const WorkspaceEntityProperty('Матч', 'Общий рабочий документ'),
-        if (_s(row['created_at']).isNotEmpty) WorkspaceEntityProperty('Создано', _s(row['created_at'])),
-        if (_s(row['updated_at']).isNotEmpty) WorkspaceEntityProperty('Изменено', _s(row['updated_at'])),
+        if (_s(row['created_at']).isNotEmpty)
+          WorkspaceEntityProperty('Создано', _s(row['created_at'])),
+        if (_s(row['updated_at']).isNotEmpty)
+          WorkspaceEntityProperty('Изменено', _s(row['updated_at'])),
       ],
       openRecord: (context, row) async {
         if (row['_workspace_match_main_note'] != true) return;
-        if (widget.documentsOnly || _rightPanelMode == _MatchRightPanelMode.documents) {
+        if (widget.documentsOnly ||
+            _rightPanelMode == _MatchRightPanelMode.documents) {
           if (mounted) setState(() => _embeddedMainNoteOpen = true);
           return;
         }
@@ -7805,13 +8528,17 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
           MaterialPageRoute<void>(
             builder: (_) => Scaffold(
               backgroundColor: Colors.white,
-              body: SafeArea(child: _buildInlineMatchMainNote(onClose: () => Navigator.of(context).maybePop())),
+              body: SafeArea(
+                  child: _buildInlineMatchMainNote(
+                      onClose: () => Navigator.of(context).maybePop())),
             ),
           ),
         );
       },
-      emptyText: 'У матча пока нет документов и заметок. Добавьте заметку или перетащите сюда файл.',
-      localStorageKey: 'sportoteka_match_materials_${resolvedClubId}_$resolvedMatchId',
+      emptyText:
+          'У матча пока нет документов и заметок. Добавьте заметку или перетащите сюда файл.',
+      localStorageKey:
+          'sportoteka_match_materials_${resolvedClubId}_$resolvedMatchId',
       contextLabel: 'Матч',
       clubId: resolvedClubId,
       serverParentKey: 'entity:match:$resolvedMatchId:materials',
@@ -7832,7 +8559,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
 
     return ListView(
       controller: _scrollController,
-      padding: EdgeInsets.fromLTRB(isPhone ? 8 : 16, isPhone ? 8 : 16, isPhone ? 8 : 16, isPhone ? 96 : 16),
+      padding: EdgeInsets.fromLTRB(isPhone ? 8 : 16, isPhone ? 8 : 16,
+          isPhone ? 8 : 16, isPhone ? 96 : 16),
       children: [
         _buildSectionCard(
           title: "Видео матча",
@@ -7845,7 +8573,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
               _videoAddButton(
                 label: uploadingVideo ? "Загрузка..." : "Добавить",
                 icon: Icons.cloud_upload_outlined,
-                onTap: uploadingVideo ? null : () => _showUploadVideoSheet("full"),
+                onTap:
+                    uploadingVideo ? null : () => _showUploadVideoSheet("full"),
               ),
             ],
           ),
@@ -7853,7 +8582,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               if (videos.isEmpty)
-                _emptyState("Видео матча пока нет", icon: Icons.videocam_off_outlined)
+                _emptyState("Видео матча пока нет",
+                    icon: Icons.videocam_off_outlined)
               else
                 _responsiveGrid(
                   minItemWidth: 300,
@@ -8020,7 +8750,884 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
         firstWithUrl(videos);
   }
 
+  String _videoReviewScopeKey() {
+    final resolvedTeamId = teamId > 0 ? teamId : (widget.teamId ?? 0);
+    final resolvedMatchId =
+        matchId > 0 ? matchId : _i(match?["id"] ?? match?["match_id"]);
+    return 'video-match:$resolvedTeamId:match:$resolvedMatchId';
+  }
+
+  void _queueVideoReviewSave(
+    String scopeKey,
+    List<Map<String, dynamic>> annotations,
+  ) {
+    _videoReviewRevision += 1;
+    _pendingVideoReviewScopeKey = scopeKey;
+    _pendingVideoReviewAnnotations = annotations
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList(growable: false);
+    _videoReviewSaveTimer?.cancel();
+    _videoReviewSaveTimer = Timer(
+      const Duration(milliseconds: 850),
+      () => unawaited(_flushVideoReviewSave()),
+    );
+  }
+
+  Future<void> _flushVideoReviewSave() async {
+    _videoReviewSaveTimer?.cancel();
+    _videoReviewSaveTimer = null;
+    final scopeKey = _pendingVideoReviewScopeKey;
+    final annotations = _pendingVideoReviewAnnotations;
+    if (scopeKey == null || annotations == null) return;
+
+    final revision = _videoReviewRevision;
+    _pendingVideoReviewScopeKey = null;
+    _pendingVideoReviewAnnotations = null;
+    _videoReviewSaving = true;
+    try {
+      final durationMs = _embeddedAiPlayback.duration.inMilliseconds;
+      await _videoReviewApi.save(
+        scopeKey: scopeKey,
+        clubId: _workspaceClubId > 0
+            ? _workspaceClubId
+            : (widget.clubId ?? _i(match?["club_id"])),
+        teamId: teamId > 0 ? teamId : (widget.teamId ?? _i(match?["team_id"])),
+        createdBy: _coachId,
+        endMs: durationMs,
+        title: '${_matchTitleForReview()} · видеоразбор',
+        annotations: annotations,
+      );
+      if (revision == _videoReviewRevision) {
+        _videoReviewSavedRevision = revision;
+      }
+    } catch (error) {
+      developer.log(
+        'Video tactical review save fallback',
+        name: 'TeamMatchDetailScreen',
+        error: error,
+      );
+      // Возвращаем документ в очередь: следующая мутация/выход попробует снова.
+      _pendingVideoReviewScopeKey ??= scopeKey;
+      _pendingVideoReviewAnnotations ??= annotations;
+    } finally {
+      _videoReviewSaving = false;
+      if (mounted) setState(() {});
+    }
+  }
+
+  Future<void> _loadVideoReviewForCurrentMatch() async {
+    final scopeKey = _videoReviewScopeKey();
+    if (_videoReviewController.sessionKey != scopeKey) {
+      await _flushVideoReviewSave();
+      _videoReviewController.switchSession(scopeKey);
+      _videoReviewSavedRevision = 0;
+      _videoReviewRevision = 0;
+    }
+
+    final token = ++_videoReviewLoadToken;
+    try {
+      final document = await _videoReviewApi.load(scopeKey: scopeKey);
+      if (!mounted || token != _videoReviewLoadToken) return;
+      if (_videoReviewController.sessionKey != scopeKey) return;
+      if (_videoReviewRevision != _videoReviewSavedRevision) return;
+      if (document != null) {
+        _videoReviewController.replaceFromJson(document);
+      }
+    } catch (error) {
+      developer.log(
+        'Video tactical review load fallback',
+        name: 'TeamMatchDetailScreen',
+        error: error,
+      );
+    }
+  }
+
+  Future<void> _toggleVideoReviewMode() async {
+    if (!_videoReviewMode) {
+      try {
+        await _embeddedAiPlayback.pause();
+      } catch (_) {}
+    }
+    if (!mounted) return;
+    setState(() {
+      _videoReviewMode = !_videoReviewMode;
+      if (_videoReviewMode) {
+        _videoReviewController.setTool(TgAnalyticsTool.select);
+      }
+    });
+  }
+
+  Map<String, dynamic>? _selectedVideoAnalysisVideo() {
+    final videos = ((match?["videos"] as List?) ?? const [])
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .where((e) => _s(e["video_type"]) == "full")
+        .toList();
+    if (videos.isEmpty) return _primaryAiVideo();
+    final selectedId = _selectedVideoAnalysisVideoId ?? 0;
+    if (selectedId > 0) {
+      for (final video in videos) {
+        if (_i(video['id']) == selectedId) return video;
+      }
+    }
+    return videos.first;
+  }
+
+  List<Map<String, dynamic>> _videoReviewToolbarPlayers() {
+    final rows = ((match?["players"] as List?) ?? const [])
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList(growable: false);
+    return rows.map((player) {
+      return <String, dynamic>{
+        ...player,
+        'id': player['id'] ?? player['player_id'],
+        'number': player['number'] ?? player['player_number'],
+        'name': _playerName(player),
+        'position': player['position'] ?? player['group_key'],
+      };
+    }).toList(growable: false);
+  }
+
+  Widget _videoReviewSidebarItem({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required bool active,
+    required VoidCallback onTap,
+    bool emphasis = false,
+  }) {
+    final accent = active ? _mcGreen : _mcSub;
+    return Material(
+      color: active ? const Color(0xFFEAF8F1) : Colors.transparent,
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 50),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 30,
+                height: 30,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Icon(icon, size: 18, color: accent),
+                    if (emphasis && active)
+                      Positioned(
+                        right: 1,
+                        bottom: 1,
+                        child: Container(
+                          width: 6,
+                          height: 6,
+                          decoration: const BoxDecoration(
+                            color: Color(0xFF00A750),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.subsectionTitle(
+                        color: active ? _mcText : const Color(0xFF344054),
+                      ).copyWith(
+                        fontSize: 11.8,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.commentMeta(
+                        color: const Color(0xFF8A9099),
+                      ).copyWith(
+                        fontSize: 9.4,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _videoReviewDesktopSidebar() {
+    Widget label(String text) => Padding(
+          padding: const EdgeInsets.fromLTRB(10, 12, 10, 6),
+          child: Text(
+            text,
+            style: AppTypography.commentMeta(
+              color: const Color(0xFF8A9099),
+            ).copyWith(
+              fontSize: 9.2,
+              fontWeight: FontWeight.w600,
+              letterSpacing: .35,
+            ),
+          ),
+        );
+
+    return Container(
+      width: 212,
+      color: Colors.white,
+      padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          label('ВИДЕОРАЗБОР'),
+          _videoReviewSidebarItem(
+            title: 'Запись',
+            subtitle: 'видео + AI overlay',
+            icon: Icons.play_circle_outline_rounded,
+            active: _videoAnalysisStage == 'video',
+            onTap: () => setState(() => _videoAnalysisStage = 'video'),
+          ),
+          const SizedBox(height: 4),
+          _videoReviewSidebarItem(
+            title: 'Карта',
+            subtitle: 'позиции и траектории',
+            icon: Icons.map_outlined,
+            active: _videoAnalysisStage == 'map',
+            onTap: () => setState(() => _videoAnalysisStage = 'map'),
+          ),
+          const SizedBox(height: 4),
+          _videoReviewSidebarItem(
+            title: '3D PRO',
+            subtitle: 'камера и наклон поля',
+            icon: Icons.view_in_ar_rounded,
+            active: _videoAnalysisStage == 'map' && _videoMapPerspective3d,
+            emphasis: true,
+            onTap: () => setState(() {
+              _videoAnalysisStage = 'map';
+              _videoMapPerspective3d = !_videoMapPerspective3d;
+            }),
+          ),
+          const SizedBox(height: 4),
+          _videoReviewSidebarItem(
+            title: 'Разбор',
+            subtitle: 'рисунки и стоп-кадр',
+            icon: Icons.draw_rounded,
+            active: _videoReviewMode,
+            emphasis: true,
+            onTap: () => unawaited(_toggleVideoReviewMode()),
+          ),
+          label('ИНСПЕКТОР'),
+          _videoReviewSidebarItem(
+            title: 'Журнал',
+            subtitle: '${_liveAiEvents.length} событий',
+            icon: Icons.timeline_rounded,
+            active: _videoAnalysisInspector == 'events',
+            onTap: () => setState(() => _videoAnalysisInspector = 'events'),
+          ),
+          const SizedBox(height: 4),
+          _videoReviewSidebarItem(
+            title: 'Игроки',
+            subtitle: '${_liveAiPlayers.length} в кадре',
+            icon: Icons.groups_2_outlined,
+            active: _videoAnalysisInspector == 'players',
+            onTap: () => setState(() => _videoAnalysisInspector = 'players'),
+          ),
+          const SizedBox(height: 4),
+          _videoReviewSidebarItem(
+            title: 'ИИ',
+            subtitle: 'выводы и нагрузка',
+            icon: Icons.auto_awesome_rounded,
+            active: _videoAnalysisInspector == 'ai',
+            onTap: () => setState(() => _videoAnalysisInspector = 'ai'),
+          ),
+          const Spacer(),
+          Container(height: 1, color: _mcLine),
+          const SizedBox(height: 8),
+          _videoReviewSidebarItem(
+            title: 'Видео матча',
+            subtitle: 'вернуться к файлам',
+            icon: Icons.arrow_back_rounded,
+            active: false,
+            onTap: () =>
+                _openMatchDetailTab(TeamMatchDetailScreen.videoTabIndex),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _videoReviewCompactToolbar() {
+    Widget action({
+      required String label,
+      required IconData icon,
+      required bool active,
+      required VoidCallback onTap,
+    }) {
+      return Material(
+        color: active ? const Color(0xFFEAF8F1) : const Color(0xFFF7F9F8),
+        borderRadius: BorderRadius.circular(10),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(10),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 16, color: active ? _mcGreen : _mcSub),
+                const SizedBox(width: 6),
+                Text(
+                  label,
+                  style: AppTypography.caption(
+                    color: active ? _mcGreen : _mcText,
+                  ).copyWith(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return SizedBox(
+      height: 48,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        children: [
+          action(
+            label: 'Видео',
+            icon: Icons.play_circle_outline_rounded,
+            active: _videoAnalysisStage == 'video',
+            onTap: () => setState(() => _videoAnalysisStage = 'video'),
+          ),
+          const SizedBox(width: 6),
+          action(
+            label: 'Карта',
+            icon: Icons.map_outlined,
+            active: _videoAnalysisStage == 'map',
+            onTap: () => setState(() => _videoAnalysisStage = 'map'),
+          ),
+          const SizedBox(width: 6),
+          action(
+            label: '3D',
+            icon: Icons.view_in_ar_rounded,
+            active: _videoAnalysisStage == 'map' && _videoMapPerspective3d,
+            onTap: () => setState(() {
+              _videoAnalysisStage = 'map';
+              _videoMapPerspective3d = !_videoMapPerspective3d;
+            }),
+          ),
+          const SizedBox(width: 6),
+          action(
+            label: 'Разбор',
+            icon: Icons.draw_rounded,
+            active: _videoReviewMode,
+            onTap: () => unawaited(_toggleVideoReviewMode()),
+          ),
+          const SizedBox(width: 6),
+          action(
+            label: 'Журнал',
+            icon: Icons.timeline_rounded,
+            active: _videoAnalysisInspector == 'events',
+            onTap: () => setState(() => _videoAnalysisInspector = 'events'),
+          ),
+          const SizedBox(width: 6),
+          action(
+            label: 'Игроки',
+            icon: Icons.groups_2_outlined,
+            active: _videoAnalysisInspector == 'players',
+            onTap: () => setState(() => _videoAnalysisInspector = 'players'),
+          ),
+          const SizedBox(width: 6),
+          action(
+            label: 'ИИ',
+            icon: Icons.auto_awesome_rounded,
+            active: _videoAnalysisInspector == 'ai',
+            onTap: () => setState(() => _videoAnalysisInspector = 'ai'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _videoReviewInspector() {
+    final title = _videoAnalysisInspector == 'players'
+        ? 'Игроки'
+        : _videoAnalysisInspector == 'ai'
+            ? 'ИИ-разбор'
+            : 'Журнал событий';
+    final subtitle = _videoAnalysisInspector == 'players'
+        ? 'распознанные игроки и Track ID'
+        : _videoAnalysisInspector == 'ai'
+            ? 'выводы по текущему видео'
+            : 'события синхронно с записью';
+    final compact = (MediaQuery.maybeOf(context)?.size.width ?? 1000) < 760;
+
+    Widget body;
+    if (_videoAnalysisInspector == 'players') {
+      body = _inlineAiPlayersPanel();
+    } else if (_videoAnalysisInspector == 'ai') {
+      body = Container(
+        padding: const EdgeInsets.all(10),
+        color: const Color(0xFFF7F9F8),
+        child: SingleChildScrollView(
+          child: _analysisAiBlock(compact: true),
+        ),
+      );
+    } else {
+      body = _inlineAiEventsPanel();
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: compact
+            ? null
+            : Border(left: BorderSide(color: _mcLine.withOpacity(.72))),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            height: compact ? 46 : 52,
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            color: Colors.white,
+            child: Row(
+              children: [
+                Container(
+                  width: compact ? 28 : 30,
+                  height: compact ? 28 : 30,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF3FAF6),
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  child: Icon(
+                    _videoAnalysisInspector == 'players'
+                        ? Icons.groups_2_outlined
+                        : _videoAnalysisInspector == 'ai'
+                            ? Icons.auto_awesome_rounded
+                            : Icons.timeline_rounded,
+                    color: _mcGreen,
+                    size: 16,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.subsectionTitle(color: _mcText)
+                            .copyWith(
+                          fontSize: compact ? 10.8 : 11.4,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      if (!compact) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          subtitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTypography.commentMeta(
+                            color: const Color(0xFF8A9099),
+                          ).copyWith(
+                            fontSize: 9.2,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const _MatchProfileBrandDots(),
+              ],
+            ),
+          ),
+          Expanded(
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(
+                compact ? 5 : 8,
+                2,
+                compact ? 5 : 8,
+                compact ? 5 : 8,
+              ),
+              child: body,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _videoReviewMainStage({
+    required Map<String, dynamic> video,
+    required Map<String, dynamic> params,
+    bool showEmbeddedControls = false,
+  }) {
+    final videoStage = AdvancedVideoAnalysisScreen(
+      key: ValueKey(
+          'tracker-video-review-${_i(video['id'])}-${_s(params['videoUrl'])}'),
+      params: params,
+      embedded: true,
+      modalWindow: false,
+      hideControls: !showEmbeddedControls,
+      connectAi: true,
+      showAiOverlay: true,
+      externalPlaybackController: _embeddedAiPlayback,
+      onAnalysisFrame: _onLiveAiFrame,
+      onStatusChanged: _onLiveAiStatus,
+    );
+
+    // Поле теперь не мини-карта в карточке, а полноценная сцена Tracker.
+    // Перспектива применяется снаружи TgAnalyticsOverlay: поэтому чертёж,
+    // игроки и само поле вращаются как единое полотно и hit-test остаётся верным.
+    final mapStage = RepaintBoundary(
+      child: ColoredBox(
+        color: const Color(0xFF0D5B33),
+        child: CustomPaint(
+          painter: _MatchPitchNetworkPainter(
+            vertical: false,
+            livePositions: _liveAiPositions,
+            liveTrails: _liveAiTrails,
+            liveSpeeds: _liveAiSpeedsKmh,
+          ),
+          child: const SizedBox.expand(),
+        ),
+      ),
+    );
+
+    return AnimatedBuilder(
+      animation: _embeddedAiPlayback,
+      builder: (context, _) {
+        final cursorMs = max(0, _embeddedAiPlayback.position.inMilliseconds);
+        final phone = (MediaQuery.maybeOf(context)?.size.width ?? 1000) < 600;
+
+        final reviewSurface = TgAnalyticsOverlay(
+          controller: _videoReviewController,
+          enabled: _videoReviewMode,
+          cursorElapsedMs: cursorMs,
+          child: IndexedStack(
+            index: _videoAnalysisStage == 'map' ? 1 : 0,
+            sizing: StackFit.expand,
+            children: [videoStage, mapStage],
+          ),
+        );
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (_videoReviewMode)
+              Container(
+                height: 42,
+                margin: EdgeInsets.fromLTRB(
+                    phone ? 3 : 6, phone ? 3 : 6, phone ? 3 : 6, 0),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF7F9F8),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: ClipRect(
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    physics: const BouncingScrollPhysics(),
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        minWidth: phone ? 720 : 0,
+                      ),
+                      child: TgAnalyticsToolbar(
+                        controller: _videoReviewController,
+                        teamName: teamName,
+                        teamPlayers: _videoReviewToolbarPlayers(),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            Expanded(
+              child: Padding(
+                padding: EdgeInsets.all(phone ? 3 : 6),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(phone ? 10 : 14),
+                  child: Stack(
+                    children: [
+                      Positioned.fill(
+                        child: _MatchVideoPitchPerspective(
+                          enabled: _videoAnalysisStage == 'map' &&
+                              _videoMapPerspective3d,
+                          compact: phone,
+                          child: reviewSurface,
+                        ),
+                      ),
+                      Positioned(
+                        left: phone ? 7 : 10,
+                        top: phone ? 7 : 10,
+                        child: IgnorePointer(
+                          child: Container(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: phone ? 7 : 9,
+                              vertical: phone ? 5 : 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(.58),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  width: 6,
+                                  height: 6,
+                                  decoration: BoxDecoration(
+                                    color: _liveAiPlayers.isNotEmpty
+                                        ? _mcGreen
+                                        : const Color(0xFFF59E0B),
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  _videoAnalysisStage == 'map'
+                                      ? (_videoMapPerspective3d
+                                          ? 'КАРТА 3D PRO'
+                                          : 'КАРТА 2D')
+                                      : 'ВИДЕОАНАЛИЗ',
+                                  style: AppTypography.commentMeta(
+                                    color: Colors.white,
+                                  ).copyWith(
+                                    fontSize: phone ? 8.8 : 9.2,
+                                    fontWeight: FontWeight.w600,
+                                    letterSpacing: .2,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      if (!phone)
+                        Positioned(
+                          right: 10,
+                          top: 10,
+                          child: Material(
+                            color: Colors.white.withOpacity(.94),
+                            borderRadius: BorderRadius.circular(10),
+                            child: InkWell(
+                              onTap: () =>
+                                  _openMatchVideoAnalysisFullscreen(video),
+                              borderRadius: BorderRadius.circular(10),
+                              child: const SizedBox(
+                                width: 38,
+                                height: 38,
+                                child: Icon(
+                                  Icons.open_in_full_rounded,
+                                  color: Color(0xFF111827),
+                                  size: 19,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      if (_videoReviewSaving)
+                        Positioned(
+                          right: phone ? 7 : 10,
+                          bottom: phone ? 7 : 10,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(.92),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              'Сохраняем разбор…',
+                              style: AppTypography.commentMeta(color: _mcSub)
+                                  .copyWith(
+                                fontSize: 9,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Widget _buildAiVideoAnalysisTab() {
+    if (!_matchSubscriptionLoaded) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+      );
+    }
+
+    if (!_canUseMatchVideoAnalysis) {
+      return _buildMatchVideoSubscriptionLocked();
+    }
+
+    final video = _selectedVideoAnalysisVideo();
+    final resolvedTeamId =
+        teamId > 0 ? teamId : (widget.teamId ?? _i(match?['team_id']));
+
+    if (resolvedTeamId <= 0) {
+      return _matchAiEmptyState(
+        icon: Icons.info_outline_rounded,
+        title: 'Не удалось определить команду',
+        subtitle:
+            'Откройте матч из карточки команды, чтобы ИИ получил teamId и состав.',
+      );
+    }
+
+    if (video == null ||
+        _s(_analysisParamsForVideo(video)['videoUrl']).isEmpty) {
+      return _matchAiEmptyState(
+        icon: Icons.video_file_outlined,
+        title: 'Добавьте полную запись матча',
+        subtitle:
+            'После загрузки здесь откроется рабочая область Tracker: видео, 3D-карта, разбор, игроки и события.',
+        action: ElevatedButton.icon(
+          onPressed:
+              uploadingVideo ? null : () => _showUploadVideoSheet('full'),
+          icon: const Icon(Icons.cloud_upload_outlined, size: 18),
+          label: Text(uploadingVideo ? 'Загрузка...' : 'Загрузить видео'),
+          style: ElevatedButton.styleFrom(
+            elevation: 0,
+            backgroundColor: _mcGreen,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        ),
+      );
+    }
+
+    final params = _analysisParamsForVideo(video);
+
+    return ColoredBox(
+      color: Colors.white,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final phone = constraints.maxWidth < 600;
+          final compact = constraints.maxWidth < 900;
+          final sideBySideCompact = constraints.maxWidth >= 760;
+
+          if (phone) {
+            final inspectorHeight =
+                (constraints.maxHeight * .29).clamp(150.0, 210.0).toDouble();
+            return SafeArea(
+              top: false,
+              bottom: false,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _videoReviewCompactToolbar(),
+                  Expanded(
+                    child: _videoReviewMainStage(
+                      video: video,
+                      params: params,
+                      showEmbeddedControls: true,
+                    ),
+                  ),
+                  SizedBox(
+                    height: inspectorHeight,
+                    child: _videoReviewInspector(),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          if (compact) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _videoReviewCompactToolbar(),
+                Expanded(
+                  child: sideBySideCompact
+                      ? Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Expanded(
+                              child: _videoReviewMainStage(
+                                video: video,
+                                params: params,
+                              ),
+                            ),
+                            SizedBox(
+                              width: min(292.0, constraints.maxWidth * .36),
+                              child: _videoReviewInspector(),
+                            ),
+                          ],
+                        )
+                      : Column(
+                          children: [
+                            Expanded(
+                              child: _videoReviewMainStage(
+                                video: video,
+                                params: params,
+                                showEmbeddedControls: true,
+                              ),
+                            ),
+                            SizedBox(
+                                height: 190, child: _videoReviewInspector()),
+                          ],
+                        ),
+                ),
+              ],
+            );
+          }
+
+          final inspectorWidth = constraints.maxWidth < 1180 ? 286.0 : 326.0;
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _videoReviewDesktopSidebar(),
+              Expanded(
+                child: _videoReviewMainStage(video: video, params: params),
+              ),
+              SizedBox(
+                width: inspectorWidth,
+                child: _videoReviewInspector(),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildAiVideoAnalysisTabClassic() {
     final video = _primaryAiVideo();
     final resolvedTeamId =
         teamId > 0 ? teamId : (widget.teamId ?? _i(match?['team_id']));
@@ -8029,18 +9636,21 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
       return _matchAiEmptyState(
         icon: Icons.info_outline_rounded,
         title: 'Не удалось определить команду',
-        subtitle: 'Откройте матч из карточки команды, чтобы ИИ получил teamId и состав.',
+        subtitle:
+            'Откройте матч из карточки команды, чтобы ИИ получил teamId и состав.',
       );
     }
 
-    if (video == null || _s(_analysisParamsForVideo(video)['videoUrl']).isEmpty) {
+    if (video == null ||
+        _s(_analysisParamsForVideo(video)['videoUrl']).isEmpty) {
       return _matchAiEmptyState(
         icon: Icons.video_file_outlined,
         title: 'Добавьте полную запись матча',
         subtitle:
             'После загрузки ИИ начнёт распознавать игроков, мяч и события прямо на этой странице.',
         action: ElevatedButton.icon(
-          onPressed: uploadingVideo ? null : () => _showUploadVideoSheet('full'),
+          onPressed:
+              uploadingVideo ? null : () => _showUploadVideoSheet('full'),
           icon: const Icon(Icons.cloud_upload_outlined, size: 18),
           label: Text(uploadingVideo ? 'Загрузка...' : 'Загрузить видео'),
           style: ElevatedButton.styleFrom(
@@ -8048,7 +9658,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
             backgroundColor: _mcGreen,
             foregroundColor: Colors.white,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
         ),
       );
@@ -8071,13 +9682,13 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
           );
           final load = _liveAiLoad.isEmpty
               ? 0.0
-              : _liveAiLoad.values.reduce((a, b) => a + b) /
-                  _liveAiLoad.length;
+              : _liveAiLoad.values.reduce((a, b) => a + b) / _liveAiLoad.length;
 
           final videoStage = ClipRRect(
             borderRadius: BorderRadius.circular(12),
             child: AdvancedVideoAnalysisScreen(
-              key: ValueKey('inline-match-ai-${_i(video['id'])}-${_s(params['videoUrl'])}'),
+              key: ValueKey(
+                  'inline-match-ai-${_i(video['id'])}-${_s(params['videoUrl'])}'),
               params: params,
               embedded: true,
               modalWindow: false,
@@ -8126,7 +9737,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
             decoration: BoxDecoration(
               color: Colors.white,
-              border: Border(bottom: BorderSide(color: _mcLine.withOpacity(.7))),
+              border:
+                  Border(bottom: BorderSide(color: _mcLine.withOpacity(.7))),
             ),
             child: Row(
               children: [
@@ -8137,7 +9749,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                     color: const Color(0xFFEAF8F1),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Icon(Icons.auto_awesome_rounded, color: _mcGreen, size: 19),
+                  child: Icon(Icons.auto_awesome_rounded,
+                      color: _mcGreen, size: 19),
                 ),
                 const SizedBox(width: 11),
                 Expanded(
@@ -8187,7 +9800,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                     label: const Text('Онлайн-матч'),
                     style: TextButton.styleFrom(
                       foregroundColor: _mcGreen,
-                      textStyle: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600),
+                      textStyle: const TextStyle(
+                          fontSize: 11.5, fontWeight: FontWeight.w600),
                     ),
                   ),
                   const SizedBox(width: 5),
@@ -8365,17 +9979,26 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                   label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: _mcSub, fontSize: 9.4, fontWeight: FontWeight.w600),
+                  style: TextStyle(
+                      color: _mcSub,
+                      fontSize: 9.4,
+                      fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: 2),
                 Text.rich(
                   TextSpan(
                     text: value,
-                    style: TextStyle(color: _mcText, fontSize: 14, fontWeight: FontWeight.w600),
+                    style: TextStyle(
+                        color: _mcText,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600),
                     children: [
                       TextSpan(
                         text: '  $suffix',
-                        style: TextStyle(color: _mcSub, fontSize: 8.6, fontWeight: FontWeight.w600),
+                        style: TextStyle(
+                            color: _mcSub,
+                            fontSize: 8.6,
+                            fontWeight: FontWeight.w600),
                       ),
                     ],
                   ),
@@ -8404,9 +10027,13 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(title, style: TextStyle(color: _mcText, fontSize: 12.2, fontWeight: FontWeight.w600)),
+          Text(title,
+              style: TextStyle(
+                  color: _mcText, fontSize: 12.2, fontWeight: FontWeight.w600)),
           const SizedBox(height: 3),
-          Text(subtitle, style: TextStyle(color: _mcSub, fontSize: 9.8, fontWeight: FontWeight.w600)),
+          Text(subtitle,
+              style: TextStyle(
+                  color: _mcSub, fontSize: 9.8, fontWeight: FontWeight.w600)),
           const SizedBox(height: 10),
           Expanded(child: child),
         ],
@@ -8439,7 +10066,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                     : _mcGreen;
                 return Container(
                   width: horizontal ? 210 : double.infinity,
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(10),
@@ -8471,14 +10099,20 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                               _s(event['title']),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: TextStyle(color: _mcText, fontSize: 10.2, fontWeight: FontWeight.w600),
+                              style: TextStyle(
+                                  color: _mcText,
+                                  fontSize: 10.2,
+                                  fontWeight: FontWeight.w600),
                             ),
                             const SizedBox(height: 2),
                             Text(
                               '${_s(event['minute'])}${_s(event['subtitle']).isEmpty ? '' : ' · ${_s(event['subtitle'])}'}',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: TextStyle(color: _mcSub, fontSize: 8.8, fontWeight: FontWeight.w600),
+                              style: TextStyle(
+                                  color: _mcSub,
+                                  fontSize: 8.8,
+                                  fontWeight: FontWeight.w600),
                             ),
                           ],
                         ),
@@ -8542,7 +10176,10 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                       ),
                       child: Text(
                         player.number > 0 ? '${player.number}' : '$trackId',
-                        style: TextStyle(color: _mcGreen, fontSize: 9.5, fontWeight: FontWeight.w600),
+                        style: TextStyle(
+                            color: _mcGreen,
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.w600),
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -8551,12 +10188,18 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                         _liveAiPlayerLabel(trackId, player: player),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(color: _mcText, fontSize: 10.2, fontWeight: FontWeight.w600),
+                        style: TextStyle(
+                            color: _mcText,
+                            fontSize: 10.2,
+                            fontWeight: FontWeight.w600),
                       ),
                     ),
                     Text(
                       '${(player.confidence * 100).round()}%',
-                      style: TextStyle(color: _mcSub, fontSize: 9.2, fontWeight: FontWeight.w600),
+                      style: TextStyle(
+                          color: _mcSub,
+                          fontSize: 9.2,
+                          fontWeight: FontWeight.w600),
                     ),
                   ],
                 );
@@ -8577,7 +10220,11 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
             Text(
               text,
               textAlign: TextAlign.center,
-              style: TextStyle(color: _mcSub, fontSize: 9.8, height: 1.35, fontWeight: FontWeight.w600),
+              style: TextStyle(
+                  color: _mcSub,
+                  fontSize: 9.8,
+                  height: 1.35,
+                  fontWeight: FontWeight.w600),
             ),
           ],
         ),
@@ -8587,9 +10234,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
 
   Widget _buildAiVideoAnalysisTabLegacy() {
     final video = _primaryAiVideo();
-    final normalizedVideoUrl = video == null
-        ? ''
-        : (_normalizeUrl(_s(video['video_url'])) ?? '');
+    final normalizedVideoUrl =
+        video == null ? '' : (_normalizeUrl(_s(video['video_url'])) ?? '');
     final resolvedTeamId =
         teamId > 0 ? teamId : (widget.teamId ?? _i(match?['team_id']));
     final hasVideo = normalizedVideoUrl.isNotEmpty;
@@ -8778,7 +10424,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                                       if (resolvedTeamId > 0 && hasVideo)
                                         actionButton(
                                           label: 'Анализ записи',
-                                          icon: Icons.auto_awesome_motion_rounded,
+                                          icon:
+                                              Icons.auto_awesome_motion_rounded,
                                           onPressed: () =>
                                               _openMatchVideoAnalysis(video!),
                                           primaryAction: true,
@@ -8805,8 +10452,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                                       actionButton(
                                         label: 'Раздел видео',
                                         icon: Icons.video_library_outlined,
-                                        onPressed: () =>
-                                            _openMatchDetailTab(4),
+                                        onPressed: () => _openMatchDetailTab(4),
                                       ),
                                     ],
                                   ),
@@ -8815,8 +10461,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                             else
                               Expanded(
                                 child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
                                       title,
@@ -8975,7 +10620,6 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
       decoration: BoxDecoration(
         color: const Color(0xFFFAFCFB),
         borderRadius: BorderRadius.circular(26),
-        
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -8986,7 +10630,6 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(22),
-              
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -8998,33 +10641,58 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                     color: softAccent,
                     borderRadius: BorderRadius.circular(16),
                   ),
-                  child: Icon(Icons.sports_soccer_rounded, color: primary, size: 22),
+                  child: Icon(Icons.sports_soccer_rounded,
+                      color: primary, size: 22),
                 ),
                 const SizedBox(height: 14),
-                Text('Матч', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: textSecondary)),
+                Text('Матч',
+                    style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: textSecondary)),
                 const SizedBox(height: 6),
                 Text(
                   teamName,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 14, height: 1.15, fontWeight: FontWeight.w600, color: textPrimary),
+                  style: TextStyle(
+                      fontSize: 14,
+                      height: 1.15,
+                      fontWeight: FontWeight.w600,
+                      color: textPrimary),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   '$score  $opponent',
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: primary),
+                  style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: primary),
                 ),
                 const SizedBox(height: 14),
-                _proSideMeta(Icons.calendar_month_outlined, date.isEmpty ? 'Дата не указана' : date),
-                _proSideMeta(Icons.stadium_outlined, _s(_stadiumCtrl.text).isEmpty ? 'Место не указано' : _s(_stadiumCtrl.text)),
-                if (competition.isNotEmpty) _proSideMeta(Icons.emoji_events_outlined, competition),
+                _proSideMeta(Icons.calendar_month_outlined,
+                    date.isEmpty ? 'Дата не указана' : date),
+                _proSideMeta(
+                    Icons.stadium_outlined,
+                    _s(_stadiumCtrl.text).isEmpty
+                        ? 'Место не указано'
+                        : _s(_stadiumCtrl.text)),
+                if (competition.isNotEmpty)
+                  _proSideMeta(Icons.emoji_events_outlined, competition),
                 const SizedBox(height: 10),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(color: softAccent, borderRadius: BorderRadius.circular(999)),
-                  child: Text('Завершен', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: primary)),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                      color: softAccent,
+                      borderRadius: BorderRadius.circular(999)),
+                  child: Text('Завершен',
+                      style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: primary)),
                 ),
               ],
             ),
@@ -9048,7 +10716,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                       },
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 180),
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 12),
                         decoration: BoxDecoration(
                           color: active ? softAccent : Colors.transparent,
                           borderRadius: BorderRadius.circular(18),
@@ -9059,19 +10728,39 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                               width: 36,
                               height: 36,
                               decoration: BoxDecoration(
-                                color: active ? Colors.white : const Color(0xFFF1F5F9),
+                                color: active
+                                    ? Colors.white
+                                    : const Color(0xFFF1F5F9),
                                 borderRadius: BorderRadius.circular(14),
                               ),
-                              child: Icon(item.icon, size: 19, color: active ? primary : textSecondary),
+                              child: Icon(item.icon,
+                                  size: 19,
+                                  color: active ? primary : textSecondary),
                             ),
                             const SizedBox(width: 10),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(item.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: active ? textPrimary : textPrimary.withOpacity(.86))),
+                                  Text(item.title,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
+                                          color: active
+                                              ? textPrimary
+                                              : textPrimary.withOpacity(.86))),
                                   const SizedBox(height: 2),
-                                  Text(item.subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: active ? primary : textSecondary)),
+                                  Text(item.subtitle,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                          color: active
+                                              ? primary
+                                              : textSecondary)),
                                 ],
                               ),
                             ),
@@ -9177,10 +10866,16 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
     required String date,
     required String competition,
   }) {
-    final ourTeam = _s(match?["our_team"]).isEmpty ? teamName : _s(match?["our_team"]);
-    final ourScore = _s(match?["our_score"]).isEmpty ? '0' : _s(match?["our_score"]);
-    final oppScore = _s(match?["opponent_score"]).isEmpty ? '0' : _s(match?["opponent_score"]);
-    final stadium = _s(_stadiumCtrl.text).isEmpty ? _s(match?["stadium"]) : _s(_stadiumCtrl.text);
+    final ourTeam =
+        _s(match?["our_team"]).isEmpty ? teamName : _s(match?["our_team"]);
+    final ourScore =
+        _s(match?["our_score"]).isEmpty ? '0' : _s(match?["our_score"]);
+    final oppScore = _s(match?["opponent_score"]).isEmpty
+        ? '0'
+        : _s(match?["opponent_score"]);
+    final stadium = _s(_stadiumCtrl.text).isEmpty
+        ? _s(match?["stadium"])
+        : _s(_stadiumCtrl.text);
 
     return Container(
       padding: const EdgeInsets.fromLTRB(18, 17, 18, 16),
@@ -9201,7 +10896,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                   color: Colors.white.withOpacity(.12),
                   borderRadius: BorderRadius.circular(15),
                 ),
-                child: const Icon(Icons.sports_soccer_rounded, color: Colors.white, size: 22),
+                child: const Icon(Icons.sports_soccer_rounded,
+                    color: Colors.white, size: 22),
               ),
               const SizedBox(width: 16),
               Expanded(
@@ -9236,7 +10932,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
               ),
               const SizedBox(width: 18),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(20),
@@ -9259,9 +10956,12 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
             runSpacing: 10,
             children: [
               _darkHeroPill(Icons.shield_outlined, '$ourTeam — $opponent'),
-              if (date.isNotEmpty) _darkHeroPill(Icons.calendar_month_outlined, date),
-              if (stadium.isNotEmpty) _darkHeroPill(Icons.stadium_outlined, stadium),
-              if (competition.isNotEmpty) _darkHeroPill(Icons.emoji_events_outlined, competition),
+              if (date.isNotEmpty)
+                _darkHeroPill(Icons.calendar_month_outlined, date),
+              if (stadium.isNotEmpty)
+                _darkHeroPill(Icons.stadium_outlined, stadium),
+              if (competition.isNotEmpty)
+                _darkHeroPill(Icons.emoji_events_outlined, competition),
               _darkHeroPill(Icons.analytics_outlined, 'AI-отчёт и ТТД'),
             ],
           ),
@@ -9303,25 +11003,39 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
   Widget _buildMatchKpiPanel() {
     final possession = _i(_ctrlValueOrMatch(_possessionCtrl, "possession"));
     final shots = _i(_ctrlValueOrMatch(_shotsCtrl, "shots"));
-    final shotsOn = _i(_ctrlValueOrMatch(_shotsOnTargetCtrl, "shots_on_target"));
+    final shotsOn =
+        _i(_ctrlValueOrMatch(_shotsOnTargetCtrl, "shots_on_target"));
     final xg = _calculatedXg(shots, shotsOn);
     final fullVideos = _videosByType('full').length;
     final metrics = [
-      _ProKpi('xG', xg.toStringAsFixed(2), Icons.stacked_line_chart_rounded, const Color(0xFF2E90FA), 'качество моментов'),
-      _ProKpi('Владение', possession > 0 ? '$possession%' : '—', Icons.pie_chart_rounded, primary, 'контроль мяча'),
-      _ProKpi('Удары', '$shots', Icons.sports_soccer_rounded, const Color(0xFF7C3AED), 'всего'),
-      _ProKpi('В створ', '$shotsOn', Icons.center_focus_strong_rounded, const Color(0xFFF59E0B), 'точность'),
-      _ProKpi('ТТД', '$_totalActions', Icons.query_stats_rounded, const Color(0xFF0EA5E9), 'действий'),
-      _ProKpi('Эфф.', '${_efficiency.toStringAsFixed(0)}%', Icons.bolt_rounded, const Color(0xFF12B76A), 'успешность'),
-      _ProKpi('Эпизоды', '${episodes.length}', Icons.movie_filter_outlined, const Color(0xFFEF4444), 'ключевые'),
-      _ProKpi('Видео', '$fullVideos', Icons.play_circle_outline_rounded, const Color(0xFF175CD3), 'полная игра'),
+      _ProKpi('xG', xg.toStringAsFixed(2), Icons.stacked_line_chart_rounded,
+          const Color(0xFF2E90FA), 'качество моментов'),
+      _ProKpi('Владение', possession > 0 ? '$possession%' : '—',
+          Icons.pie_chart_rounded, primary, 'контроль мяча'),
+      _ProKpi('Удары', '$shots', Icons.sports_soccer_rounded,
+          const Color(0xFF7C3AED), 'всего'),
+      _ProKpi('В створ', '$shotsOn', Icons.center_focus_strong_rounded,
+          const Color(0xFFF59E0B), 'точность'),
+      _ProKpi('ТТД', '$_totalActions', Icons.query_stats_rounded,
+          const Color(0xFF0EA5E9), 'действий'),
+      _ProKpi('Эфф.', '${_efficiency.toStringAsFixed(0)}%', Icons.bolt_rounded,
+          const Color(0xFF12B76A), 'успешность'),
+      _ProKpi('Эпизоды', '${episodes.length}', Icons.movie_filter_outlined,
+          const Color(0xFFEF4444), 'ключевые'),
+      _ProKpi('Видео', '$fullVideos', Icons.play_circle_outline_rounded,
+          const Color(0xFF175CD3), 'полная игра'),
     ];
 
     return LayoutBuilder(
       builder: (context, constraints) {
         const gap = 12.0;
-        final columns = constraints.maxWidth >= 1180 ? 4 : constraints.maxWidth >= 760 ? 3 : 2;
-        final itemWidth = (constraints.maxWidth - gap * (columns - 1)) / columns;
+        final columns = constraints.maxWidth >= 1180
+            ? 4
+            : constraints.maxWidth >= 760
+                ? 3
+                : 2;
+        final itemWidth =
+            (constraints.maxWidth - gap * (columns - 1)) / columns;
         return Wrap(
           spacing: gap,
           runSpacing: gap,
@@ -9362,15 +11076,33 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(item.label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 10.4, fontWeight: FontWeight.w600, color: textSecondary)),
+                Text(item.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        fontSize: 10.4,
+                        fontWeight: FontWeight.w600,
+                        color: textSecondary)),
                 const SizedBox(height: 5),
                 FittedBox(
                   fit: BoxFit.scaleDown,
                   alignment: Alignment.centerLeft,
-                  child: Text(item.value, maxLines: 1, style: TextStyle(fontSize: 18.5, height: 1, fontWeight: FontWeight.w600, color: textPrimary)),
+                  child: Text(item.value,
+                      maxLines: 1,
+                      style: TextStyle(
+                          fontSize: 18.5,
+                          height: 1,
+                          fontWeight: FontWeight.w600,
+                          color: textPrimary)),
                 ),
                 const SizedBox(height: 5),
-                Text(item.hint, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 10.2, fontWeight: FontWeight.w600, color: textSecondary.withOpacity(.86))),
+                Text(item.hint,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        fontSize: 10.2,
+                        fontWeight: FontWeight.w600,
+                        color: textSecondary.withOpacity(.86))),
               ],
             ),
           ),
@@ -9380,9 +11112,15 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
   }
 
   Widget _buildMatchIntelligenceCard() {
-    final risk = _efficiency < 55 ? 'Высокий риск брака' : _efficiency < 70 ? 'Нужен контроль темпа' : 'Команда контролировала игру';
+    final risk = _efficiency < 55
+        ? 'Высокий риск брака'
+        : _efficiency < 70
+            ? 'Нужен контроль темпа'
+            : 'Команда контролировала игру';
     final bestPeriod = episodes.isEmpty ? '55–72 мин' : _bestEpisodeWindow();
-    final weakZone = _totalFail > _totalSuccess * .45 ? 'центральная зона и выход из обороны' : 'переходные фазы после потерь';
+    final weakZone = _totalFail > _totalSuccess * .45
+        ? 'центральная зона и выход из обороны'
+        : 'переходные фазы после потерь';
 
     return _proCard(
       title: 'Интеллект матча',
@@ -9394,27 +11132,42 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
             risk,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(fontSize: 16.2, height: 1.12, fontWeight: FontWeight.w600, color: textPrimary),
+            style: TextStyle(
+                fontSize: 16.2,
+                height: 1.12,
+                fontWeight: FontWeight.w600,
+                color: textPrimary),
           ),
           const SizedBox(height: 10),
           Text(
             'Система сопоставляет ТТД, эпизоды, владение и видео. Главная задача после матча — быстро понять сильные отрезки, провалы и нагрузку.',
             maxLines: 3,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(fontSize: 11.4, height: 1.30, fontWeight: FontWeight.w600, color: textSecondary),
+            style: TextStyle(
+                fontSize: 11.4,
+                height: 1.30,
+                fontWeight: FontWeight.w600,
+                color: textSecondary),
           ),
           const SizedBox(height: 16),
-          _proInsightRow(Icons.trending_up_rounded, 'Лучший отрезок', bestPeriod, primary),
-          _proInsightRow(Icons.warning_amber_rounded, 'Зона риска', weakZone, const Color(0xFFF59E0B)),
-          _proInsightRow(Icons.psychology_alt_outlined, 'Рекомендация', _aiRecommendation(), const Color(0xFF2E90FA)),
+          _proInsightRow(
+              Icons.trending_up_rounded, 'Лучший отрезок', bestPeriod, primary),
+          _proInsightRow(Icons.warning_amber_rounded, 'Зона риска', weakZone,
+              const Color(0xFFF59E0B)),
+          _proInsightRow(Icons.psychology_alt_outlined, 'Рекомендация',
+              _aiRecommendation(), const Color(0xFF2E90FA)),
           const SizedBox(height: 14),
-          _proOutlineButton(icon: Icons.query_stats_rounded, text: 'Открыть расширенный ТТД', onTap: () => _openMatchDetailTab(1)),
+          _proOutlineButton(
+              icon: Icons.query_stats_rounded,
+              text: 'Открыть расширенный ТТД',
+              onTap: () => _openMatchDetailTab(1)),
         ],
       ),
     );
   }
 
-  Widget _proInsightRow(IconData icon, String title, String value, Color color) {
+  Widget _proInsightRow(
+      IconData icon, String title, String value, Color color) {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(12),
@@ -9427,7 +11180,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
           Container(
             width: 34,
             height: 34,
-            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(13)),
+            decoration: BoxDecoration(
+                color: Colors.white, borderRadius: BorderRadius.circular(13)),
             child: Icon(icon, color: color, size: 19),
           ),
           const SizedBox(width: 11),
@@ -9435,9 +11189,22 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: textSecondary)),
+                Text(title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: textSecondary)),
                 const SizedBox(height: 3),
-                Text(value, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12.5, height: 1.2, fontWeight: FontWeight.w600, color: textPrimary)),
+                Text(value,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        fontSize: 12.5,
+                        height: 1.2,
+                        fontWeight: FontWeight.w600,
+                        color: textPrimary)),
               ],
             ),
           ),
@@ -9520,7 +11287,15 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
     );
   }
 
-  Widget _pitchHotZone({double? left, double? right, double? top, double? bottom, required double width, required double height, required Color color, required String label}) {
+  Widget _pitchHotZone(
+      {double? left,
+      double? right,
+      double? top,
+      double? bottom,
+      required double width,
+      required double height,
+      required Color color,
+      required String label}) {
     return Positioned(
       left: left,
       right: right,
@@ -9534,7 +11309,9 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
           color: color.withOpacity(.16),
           borderRadius: BorderRadius.circular(999),
         ),
-        child: Text(label, style: TextStyle(color: color, fontSize: 10.5, fontWeight: FontWeight.w600)),
+        child: Text(label,
+            style: TextStyle(
+                color: color, fontSize: 10.5, fontWeight: FontWeight.w600)),
       ),
     );
   }
@@ -9546,16 +11323,24 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
         color: active ? color : color.withOpacity(.08),
         borderRadius: BorderRadius.circular(999),
       ),
-      child: Text(text, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: active ? Colors.white : color)),
+      child: Text(text,
+          style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: active ? Colors.white : color)),
     );
   }
 
   Widget _buildTacticalMapsCard() {
     final maps = [
-      _TacticalMapData('Средние позиции', 'структура команды', Icons.hub_outlined, primary),
-      _TacticalMapData('Передачи', 'связи игроков', Icons.compare_arrows_rounded, const Color(0xFF2E90FA)),
-      _TacticalMapData('Прессинг', 'давление по зонам', Icons.flash_on_rounded, const Color(0xFFF59E0B)),
-      _TacticalMapData('Оборона', 'компактность линий', Icons.security_rounded, const Color(0xFF7C3AED)),
+      _TacticalMapData(
+          'Средние позиции', 'структура команды', Icons.hub_outlined, primary),
+      _TacticalMapData('Передачи', 'связи игроков',
+          Icons.compare_arrows_rounded, const Color(0xFF2E90FA)),
+      _TacticalMapData('Прессинг', 'давление по зонам', Icons.flash_on_rounded,
+          const Color(0xFFF59E0B)),
+      _TacticalMapData('Оборона', 'компактность линий', Icons.security_rounded,
+          const Color(0xFF7C3AED)),
     ];
 
     return _proCard(
@@ -9567,12 +11352,14 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
             builder: (context, constraints) {
               const gap = 10.0;
               final columns = constraints.maxWidth < 560 ? 2 : 4;
-              final itemWidth = (constraints.maxWidth - gap * (columns - 1)) / columns;
+              final itemWidth =
+                  (constraints.maxWidth - gap * (columns - 1)) / columns;
               return Wrap(
                 spacing: gap,
                 runSpacing: gap,
                 children: [
-                  for (final item in maps) SizedBox(width: itemWidth, child: _tacticalMapTile(item)),
+                  for (final item in maps)
+                    SizedBox(width: itemWidth, child: _tacticalMapTile(item)),
                 ],
               );
             },
@@ -9599,9 +11386,21 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text('Автоматическая схема', style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600, color: textPrimary)),
+                      Text('Автоматическая схема',
+                          style: TextStyle(
+                              fontSize: 14.5,
+                              fontWeight: FontWeight.w600,
+                              color: textPrimary)),
                       const SizedBox(height: 8),
-                      Text('Здесь можно подключить координаты игроков из видеоаналитики и строить связи, средние позиции, зоны прессинга и тепловую карту.', maxLines: 5, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12.2, height: 1.32, fontWeight: FontWeight.w600, color: textSecondary)),
+                      Text(
+                          'Здесь можно подключить координаты игроков из видеоаналитики и строить связи, средние позиции, зоны прессинга и тепловую карту.',
+                          maxLines: 5,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              fontSize: 12.2,
+                              height: 1.32,
+                              fontWeight: FontWeight.w600,
+                              color: textSecondary)),
                     ],
                   ),
                 ),
@@ -9629,9 +11428,21 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
           children: [
             Icon(item.icon, size: 22, color: item.color),
             const Spacer(),
-            Text(item.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12.2, fontWeight: FontWeight.w600, color: textPrimary)),
+            Text(item.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                    fontSize: 12.2,
+                    fontWeight: FontWeight.w600,
+                    color: textPrimary)),
             const SizedBox(height: 2),
-            Text(item.subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: textSecondary)),
+            Text(item.subtitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w600,
+                    color: textSecondary)),
           ],
         ),
       ),
@@ -9642,7 +11453,11 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
     final load = _loadScore();
     return _proCard(
       title: 'Физика и нагрузка',
-      trailing: _proTinyBadge(load >= 80 ? 'высокая' : load >= 55 ? 'средняя' : 'низкая'),
+      trailing: _proTinyBadge(load >= 80
+          ? 'высокая'
+          : load >= 55
+              ? 'средняя'
+              : 'низкая'),
       child: Column(
         children: [
           SizedBox(
@@ -9663,19 +11478,47 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                 Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text('${load.toStringAsFixed(0)}%', style: TextStyle(fontSize: 24, height: 1, fontWeight: FontWeight.w600, color: textPrimary)),
+                    Text('${load.toStringAsFixed(0)}%',
+                        style: TextStyle(
+                            fontSize: 24,
+                            height: 1,
+                            fontWeight: FontWeight.w600,
+                            color: textPrimary)),
                     const SizedBox(height: 4),
-                    Text('нагрузка', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: textSecondary)),
+                    Text('нагрузка',
+                        style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: textSecondary)),
                   ],
                 ),
               ],
             ),
           ),
           const SizedBox(height: 12),
-          _loadRow('Пробег', _physicalValue(['distance', 'distance_km', 'total_distance'], fallback: '— км'), Icons.route_rounded, primary),
-          _loadRow('Спринты', _physicalValue(['sprints', 'sprint_count'], fallback: '${max(0, (_totalActions / 12).round())}'), Icons.speed_rounded, const Color(0xFF2E90FA)),
-          _loadRow('Ускорения', _physicalValue(['accelerations'], fallback: '${max(0, (_totalActions / 8).round())}'), Icons.trending_up_rounded, const Color(0xFF7C3AED)),
-          _loadRow('Макс. скорость', _physicalValue(['max_speed', 'top_speed'], fallback: '— км/ч'), Icons.bolt_rounded, const Color(0xFFF59E0B)),
+          _loadRow(
+              'Пробег',
+              _physicalValue(['distance', 'distance_km', 'total_distance'],
+                  fallback: '— км'),
+              Icons.route_rounded,
+              primary),
+          _loadRow(
+              'Спринты',
+              _physicalValue(['sprints', 'sprint_count'],
+                  fallback: '${max(0, (_totalActions / 12).round())}'),
+              Icons.speed_rounded,
+              const Color(0xFF2E90FA)),
+          _loadRow(
+              'Ускорения',
+              _physicalValue(['accelerations'],
+                  fallback: '${max(0, (_totalActions / 8).round())}'),
+              Icons.trending_up_rounded,
+              const Color(0xFF7C3AED)),
+          _loadRow(
+              'Макс. скорость',
+              _physicalValue(['max_speed', 'top_speed'], fallback: '— км/ч'),
+              Icons.bolt_rounded,
+              const Color(0xFFF59E0B)),
         ],
       ),
     );
@@ -9693,8 +11536,21 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
         children: [
           Icon(icon, size: 17, color: color),
           const SizedBox(width: 10),
-          Expanded(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: textSecondary))),
-          Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: textPrimary)),
+          Expanded(
+              child: Text(label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: textSecondary))),
+          Text(value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  color: textPrimary)),
         ],
       ),
     );
@@ -9708,15 +11564,37 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
         children: [
           Row(
             children: [
-              Expanded(child: Text(teamName, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: textSecondary))),
+              Expanded(
+                  child: Text(teamName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: textSecondary))),
               const SizedBox(width: 10),
-              Expanded(child: Text(_s(match?["opponent"]).isEmpty ? 'Соперник' : _s(match?["opponent"]), textAlign: TextAlign.right, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: textSecondary))),
+              Expanded(
+                  child: Text(
+                      _s(match?["opponent"]).isEmpty
+                          ? 'Соперник'
+                          : _s(match?["opponent"]),
+                      textAlign: TextAlign.right,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: textSecondary))),
             ],
           ),
           const SizedBox(height: 14),
-          for (final row in stats) _proStatCompare(row[0].toString(), row[1] as int, row[2] as int),
+          for (final row in stats)
+            _proStatCompare(row[0].toString(), row[1] as int, row[2] as int),
           const SizedBox(height: 12),
-          _proOutlineButton(icon: Icons.arrow_forward_rounded, text: 'Редактировать статистику', onTap: _openMatchInfoEditorSheet),
+          _proOutlineButton(
+              icon: Icons.arrow_forward_rounded,
+              text: 'Редактировать статистику',
+              onTap: _openMatchInfoEditorSheet),
         ],
       ),
     );
@@ -9729,12 +11607,16 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
       child: Column(
         children: [
           if (timelineRows.isEmpty)
-            _emptyState('Эпизоды и события пока не добавлены', icon: Icons.timeline_rounded)
+            _emptyState('Эпизоды и события пока не добавлены',
+                icon: Icons.timeline_rounded)
           else
             for (final row in timelineRows.take(7)) row,
           if (timelineRows.length > 7) ...[
             const SizedBox(height: 8),
-            _proOutlineButton(icon: Icons.arrow_forward_rounded, text: 'Все события', onTap: () => _openMatchDetailTab(2)),
+            _proOutlineButton(
+                icon: Icons.arrow_forward_rounded,
+                text: 'Все события',
+                onTap: () => _openMatchDetailTab(2)),
           ],
         ],
       ),
@@ -9742,19 +11624,32 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
   }
 
   Widget _buildProVideoFragmentsCard() {
-    final videos = [..._videosByType('highlight'), ..._videosByType('moment'), ..._videosByType('full')].take(4).toList();
+    final videos = [
+      ..._videosByType('highlight'),
+      ..._videosByType('moment'),
+      ..._videosByType('full')
+    ].take(4).toList();
     return _proCard(
       title: 'Видеоаналитика',
       trailing: InkWell(
         onTap: () => _openMatchDetailTab(3),
-        child: Text('Все фрагменты  ›', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: primary)),
+        child: Text('Все фрагменты  ›',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+                fontSize: 11.5, fontWeight: FontWeight.w600, color: primary)),
       ),
       child: videos.isEmpty
-          ? _emptyState('Видео пока не загружено', icon: Icons.video_collection_outlined)
+          ? _emptyState('Видео пока не загружено',
+              icon: Icons.video_collection_outlined)
           : LayoutBuilder(
               builder: (context, constraints) {
                 const gap = 12.0;
-                final columns = constraints.maxWidth < 640 ? 1 : constraints.maxWidth < 980 ? 2 : 4;
+                final columns = constraints.maxWidth < 640
+                    ? 1
+                    : constraints.maxWidth < 980
+                        ? 2
+                        : 4;
                 final itemWidth = columns == 1
                     ? constraints.maxWidth
                     : (constraints.maxWidth - gap * (columns - 1)) / columns;
@@ -9763,7 +11658,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                   spacing: gap,
                   runSpacing: gap,
                   children: [
-                    for (final video in videos) SizedBox(width: itemWidth, child: _proVideoThumb(video)),
+                    for (final video in videos)
+                      SizedBox(width: itemWidth, child: _proVideoThumb(video)),
                   ],
                 );
               },
@@ -9809,7 +11705,10 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
           _proAiPoint('Лучший игрок: ${_bestPlayerName()}'),
           _proAiPoint('Ключевые эпизоды: ${episodes.length}'),
           const SizedBox(height: 12),
-          _proOutlineButton(icon: Icons.psychology_alt_outlined, text: 'Разобрать матч', onTap: () => _openMatchDetailTab(1)),
+          _proOutlineButton(
+              icon: Icons.psychology_alt_outlined,
+              text: 'Разобрать матч',
+              onTap: () => _openMatchDetailTab(1)),
         ],
       ),
     );
@@ -9831,10 +11730,14 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                 width: 116,
                 height: 134,
                 clipBehavior: Clip.antiAlias,
-                decoration: BoxDecoration(color: softAccent, borderRadius: BorderRadius.circular(22)),
+                decoration: BoxDecoration(
+                    color: softAccent, borderRadius: BorderRadius.circular(22)),
                 child: photo == null
                     ? Icon(Icons.person_rounded, size: 74, color: primary)
-                    : Image.network(photo, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Icon(Icons.person_rounded, size: 74, color: primary)),
+                    : Image.network(photo,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Icon(Icons.person_rounded,
+                            size: 74, color: primary)),
               ),
               const SizedBox(width: 16),
               Expanded(
@@ -9843,11 +11746,25 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                   children: [
                     Row(
                       children: [
-                        Expanded(child: Text(name, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: textPrimary))),
+                        Expanded(
+                            child: Text(name,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w600,
+                                    color: textPrimary))),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                          decoration: BoxDecoration(color: primary, borderRadius: BorderRadius.circular(12)),
-                          child: Text(rating, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600)),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 8),
+                          decoration: BoxDecoration(
+                              color: primary,
+                              borderRadius: BorderRadius.circular(12)),
+                          child: Text(rating,
+                              style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600)),
                         ),
                       ],
                     ),
@@ -9860,7 +11777,10 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
             ],
           ),
           const SizedBox(height: 14),
-          _proOutlineButton(icon: Icons.arrow_forward_rounded, text: 'Профиль игрока', onTap: row == null ? null : () => _openMatchDetailTab(1)),
+          _proOutlineButton(
+              icon: Icons.arrow_forward_rounded,
+              text: 'Профиль игрока',
+              onTap: row == null ? null : () => _openMatchDetailTab(1)),
         ],
       ),
     );
@@ -9880,15 +11800,21 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
             style: AppTypography.commentText(color: textPrimary),
             decoration: InputDecoration(
               hintText: 'Добавьте заметку о матче...',
-              hintStyle: AppTypography.formHint(color: textSecondary.withOpacity(.75)),
+              hintStyle:
+                  AppTypography.formHint(color: textSecondary.withOpacity(.75)),
               filled: true,
               fillColor: softSurface,
-              border: OutlineInputBorder(borderSide: BorderSide.none, borderRadius: BorderRadius.circular(18)),
+              border: OutlineInputBorder(
+                  borderSide: BorderSide.none,
+                  borderRadius: BorderRadius.circular(18)),
               contentPadding: const EdgeInsets.all(14),
             ),
           ),
           const SizedBox(height: 12),
-          _proOutlineButton(icon: Icons.save_rounded, text: saving ? 'Сохранение...' : 'Сохранить заметку', onTap: saving ? null : _saveAll),
+          _proOutlineButton(
+              icon: Icons.save_rounded,
+              text: saving ? 'Сохранение...' : 'Сохранить заметку',
+              onTap: saving ? null : _saveAll),
         ],
       ),
     );
@@ -9897,12 +11823,16 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
   Widget _proTinyBadge(String text) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-      decoration: BoxDecoration(color: softAccent, borderRadius: BorderRadius.circular(999)),
-      child: Text(text.toUpperCase(), style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: primary)),
+      decoration: BoxDecoration(
+          color: softAccent, borderRadius: BorderRadius.circular(999)),
+      child: Text(text.toUpperCase(),
+          style: TextStyle(
+              fontSize: 10.5, fontWeight: FontWeight.w600, color: primary)),
     );
   }
 
-  Widget _proCard({required String title, required Widget child, Widget? trailing}) {
+  Widget _proCard(
+      {required String title, required Widget child, Widget? trailing}) {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -9912,7 +11842,17 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(children: [Expanded(child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.w600, color: textPrimary))), if (trailing != null) trailing]),
+          Row(children: [
+            Expanded(
+                child: Text(title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        fontSize: 15.5,
+                        fontWeight: FontWeight.w600,
+                        color: textPrimary))),
+            if (trailing != null) trailing
+          ]),
           const SizedBox(height: 16),
           child,
         ],
@@ -9937,23 +11877,35 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
   }
 
   String _aiRecommendation() {
-    if (_totalActions == 0) return 'добавить ТТД и видео, чтобы Sportoteka построила точный отчёт';
-    if (_efficiency < 55) return 'снизить риск при первом пасе и усилить поддержку под мяч';
+    if (_totalActions == 0)
+      return 'добавить ТТД и видео, чтобы Sportoteka построила точный отчёт';
+    if (_efficiency < 55)
+      return 'снизить риск при первом пасе и усилить поддержку под мяч';
     if (_efficiency < 70) return 'улучшить качество решений в центральной зоне';
     return 'сохранить модель игры и разобрать лучшие эпизоды с командой';
   }
 
   String _aiCoachText() {
-    if (_totalActions == 0) return 'Матч готов к разбору. После добавления ТТД и видео система покажет слабые зоны, сильные отрезки и персональные рекомендации игрокам.';
-    if (_efficiency < 55) return 'Команда часто теряла мяч и не успевала закрепиться после перехода в атаку. Нужны упражнения на выход из-под давления и короткие связи.';
-    if (_efficiency < 70) return 'Матч был рабочим по интенсивности, но есть просадки в качестве решений. Рекомендуется разобрать эпизоды потерь и второй темп атаки.';
+    if (_totalActions == 0)
+      return 'Матч готов к разбору. После добавления ТТД и видео система покажет слабые зоны, сильные отрезки и персональные рекомендации игрокам.';
+    if (_efficiency < 55)
+      return 'Команда часто теряла мяч и не успевала закрепиться после перехода в атаку. Нужны упражнения на выход из-под давления и короткие связи.';
+    if (_efficiency < 70)
+      return 'Матч был рабочим по интенсивности, но есть просадки в качестве решений. Рекомендуется разобрать эпизоды потерь и второй темп атаки.';
     return 'Команда контролировала значительную часть матча. Следующий шаг — закрепить удачные игровые связи и показать игрокам лучшие эпизоды.';
   }
 
   double _loadScore() {
     final fromMatch = _d(match?['load_score'] ?? match?['physical_load']);
     if (fromMatch > 0) return fromMatch.clamp(0, 100).toDouble();
-    return min(100, max(22, _totalActions * .42 + episodes.length * 3 + _i(_shotsCtrl.text) * 1.4)).toDouble();
+    return min(
+            100,
+            max(
+                22,
+                _totalActions * .42 +
+                    episodes.length * 3 +
+                    _i(_shotsCtrl.text) * 1.4))
+        .toDouble();
   }
 
   Color _loadColor(double load) {
@@ -9970,7 +11922,13 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
     return fallback;
   }
 
-  Widget _proQuickTile({required IconData icon, required String title, required String value, required String subtitle, required Color color, required int tabIndex}) {
+  Widget _proQuickTile(
+      {required IconData icon,
+      required String title,
+      required String value,
+      required String subtitle,
+      required Color color,
+      required int tabIndex}) {
     return InkWell(
       borderRadius: BorderRadius.circular(22),
       onTap: () => _openMatchDetailTab(tabIndex),
@@ -9983,22 +11941,46 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
         ),
         child: Row(
           children: [
-            Container(width: 44, height: 44, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)), child: Icon(icon, color: color, size: 24)),
+            Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16)),
+                child: Icon(icon, color: color, size: 24)),
             const SizedBox(width: 14),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: textPrimary)),
+                  Text(title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w600,
+                          color: textPrimary)),
                   const SizedBox(height: 5),
                   FittedBox(
                     fit: BoxFit.scaleDown,
                     alignment: Alignment.centerLeft,
-                    child: Text(value, maxLines: 1, style: TextStyle(fontSize: value.length > 12 ? 14 : 20, height: 1, fontWeight: FontWeight.w600, color: textPrimary)),
+                    child: Text(value,
+                        maxLines: 1,
+                        style: TextStyle(
+                            fontSize: value.length > 12 ? 14 : 20,
+                            height: 1,
+                            fontWeight: FontWeight.w600,
+                            color: textPrimary)),
                   ),
                   const SizedBox(height: 5),
-                  Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: textSecondary)),
+                  Text(subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w600,
+                          color: textSecondary)),
                 ],
               ),
             ),
@@ -10015,45 +11997,114 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
       padding: const EdgeInsets.only(bottom: 13),
       child: Row(
         children: [
-          SizedBox(width: 46, child: Text('$left', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: textPrimary))),
+          SizedBox(
+              width: 46,
+              child: Text('$left',
+                  style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: textPrimary))),
           Expanded(
             child: Column(
               children: [
-                Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: textSecondary)),
+                Text(label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: textSecondary)),
                 const SizedBox(height: 5),
                 ClipRRect(
                   borderRadius: BorderRadius.circular(99),
-                  child: LinearProgressIndicator(value: value, minHeight: 5, color: primary, backgroundColor: const Color(0xFFE4EAF0)),
+                  child: LinearProgressIndicator(
+                      value: value,
+                      minHeight: 5,
+                      color: primary,
+                      backgroundColor: const Color(0xFFE4EAF0)),
                 ),
               ],
             ),
           ),
-          SizedBox(width: 46, child: Text('$right', textAlign: TextAlign.right, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: textPrimary))),
+          SizedBox(
+              width: 46,
+              child: Text('$right',
+                  textAlign: TextAlign.right,
+                  style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: textPrimary))),
         ],
       ),
     );
   }
 
-  Widget _proTimelineEvent({required String minute, required IconData icon, required String title, required String player, required String subtitle, required String score, required Color color}) {
+  Widget _proTimelineEvent(
+      {required String minute,
+      required IconData icon,
+      required String title,
+      required String player,
+      required String subtitle,
+      required String score,
+      required Color color}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(width: 42, child: Text(minute, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: textSecondary))),
-          Container(width: 30, height: 30, decoration: BoxDecoration(color: color.withOpacity(.12), shape: BoxShape.circle), child: Icon(icon, size: 17, color: color)),
+          SizedBox(
+              width: 42,
+              child: Text(minute,
+                  style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: textSecondary))),
+          Container(
+              width: 30,
+              height: 30,
+              decoration: BoxDecoration(
+                  color: color.withOpacity(.12), shape: BoxShape.circle),
+              child: Icon(icon, size: 17, color: color)),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: color)),
-                Text(player, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: textPrimary)),
-                if (subtitle.isNotEmpty) Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: textSecondary)),
+                Text(title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: color)),
+                Text(player,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: textPrimary)),
+                if (subtitle.isNotEmpty)
+                  Text(subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: textSecondary)),
               ],
             ),
           ),
-          if (score.isNotEmpty) Flexible(child: Text(score, maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.right, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: textPrimary))),
+          if (score.isNotEmpty)
+            Flexible(
+                child: Text(score,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.right,
+                    style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: textPrimary))),
         ],
       ),
     );
@@ -10061,7 +12112,9 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
 
   Widget _proVideoThumb(Map<String, dynamic> video) {
     final title = _formatVideoTitle(_s(video['file_name']), 'Видео момента');
-    final thumb = _normalizeUrl(_s(video['thumbnail_url']).isEmpty ? _s(video['thumbnail']) : _s(video['thumbnail_url']));
+    final thumb = _normalizeUrl(_s(video['thumbnail_url']).isEmpty
+        ? _s(video['thumbnail'])
+        : _s(video['thumbnail_url']));
     final url = _s(video['video_url']);
     return InkWell(
       borderRadius: BorderRadius.circular(18),
@@ -10069,51 +12122,117 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
       child: Container(
         height: 142,
         clipBehavior: Clip.antiAlias,
-        decoration: BoxDecoration(color: softSurface, borderRadius: BorderRadius.circular(18)),
+        decoration: BoxDecoration(
+            color: softSurface, borderRadius: BorderRadius.circular(18)),
         child: Stack(
           fit: StackFit.expand,
           children: [
-            if (thumb != null) Image.network(thumb, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const SizedBox.shrink()),
-            Container(decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.transparent, Colors.black.withOpacity(.55)]))),
-            Center(child: Icon(Icons.play_circle_fill_rounded, color: Colors.white.withOpacity(.92), size: 44)),
-            Positioned(left: 12, right: 12, bottom: 10, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)), Text(_videoMeta(video), maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: Colors.white.withOpacity(.78), fontSize: 11, fontWeight: FontWeight.w600))])),
+            if (thumb != null)
+              Image.network(thumb,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => const SizedBox.shrink()),
+            Container(
+                decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                  Colors.transparent,
+                  Colors.black.withOpacity(.55)
+                ]))),
+            Center(
+                child: Icon(Icons.play_circle_fill_rounded,
+                    color: Colors.white.withOpacity(.92), size: 44)),
+            Positioned(
+                left: 12,
+                right: 12,
+                bottom: 10,
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600)),
+                      Text(_videoMeta(video),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              color: Colors.white.withOpacity(.78),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600))
+                    ])),
           ],
         ),
       ),
     );
   }
 
-  Widget _proOutlineButton({required IconData icon, required String text, VoidCallback? onTap}) {
+  Widget _proOutlineButton(
+      {required IconData icon, required String text, VoidCallback? onTap}) {
     return SizedBox(
       width: double.infinity,
       height: 42,
       child: OutlinedButton.icon(
         onPressed: onTap,
         icon: Icon(icon, size: 17),
-        label: FittedBox(fit: BoxFit.scaleDown, child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis)),
+        label: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis)),
         style: OutlinedButton.styleFrom(
           foregroundColor: primary,
           side: BorderSide.none,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
           textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
         ),
       ),
     );
   }
 
-  Widget _proHeroTeam({required String title, required String label, required IconData icon, required Color color, bool alignRight = false}) {
+  Widget _proHeroTeam(
+      {required String title,
+      required String label,
+      required IconData icon,
+      required Color color,
+      bool alignRight = false}) {
     return Row(
-      mainAxisAlignment: alignRight ? MainAxisAlignment.end : MainAxisAlignment.start,
+      mainAxisAlignment:
+          alignRight ? MainAxisAlignment.end : MainAxisAlignment.start,
       children: [
         if (!alignRight) _proShield(icon, color),
         if (!alignRight) const SizedBox(width: 14),
         Flexible(
           child: Column(
-            crossAxisAlignment: alignRight ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+            crossAxisAlignment:
+                alignRight ? CrossAxisAlignment.end : CrossAxisAlignment.start,
             children: [
-              Text(title, maxLines: 2, overflow: TextOverflow.ellipsis, textAlign: alignRight ? TextAlign.right : TextAlign.left, style: TextStyle(fontSize: 17.5, height: 1.12, fontWeight: FontWeight.w600, color: textPrimary)),
+              Text(title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: alignRight ? TextAlign.right : TextAlign.left,
+                  style: TextStyle(
+                      fontSize: 17.5,
+                      height: 1.12,
+                      fontWeight: FontWeight.w600,
+                      color: textPrimary)),
               const SizedBox(height: 8),
-              Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5), decoration: BoxDecoration(color: color.withOpacity(.10), borderRadius: BorderRadius.circular(8)), child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: color))),
+              Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                  decoration: BoxDecoration(
+                      color: color.withOpacity(.10),
+                      borderRadius: BorderRadius.circular(8)),
+                  child: Text(label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w600,
+                          color: color))),
             ],
           ),
         ),
@@ -10124,16 +12243,83 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
   }
 
   Widget _proShield(IconData icon, Color color) {
-    return Container(width: 58, height: 58, decoration: BoxDecoration(color: color.withOpacity(.09), borderRadius: BorderRadius.circular(20)), child: Icon(icon, color: color, size: 32));
+    return Container(
+        width: 58,
+        height: 58,
+        decoration: BoxDecoration(
+            color: color.withOpacity(.09),
+            borderRadius: BorderRadius.circular(20)),
+        child: Icon(icon, color: color, size: 32));
   }
 
-  Widget _proHeroMeta(IconData icon, String text) => Row(mainAxisSize: MainAxisSize.min, children: [Icon(icon, size: 16, color: textSecondary), const SizedBox(width: 7), ConstrainedBox(constraints: const BoxConstraints(maxWidth: 220), child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: textSecondary)))]);
+  Widget _proHeroMeta(IconData icon, String text) =>
+      Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(icon, size: 16, color: textSecondary),
+        const SizedBox(width: 7),
+        ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 220),
+            child: Text(text,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    color: textSecondary)))
+      ]);
 
-  Widget _proSideMeta(IconData icon, String text) => Padding(padding: const EdgeInsets.only(bottom: 9), child: Row(children: [Icon(icon, size: 16, color: textSecondary), const SizedBox(width: 8), Expanded(child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: textSecondary)))]));
+  Widget _proSideMeta(IconData icon, String text) => Padding(
+      padding: const EdgeInsets.only(bottom: 9),
+      child: Row(children: [
+        Icon(icon, size: 16, color: textSecondary),
+        const SizedBox(width: 8),
+        Expanded(
+            child: Text(text,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: textSecondary)))
+      ]));
 
-  Widget _proMiniPlayerStat(String label, String value) => Padding(padding: const EdgeInsets.only(bottom: 7), child: Row(children: [Expanded(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: textSecondary))), const SizedBox(width: 8), Flexible(child: Text(value.isEmpty || value == '0' ? '—' : value, maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.right, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: textPrimary)))]));
+  Widget _proMiniPlayerStat(String label, String value) => Padding(
+      padding: const EdgeInsets.only(bottom: 7),
+      child: Row(children: [
+        Expanded(
+            child: Text(label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: textSecondary))),
+        const SizedBox(width: 8),
+        Flexible(
+            child: Text(value.isEmpty || value == '0' ? '—' : value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.right,
+                style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: textPrimary)))
+      ]));
 
-  Widget _proAiPoint(String text) => Padding(padding: const EdgeInsets.only(bottom: 8), child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [Icon(Icons.check_circle_rounded, color: primary, size: 17), const SizedBox(width: 8), Expanded(child: Text(text, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, height: 1.25, fontWeight: FontWeight.w600, color: textSecondary)))]));
+  Widget _proAiPoint(String text) => Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Icon(Icons.check_circle_rounded, color: primary, size: 17),
+        const SizedBox(width: 8),
+        Expanded(
+            child: Text(text,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                    fontSize: 12,
+                    height: 1.25,
+                    fontWeight: FontWeight.w600,
+                    color: textSecondary)))
+      ]));
 
   List<Map<String, dynamic>> _videosByType(String type) {
     return ((match?["videos"] as List?) ?? [])
@@ -10153,12 +12339,36 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
     final oppPossession = possession > 0 ? max(0, 100 - possession) : 0;
     return [
       ['Владение мячом', possession, oppPossession],
-      ['Удары', field('shots', _shotsCtrl), _i(match?['opponent_shots'] ?? match?['opp_shots'])],
-      ['Удары в створ', field('shots_on_target', _shotsOnTargetCtrl), _i(match?['opponent_shots_on_target'] ?? match?['opp_shots_on_target'])],
-      ['Угловые', field('corners', _cornersCtrl), _i(match?['opponent_corners'] ?? match?['opp_corners'])],
-      ['Офсайды', field('offsides', _offsidesCtrl), _i(match?['opponent_offsides'] ?? match?['opp_offsides'])],
-      ['Жёлтые карточки', field('yellow_cards', _yellowCtrl), _i(match?['opponent_yellow_cards'] ?? match?['opp_yellow_cards'])],
-      ['Красные карточки', field('red_cards', _redCtrl), _i(match?['opponent_red_cards'] ?? match?['opp_red_cards'])],
+      [
+        'Удары',
+        field('shots', _shotsCtrl),
+        _i(match?['opponent_shots'] ?? match?['opp_shots'])
+      ],
+      [
+        'Удары в створ',
+        field('shots_on_target', _shotsOnTargetCtrl),
+        _i(match?['opponent_shots_on_target'] ?? match?['opp_shots_on_target'])
+      ],
+      [
+        'Угловые',
+        field('corners', _cornersCtrl),
+        _i(match?['opponent_corners'] ?? match?['opp_corners'])
+      ],
+      [
+        'Офсайды',
+        field('offsides', _offsidesCtrl),
+        _i(match?['opponent_offsides'] ?? match?['opp_offsides'])
+      ],
+      [
+        'Жёлтые карточки',
+        field('yellow_cards', _yellowCtrl),
+        _i(match?['opponent_yellow_cards'] ?? match?['opp_yellow_cards'])
+      ],
+      [
+        'Красные карточки',
+        field('red_cards', _redCtrl),
+        _i(match?['opponent_red_cards'] ?? match?['opp_red_cards'])
+      ],
       ['ТТД успешно', _totalSuccess, _totalFail],
     ];
   }
@@ -10167,16 +12377,30 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
     final rows = <Widget>[];
     final all = <Map<String, dynamic>>[];
     all.addAll(episodes);
-    all.sort((a, b) => _i(a['minute'] ?? a['time_minute'] ?? a['match_minute']).compareTo(_i(b['minute'] ?? b['time_minute'] ?? b['match_minute'])));
+    all.sort((a, b) => _i(a['minute'] ?? a['time_minute'] ?? a['match_minute'])
+        .compareTo(_i(b['minute'] ?? b['time_minute'] ?? b['match_minute'])));
 
     for (final e in all) {
       final type = _s(e['type'] ?? e['event_type'] ?? e['episode_type']);
       final title = _timelineTitle(type, e);
-      final minuteRaw = _s(e['minute'] ?? e['time_minute'] ?? e['match_minute']);
+      final minuteRaw =
+          _s(e['minute'] ?? e['time_minute'] ?? e['match_minute']);
       final minute = minuteRaw.isEmpty ? '—' : "$minuteRaw’";
-      final player = _s(e['player_name'] ?? e['author_name'] ?? e['name']).isEmpty ? _s(e['title']).isEmpty ? 'Эпизод матча' : _s(e['title']) : _s(e['player_name'] ?? e['author_name'] ?? e['name']);
+      final player =
+          _s(e['player_name'] ?? e['author_name'] ?? e['name']).isEmpty
+              ? _s(e['title']).isEmpty
+                  ? 'Эпизод матча'
+                  : _s(e['title'])
+              : _s(e['player_name'] ?? e['author_name'] ?? e['name']);
       final subtitle = _s(e['description'] ?? e['comment'] ?? e['note']);
-      rows.add(_proTimelineEvent(minute: minute, icon: _timelineIcon(type), title: title, player: player, subtitle: subtitle, score: _s(e['score']), color: _timelineColor(type)));
+      rows.add(_proTimelineEvent(
+          minute: minute,
+          icon: _timelineIcon(type),
+          title: title,
+          player: player,
+          subtitle: subtitle,
+          score: _s(e['score']),
+          color: _timelineColor(type)));
     }
     return rows;
   }
@@ -10194,16 +12418,20 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
 
   IconData _timelineIcon(String type) {
     final t = type.toLowerCase();
-    if (t.contains('goal') || t.contains('гол')) return Icons.sports_soccer_rounded;
-    if (t.contains('yellow') || t.contains('жел')) return Icons.crop_square_rounded;
-    if (t.contains('red') || t.contains('крас')) return Icons.crop_square_rounded;
+    if (t.contains('goal') || t.contains('гол'))
+      return Icons.sports_soccer_rounded;
+    if (t.contains('yellow') || t.contains('жел'))
+      return Icons.crop_square_rounded;
+    if (t.contains('red') || t.contains('крас'))
+      return Icons.crop_square_rounded;
     return Icons.movie_filter_outlined;
   }
 
   Color _timelineColor(String type) {
     final t = type.toLowerCase();
     if (t.contains('goal') || t.contains('гол')) return primary;
-    if (t.contains('yellow') || t.contains('жел')) return const Color(0xFFF59E0B);
+    if (t.contains('yellow') || t.contains('жел'))
+      return const Color(0xFFF59E0B);
     if (t.contains('red') || t.contains('крас')) return const Color(0xFFEF4444);
     return const Color(0xFF2E90FA);
   }
@@ -10215,7 +12443,9 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
       for (final source in rows) {
         final key = _mainTtdPlayerKey(source);
         final name = _playerName(source).trim().toLowerCase();
-        if (key == 'name:игрок' && name == 'игрок' && _playerTotalTtdActions(source) <= 0) {
+        if (key == 'name:игрок' &&
+            name == 'игрок' &&
+            _playerTotalTtdActions(source) <= 0) {
           continue;
         }
 
@@ -10238,14 +12468,18 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
     addRows(goalkeeperReport);
 
     final rows = byKey.values
-        .where((row) => _playerTotalTtdActions(row) > 0 || _playerGoalCount(row) > 0 || _playerAssistCount(row) > 0)
+        .where((row) =>
+            _playerTotalTtdActions(row) > 0 ||
+            _playerGoalCount(row) > 0 ||
+            _playerAssistCount(row) > 0)
         .toList();
 
     rows.sort((a, b) => _playerMvpScore(b).compareTo(_playerMvpScore(a)));
     return rows;
   }
 
-  void _mergePlayerTtdRow(Map<String, dynamic> target, Map<String, dynamic> source) {
+  void _mergePlayerTtdRow(
+      Map<String, dynamic> target, Map<String, dynamic> source) {
     source.forEach((key, value) {
       final current = target[key];
 
@@ -10371,7 +12605,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
           row['actions_count'] ??
           row['total'],
     );
-    final successFailTotal = _playerSuccessActions(row) + _playerFailActions(row);
+    final successFailTotal =
+        _playerSuccessActions(row) + _playerFailActions(row);
     final mainTotal = _mainTtdTotal(row);
     final gkTotal = _goalkeeperTotal(row);
     return [direct, successFailTotal, mainTotal, gkTotal].reduce(max);
@@ -10396,7 +12631,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
     return ((success / total) * 100).clamp(0, 100).toDouble();
   }
 
-  bool _sameEpisodePlayer(Map<String, dynamic> row, Map<String, dynamic> episode) {
+  bool _sameEpisodePlayer(
+      Map<String, dynamic> row, Map<String, dynamic> episode) {
     final rowId = _playerId(row);
     final episodeId = _s(
       episode['player_id'] ??
@@ -10405,7 +12641,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
           episode['user_id'] ??
           episode['author_id'],
     );
-    if (rowId.isNotEmpty && episodeId.isNotEmpty && rowId == episodeId) return true;
+    if (rowId.isNotEmpty && episodeId.isNotEmpty && rowId == episodeId)
+      return true;
 
     final rowName = _playerName(row).trim().toLowerCase();
     if (rowName.isEmpty || rowName == 'игрок') return false;
@@ -10419,7 +12656,9 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
     ).toLowerCase();
 
     return episodeName.isNotEmpty &&
-        (episodeName == rowName || episodeName.contains(rowName) || rowName.contains(episodeName));
+        (episodeName == rowName ||
+            episodeName.contains(rowName) ||
+            rowName.contains(episodeName));
   }
 
   int _playerEpisodeCount(Map<String, dynamic> row, List<String> markers) {
@@ -10444,27 +12683,38 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
   }
 
   int _playerGoalCount(Map<String, dynamic> row) {
-    final direct = _numericValue(row['goals'] ?? row['goal'] ?? row['goals_count']);
+    final direct =
+        _numericValue(row['goals'] ?? row['goal'] ?? row['goals_count']);
     if (direct > 0) return direct;
     return _playerEpisodeCount(row, const ['goal', 'гол']);
   }
 
   int _playerAssistCount(Map<String, dynamic> row) {
-    final direct = _numericValue(row['assists'] ?? row['assist'] ?? row['goal_assists']);
+    final direct =
+        _numericValue(row['assists'] ?? row['assist'] ?? row['goal_assists']);
     if (direct > 0) return direct;
-    return _playerEpisodeCount(row, const ['assist', 'ассист', 'голевая', 'голевой', 'результативная']);
+    return _playerEpisodeCount(row,
+        const ['assist', 'ассист', 'голевая', 'голевой', 'результативная']);
   }
 
-  int _playerSharpPasses(Map<String, dynamic> row) => _mainTtdValue(row, 'pass_avp');
-  int _playerShots(Map<String, dynamic> row) => _mainTtdValue(row, 'shot_on_goal');
-  int _playerDribbles(Map<String, dynamic> row) => _mainTtdValue(row, 'feint_dribble');
-  int _playerTackles(Map<String, dynamic> row) => _mainTtdValue(row, 'tackle_duel');
-  int _playerInterceptions(Map<String, dynamic> row) =>
-      max(_mainTtdValue(row, 'interception'), _numericValue(row['interceptions'] ?? row['interceptions_gk']));
-  int _playerRecoveries(Map<String, dynamic> row) => _mainTtdValue(row, 'recovery');
-  int _playerHeaders(Map<String, dynamic> row) => _mainTtdValue(row, 'header_play');
+  int _playerSharpPasses(Map<String, dynamic> row) =>
+      _mainTtdValue(row, 'pass_avp');
+  int _playerShots(Map<String, dynamic> row) =>
+      _mainTtdValue(row, 'shot_on_goal');
+  int _playerDribbles(Map<String, dynamic> row) =>
+      _mainTtdValue(row, 'feint_dribble');
+  int _playerTackles(Map<String, dynamic> row) =>
+      _mainTtdValue(row, 'tackle_duel');
+  int _playerInterceptions(Map<String, dynamic> row) => max(
+      _mainTtdValue(row, 'interception'),
+      _numericValue(row['interceptions'] ?? row['interceptions_gk']));
+  int _playerRecoveries(Map<String, dynamic> row) =>
+      _mainTtdValue(row, 'recovery');
+  int _playerHeaders(Map<String, dynamic> row) =>
+      _mainTtdValue(row, 'header_play');
   int _playerSaves(Map<String, dynamic> row) => _numericValue(row['saves']);
-  int _playerConceded(Map<String, dynamic> row) => _numericValue(row['conceded']);
+  int _playerConceded(Map<String, dynamic> row) =>
+      _numericValue(row['conceded']);
 
   double _playerMvpScore(Map<String, dynamic> row) {
     final success = _playerSuccessActions(row);
@@ -10521,7 +12771,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
     return rating.clamp(5.0, 10.0).toStringAsFixed(1);
   }
 
-  List<List<String>> _playerKeyTtdStats(Map<String, dynamic>? row, {int maxItems = 6}) {
+  List<List<String>> _playerKeyTtdStats(Map<String, dynamic>? row,
+      {int maxItems = 6}) {
     if (row == null) {
       return const [
         ['ТТД', 'нет данных'],
@@ -10612,7 +12863,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                   color: softAccent,
                   borderRadius: BorderRadius.circular(16),
                 ),
-                child: Icon(Icons.analytics_outlined, color: primary, size: compact ? 21 : 23),
+                child: Icon(Icons.analytics_outlined,
+                    color: primary, size: compact ? 21 : 23),
               ),
               const SizedBox(width: 12),
             ],
@@ -10706,7 +12958,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(color: const Color(0xFFF0F2F4), width: 1),
                 ),
-                child: const Icon(Icons.sports_soccer_rounded, color: Color(0xFF6B7280), size: 20),
+                child: const Icon(Icons.sports_soccer_rounded,
+                    color: Color(0xFF6B7280), size: 20),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -10755,7 +13008,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                   separatorBuilder: (_, __) => const SizedBox(height: 6),
                   itemBuilder: (context, index) {
                     final item = _matchNavItems[index];
-                    final active = _safeMatchTabIndex(_tabController.index) == index;
+                    final active =
+                        _safeMatchTabIndex(_tabController.index) == index;
                     return _MatchSidebarButton(
                       item: item,
                       active: active,
@@ -10771,7 +13025,9 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
           _buildMatchSidebarFooterAction(
             icon: Icons.refresh_rounded,
             label: 'Обновить',
-            onTap: () { _init(); },
+            onTap: () {
+              _init();
+            },
           ),
           const SizedBox(height: 6),
           _buildMatchSidebarFooterAction(
@@ -10884,7 +13140,9 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(item.$2, size: 21, color: active ? primary : textSecondary),
+                          Icon(item.$2,
+                              size: 21,
+                              color: active ? primary : textSecondary),
                           const SizedBox(height: 3),
                           Text(
                             item.$3,
@@ -10925,7 +13183,6 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(26),
-
             ),
             child: AnimatedBuilder(
               animation: _tabController,
@@ -11088,14 +13345,17 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                           },
                           child: AnimatedContainer(
                             duration: const Duration(milliseconds: 180),
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 9),
                             decoration: BoxDecoration(
                               color: active ? softAccent : Colors.transparent,
                               borderRadius: BorderRadius.circular(16),
                             ),
                             child: Row(
                               children: [
-                                Icon(item.icon, size: 18, color: active ? primary : textSecondary),
+                                Icon(item.icon,
+                                    size: 18,
+                                    color: active ? primary : textSecondary),
                                 const SizedBox(width: 6),
                                 Text(
                                   item.title,
@@ -11144,20 +13404,19 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
     );
   }
 
-
   // ---------------------------------------------------------------------------
   // Light professional match analytics workspace (Catapult-like composition).
   // Existing tabs stay the same: Обзор / Основные ТТД / Эпизоды / Нарезка / Видео.
   // ---------------------------------------------------------------------------
 
-  Color get _mcBg => const Color(0xFFF6F7F6);
+  Color get _mcBg => const Color(0xFFFFFFFF);
   Color get _mcRail => Colors.white;
   Color get _mcHeader => Colors.white;
   Color get _mcPanel => const Color(0xFFFFFFFF);
-  Color get _mcPanelTop => const Color(0xFFF8F9FA);
-  Color get _mcLine => const Color(0xFFE5E7EB);
+  Color get _mcPanelTop => const Color(0xFFF7F8F7);
+  Color get _mcLine => const Color(0xFFE9ECEA);
   Color get _mcText => const Color(0xFF111827);
-  Color get _mcSub => const Color(0xFF475467);
+  Color get _mcSub => const Color(0xFF5F6670);
   Color get _mcGreen => const Color(0xFF00A750);
   Color get _mcBlue => const Color(0xFF00A750);
   Color get _mcRed => const Color(0xFFD64545);
@@ -11167,9 +13426,9 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
   Color get _mcOnDark => const Color(0xFFFFFFFF);
   Color get _mcOnDarkSub => const Color(0xFFCBD5E1);
   Color get _mcPlayerBar => Colors.white;
-  Color get _mcPlayerLine => const Color(0xFFE5EAE7);
+  Color get _mcPlayerLine => const Color(0xFFE9ECEA);
   Color get _mcPlayerText => const Color(0xFF111827);
-  Color get _mcPlayerSub => const Color(0xFF667085);
+  Color get _mcPlayerSub => const Color(0xFF5F6670);
   Color get _cmrMatchGreen => const Color(0xFF00A750);
   Color get _cmrMatchGreenSoft => const Color(0xFFEAF7F0);
   Color get _cmrMatchSurface => const Color(0xFFF7F9F8);
@@ -11184,7 +13443,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
     required String score,
   }) {
     return Container(
-      color: _mcBg,
+      color: Colors.white,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -11198,6 +13457,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
           Expanded(
             child: LayoutBuilder(
               builder: (context, constraints) {
+                final mobileWorkspace = constraints.maxWidth < 720;
                 final compactRail = constraints.maxWidth < 860;
                 final railWidth = compactRail
                     ? 56.0
@@ -11205,47 +13465,86 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                         ? 206.0
                         : 232.0;
 
-                return Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    SizedBox(
-                      width: railWidth,
-                      child: _buildTrackerMatchSideNav(compact: compactRail),
-                    ),
-                    Expanded(
-                      child: AnimatedBuilder(
-                        animation: _tabController,
-                        builder: (context, _) {
-                          final index =
-                              _safeMatchTabIndex(_tabController.index);
-                          final content = index == 0
-                              ? _matchAnalysisOverview(
-                                  title: title,
-                                  opponent: opponent,
-                                  date: date,
-                                  competition: competition,
-                                  score: score,
-                                )
-                              : _activeTabWidgetByIndex(index);
+                return AnimatedBuilder(
+                  animation: _tabController,
+                  builder: (context, _) {
+                    final index = _safeMatchTabIndex(_tabController.index);
+                    final content = index == 0
+                        ? _matchAnalysisOverview(
+                            title: title,
+                            opponent: opponent,
+                            date: date,
+                            competition: competition,
+                            score: score,
+                          )
+                        : _activeTabWidgetByIndex(index);
 
-                          return ColoredBox(
-                            color: Colors.white,
+                    // iPhone/узкий Android: тот же workspace, но левый rail
+                    // превращается в горизонтальную CMR-навигацию. Никакой
+                    // отдельной "старой мобильной версии" больше нет.
+                    if (mobileWorkspace) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _buildTrackerStyleMatchTabs(),
+                          Expanded(
+                            child: ColoredBox(
+                              color: index == 0 ? _mcBg : Colors.white,
+                              child: AnimatedSwitcher(
+                                duration: const Duration(milliseconds: 150),
+                                switchInCurve: Curves.easeOutCubic,
+                                switchOutCurve: Curves.easeOutCubic,
+                                child: KeyedSubtree(
+                                  key: ValueKey(
+                                      'match-detail-mobile-workspace-$index'),
+                                  child: content,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      );
+                    }
+
+                    // Видеоразбор, как и Tracker Full Review, получает всю
+                    // рабочую ширину и собственное меню инструментов.
+                    if (index == TeamMatchDetailScreen.aiTabIndex) {
+                      return ColoredBox(
+                        color: Colors.white,
+                        child: KeyedSubtree(
+                          key: const ValueKey(
+                              'match-detail-video-review-workspace'),
+                          child: content,
+                        ),
+                      );
+                    }
+
+                    return Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        SizedBox(
+                          width: railWidth,
+                          child:
+                              _buildTrackerMatchSideNav(compact: compactRail),
+                        ),
+                        Expanded(
+                          child: ColoredBox(
+                            color: index == 0 ? _mcBg : Colors.white,
                             child: AnimatedSwitcher(
                               duration: const Duration(milliseconds: 160),
                               switchInCurve: Curves.easeOutCubic,
                               switchOutCurve: Curves.easeOutCubic,
                               child: KeyedSubtree(
-                                key: ValueKey(
-                                  'match-detail-tracker-tab-$index',
-                                ),
+                                key:
+                                    ValueKey('match-detail-tracker-tab-$index'),
                                 child: content,
                               ),
                             ),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
+                          ),
+                        ),
+                      ],
+                    );
+                  },
                 );
               },
             ),
@@ -11382,8 +13681,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                         style: TextStyle(
-                                          fontFamily:
-                                              AppTypography.fontFamily,
+                                          fontFamily: AppTypography.fontFamily,
                                           color: active
                                               ? const Color(0xFF111827)
                                               : const Color(0xFF344054),
@@ -11398,8 +13696,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                         style: TextStyle(
-                                          fontFamily:
-                                              AppTypography.fontFamily,
+                                          fontFamily: AppTypography.fontFamily,
                                           color: const Color(0xFF98A2B3),
                                           fontSize: 9.8,
                                           fontWeight: FontWeight.w400,
@@ -11433,8 +13730,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                       child: compact
                           ? Tooltip(
                               message: label,
-                              waitDuration:
-                                  const Duration(milliseconds: 220),
+                              waitDuration: const Duration(milliseconds: 220),
                               child: tile,
                             )
                           : tile,
@@ -11502,7 +13798,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
             child: Row(
               children: List.generate(_matchNavItems.length, (index) {
                 final item = _matchNavItems[index];
-                final active = _safeMatchTabIndex(_tabController.index) == index;
+                final active =
+                    _safeMatchTabIndex(_tabController.index) == index;
                 var label = item.title;
                 if (label == 'Основные ТТД') label = 'ТТД';
                 if (label == 'Видеоанализ ИИ') label = 'ИИ-анализ';
@@ -11534,7 +13831,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                             style: TextStyle(
                               color: active ? _mcGreen : _mcText,
                               fontSize: 11.5,
-                              fontWeight: active ? FontWeight.w600 : FontWeight.w600,
+                              fontWeight:
+                                  active ? FontWeight.w600 : FontWeight.w600,
                             ),
                           ),
                           if (index == 5) ...[
@@ -11573,94 +13871,112 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
     final safeTitle = title.trim().isEmpty ? 'Матч' : title.trim();
     final safeOpponent = opponent.trim().isEmpty ? 'Соперник' : opponent.trim();
 
-    return Container(
-      height: 58,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      color: Colors.white,
-      child: Row(
-        children: [
-          if (!widget.embedded) ...[
-            _analysisTopIcon(Icons.arrow_back_rounded, onTap: () => Get.back()),
-            const SizedBox(width: 8),
-            Container(width: 1, height: 24, color: _mcLine),
-            const SizedBox(width: 10),
-          ],
-          Container(
-            width: 32,
-            height: 32,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: const Color(0xFFF3FBF7),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Icon(Icons.sports_soccer_rounded, color: Color(0xFF00A750), size: 17),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final phone = constraints.maxWidth < 600;
+        final narrow = constraints.maxWidth < 820;
+        return SafeArea(
+          bottom: false,
+          child: Container(
+            height: phone ? 52 : 58,
+            padding: EdgeInsets.symmetric(horizontal: phone ? 8 : 12),
+            color: Colors.white,
+            child: Row(
               children: [
-                Text(
-                  safeTitle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Color(0xFF0B0F14),
-                    fontSize: 12.4,
-                    fontWeight: FontWeight.w600,
-                    height: 1.05,
-                    letterSpacing: -.18,
+                if (!widget.embedded) ...[
+                  _analysisTopIcon(Icons.arrow_back_rounded,
+                      onTap: () => Get.back()),
+                  SizedBox(width: phone ? 6 : 9),
+                ],
+                Container(
+                  width: phone ? 30 : 32,
+                  height: phone ? 30 : 32,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF3FAF6),
+                    borderRadius: BorderRadius.circular(phone ? 9 : 10),
+                  ),
+                  child: const Icon(
+                    Icons.sports_soccer_rounded,
+                    color: Color(0xFF00A750),
+                    size: 17,
                   ),
                 ),
-                const SizedBox(height: 3),
-                Text(
-                  [
-                    teamName,
-                    safeOpponent,
-                    if (date.trim().isNotEmpty) date.trim(),
-                    if (competition.trim().isNotEmpty) competition.trim(),
-                  ].where((e) => e.trim().isNotEmpty).join(' • '),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Color(0xFF6B7280),
-                    fontSize: 9.8,
-                    fontWeight: FontWeight.w600,
-                    height: 1.05,
-                    letterSpacing: -.05,
+                SizedBox(width: phone ? 8 : 10),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        safeTitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.subsectionTitle(
+                          color: const Color(0xFF0B0F14),
+                        ).copyWith(
+                          fontSize: phone ? 12.2 : 13.0,
+                          fontWeight: FontWeight.w600,
+                          height: 1.05,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        [
+                          if (!phone) teamName,
+                          safeOpponent,
+                          if (date.trim().isNotEmpty) date.trim(),
+                          if (!narrow && competition.trim().isNotEmpty)
+                            competition.trim(),
+                        ].where((e) => e.trim().isNotEmpty).join(' • '),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.caption(
+                          color: const Color(0xFF667085),
+                        ).copyWith(
+                          fontSize: phone ? 9.6 : 10.0,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
+                const SizedBox(width: 6),
+                Container(
+                  height: phone ? 26 : 28,
+                  alignment: Alignment.center,
+                  padding: EdgeInsets.symmetric(horizontal: phone ? 8 : 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF3FAF6),
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  child: Text(
+                    score,
+                    style: AppTypography.badge(
+                      color: const Color(0xFF00A750),
+                    ).copyWith(fontSize: phone ? 10.2 : 10.8),
+                  ),
+                ),
+                SizedBox(width: phone ? 4 : 7),
+                _analysisTopIcon(
+                  Icons.more_horiz_rounded,
+                  onTap: _showCurrentMatchActions,
+                ),
+                if (!phone) ...[
+                  const SizedBox(width: 6),
+                  _analysisTopIcon(Icons.tune_rounded,
+                      onTap: _openMatchInfoEditorSheet),
+                  if (!narrow) ...[
+                    const SizedBox(width: 6),
+                    _analysisTopIcon(Icons.save_rounded,
+                        onTap: saving ? null : _saveAll),
+                  ],
+                ],
               ],
             ),
           ),
-          const SizedBox(width: 10),
-          Container(
-            height: 28,
-            alignment: Alignment.center,
-            padding: const EdgeInsets.symmetric(horizontal: 10),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF3FBF7),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              score,
-              style: const TextStyle(
-                color: Color(0xFF00A750),
-                fontSize: 10.8,
-                fontWeight: FontWeight.w600,
-                height: 1,
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          _analysisTopIcon(Icons.more_horiz_rounded, onTap: _showCurrentMatchActions),
-          const SizedBox(width: 8),
-          _analysisTopIcon(Icons.tune_rounded, onTap: _openMatchInfoEditorSheet),
-          const SizedBox(width: 8),
-          _analysisTopIcon(Icons.save_rounded, onTap: saving ? null : _saveAll),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -11696,7 +14012,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                         color: _cmrMatchSurface,
                         borderRadius: BorderRadius.circular(14),
                       ),
-                      child: Icon(Icons.arrow_back_rounded, color: _cmrMatchInk, size: 21),
+                      child: Icon(Icons.arrow_back_rounded,
+                          color: _cmrMatchInk, size: 21),
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -11709,7 +14026,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                       color: const Color(0xFFF7F9F8),
                       borderRadius: BorderRadius.circular(11),
                     ),
-                    child: const Icon(Icons.drag_indicator_rounded, color: Color(0xFF667085), size: 16),
+                    child: const Icon(Icons.drag_indicator_rounded,
+                        color: Color(0xFF667085), size: 16),
                   ),
                   const SizedBox(width: 10),
                 ],
@@ -11721,7 +14039,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                     color: _cmrMatchGreenSoft,
                     borderRadius: BorderRadius.circular(13),
                   ),
-                  child: Icon(Icons.sports_soccer_rounded, color: _cmrMatchGreen, size: 18),
+                  child: Icon(Icons.sports_soccer_rounded,
+                      color: _cmrMatchGreen, size: 18),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -11746,7 +14065,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                           ),
                           const SizedBox(width: 10),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 5),
                             decoration: BoxDecoration(
                               color: _cmrMatchGreenSoft,
                               borderRadius: BorderRadius.circular(999),
@@ -11768,7 +14088,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                           teamName,
                           safeOpponent,
                           if (date.trim().isNotEmpty) date.trim(),
-                          if (!compact && competition.trim().isNotEmpty) competition.trim(),
+                          if (!compact && competition.trim().isNotEmpty)
+                            competition.trim(),
                         ].join(' • '),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -11783,12 +14104,18 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                 ),
                 const SizedBox(width: 10),
                 if (!compact) ...[
-                  _analysisTopButton('Экспорт', Icons.file_download_outlined, _exportPdfStub, false),
+                  _analysisTopButton('Экспорт', Icons.file_download_outlined,
+                      _exportPdfStub, false),
                   const SizedBox(width: 8),
-                  _analysisTopButton(saving ? 'Сохраняем' : 'Сохранить', saving ? Icons.hourglass_top_rounded : Icons.save_rounded, saving ? null : _saveAll, true),
+                  _analysisTopButton(
+                      saving ? 'Сохраняем' : 'Сохранить',
+                      saving ? Icons.hourglass_top_rounded : Icons.save_rounded,
+                      saving ? null : _saveAll,
+                      true),
                   const SizedBox(width: 8),
                 ],
-                _analysisTopIcon(Icons.tune_rounded, onTap: _openMatchInfoEditorSheet),
+                _analysisTopIcon(Icons.tune_rounded,
+                    onTap: _openMatchInfoEditorSheet),
               ],
             );
           },
@@ -11816,7 +14143,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                       child: Row(
                         children: List.generate(_matchNavItems.length, (index) {
                           final item = _matchNavItems[index];
-                          final active = _safeMatchTabIndex(_tabController.index) == index;
+                          final active =
+                              _safeMatchTabIndex(_tabController.index) == index;
                           return Padding(
                             padding: const EdgeInsets.only(right: 8),
                             child: InkWell(
@@ -11831,12 +14159,15 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                                   right: compact ? 13 : 16,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: active ? _cmrMatchGreenSoft : _cmrMatchSurface,
+                                  color: active
+                                      ? _cmrMatchGreenSoft
+                                      : _cmrMatchSurface,
                                   borderRadius: BorderRadius.circular(18),
                                   boxShadow: active
                                       ? [
                                           BoxShadow(
-                                            color: _cmrMatchGreen.withOpacity(.10),
+                                            color:
+                                                _cmrMatchGreen.withOpacity(.10),
                                             blurRadius: 18,
                                             offset: const Offset(0, 8),
                                           ),
@@ -11847,7 +14178,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     AnimatedContainer(
-                                      duration: const Duration(milliseconds: 180),
+                                      duration:
+                                          const Duration(milliseconds: 180),
                                       width: 4,
                                       height: active ? 22 : 0,
                                       decoration: BoxDecoration(
@@ -11859,7 +14191,9 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                                     Icon(
                                       item.icon,
                                       size: 16,
-                                      color: active ? _cmrMatchGreen : _cmrMatchMuted,
+                                      color: active
+                                          ? _cmrMatchGreen
+                                          : _cmrMatchMuted,
                                     ),
                                     const SizedBox(width: 7),
                                     Text(
@@ -11867,9 +14201,13 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       style: TextStyle(
-                                        color: active ? _cmrMatchInk : _cmrMatchMuted,
+                                        color: active
+                                            ? _cmrMatchInk
+                                            : _cmrMatchMuted,
                                         fontSize: 11.2,
-                                        fontWeight: active ? FontWeight.w600 : FontWeight.w600,
+                                        fontWeight: active
+                                            ? FontWeight.w600
+                                            : FontWeight.w600,
                                       ),
                                     ),
                                     if (active) ...[
@@ -11879,7 +14217,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                                         height: 6,
                                         decoration: BoxDecoration(
                                           color: _cmrMatchGreen,
-                                          borderRadius: BorderRadius.circular(99),
+                                          borderRadius:
+                                              BorderRadius.circular(99),
                                         ),
                                       ),
                                     ],
@@ -11914,8 +14253,6 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
     );
   }
 
-
-
   Widget _analysisTopIcon(IconData icon, {VoidCallback? onTap}) {
     return InkWell(
       onTap: onTap,
@@ -11933,8 +14270,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
     );
   }
 
-
-  Widget _analysisTopButton(String label, IconData icon, VoidCallback? onTap, bool filled) {
+  Widget _analysisTopButton(
+      String label, IconData icon, VoidCallback? onTap, bool filled) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(14),
@@ -11973,7 +14310,6 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
       ),
     );
   }
-
 
   Widget _matchAnalysisRail({
     required String title,
@@ -12019,9 +14355,14 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                     height: 50,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
-                      color: active ? _MatchRailColors.active : _MatchRailColors.railPanel,
+                      color: active
+                          ? _MatchRailColors.active
+                          : _MatchRailColors.railPanel,
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: active ? _MatchRailColors.active : _MatchRailColors.border),
+                      border: Border.all(
+                          color: active
+                              ? _MatchRailColors.active
+                              : _MatchRailColors.border),
                       boxShadow: active
                           ? [
                               BoxShadow(
@@ -12054,7 +14395,9 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                           children: [
                             Icon(
                               Icons.sports_soccer_rounded,
-                              color: active ? _MatchRailColors.activeText : _MatchRailColors.railText,
+                              color: active
+                                  ? _MatchRailColors.activeText
+                                  : _MatchRailColors.railText,
                               size: 18,
                             ),
                             const SizedBox(height: 3),
@@ -12064,7 +14407,9 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                               overflow: TextOverflow.ellipsis,
                               textAlign: TextAlign.center,
                               style: TextStyle(
-                                color: active ? _MatchRailColors.activeText : _MatchRailColors.railMuted,
+                                color: active
+                                    ? _MatchRailColors.activeText
+                                    : _MatchRailColors.railMuted,
                                 fontSize: 8,
                                 height: .95,
                                 letterSpacing: -.25,
@@ -12094,14 +14439,16 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
               animation: _tabController,
               builder: (context, _) {
                 return ListView.separated(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
                   physics: const BouncingScrollPhysics(),
                   itemCount: max(0, _matchNavItems.length - 1),
                   separatorBuilder: (_, __) => const SizedBox(height: 5),
                   itemBuilder: (context, index) {
                     final navIndex = index + 1;
                     final item = _matchNavItems[navIndex];
-                    final active = _safeMatchTabIndex(_tabController.index) == navIndex;
+                    final active =
+                        _safeMatchTabIndex(_tabController.index) == navIndex;
 
                     return _MatchRailButton(
                       item: item,
@@ -12275,7 +14622,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                             height: lowerHeight,
                             title: 'Ускорения (м/с²)',
                             subtitle: 'Распределение',
-                            child: const CustomPaint(painter: _MatchHistogramPainter()),
+                            child: const CustomPaint(
+                                painter: _MatchHistogramPainter()),
                           ),
                         ]),
                       ],
@@ -12407,7 +14755,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                           height: lowerHeight,
                           title: 'Ускорения (м/с²)',
                           subtitle: 'Распределение',
-                          child: const CustomPaint(painter: _MatchHistogramPainter()),
+                          child: const CustomPaint(
+                              painter: _MatchHistogramPainter()),
                         ),
                       ]),
                     ],
@@ -12540,7 +14889,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                           height: lowerHeight,
                           title: 'Ускорения',
                           subtitle: 'Распределение',
-                          child: const CustomPaint(painter: _MatchHistogramPainter()),
+                          child: const CustomPaint(
+                              painter: _MatchHistogramPainter()),
                         ),
                       ]),
                     ],
@@ -12775,14 +15125,24 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
     );
   }
 
-
-  Widget _sizedAnalysisPanel(double height, {String? title, String? subtitle, Widget? trailing, required Widget child}) {
+  Widget _sizedAnalysisPanel(double height,
+      {String? title,
+      String? subtitle,
+      Widget? trailing,
+      required Widget child}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
-      child: SizedBox(height: height, child: title == null ? child : _analysisPanel(title: title, subtitle: subtitle, trailing: trailing, child: child)),
+      child: SizedBox(
+          height: height,
+          child: title == null
+              ? child
+              : _analysisPanel(
+                  title: title,
+                  subtitle: subtitle,
+                  trailing: trailing,
+                  child: child)),
     );
   }
-
 
   Widget _analysisPanel({
     required String title,
@@ -12794,19 +15154,23 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: _mcLine, width: 1),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF111512).withOpacity(.025),
+            blurRadius: 18,
+            spreadRadius: -12,
+            offset: const Offset(0, 9),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Container(
-            height: 38,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              border: Border(bottom: BorderSide(color: Color(0xFFE8EEE9))),
-            ),
+            constraints: const BoxConstraints(minHeight: 44),
+            padding: const EdgeInsets.fromLTRB(12, 8, 10, 6),
+            color: Colors.white,
             child: Row(
               children: [
                 Expanded(
@@ -12818,26 +15182,29 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                         title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Color(0xFF0B0F14),
-                          fontSize: 11.2,
+                        style: AppTypography.subsectionTitle(
+                          color: _mcText,
+                        ).copyWith(
+                          fontSize: 11.8,
                           fontWeight: FontWeight.w600,
-                          height: .95,
-                          letterSpacing: -.12,
+                          height: 1.05,
                         ),
                       ),
-                      if (subtitle != null)
+                      if (subtitle != null && subtitle.trim().isNotEmpty) ...[
+                        const SizedBox(height: 3),
                         Text(
                           subtitle,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Color(0xFF6B7280),
-                            fontSize: 9.3,
-                            fontWeight: FontWeight.w600,
-                            height: .95,
+                          style: AppTypography.caption(
+                            color: _mcSub,
+                          ).copyWith(
+                            fontSize: 9.6,
+                            fontWeight: FontWeight.w500,
+                            height: 1.05,
                           ),
                         ),
+                      ],
                     ],
                   ),
                 ),
@@ -12846,7 +15213,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                     constraints: const BoxConstraints(maxWidth: 136),
                     child: trailing,
                   ),
-                  const SizedBox(width: 7),
+                  const SizedBox(width: 5),
                 ],
                 _analysisPanelTools(
                   onExpand: () {
@@ -12866,7 +15233,7 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
           ),
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.all(10),
+              padding: const EdgeInsets.fromLTRB(10, 6, 10, 10),
               child: child,
             ),
           ),
@@ -12874,7 +15241,6 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
       ),
     );
   }
-
 
   Widget _analysisPanelTools({
     VoidCallback? onCopy,
@@ -12921,8 +15287,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
           height: 24,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(6),
-            border: Border.all(color: const Color(0xFFF0F2F4)),
+            color: const Color(0xFFF6F7F9),
+            borderRadius: BorderRadius.circular(8),
           ),
           child: Icon(
             icon,
@@ -12947,7 +15313,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
   }) {
     OverlayState? overlay;
     try {
-      overlay = Navigator.of(context, rootNavigator: true).overlay ?? Overlay.maybeOf(context);
+      overlay = Navigator.of(context, rootNavigator: true).overlay ??
+          Overlay.maybeOf(context);
     } catch (_) {
       overlay = Overlay.maybeOf(context);
     }
@@ -12973,20 +15340,27 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
 
         final double width = maximized
             ? screen.width - 28
-            : (isCompact ? screen.width - 24 : min(1180.0, max(760.0, screen.width * .78)));
+            : (isCompact
+                ? screen.width - 24
+                : min(1180.0, max(760.0, screen.width * .78)));
         final double height = maximized
             ? screen.height - media.padding.top - media.padding.bottom - 28
-            : (isCompact ? screen.height - media.padding.top - media.padding.bottom - 24 : min(760.0, max(520.0, screen.height * .78)));
+            : (isCompact
+                ? screen.height - media.padding.top - media.padding.bottom - 24
+                : min(760.0, max(520.0, screen.height * .78)));
 
         final double left = maximized
             ? 14.0
-            : position.dx.clamp(12.0, max(12.0, screen.width - width - 12.0)).toDouble();
+            : position.dx
+                .clamp(12.0, max(12.0, screen.width - width - 12.0))
+                .toDouble();
         final double top = maximized
             ? media.padding.top + 14.0
             : position.dy
                 .clamp(
                   media.padding.top + 12.0,
-                  max(media.padding.top + 12.0, screen.height - height - media.padding.bottom - 12.0),
+                  max(media.padding.top + 12.0,
+                      screen.height - height - media.padding.bottom - 12.0),
                 )
                 .toDouble();
 
@@ -13020,7 +15394,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.open_in_full_rounded, color: Color(0xFF00A750), size: 16),
+                      const Icon(Icons.open_in_full_rounded,
+                          color: Color(0xFF00A750), size: 16),
                       const SizedBox(width: 8),
                       Text(
                         title,
@@ -13051,7 +15426,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
               clipBehavior: Clip.antiAlias,
               decoration: BoxDecoration(
                 color: _mcPanel,
-                borderRadius: BorderRadius.circular(isCompact || maximized ? 8 : 18),
+                borderRadius:
+                    BorderRadius.circular(isCompact || maximized ? 8 : 18),
                 border: Border.all(color: _mcLine.withOpacity(.92)),
                 boxShadow: [
                   BoxShadow(
@@ -13077,11 +15453,16 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                       padding: const EdgeInsets.symmetric(horizontal: 12),
                       decoration: BoxDecoration(
                         color: _mcPanelTop,
-                        border: Border(bottom: BorderSide(color: _mcLine.withOpacity(.82))),
+                        border: Border(
+                            bottom:
+                                BorderSide(color: _mcLine.withOpacity(.82))),
                       ),
                       child: Row(
                         children: [
-                          _TeamMatchCmrWindowButton(icon: Icons.close_rounded, tooltip: 'Закрыть', onTap: closeWindow),
+                          _TeamMatchCmrWindowButton(
+                              icon: Icons.close_rounded,
+                              tooltip: 'Закрыть',
+                              onTap: closeWindow),
                           const SizedBox(width: 7),
                           _TeamMatchCmrWindowButton(
                             icon: Icons.remove_rounded,
@@ -13093,8 +15474,11 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                           ),
                           const SizedBox(width: 7),
                           _TeamMatchCmrWindowButton(
-                            icon: maximized ? Icons.close_fullscreen_rounded : Icons.open_in_full_rounded,
-                            tooltip: maximized ? 'Вернуть размер' : 'Развернуть',
+                            icon: maximized
+                                ? Icons.close_fullscreen_rounded
+                                : Icons.open_in_full_rounded,
+                            tooltip:
+                                maximized ? 'Вернуть размер' : 'Развернуть',
                             onTap: () {
                               maximized = !maximized;
                               entry.markNeedsBuild();
@@ -13109,7 +15493,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                               color: const Color(0xFFF3F6F9),
                               borderRadius: BorderRadius.circular(12),
                             ),
-                            child: Icon(Icons.analytics_outlined, color: _mcText, size: 16),
+                            child: Icon(Icons.analytics_outlined,
+                                color: _mcText, size: 16),
                           ),
                           const SizedBox(width: 10),
                           Expanded(
@@ -13121,15 +15506,22 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                                   title,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(color: _mcText, fontSize: 13.2, fontWeight: FontWeight.w600),
+                                  style: TextStyle(
+                                      color: _mcText,
+                                      fontSize: 13.2,
+                                      fontWeight: FontWeight.w600),
                                 ),
-                                if (subtitle != null && subtitle.trim().isNotEmpty) ...[
+                                if (subtitle != null &&
+                                    subtitle.trim().isNotEmpty) ...[
                                   const SizedBox(height: 2),
                                   Text(
                                     subtitle,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(color: _mcSub, fontSize: 10.4, fontWeight: FontWeight.w600),
+                                    style: TextStyle(
+                                        color: _mcSub,
+                                        fontSize: 10.4,
+                                        fontWeight: FontWeight.w600),
                                   ),
                                 ],
                               ],
@@ -13158,47 +15550,176 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
 
   Widget _analysisDropDown(String text) {
     final t = text.trim().isEmpty ? 'Команда' : text.trim();
-    return Container(height: 22, constraints: const BoxConstraints(maxWidth: 128), padding: const EdgeInsets.symmetric(horizontal: 8), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(5), border: Border.all(color: _mcLine)), child: Row(mainAxisSize: MainAxisSize.min, children: [Flexible(child: Text(t, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: _mcText, fontSize: 9.5, fontWeight: FontWeight.w600))), const SizedBox(width: 4), Icon(Icons.keyboard_arrow_down_rounded, color: _mcSub, size: 14)]));
+    return Container(
+      height: 26,
+      constraints: const BoxConstraints(maxWidth: 136),
+      padding: const EdgeInsets.symmetric(horizontal: 9),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF7F9F8),
+        borderRadius: BorderRadius.circular(9),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Flexible(
+            child: Text(
+              t,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.caption(color: _mcText).copyWith(
+                fontSize: 9.7,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          const SizedBox(width: 4),
+          Icon(Icons.keyboard_arrow_down_rounded, color: _mcSub, size: 14),
+        ],
+      ),
+    );
   }
 
-  Widget _analysisMatchHeader({required String title, required String opponent, required String date, required String competition, required String score}) {
-    final ourTeam = _s(match?['our_team']).isEmpty ? teamName : _s(match?['our_team']);
+  Widget _analysisMatchHeader({
+    required String title,
+    required String opponent,
+    required String date,
+    required String competition,
+    required String score,
+  }) {
+    final ourTeam =
+        _s(match?['our_team']).isEmpty ? teamName : _s(match?['our_team']);
     final opp = opponent.isEmpty ? 'Соперник' : opponent;
     final scoreParts = score.split(RegExp(r'[:\-]'));
     final leftScore = scoreParts.isNotEmpty ? scoreParts.first.trim() : '0';
     final rightScore = scoreParts.length > 1 ? scoreParts[1].trim() : '0';
-    final stadium = _s(_stadiumCtrl.text).isEmpty ? _s(match?['stadium']) : _s(_stadiumCtrl.text);
+    final stadium = _s(_stadiumCtrl.text).isEmpty
+        ? _s(match?['stadium'])
+        : _s(_stadiumCtrl.text);
+
     return Container(
       clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(color: _mcPanel, border: Border.all(color: _mcLine.withOpacity(.9)), borderRadius: BorderRadius.circular(8)),
-      child: Column(children: [
-        Container(height: 28, padding: const EdgeInsets.symmetric(horizontal: 10), decoration: BoxDecoration(color: _mcPanelTop, border: Border(bottom: BorderSide(color: _mcLine.withOpacity(.85)))), child: Row(children: [Icon(Icons.star_border_rounded, color: _mcSub, size: 15), const SizedBox(width: 6), Expanded(child: Text(competition.isEmpty ? 'Матч команды' : competition, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: _mcSub, fontSize: 10.5, fontWeight: FontWeight.w600))), _analysisPanelTools(
-          onExpand: () => _openAnalysisPanelFullscreen(
-            title: competition.isEmpty ? 'Матч команды' : competition,
-            subtitle: 'Информация о матче',
-            child: _analysisMatchHeader(
-              title: title,
-              opponent: opponent,
-              date: date,
-              competition: competition,
-              score: score,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF111512).withOpacity(.025),
+            blurRadius: 18,
+            spreadRadius: -12,
+            offset: const Offset(0, 9),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Container(
+            height: 34,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            color: Colors.white,
+            child: Row(
+              children: [
+                const _MatchProfileBrandDots(),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    competition.isEmpty ? 'Матч команды' : competition,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.caption(color: _mcSub).copyWith(
+                      fontSize: 10.2,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                _analysisPanelTools(
+                  onExpand: () => _openAnalysisPanelFullscreen(
+                    title: competition.isEmpty ? 'Матч команды' : competition,
+                    subtitle: 'Информация о матче',
+                    child: _analysisMatchHeader(
+                      title: title,
+                      opponent: opponent,
+                      date: date,
+                      competition: competition,
+                      score: score,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
-        )])),
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(14, 10, 14, 8),
-            child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-              Row(children: [Expanded(child: _analysisTeamBadge(ourTeam, Icons.shield_rounded, _mcBlue)), const SizedBox(width: 10), Container(width: 92, height: 62, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8), border: Border.all(color: _mcLine)), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Text('$leftScore - $rightScore', style: TextStyle(color: _mcText, fontSize: 23, fontWeight: FontWeight.w600, height: 1)), const SizedBox(height: 7), Text('ЗАВЕРШЕН', style: TextStyle(color: _mcGreen, fontSize: 10.5, fontWeight: FontWeight.w600))])), const SizedBox(width: 10), Expanded(child: _analysisTeamBadge(opp, Icons.security_rounded, _mcGreen, right: true))]),
-              const SizedBox(height: 9),
-              Text([if (date.isNotEmpty) date, if (stadium.isNotEmpty) stadium, if (title.isNotEmpty) title].join(' · '), maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: _mcSub, fontSize: 10.5, fontWeight: FontWeight.w600)),
-            ]),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(14, 4, 14, 10),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                          child: _analysisTeamBadge(
+                              ourTeam, Icons.shield_rounded, _mcGreen)),
+                      const SizedBox(width: 8),
+                      Container(
+                        width: 88,
+                        height: 58,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF3FAF6),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              '$leftScore : $rightScore',
+                              style: AppTypography.metricStrong(color: _mcText)
+                                  .copyWith(
+                                fontSize: 22,
+                                fontWeight: FontWeight.w600,
+                                height: 1,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'ЗАВЕРШЕН',
+                              style: AppTypography.commentMeta(color: _mcGreen)
+                                  .copyWith(
+                                fontSize: 9.6,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: .25,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                          child: _analysisTeamBadge(
+                              opp, Icons.security_rounded, _mcGreen,
+                              right: true)),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    [
+                      if (date.isNotEmpty) date,
+                      if (stadium.isNotEmpty) stadium,
+                      if (title.isNotEmpty) title,
+                    ].join(' · '),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.caption(color: _mcSub).copyWith(
+                      fontSize: 10.2,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
-        ),
-      ]),
+        ],
+      ),
     );
   }
-
 
   bool get _hasLiveAiData => _liveAiPlayers.isNotEmpty;
 
@@ -13213,14 +15734,23 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
 
   void _onLiveAiStatus(String status) {
     if (!mounted) return;
-    setState(() => _liveAiStatus = status.replaceAll('✅', '').replaceAll('❌', '').replaceAll('⚠️', '').replaceAll('🔄', '').trim());
+    setState(() => _liveAiStatus = status
+        .replaceAll('✅', '')
+        .replaceAll('❌', '')
+        .replaceAll('⚠️', '')
+        .replaceAll('🔄', '')
+        .trim());
   }
 
   void _onLiveAiFrame(AnalysisResult result) {
     if (result.players.isEmpty) return;
 
-    final timeMs = result.timestamp > 0 ? result.timestamp : result.frame * 20.0;
-    final dtSec = ((_liveAiTimeMs > 0) ? (timeMs - _liveAiTimeMs) / 1000.0 : 0.0).clamp(0.04, 1.8).toDouble();
+    final timeMs =
+        result.timestamp > 0 ? result.timestamp : result.frame * 20.0;
+    final dtSec =
+        ((_liveAiTimeMs > 0) ? (timeMs - _liveAiTimeMs) / 1000.0 : 0.0)
+            .clamp(0.04, 1.8)
+            .toDouble();
     final nextPositions = <int, Offset>{};
     final nextTrails = <int, List<Offset>>{};
     final nextSpeeds = Map<int, double>.from(_liveAiSpeedsKmh);
@@ -13236,7 +15766,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
     ];
     for (final event in serverEvents.reversed) {
       final eventId = _s(event['id']);
-      if (eventId.isNotEmpty && events.any((old) => _s(old['server_event_id']) == eventId)) {
+      if (eventId.isNotEmpty &&
+          events.any((old) => _s(old['server_event_id']) == eventId)) {
         continue;
       }
       final type = _s(event['event_type']);
@@ -13257,8 +15788,11 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
           Duration(milliseconds: _i(event['time_ms'])),
         ),
         'title': title,
-        'subtitle': 'AI ${(100 * _d(event['confidence'])).round()}% · ${_s(event['status'])}',
-        'icon': type.contains('goal') ? Icons.sports_soccer_rounded : Icons.auto_awesome_rounded,
+        'subtitle':
+            'AI ${(100 * _d(event['confidence'])).round()}% · ${_s(event['status'])}',
+        'icon': type.contains('goal')
+            ? Icons.sports_soccer_rounded
+            : Icons.auto_awesome_rounded,
         'color': type.contains('goal') ? _mcGreen : _mcBlue,
       });
     }
@@ -13267,13 +15801,17 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
       ...result.advice,
     ].reversed) {
       final adviceId = _s(advice['id']);
-      if (adviceId.isNotEmpty && events.any((old) => _s(old['server_event_id']) == adviceId)) {
+      if (adviceId.isNotEmpty &&
+          events.any((old) => _s(old['server_event_id']) == adviceId)) {
         continue;
       }
       events.insert(0, {
         'server_event_id': adviceId,
-        'minute': _formatMatchPlayerTime(Duration(milliseconds: _i(advice['time_ms']))),
-        'title': _s(advice['title']).isEmpty ? 'Подсказка тренеру' : _s(advice['title']),
+        'minute': _formatMatchPlayerTime(
+            Duration(milliseconds: _i(advice['time_ms']))),
+        'title': _s(advice['title']).isEmpty
+            ? 'Подсказка тренеру'
+            : _s(advice['title']),
         'subtitle': _s(advice['message']),
         'icon': Icons.psychology_alt_rounded,
         'color': _mcYellow,
@@ -13281,7 +15819,9 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
     }
 
     for (final player in result.players) {
-      final trackId = player.trackId > 0 ? player.trackId : int.tryParse(player.id) ?? player.bbox.hashCode.abs();
+      final trackId = player.trackId > 0
+          ? player.trackId
+          : int.tryParse(player.id) ?? player.bbox.hashCode.abs();
       if (player.bbox.isEmpty) continue;
 
       // Для мини-карты используем нижнюю точку bbox — условные "ноги" игрока.
@@ -13296,9 +15836,10 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
       final fieldX = rawX;
       const visibleFieldTop = 0.22;
       const visibleFieldBottom = 0.94;
-      final fieldY = ((rawY - visibleFieldTop) / (visibleFieldBottom - visibleFieldTop))
-          .clamp(0.0, 1.0)
-          .toDouble();
+      final fieldY =
+          ((rawY - visibleFieldTop) / (visibleFieldBottom - visibleFieldTop))
+              .clamp(0.0, 1.0)
+              .toDouble();
 
       final prev = _lastAiMotion[trackId];
       final rawPos = Offset(fieldX, fieldY);
@@ -13312,7 +15853,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
 
       // Если трек не перескочил резко, слегка сглаживаем точку на мини-карте.
       // Если скачок большой — считаем, что YOLO/track_id сменился, и начинаем новый след.
-      final bool resetTrail = prev != null && (rawPos - prev.position).distance > .22;
+      final bool resetTrail =
+          prev != null && (rawPos - prev.position).distance > .22;
       if (prev != null && !resetTrail) {
         pos = Offset(
           prev.position.dx * .42 + rawPos.dx * .58,
@@ -13321,7 +15863,9 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
       }
       nextPositions[trackId] = pos;
 
-      final trail = resetTrail ? <Offset>[] : List<Offset>.from(_liveAiTrails[trackId] ?? const []);
+      final trail = resetTrail
+          ? <Offset>[]
+          : List<Offset>.from(_liveAiTrails[trackId] ?? const []);
       trail.add(pos);
       if (trail.length > 70) trail.removeRange(0, trail.length - 70);
       nextTrails[trackId] = trail;
@@ -13332,7 +15876,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
         final meters = sqrt(dxM * dxM + dyM * dyM);
         final rawSpeed = (meters / dtSec) * 3.6;
         // Фильтр скачков bbox: YOLO иногда перескакивает между игроками.
-        final filtered = rawSpeed.isFinite ? rawSpeed.clamp(0.0, 38.0).toDouble() : 0.0;
+        final filtered =
+            rawSpeed.isFinite ? rawSpeed.clamp(0.0, 38.0).toDouble() : 0.0;
         speedKmh = speedKmh <= 0 ? filtered : speedKmh * .58 + filtered * .42;
         accel = ((speedKmh / 3.6) - (prev.speedKmh / 3.6)) / dtSec;
         accel = accel.clamp(-8.0, 8.0).toDouble();
@@ -13363,7 +15908,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
         nextSprints[trackId] = (nextSprints[trackId] ?? 0) + 1;
         final label = _liveAiPlayerLabel(trackId, player: player);
         events.insert(0, {
-          'minute': _formatMatchPlayerTime(Duration(milliseconds: timeMs.round())),
+          'minute':
+              _formatMatchPlayerTime(Duration(milliseconds: timeMs.round())),
           'title': 'Спринт $label',
           'subtitle': '${speedKmh.toStringAsFixed(1)} км/ч',
           'icon': Icons.bolt_rounded,
@@ -13371,7 +15917,11 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
         });
       }
 
-      nextMotion[trackId] = _AiPlayerMotion(position: pos, timeMs: timeMs, speedKmh: speedKmh, sprinting: sprintNow);
+      nextMotion[trackId] = _AiPlayerMotion(
+          position: pos,
+          timeMs: timeMs,
+          speedKmh: speedKmh,
+          sprinting: sprintNow);
     }
 
     if (events.length > 30) events.removeRange(30, events.length);
@@ -13413,7 +15963,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
 
   void _queueSaveLiveAiFrame(AnalysisResult result) {
     final now = DateTime.now();
-    if (_savingLiveAiFrame || now.difference(_lastAiSaveAt).inMilliseconds < 2200) return;
+    if (_savingLiveAiFrame ||
+        now.difference(_lastAiSaveAt).inMilliseconds < 2200) return;
     _lastAiSaveAt = now;
     _savingLiveAiFrame = true;
 
@@ -13427,24 +15978,29 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
       'source_mode': result.sourceMode,
       'ball': result.ball,
       'telemetry': result.telemetry,
-      'players': result.players.map((p) => {
-            'id': p.id,
-            'track_id': p.trackId,
-            'name': p.name,
-            'confidence': p.confidence,
-            'bbox': [p.bbox.left, p.bbox.top, p.bbox.right, p.bbox.bottom],
-            'speed_kmh': _liveAiSpeedsKmh[p.trackId] ?? 0,
-            'acceleration': _liveAiAccelerations[p.trackId] ?? 0,
-            'sprints': _liveAiSprints[p.trackId] ?? 0,
-            'load': _liveAiLoad[p.trackId] ?? 0,
-          }).toList(),
+      'players': result.players
+          .map((p) => {
+                'id': p.id,
+                'track_id': p.trackId,
+                'name': p.name,
+                'confidence': p.confidence,
+                'bbox': [p.bbox.left, p.bbox.top, p.bbox.right, p.bbox.bottom],
+                'speed_kmh': _liveAiSpeedsKmh[p.trackId] ?? 0,
+                'acceleration': _liveAiAccelerations[p.trackId] ?? 0,
+                'sprints': _liveAiSprints[p.trackId] ?? 0,
+                'load': _liveAiLoad[p.trackId] ?? 0,
+              })
+          .toList(),
       'events': result.recentEvents.isNotEmpty
           ? result.recentEvents.take(20).toList()
-          : _liveAiEvents.take(12).map((e) => {
-            'minute': _s(e['minute']),
-            'title': _s(e['title']),
-            'subtitle': _s(e['subtitle']),
-          }).toList(),
+          : _liveAiEvents
+              .take(12)
+              .map((e) => {
+                    'minute': _s(e['minute']),
+                    'title': _s(e['title']),
+                    'subtitle': _s(e['subtitle']),
+                  })
+              .toList(),
     };
 
     unawaited(
@@ -13456,24 +16012,66 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
           )
           .timeout(const Duration(seconds: 6))
           .catchError((Object error) {
-            developer.log('AI live save skipped/failed: $error', name: 'TeamMatchDetailScreen');
-            return http.Response('{}', 499);
-          })
-          .whenComplete(() => _savingLiveAiFrame = false),
+        developer.log('AI live save skipped/failed: $error',
+            name: 'TeamMatchDetailScreen');
+        return http.Response('{}', 499);
+      }).whenComplete(() => _savingLiveAiFrame = false),
     );
   }
 
-  Widget _analysisTeamBadge(String name, IconData icon, Color color, {bool right = false}) {
-    final logo = Container(width: 54, height: 54, decoration: BoxDecoration(shape: BoxShape.circle, color: color.withOpacity(.14), border: Border.all(color: color.withOpacity(.78), width: 2)), child: Icon(icon, color: color, size: 30));
-    final text = Flexible(child: Column(crossAxisAlignment: right ? CrossAxisAlignment.end : CrossAxisAlignment.start, children: [Text(name, maxLines: 2, overflow: TextOverflow.ellipsis, textAlign: right ? TextAlign.right : TextAlign.left, style: TextStyle(color: _mcText, fontSize: 14.5, height: 1.1, fontWeight: FontWeight.w600)), const SizedBox(height: 4), Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.star_rounded, color: _mcYellow, size: 14), const SizedBox(width: 4), Text('команда', style: TextStyle(color: _mcSub, fontSize: 9.5, fontWeight: FontWeight.w600))])]));
-    return Row(mainAxisAlignment: right ? MainAxisAlignment.end : MainAxisAlignment.start, children: right ? [text, const SizedBox(width: 10), logo] : [logo, const SizedBox(width: 10), text]);
+  Widget _analysisTeamBadge(String name, IconData icon, Color color,
+      {bool right = false}) {
+    final logo = Container(
+      width: 48,
+      height: 48,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: const Color(0xFFF3FAF6),
+      ),
+      child: Icon(icon, color: color, size: 25),
+    );
+    final text = Flexible(
+      child: Column(
+        crossAxisAlignment:
+            right ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        children: [
+          Text(
+            name,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            textAlign: right ? TextAlign.right : TextAlign.left,
+            style: AppTypography.subsectionTitle(color: _mcText).copyWith(
+              fontSize: 13.6,
+              height: 1.08,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'команда',
+            style: AppTypography.commentMeta(color: _mcSub).copyWith(
+              fontSize: 9.4,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+    return Row(
+      mainAxisAlignment:
+          right ? MainAxisAlignment.end : MainAxisAlignment.start,
+      children: right
+          ? [text, const SizedBox(width: 9), logo]
+          : [logo, const SizedBox(width: 9), text],
+    );
   }
 
   Widget _analysisLiveSprintBars() {
     if (!_hasLiveAiData || _liveAiSprints.isEmpty) {
       return const CustomPaint(painter: _MatchStackedBarsPainter());
     }
-    final rows = _liveAiSprints.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+    final rows = _liveAiSprints.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: rows.take(7).map((entry) {
@@ -13481,10 +16079,32 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
         return Expanded(
           child: Row(
             children: [
-              SizedBox(width: 74, child: Text('Игрок ${entry.key}', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: _mcText, fontSize: 10.5, fontWeight: FontWeight.w600))),
-              Expanded(child: ClipRRect(borderRadius: BorderRadius.circular(99), child: LinearProgressIndicator(value: (value / 8).clamp(0, 1), minHeight: 5, color: _mcGreen, backgroundColor: const Color(0xFFE5E7EB)))),
+              SizedBox(
+                  width: 74,
+                  child: Text('Игрок ${entry.key}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                          color: _mcText,
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w600))),
+              Expanded(
+                  child: ClipRRect(
+                      borderRadius: BorderRadius.circular(99),
+                      child: LinearProgressIndicator(
+                          value: (value / 8).clamp(0, 1),
+                          minHeight: 5,
+                          color: _mcGreen,
+                          backgroundColor: const Color(0xFFE5E7EB)))),
               const SizedBox(width: 8),
-              SizedBox(width: 28, child: Text('$value', textAlign: TextAlign.right, style: TextStyle(color: _mcText, fontSize: 10.5, fontWeight: FontWeight.w600))),
+              SizedBox(
+                  width: 28,
+                  child: Text('$value',
+                      textAlign: TextAlign.right,
+                      style: TextStyle(
+                          color: _mcText,
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w600))),
             ],
           ),
         );
@@ -13496,19 +16116,46 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
     if (!_hasLiveAiData || _liveAiLoad.isEmpty) {
       return const CustomPaint(painter: _MatchLoadBarsPainter());
     }
-    final rows = _liveAiLoad.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+    final rows = _liveAiLoad.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: rows.take(8).map((entry) {
         final value = entry.value.clamp(0.0, 100.0).toDouble();
-        final color = value >= 70 ? const Color(0xFFEF4444) : value >= 45 ? const Color(0xFFF59E0B) : _mcGreen;
+        final color = value >= 70
+            ? const Color(0xFFEF4444)
+            : value >= 45
+                ? const Color(0xFFF59E0B)
+                : _mcGreen;
         return Expanded(
           child: Row(
             children: [
-              SizedBox(width: 74, child: Text('Игрок ${entry.key}', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: _mcText, fontSize: 10.5, fontWeight: FontWeight.w600))),
-              Expanded(child: ClipRRect(borderRadius: BorderRadius.circular(99), child: LinearProgressIndicator(value: (value / 100).clamp(0, 1), minHeight: 5, color: color, backgroundColor: const Color(0xFFE5E7EB)))),
+              SizedBox(
+                  width: 74,
+                  child: Text('Игрок ${entry.key}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                          color: _mcText,
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w600))),
+              Expanded(
+                  child: ClipRRect(
+                      borderRadius: BorderRadius.circular(99),
+                      child: LinearProgressIndicator(
+                          value: (value / 100).clamp(0, 1),
+                          minHeight: 5,
+                          color: color,
+                          backgroundColor: const Color(0xFFE5E7EB)))),
               const SizedBox(width: 8),
-              SizedBox(width: 36, child: Text('${value.round()}%', textAlign: TextAlign.right, style: TextStyle(color: _mcText, fontSize: 10.5, fontWeight: FontWeight.w600))),
+              SizedBox(
+                  width: 36,
+                  child: Text('${value.round()}%',
+                      textAlign: TextAlign.right,
+                      style: TextStyle(
+                          color: _mcText,
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w600))),
             ],
           ),
         );
@@ -13537,10 +16184,32 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
           return Expanded(
             child: Row(
               children: [
-                SizedBox(width: 82, child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: _mcText, fontSize: 10.5, fontWeight: FontWeight.w600))),
-                Expanded(child: ClipRRect(borderRadius: BorderRadius.circular(99), child: LinearProgressIndicator(value: (v / 34).clamp(0, 1), minHeight: 4, color: v >= 22 ? _mcGreen : _mcBlue, backgroundColor: const Color(0xFFE5E7EB)))),
+                SizedBox(
+                    width: 82,
+                    child: Text(label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            color: _mcText,
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w600))),
+                Expanded(
+                    child: ClipRRect(
+                        borderRadius: BorderRadius.circular(99),
+                        child: LinearProgressIndicator(
+                            value: (v / 34).clamp(0, 1),
+                            minHeight: 4,
+                            color: v >= 22 ? _mcGreen : _mcBlue,
+                            backgroundColor: const Color(0xFFE5E7EB)))),
                 const SizedBox(width: 8),
-                SizedBox(width: 34, child: Text(v.toStringAsFixed(1), textAlign: TextAlign.right, style: TextStyle(color: _mcText, fontSize: 10.5, fontWeight: FontWeight.w600))),
+                SizedBox(
+                    width: 34,
+                    child: Text(v.toStringAsFixed(1),
+                        textAlign: TextAlign.right,
+                        style: TextStyle(
+                            color: _mcText,
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w600))),
               ],
             ),
           );
@@ -13550,17 +16219,62 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
 
     final names = _analysisPlayerNames();
     final values = [33.4, 32.1, 31.8, 31.2, 30.9, 30.2, 29.8, 29.5, 29.1, 28.7];
-    return Column(children: List.generate(min(names.length, values.length), (index) {
+    return Column(
+        children: List.generate(min(names.length, values.length), (index) {
       final v = values[index];
-      return Expanded(child: Row(children: [SizedBox(width: 82, child: Text(names[index], maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: _mcText, fontSize: 10.5, fontWeight: FontWeight.w600))), Expanded(child: ClipRRect(borderRadius: BorderRadius.circular(99), child: LinearProgressIndicator(value: (v / 36).clamp(0, 1), minHeight: 4, color: _mcBlue, backgroundColor: const Color(0xFFE5E7EB)))), const SizedBox(width: 8), SizedBox(width: 30, child: Text(v.toStringAsFixed(1), textAlign: TextAlign.right, style: TextStyle(color: _mcText, fontSize: 10.5, fontWeight: FontWeight.w600)))]));
+      return Expanded(
+          child: Row(children: [
+        SizedBox(
+            width: 82,
+            child: Text(names[index],
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                    color: _mcText,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w600))),
+        Expanded(
+            child: ClipRRect(
+                borderRadius: BorderRadius.circular(99),
+                child: LinearProgressIndicator(
+                    value: (v / 36).clamp(0, 1),
+                    minHeight: 4,
+                    color: _mcBlue,
+                    backgroundColor: const Color(0xFFE5E7EB)))),
+        const SizedBox(width: 8),
+        SizedBox(
+            width: 30,
+            child: Text(v.toStringAsFixed(1),
+                textAlign: TextAlign.right,
+                style: TextStyle(
+                    color: _mcText,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w600)))
+      ]));
     }));
   }
 
   List<String> _analysisPlayerNames() {
-    final names = ttdPlayers.map((e) => _playerName(e)).where((e) => e.trim().isNotEmpty).take(10).toList();
-    return names.length >= 6 ? names : ['Бахар', 'Седько', 'Лисакович', 'Гречихо', 'Бегунов', 'Зеньков', 'Барковский', 'Пащенко', 'Коваль', 'Журавлев'];
+    final names = ttdPlayers
+        .map((e) => _playerName(e))
+        .where((e) => e.trim().isNotEmpty)
+        .take(10)
+        .toList();
+    return names.length >= 6
+        ? names
+        : [
+            'Бахар',
+            'Седько',
+            'Лисакович',
+            'Гречихо',
+            'Бегунов',
+            'Зеньков',
+            'Барковский',
+            'Пащенко',
+            'Коваль',
+            'Журавлев'
+          ];
   }
-
 
   List<Map<String, dynamic>> _analysisMatchPlayerRows() {
     final byKey = <String, Map<String, dynamic>>{};
@@ -13597,7 +16311,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
   Widget _analysisMatchPlayersPane() {
     final rows = _analysisMatchPlayerRows();
     if (rows.isEmpty) {
-      return _emptyState('Игроки матча пока не загружены', icon: Icons.groups_2_outlined);
+      return _emptyState('Игроки матча пока не загружены',
+          icon: Icons.groups_2_outlined);
     }
 
     return LayoutBuilder(
@@ -13615,7 +16330,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
             itemBuilder: (_, index) {
               final row = rows[index];
               final key = _playerIdentityKey(row);
-              final selected = _selectedAnalysisPlayerKey == key || (_selectedAnalysisPlayerKey == null && index == 0);
+              final selected = _selectedAnalysisPlayerKey == key ||
+                  (_selectedAnalysisPlayerKey == null && index == 0);
               final name = _playerName(row);
               final photo = _playerPhotoUrl(row);
               final rating = _playerRating(row);
@@ -13624,7 +16340,9 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
               final assists = _playerAssistCount(row);
 
               return Material(
-                color: selected ? _mcGreen.withOpacity(.10) : const Color(0xFFF8FAF9),
+                color: selected
+                    ? _mcGreen.withOpacity(.10)
+                    : const Color(0xFFF8FAF9),
                 borderRadius: BorderRadius.circular(12),
                 child: InkWell(
                   borderRadius: BorderRadius.circular(12),
@@ -13633,23 +16351,42 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                   },
                   child: Container(
                     height: rowHeight,
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
                     decoration: BoxDecoration(
+                      color: selected
+                          ? const Color(0xFFF3FAF6)
+                          : const Color(0xFFF8FAF9),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: selected ? _mcGreen.withOpacity(.42) : _mcLine.withOpacity(.72)),
                     ),
                     child: Row(
                       children: [
-                        _PlayerAvatar(imageUrl: photo, name: name, primary: _mcGreen, size: avatarSize),
+                        _PlayerAvatar(
+                            imageUrl: photo,
+                            name: name,
+                            primary: _mcGreen,
+                            size: avatarSize),
                         const SizedBox(width: 9),
                         Expanded(
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: _mcText, fontSize: compact ? 10.5 : 11.4, fontWeight: FontWeight.w600)),
+                              Text(name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                      color: _mcText,
+                                      fontSize: compact ? 10.5 : 11.4,
+                                      fontWeight: FontWeight.w600)),
                               const SizedBox(height: 3),
-                              Text('ТТД: $total · Г: $goals · А: $assists', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: _mcSub, fontSize: compact ? 9.0 : 9.8, fontWeight: FontWeight.w600)),
+                              Text('ТТД: $total · Г: $goals · А: $assists',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                      color: _mcSub,
+                                      fontSize: compact ? 9.0 : 9.8,
+                                      fontWeight: FontWeight.w600)),
                             ],
                           ),
                         ),
@@ -13658,8 +16395,17 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                           width: compact ? 34 : 40,
                           height: compact ? 24 : 28,
                           alignment: Alignment.center,
-                          decoration: BoxDecoration(color: selected ? _mcGreen : Colors.white, borderRadius: BorderRadius.circular(9), border: Border.all(color: selected ? _mcGreen : _mcLine)),
-                          child: Text(rating, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: selected ? Colors.white : _mcText, fontSize: compact ? 10 : 11, fontWeight: FontWeight.w600)),
+                          decoration: BoxDecoration(
+                              color:
+                                  selected ? _mcGreen : const Color(0xFFF2F4F3),
+                              borderRadius: BorderRadius.circular(9)),
+                          child: Text(rating,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                  color: selected ? Colors.white : _mcText,
+                                  fontSize: compact ? 10 : 11,
+                                  fontWeight: FontWeight.w600)),
                         ),
                       ],
                     ),
@@ -13675,34 +16421,158 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
 
   Widget _analysisStatsTable({bool compact = false}) {
     final rows = _matchStatsRows();
-    final opp = _s(match?['opponent']).isEmpty ? 'Соперник' : _s(match?['opponent']);
-    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [Row(children: [Expanded(child: Text(teamName, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: _mcBlue, fontSize: 10.5, fontWeight: FontWeight.w600))), Expanded(child: Text(opp, maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.right, style: TextStyle(color: _mcGreen, fontSize: 10.5, fontWeight: FontWeight.w600)))]), const SizedBox(height: 5), ...rows.take(compact ? 9 : rows.length).map((row) => Expanded(child: Row(children: [SizedBox(width: 38, child: Text('${row[1]}', style: TextStyle(color: _mcText, fontSize: 10.5, fontWeight: FontWeight.w600))), Expanded(child: Text(row[0].toString(), maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center, style: TextStyle(color: _mcSub, fontSize: 10.1, fontWeight: FontWeight.w600))), SizedBox(width: 38, child: Text('${row[2]}', textAlign: TextAlign.right, style: TextStyle(color: _mcText, fontSize: 10.5, fontWeight: FontWeight.w600)))])))]);
+    final opp =
+        _s(match?['opponent']).isEmpty ? 'Соперник' : _s(match?['opponent']);
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Row(children: [
+        Expanded(
+            child: Text(teamName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                    color: _mcBlue,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w600))),
+        Expanded(
+            child: Text(opp,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.right,
+                style: TextStyle(
+                    color: _mcGreen,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w600)))
+      ]),
+      const SizedBox(height: 5),
+      ...rows.take(compact ? 9 : rows.length).map((row) => Expanded(
+              child: Row(children: [
+            SizedBox(
+                width: 38,
+                child: Text('${row[1]}',
+                    style: TextStyle(
+                        color: _mcText,
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w600))),
+            Expanded(
+                child: Text(row[0].toString(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                        color: _mcSub,
+                        fontSize: 10.1,
+                        fontWeight: FontWeight.w600))),
+            SizedBox(
+                width: 38,
+                child: Text('${row[2]}',
+                    textAlign: TextAlign.right,
+                    style: TextStyle(
+                        color: _mcText,
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w600)))
+          ])))
+    ]);
   }
 
   Widget _analysisAiBlock({bool compact = false}) {
-    final liveLoad = _liveAiLoad.isEmpty ? 0.0 : _liveAiLoad.values.reduce((a, b) => a + b) / _liveAiLoad.length;
-    final displayScore = _hasLiveAiData ? liveLoad.clamp(0, 100).round() : (_efficiency <= 0 ? 83 : _efficiency.clamp(0, 100).round());
-    final liveTopSpeed = _liveAiSpeedsKmh.isEmpty ? 0.0 : _liveAiSpeedsKmh.values.reduce((a, b) => a > b ? a : b);
-    final liveSprints = _liveAiSprints.values.fold<int>(0, (sum, value) => sum + value);
+    final liveLoad = _liveAiLoad.isEmpty
+        ? 0.0
+        : _liveAiLoad.values.reduce((a, b) => a + b) / _liveAiLoad.length;
+    final displayScore = _hasLiveAiData
+        ? liveLoad.clamp(0, 100).round()
+        : (_efficiency <= 0 ? 83 : _efficiency.clamp(0, 100).round());
+    final liveTopSpeed = _liveAiSpeedsKmh.isEmpty
+        ? 0.0
+        : _liveAiSpeedsKmh.values.reduce((a, b) => a > b ? a : b);
+    final liveSprints =
+        _liveAiSprints.values.fold<int>(0, (sum, value) => sum + value);
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Row(children: [Container(width: compact ? 58 : 70, height: compact ? 58 : 70, alignment: Alignment.center, decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: _mcGreen, width: 5), color: _mcGreen.withOpacity(.12)), child: Text('$displayScore', style: TextStyle(color: _mcGreen, fontSize: compact ? 19 : 23, fontWeight: FontWeight.w600))), const SizedBox(width: 12), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(_hasLiveAiData ? 'Live AI подключен' : 'Высокая эффективность', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: _mcGreen, fontSize: 12.5, fontWeight: FontWeight.w600)), const SizedBox(height: 4), Text(_hasLiveAiData ? 'Кадр $_liveAiFrame · ${_liveAiPlayers.length} игроков · ${_formatMatchPlayerTime(Duration(milliseconds: _liveAiTimeMs.round()))}' : _aiCoachText(), maxLines: compact ? 3 : 4, overflow: TextOverflow.ellipsis, style: TextStyle(color: _mcSub, fontSize: 10.5, height: 1.25, fontWeight: FontWeight.w600))]))]),
+      Row(children: [
+        Container(
+            width: compact ? 58 : 70,
+            height: compact ? 58 : 70,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: _mcGreen, width: 5),
+                color: _mcGreen.withOpacity(.12)),
+            child: Text('$displayScore',
+                style: TextStyle(
+                    color: _mcGreen,
+                    fontSize: compact ? 19 : 23,
+                    fontWeight: FontWeight.w600))),
+        const SizedBox(width: 12),
+        Expanded(
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(_hasLiveAiData ? 'Live AI подключен' : 'Высокая эффективность',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                  color: _mcGreen,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600)),
+          const SizedBox(height: 4),
+          Text(
+              _hasLiveAiData
+                  ? 'Кадр $_liveAiFrame · ${_liveAiPlayers.length} игроков · ${_formatMatchPlayerTime(Duration(milliseconds: _liveAiTimeMs.round()))}'
+                  : _aiCoachText(),
+              maxLines: compact ? 3 : 4,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                  color: _mcSub,
+                  fontSize: 10.5,
+                  height: 1.25,
+                  fontWeight: FontWeight.w600))
+        ]))
+      ]),
       const SizedBox(height: 10),
-      Text('Ключевые инсайты', style: TextStyle(color: _mcText, fontSize: 11.5, fontWeight: FontWeight.w600)),
+      Text('Ключевые инсайты',
+          style: TextStyle(
+              color: _mcText, fontSize: 11.5, fontWeight: FontWeight.w600)),
       const SizedBox(height: 6),
       if (_hasLiveAiData) ...[
         _analysisBullet('В кадре сейчас: ${_liveAiPlayers.length} игроков'),
-        _analysisBullet('Максимальная скорость live: ${liveTopSpeed.toStringAsFixed(1)} км/ч'),
+        _analysisBullet(
+            'Максимальная скорость live: ${liveTopSpeed.toStringAsFixed(1)} км/ч'),
         _analysisBullet('Спринтов за просмотр: $liveSprints'),
       ] else ...[
         _analysisBullet('64% атак начинались через центр'),
         _analysisBullet('Высокая интенсивность в финальной трети'),
         _analysisBullet('Компактность проседала после 60-й минуты'),
       ],
-      if (!compact) ...[const SizedBox(height: 8), Text('Рекомендации', style: TextStyle(color: _mcText, fontSize: 11.5, fontWeight: FontWeight.w600)), const SizedBox(height: 6), _analysisBullet(_aiRecommendation()), _analysisBullet('Ускорять переход в атаку коротким пасом')],
+      if (!compact) ...[
+        const SizedBox(height: 8),
+        Text('Рекомендации',
+            style: TextStyle(
+                color: _mcText, fontSize: 11.5, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 6),
+        _analysisBullet(_aiRecommendation()),
+        _analysisBullet('Ускорять переход в атаку коротким пасом')
+      ],
     ]);
   }
 
-  Widget _analysisBullet(String text) => Padding(padding: const EdgeInsets.only(bottom: 5), child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [Container(width: 4, height: 4, margin: const EdgeInsets.only(top: 6), decoration: BoxDecoration(color: _mcGreen, borderRadius: BorderRadius.circular(99))), const SizedBox(width: 7), Expanded(child: Text(text, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: _mcSub, fontSize: 10.2, height: 1.25, fontWeight: FontWeight.w600)))]));
+  Widget _analysisBullet(String text) => Padding(
+      padding: const EdgeInsets.only(bottom: 5),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Container(
+            width: 4,
+            height: 4,
+            margin: const EdgeInsets.only(top: 6),
+            decoration: BoxDecoration(
+                color: _mcGreen, borderRadius: BorderRadius.circular(99))),
+        const SizedBox(width: 7),
+        Expanded(
+            child: Text(text,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                    color: _mcSub,
+                    fontSize: 10.2,
+                    height: 1.25,
+                    fontWeight: FontWeight.w600)))
+      ]));
 
   Map<String, dynamic>? _firstUploadedMatchVideo({required bool tactical}) {
     final fullVideos = _videosByType('full')
@@ -13715,7 +16585,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
       final tacticalVideo = fullVideos.firstWhere(
         (video) {
           final type = _s(video['analysis_type']).toLowerCase();
-          final title = '${_s(video['file_name'])} ${_s(video['title'])}'.toLowerCase();
+          final title =
+              '${_s(video['file_name'])} ${_s(video['title'])}'.toLowerCase();
           return type.contains('tactical') ||
               type.contains('тактик') ||
               title.contains('tactical') ||
@@ -13770,7 +16641,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
         text.toLowerCase().contains('damaged')) {
       return 'Плеер macOS не смог открыть файл. Обычно это битый файл, неподдерживаемый кодек MOV/HEVC или старый повреждённый URL в базе.';
     }
-    if (text.toLowerCase().contains('source error') || text.toLowerCase().contains('404')) {
+    if (text.toLowerCase().contains('source error') ||
+        text.toLowerCase().contains('404')) {
       return 'Файл не найден по ссылке. Проверьте, что видео реально лежит в /uploads/team_matches/.';
     }
     return 'Видео загружено, но встроенный плеер не смог его открыть.';
@@ -13877,7 +16749,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
   String _bottomPlaybackStatusText() {
     if (_bottomVideoLoading) return 'Подготовка AI-тактического ракурса...';
     if (!_isBottomPlaybackReady()) return 'AI-видео загружается...';
-    if (_liveAiStatus.trim().isNotEmpty && !_liveAiStatus.toLowerCase().contains('ожидает')) {
+    if (_liveAiStatus.trim().isNotEmpty &&
+        !_liveAiStatus.toLowerCase().contains('ожидает')) {
       return _liveAiStatus;
     }
     return 'Готово к воспроизведению';
@@ -13914,7 +16787,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
       // Управляем только тактическим AI-плеером. Внутренние кнопки в карточке скрыты.
       await _embeddedAiPlayback.play();
     } catch (e) {
-      developer.log('Bottom AI play failed', name: 'TeamMatchDetailScreen', error: e);
+      developer.log('Bottom AI play failed',
+          name: 'TeamMatchDetailScreen', error: e);
     }
 
     if (mounted) {
@@ -13930,7 +16804,9 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
     final target = current + Duration(seconds: seconds);
     final safeTarget = target < Duration.zero
         ? Duration.zero
-        : (duration.inMilliseconds > 0 && target > duration ? duration : target);
+        : (duration.inMilliseconds > 0 && target > duration
+            ? duration
+            : target);
 
     await _embeddedAiPlayback.seekTo(safeTarget);
     if (mounted) setState(() {});
@@ -13951,7 +16827,9 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
     final duration = _currentBottomPlaybackDuration();
     final safePosition = position < Duration.zero
         ? Duration.zero
-        : (duration.inMilliseconds > 0 && position > duration ? duration : position);
+        : (duration.inMilliseconds > 0 && position > duration
+            ? duration
+            : position);
 
     await _embeddedAiPlayback.seekTo(safePosition);
     if (mounted) setState(() {});
@@ -14001,16 +16879,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
 
   void _openActiveMatchVideoFullscreen() {
     final video = _firstUploadedMatchVideo(tactical: true);
-    final url = _analysisVideoUrl(video);
-    if (url == null || url.isEmpty) return;
-
-    final params = _analysisParamsForVideo(video ?? <String, dynamic>{}, fallbackUrl: url);
-    showAdvancedVideoAnalysisWindow(
-      context,
-      params,
-      externalPlaybackController: _embeddedAiPlayback,
-      hideControls: false,
-    );
+    if (video == null) return;
+    unawaited(_openMatchVideoAnalysis(video));
   }
 
   Future<void> _toggleAnalysisVideoFromPane(
@@ -14029,9 +16899,10 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
       final type = _s(e['type'] ?? e['event_type'] ?? e['episode_type']);
       final title = _timelineTitle(type, e);
       final time = _eventPositionFromMap(e);
-      final player = _s(e['player_name'] ?? e['author_name'] ?? e['name']).isEmpty
-          ? (_s(e['title']).isEmpty ? 'Эпизод матча' : _s(e['title']))
-          : _s(e['player_name'] ?? e['author_name'] ?? e['name']);
+      final player =
+          _s(e['player_name'] ?? e['author_name'] ?? e['name']).isEmpty
+              ? (_s(e['title']).isEmpty ? 'Эпизод матча' : _s(e['title']))
+              : _s(e['player_name'] ?? e['author_name'] ?? e['name']);
 
       result.add({
         'title': title,
@@ -14044,7 +16915,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
       });
     }
 
-    result.sort((a, b) => (a['time'] as Duration).compareTo(b['time'] as Duration));
+    result.sort(
+        (a, b) => (a['time'] as Duration).compareTo(b['time'] as Duration));
 
     if (result.isNotEmpty) return result;
 
@@ -14108,8 +16980,10 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
       if (value > 0) return Duration(milliseconds: value);
     }
 
-    final minute = _i(e['minute'] ?? e['time_minute'] ?? e['match_minute'] ?? e['min']);
-    final second = _i(e['second'] ?? e['time_second'] ?? e['match_second'] ?? e['sec']);
+    final minute =
+        _i(e['minute'] ?? e['time_minute'] ?? e['match_minute'] ?? e['min']);
+    final second =
+        _i(e['second'] ?? e['time_second'] ?? e['match_second'] ?? e['sec']);
 
     return Duration(minutes: minute, seconds: second);
   }
@@ -14194,7 +17068,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                                     color: color.withOpacity(.12),
                                     borderRadius: BorderRadius.circular(12),
                                   ),
-                                  child: Icon(event['icon'] as IconData, color: color, size: 22),
+                                  child: Icon(event['icon'] as IconData,
+                                      color: color, size: 22),
                                 ),
                                 const SizedBox(width: 12),
                                 SizedBox(
@@ -14211,7 +17086,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Text(
                                         event['title'] as String,
@@ -14237,7 +17113,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                                     ],
                                   ),
                                 ),
-                                Icon(Icons.chevron_right_rounded, color: _mcSub),
+                                Icon(Icons.chevron_right_rounded,
+                                    color: _mcSub),
                               ],
                             ),
                           ),
@@ -14302,7 +17179,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                   bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 16,
                 ),
                 child: SizedBox(
-                  height: min(MediaQuery.of(sheetContext).size.height * .72, 620.0),
+                  height:
+                      min(MediaQuery.of(sheetContext).size.height * .72, 620.0),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
@@ -14314,12 +17192,14 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                               children: [
                                 Text(
                                   'Заметка к видео',
-                                  style: AppTypography.sectionTitle(color: _mcText),
+                                  style: AppTypography.sectionTitle(
+                                      color: _mcText),
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
                                   'Текущий момент: ${_formatMatchPlayerTime(position)}',
-                                  style: AppTypography.commentMeta(color: _mcSub),
+                                  style:
+                                      AppTypography.commentMeta(color: _mcSub),
                                 ),
                               ],
                             ),
@@ -14338,7 +17218,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                         autofocus: true,
                         style: AppTypography.commentText(color: _mcText),
                         decoration: InputDecoration(
-                          hintText: 'Например: плохо закрыли правый фланг после потери...',
+                          hintText:
+                              'Например: плохо закрыли правый фланг после потери...',
                           hintStyle: AppTypography.formHint(color: _mcSub),
                           filled: true,
                           fillColor: Colors.white,
@@ -14367,8 +17248,10 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                             backgroundColor: _mcBlue,
                             foregroundColor: Colors.white,
                             elevation: 0,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            textStyle: const TextStyle(fontWeight: FontWeight.w600),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12)),
+                            textStyle:
+                                const TextStyle(fontWeight: FontWeight.w600),
                           ),
                         ),
                       ),
@@ -14377,7 +17260,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                         children: [
                           Text(
                             'Быстрые заметки',
-                            style: AppTypography.subsectionTitle(color: _mcText),
+                            style:
+                                AppTypography.subsectionTitle(color: _mcText),
                           ),
                           const Spacer(),
                           if (_localVideoNotes.isNotEmpty)
@@ -14408,7 +17292,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                               )
                             : ListView.separated(
                                 itemCount: _localVideoNotes.length,
-                                separatorBuilder: (_, __) => const SizedBox(height: 8),
+                                separatorBuilder: (_, __) =>
+                                    const SizedBox(height: 8),
                                 itemBuilder: (_, index) {
                                   final note = _localVideoNotes[index];
                                   final time = note['time'] as Duration;
@@ -14424,17 +17309,21 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                                       child: Padding(
                                         padding: const EdgeInsets.all(12),
                                         child: Row(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
                                           children: [
                                             Text(
                                               note['timeLabel'] as String,
-                                              style: AppTypography.commentMeta(color: _mcBlue),
+                                              style: AppTypography.commentMeta(
+                                                  color: _mcBlue),
                                             ),
                                             const SizedBox(width: 12),
                                             Expanded(
                                               child: Text(
                                                 note['text'] as String,
-                                                style: AppTypography.commentText(color: _mcText),
+                                                style:
+                                                    AppTypography.commentText(
+                                                        color: _mcText),
                                               ),
                                             ),
                                           ],
@@ -14457,7 +17346,6 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
 
     noteCtrl.dispose();
   }
-
 
   Widget _analysisVideoEmptyState({required bool tactical}) {
     return Container(
@@ -14499,14 +17387,18 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
-                      tactical ? Icons.account_tree_outlined : Icons.video_file_outlined,
+                      tactical
+                          ? Icons.account_tree_outlined
+                          : Icons.video_file_outlined,
                       color: _mcOnDark,
                       size: 22,
                     ),
                   ),
                   const SizedBox(height: 10),
                   Text(
-                    tactical ? 'Тактическое видео не загружено' : 'Видео матча не загружено',
+                    tactical
+                        ? 'Тактическое видео не загружено'
+                        : 'Видео матча не загружено',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: _mcOnDark,
@@ -14535,15 +17427,18 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
             child: SizedBox(
               height: 30,
               child: ElevatedButton.icon(
-                onPressed: uploadingVideo ? null : () => _showUploadVideoSheet('full'),
+                onPressed:
+                    uploadingVideo ? null : () => _showUploadVideoSheet('full'),
                 icon: const Icon(Icons.cloud_upload_outlined, size: 16),
                 label: const Text('Загрузить видео'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.white,
                   foregroundColor: _mcControl,
                   elevation: 0,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                  textStyle: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(6)),
+                  textStyle: const TextStyle(
+                      fontSize: 10.5, fontWeight: FontWeight.w600),
                 ),
               ),
             ),
@@ -14552,7 +17447,6 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
       ),
     );
   }
-
 
   Widget _analysisVideoPane({required bool tactical}) {
     if (!tactical) {
@@ -14566,14 +17460,17 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
       return _analysisVideoEmptyState(tactical: tactical);
     }
 
-    final title = tactical ? 'Тактический ракурс' : _formatVideoTitle(_s(video?['file_name']), 'Видео матча');
+    final title = tactical
+        ? 'Тактический ракурс'
+        : _formatVideoTitle(_s(video?['file_name']), 'Видео матча');
 
     if (!tactical) {
       return _analysisMatchPlayersPane();
     }
 
     if (tactical) {
-      final params = _analysisParamsForVideo(video ?? <String, dynamic>{}, fallbackUrl: url);
+      final params = _analysisParamsForVideo(video ?? <String, dynamic>{},
+          fallbackUrl: url);
       return Container(
         clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
@@ -14596,12 +17493,10 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
               right: 10,
               top: 10,
               child: InkWell(
-                onTap: () => showAdvancedVideoAnalysisWindow(
-                  context,
-                  params,
-                  externalPlaybackController: _embeddedAiPlayback,
-                  hideControls: false,
-                ),
+                onTap: () {
+                  final selectedVideo = video ?? <String, dynamic>{};
+                  unawaited(_openMatchVideoAnalysis(selectedVideo));
+                },
                 borderRadius: BorderRadius.circular(999),
                 child: Container(
                   width: 32,
@@ -14609,9 +17504,15 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                   decoration: BoxDecoration(
                     color: Colors.white.withOpacity(.94),
                     borderRadius: BorderRadius.circular(999),
-                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(.16), blurRadius: 18, offset: const Offset(0, 8))],
+                    boxShadow: [
+                      BoxShadow(
+                          color: Colors.black.withOpacity(.16),
+                          blurRadius: 18,
+                          offset: const Offset(0, 8))
+                    ],
                   ),
-                  child: Icon(Icons.open_in_full_rounded, color: _mcText, size: 16),
+                  child: Icon(Icons.open_in_full_rounded,
+                      color: _mcText, size: 16),
                 ),
               ),
             ),
@@ -14620,8 +17521,10 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
       );
     }
 
-    final params = _analysisParamsForVideo(video ?? <String, dynamic>{}, fallbackUrl: url);
-    _activeAnalysisVideoKey ??= _analysisVideoControllerKey(url, tactical: false);
+    final params =
+        _analysisParamsForVideo(video ?? <String, dynamic>{}, fallbackUrl: url);
+    _activeAnalysisVideoKey ??=
+        _analysisVideoControllerKey(url, tactical: false);
 
     return Container(
       clipBehavior: Clip.antiAlias,
@@ -14664,14 +17567,18 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
             child: Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                   decoration: BoxDecoration(
                     color: const Color(0xFFD64545),
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: const Text(
                     'ВИДЕО',
-                    style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w600),
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w600),
                   ),
                 ),
                 const SizedBox(width: 6),
@@ -14681,7 +17588,10 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                     title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w600),
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600),
                   ),
                 ),
               ],
@@ -14699,9 +17609,15 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                 decoration: BoxDecoration(
                   color: Colors.white.withOpacity(.94),
                   borderRadius: BorderRadius.circular(999),
-                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(.16), blurRadius: 18, offset: const Offset(0, 8))],
+                  boxShadow: [
+                    BoxShadow(
+                        color: Colors.black.withOpacity(.16),
+                        blurRadius: 18,
+                        offset: const Offset(0, 8))
+                  ],
                 ),
-                child: Icon(Icons.open_in_full_rounded, color: _mcText, size: 16),
+                child:
+                    Icon(Icons.open_in_full_rounded, color: _mcText, size: 16),
               ),
             ),
           ),
@@ -14736,7 +17652,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                   : Image.network(
                       photo,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Icon(Icons.person_rounded, color: _mcSub, size: 42),
+                      errorBuilder: (_, __, ___) =>
+                          Icon(Icons.person_rounded, color: _mcSub, size: 42),
                     ),
             ),
             const SizedBox(width: 10),
@@ -14755,10 +17672,14 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
             ),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-              decoration: BoxDecoration(color: _mcBlue, borderRadius: BorderRadius.circular(4)),
+              decoration: BoxDecoration(
+                  color: _mcBlue, borderRadius: BorderRadius.circular(4)),
               child: Text(
                 rating,
-                style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600),
               ),
             ),
           ],
@@ -14766,15 +17687,15 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
         const SizedBox(height: 10),
         Text(
           'Ключевая статистика по ТТД',
-          style: TextStyle(color: _mcText, fontSize: 11, fontWeight: FontWeight.w600),
+          style: TextStyle(
+              color: _mcText, fontSize: 11, fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 5),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              for (final stat in keyStats)
-                _analysisKeyStat(stat[0], stat[1]),
+              for (final stat in keyStats) _analysisKeyStat(stat[0], stat[1]),
             ],
           ),
         ),
@@ -14785,8 +17706,10 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
             style: OutlinedButton.styleFrom(
               foregroundColor: _mcText,
               side: BorderSide(color: _mcLine),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-              textStyle: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(4)),
+              textStyle:
+                  const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600),
             ),
             child: const Text('Открыть ТТД игрока'),
           ),
@@ -14795,21 +17718,41 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
     );
   }
 
-  Widget _analysisKeyStat(String label, String value) => Padding(padding: const EdgeInsets.only(bottom: 4), child: Row(children: [Expanded(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: _mcSub, fontSize: 10.5, fontWeight: FontWeight.w600))), const SizedBox(width: 8), Text(value, style: TextStyle(color: _mcText, fontSize: 10.5, fontWeight: FontWeight.w600))]));
+  Widget _analysisKeyStat(String label, String value) => Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(children: [
+        Expanded(
+            child: Text(label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                    color: _mcSub,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w600))),
+        const SizedBox(width: 8),
+        Text(value,
+            style: TextStyle(
+                color: _mcText, fontSize: 10.5, fontWeight: FontWeight.w600))
+      ]));
 
   Widget _analysisEventTimeline({required bool wide}) {
-    final liveRows = _liveAiEvents.map((e) => _analysisEventLine(
-          _s(e['minute']),
-          e['icon'] is IconData ? e['icon'] as IconData : Icons.bolt_rounded,
-          '${_s(e['title'])}${_s(e['subtitle']).isNotEmpty ? ' · ${_s(e['subtitle'])}' : ''}',
-          e['color'] is Color ? e['color'] as Color : _mcGreen,
-        )).toList();
+    final liveRows = _liveAiEvents
+        .map((e) => _analysisEventLine(
+              _s(e['minute']),
+              e['icon'] is IconData
+                  ? e['icon'] as IconData
+                  : Icons.bolt_rounded,
+              '${_s(e['title'])}${_s(e['subtitle']).isNotEmpty ? ' · ${_s(e['subtitle'])}' : ''}',
+              e['color'] is Color ? e['color'] as Color : _mcGreen,
+            ))
+        .toList();
     final rows = liveRows.isNotEmpty ? liveRows : _timelineRows();
     final list = rows.take(wide ? 8 : 5).toList();
     if (list.isEmpty) {
       return _inlineAiWaiting(
         icon: Icons.timeline_rounded,
-        text: 'Событий пока нет. Запустите ИИ-видеоповтор или добавьте эпизоды матча.',
+        text:
+            'Событий пока нет. Запустите ИИ-видеоповтор или добавьте эпизоды матча.',
       );
     }
     if (!wide) {
@@ -14838,19 +17781,165 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
     );
   }
 
-  Widget _analysisEventLine(String minute, IconData icon, String title, Color color) => Row(children: [SizedBox(width: 40, child: Text(minute, style: TextStyle(color: _mcText, fontSize: 11, fontWeight: FontWeight.w600))), Icon(icon, color: color, size: 15), const SizedBox(width: 8), Expanded(child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: _mcSub, fontSize: 10.8, fontWeight: FontWeight.w600)))]);
+  Widget _analysisEventLine(
+          String minute, IconData icon, String title, Color color) =>
+      Row(children: [
+        SizedBox(
+            width: 40,
+            child: Text(minute,
+                style: TextStyle(
+                    color: _mcText,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600))),
+        Icon(icon, color: color, size: 15),
+        const SizedBox(width: 8),
+        Expanded(
+            child: Text(title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                    color: _mcSub,
+                    fontSize: 10.8,
+                    fontWeight: FontWeight.w600)))
+      ]);
 
-  Widget _analysisCoachNotes() => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [Row(children: [_analysisNoteTab('Общие', true), _analysisNoteTab('Атака', false), _analysisNoteTab('Оборона', false), _analysisNoteTab('Стандарты', false)]), const SizedBox(height: 10), Expanded(child: Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4), border: Border.all(color: _mcLine.withOpacity(.65))), child: _coachCommentCtrl.text.trim().isEmpty ? _inlineAiWaiting(icon: Icons.edit_note_rounded, text: 'Заметок тренера пока нет.') : Text(_coachCommentCtrl.text.trim(), maxLines: 7, overflow: TextOverflow.ellipsis, style: TextStyle(color: _mcSub, fontSize: 10.5, height: 1.35, fontWeight: FontWeight.w600)))), if (_coachCommentCtrl.text.trim().isNotEmpty) ...[const SizedBox(height: 8), Align(alignment: Alignment.centerRight, child: Text('Сохранено в матче', style: TextStyle(color: _mcSub, fontSize: 9.5, fontWeight: FontWeight.w600)))]]);
+  Widget _analysisCoachNotes() => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              _analysisNoteTab('Общие', true),
+              _analysisNoteTab('Атака', false),
+              _analysisNoteTab('Оборона', false),
+              _analysisNoteTab('Стандарты', false),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Expanded(
+            child: Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF7F9F8),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: _coachCommentCtrl.text.trim().isEmpty
+                  ? _inlineAiWaiting(
+                      icon: Icons.edit_note_rounded,
+                      text: 'Заметок тренера пока нет.',
+                    )
+                  : Text(
+                      _coachCommentCtrl.text.trim(),
+                      maxLines: 7,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.secondary(color: _mcSub).copyWith(
+                        fontSize: 10.5,
+                        height: 1.35,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+            ),
+          ),
+          if (_coachCommentCtrl.text.trim().isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Align(
+              alignment: Alignment.centerRight,
+              child: Text(
+                'Сохранено в матче',
+                style: AppTypography.commentMeta(color: _mcSub).copyWith(
+                  fontSize: 9.2,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ],
+        ],
+      );
 
-  Widget _analysisNoteTab(String text, bool active) => Expanded(child: Container(height: 22, alignment: Alignment.center, decoration: BoxDecoration(border: Border(bottom: BorderSide(color: active ? _mcGreen : _mcLine, width: active ? 2 : 1))), child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: active ? _mcGreen : _mcSub, fontSize: 9.5, fontWeight: FontWeight.w600))));
+  Widget _analysisNoteTab(String text, bool active) => Expanded(
+        child: Container(
+          height: 28,
+          margin: const EdgeInsets.symmetric(horizontal: 2),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: active ? const Color(0xFFF3FAF6) : Colors.transparent,
+            borderRadius: BorderRadius.circular(9),
+          ),
+          child: Text(
+            text,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTypography.caption(
+              color: active ? _mcGreen : _mcSub,
+            ).copyWith(
+              fontSize: 9.5,
+              fontWeight: active ? FontWeight.w600 : FontWeight.w500,
+            ),
+          ),
+        ),
+      );
 
   Widget _analysisConnections() {
     final names = _analysisPlayerNames();
-    final pairs = [[names[0], names.length > 1 ? names[1] : 'Седько', '24'], [names.length > 2 ? names[2] : 'Гречихо', names.length > 3 ? names[3] : 'Лисакович', '19'], [names.length > 4 ? names[4] : 'Пащенко', names.length > 5 ? names[5] : 'Коваль', '17']];
-    return Column(children: [...pairs.map((p) => Expanded(child: Row(children: [_analysisNumberCircle(p[0].toString().hashCode.abs() % 90 + 1), const SizedBox(width: 6), Expanded(child: Text(p[0], maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: _mcText, fontSize: 10.5, fontWeight: FontWeight.w600))), Icon(Icons.compare_arrows_rounded, color: _mcSub, size: 16), Expanded(child: Text(p[1], maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.right, style: TextStyle(color: _mcText, fontSize: 10.5, fontWeight: FontWeight.w600))), const SizedBox(width: 8), Text(p[2], style: TextStyle(color: _mcSub, fontSize: 10.5, fontWeight: FontWeight.w600))]))), Align(alignment: Alignment.centerLeft, child: Text('Все связи  ›', style: TextStyle(color: _mcSub, fontSize: 10.5, fontWeight: FontWeight.w600)))]);
+    final pairs = [
+      [names[0], names.length > 1 ? names[1] : 'Седько', '24'],
+      [
+        names.length > 2 ? names[2] : 'Гречихо',
+        names.length > 3 ? names[3] : 'Лисакович',
+        '19'
+      ],
+      [
+        names.length > 4 ? names[4] : 'Пащенко',
+        names.length > 5 ? names[5] : 'Коваль',
+        '17'
+      ]
+    ];
+    return Column(children: [
+      ...pairs.map((p) => Expanded(
+              child: Row(children: [
+            _analysisNumberCircle(p[0].toString().hashCode.abs() % 90 + 1),
+            const SizedBox(width: 6),
+            Expanded(
+                child: Text(p[0],
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        color: _mcText,
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w600))),
+            Icon(Icons.compare_arrows_rounded, color: _mcSub, size: 16),
+            Expanded(
+                child: Text(p[1],
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.right,
+                    style: TextStyle(
+                        color: _mcText,
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w600))),
+            const SizedBox(width: 8),
+            Text(p[2],
+                style: TextStyle(
+                    color: _mcSub, fontSize: 10.5, fontWeight: FontWeight.w600))
+          ]))),
+      Align(
+          alignment: Alignment.centerLeft,
+          child: Text('Все связи  ›',
+              style: TextStyle(
+                  color: _mcSub, fontSize: 10.5, fontWeight: FontWeight.w600)))
+    ]);
   }
 
-  Widget _analysisNumberCircle(int number) => Container(width: 22, height: 22, alignment: Alignment.center, decoration: BoxDecoration(shape: BoxShape.circle, color: _mcBlue, border: Border.all(color: Colors.white.withOpacity(.5))), child: Text('$number', style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w600)));
+  Widget _analysisNumberCircle(int number) => Container(
+      width: 22,
+      height: 22,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: _mcBlue,
+          border: Border.all(color: Colors.white.withOpacity(.5))),
+      child: Text('$number',
+          style: const TextStyle(
+              color: Colors.white, fontSize: 9, fontWeight: FontWeight.w600)));
 
   Widget _matchAnalysisBottomTimeline() {
     return Container(
@@ -14886,169 +17975,268 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
     );
   }
 
-
   Widget _matchAnalysisVideoBottomTimeline() {
     final source = _activeMatchVideoSourceForBottom();
-    final compactTimeline =
-        (MediaQuery.maybeOf(context)?.size.width ?? 1200) < 1100;
+    final width = MediaQuery.maybeOf(context)?.size.width ?? 1200;
+    final phone = width < 600;
+    final compactTimeline = width < 1100;
 
     if (source == null) {
       return Container(
-        height: 64,
-        decoration: BoxDecoration(
-          color: _mcPlayerBar,
-          border: Border(top: BorderSide(color: _mcPlayerLine)),
-        ),
+        height: phone ? 48 : 58,
+        padding: EdgeInsets.symmetric(horizontal: phone ? 10 : 18),
+        color: const Color(0xFFF7F9F8),
         child: Row(
           children: [
-            const SizedBox(width: 24),
-            Icon(Icons.video_file_outlined, color: _mcPlayerSub, size: 22),
-            const SizedBox(width: 10),
-            Text('Видео матча не загружено', style: TextStyle(color: _mcPlayerSub, fontSize: 11.5, fontWeight: FontWeight.w600)),
-            const Spacer(),
-            InkWell(
-              onTap: () => _openMatchLive(),
-              borderRadius: BorderRadius.circular(6),
-              child: _analysisBottomButton('Онлайн-матч', icon: Icons.sensors_rounded),
-            ),
+            Icon(Icons.video_file_outlined, color: _mcPlayerSub, size: 19),
             const SizedBox(width: 8),
-            InkWell(
-              onTap: _openMatchRecordingAnalysis,
-              borderRadius: BorderRadius.circular(6),
-              child: _analysisBottomButton(
-                'Анализ записи',
-                icon: Icons.auto_awesome_motion_rounded,
-                primary: true,
+            Expanded(
+              child: Text(
+                'Видео матча не загружено',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.secondary(color: _mcPlayerSub).copyWith(
+                  fontSize: phone ? 10.3 : 11.2,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
             ),
-            const SizedBox(width: 18),
+            if (!phone) ...[
+              InkWell(
+                onTap: _openMatchRecordingAnalysis,
+                borderRadius: BorderRadius.circular(10),
+                child: _analysisBottomButton(
+                  'Анализ записи',
+                  icon: Icons.auto_awesome_motion_rounded,
+                  primary: true,
+                ),
+              ),
+            ],
           ],
         ),
       );
     }
 
-    final listenables = <Listenable>[
-      _embeddedAiPlayback,
-    ];
-
     return AnimatedBuilder(
-      animation: Listenable.merge(listenables),
+      animation: _embeddedAiPlayback,
       builder: (context, _) {
         final duration = _currentBottomPlaybackDuration();
         final position = _currentBottomPlaybackPosition();
         final hasDuration = duration.inMilliseconds > 0;
         final progress = hasDuration
-            ? (position.inMilliseconds / duration.inMilliseconds).clamp(0.0, 1.0).toDouble()
+            ? (position.inMilliseconds / duration.inMilliseconds)
+                .clamp(0.0, 1.0)
+                .toDouble()
             : 0.0;
         final ready = _isBottomPlaybackReady();
         final playing = _isBottomPlaybackPlaying();
         final statusText = _bottomPlaybackStatusText();
 
+        if (phone) {
+          return Container(
+            height: 72,
+            padding: const EdgeInsets.fromLTRB(8, 5, 8, 4),
+            color: const Color(0xFFF7F9F8),
+            child: Column(
+              children: [
+                SizedBox(
+                  height: 34,
+                  child: Row(
+                    children: [
+                      _aiPlayerIconButton(
+                        icon: Icons.fast_rewind_rounded,
+                        onTap: ready
+                            ? () => _seekBottomMatchVideoRelative(-10)
+                            : null,
+                      ),
+                      const SizedBox(width: 5),
+                      _aiPlayerIconButton(
+                        icon: playing
+                            ? Icons.pause_rounded
+                            : Icons.play_arrow_rounded,
+                        onTap: _toggleBottomMatchVideo,
+                        active: playing,
+                      ),
+                      const SizedBox(width: 5),
+                      _aiPlayerIconButton(
+                        icon: Icons.fast_forward_rounded,
+                        onTap: ready
+                            ? () => _seekBottomMatchVideoRelative(10)
+                            : null,
+                      ),
+                      const SizedBox(width: 8),
+                      InkWell(
+                        borderRadius: BorderRadius.circular(8),
+                        onTap: _cycleBottomMatchVideoSpeed,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 5, vertical: 5),
+                          child: Text(
+                            '${_matchPlaybackSpeed.toStringAsFixed(_matchPlaybackSpeed == _matchPlaybackSpeed.roundToDouble() ? 0 : 2)}x',
+                            style: AppTypography.caption(color: _mcPlayerSub)
+                                .copyWith(
+                              fontSize: 10.2,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const Spacer(),
+                      Text(
+                        '${_formatMatchPlayerTime(position)} / ${hasDuration ? _formatMatchPlayerTime(duration) : '00:00'}',
+                        style: AppTypography.commentMeta(color: _mcPlayerSub)
+                            .copyWith(
+                          fontSize: 9.6,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                SizedBox(
+                  height: 28,
+                  child: SliderTheme(
+                    data: SliderTheme.of(context).copyWith(
+                      trackHeight: 3,
+                      thumbShape:
+                          const RoundSliderThumbShape(enabledThumbRadius: 4.5),
+                      overlayShape:
+                          const RoundSliderOverlayShape(overlayRadius: 10),
+                    ),
+                    child: Slider(
+                      value: progress,
+                      min: 0,
+                      max: 1,
+                      onChanged:
+                          hasDuration ? _seekBottomMatchVideoToFraction : null,
+                      activeColor: _mcGreen,
+                      inactiveColor: const Color(0xFFDDE3DF),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
         return Container(
-          height: 64,
-          decoration: BoxDecoration(
-            color: _mcPlayerBar,
-            border: Border(top: BorderSide(color: _mcPlayerLine)),
-          ),
+          height: 60,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          color: const Color(0xFFF7F9F8),
           child: Row(
             children: [
               SizedBox(
-                width: 220,
+                width: compactTimeline ? 174 : 208,
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    _aiPlayerIconButton(icon: Icons.fast_rewind_rounded, onTap: ready ? () { _seekBottomMatchVideoRelative(-10); } : null),
-                    const SizedBox(width: 12),
                     _aiPlayerIconButton(
-                      icon: playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                      icon: Icons.fast_rewind_rounded,
+                      onTap: ready
+                          ? () => _seekBottomMatchVideoRelative(-10)
+                          : null,
+                    ),
+                    const SizedBox(width: 8),
+                    _aiPlayerIconButton(
+                      icon: playing
+                          ? Icons.pause_rounded
+                          : Icons.play_arrow_rounded,
                       large: true,
                       filled: true,
                       active: playing,
-                      // Play разрешён сразу: если видео/AI ещё грузятся, они стартуют после canplay.
                       onTap: _toggleBottomMatchVideo,
                     ),
-                    const SizedBox(width: 12),
-                    _aiPlayerIconButton(icon: Icons.fast_forward_rounded, onTap: ready ? () { _seekBottomMatchVideoRelative(10); } : null),
-                    const SizedBox(width: 14),
-                    InkWell(
-                      borderRadius: BorderRadius.circular(10),
-                      onTap: () { _cycleBottomMatchVideoSpeed(); },
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 5),
-                        child: Text(
-                          '${_matchPlaybackSpeed.toStringAsFixed(_matchPlaybackSpeed == _matchPlaybackSpeed.roundToDouble() ? 0 : 2)}x',
-                          style: TextStyle(color: _mcPlayerSub, fontSize: 11.5, fontWeight: FontWeight.w600),
-                        ),
-                      ),
+                    const SizedBox(width: 8),
+                    _aiPlayerIconButton(
+                      icon: Icons.fast_forward_rounded,
+                      onTap: ready
+                          ? () => _seekBottomMatchVideoRelative(10)
+                          : null,
                     ),
                   ],
                 ),
               ),
-              Text(_formatMatchPlayerTime(position), style: TextStyle(color: _mcPlayerSub, fontSize: 10.5, fontWeight: FontWeight.w600)),
-              const SizedBox(width: 10),
+              InkWell(
+                borderRadius: BorderRadius.circular(8),
+                onTap: _cycleBottomMatchVideoSpeed,
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 5, vertical: 5),
+                  child: Text(
+                    '${_matchPlaybackSpeed.toStringAsFixed(_matchPlaybackSpeed == _matchPlaybackSpeed.roundToDouble() ? 0 : 2)}x',
+                    style: AppTypography.caption(color: _mcPlayerSub).copyWith(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                _formatMatchPlayerTime(position),
+                style: AppTypography.commentMeta(color: _mcPlayerSub)
+                    .copyWith(fontSize: 9.8),
+              ),
+              const SizedBox(width: 8),
               Expanded(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     SliderTheme(
                       data: SliderTheme.of(context).copyWith(
                         trackHeight: 3,
-                        thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5),
-                        overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
+                        thumbShape:
+                            const RoundSliderThumbShape(enabledThumbRadius: 5),
+                        overlayShape:
+                            const RoundSliderOverlayShape(overlayRadius: 12),
                       ),
                       child: Slider(
                         value: progress,
                         min: 0,
                         max: 1,
-                        onChanged: hasDuration ? (newValue) { _seekBottomMatchVideoToFraction(newValue); } : null,
+                        onChanged: hasDuration
+                            ? _seekBottomMatchVideoToFraction
+                            : null,
                         activeColor: _mcGreen,
-                        inactiveColor: const Color(0xFFE5E7EB),
+                        inactiveColor: const Color(0xFFDDE3DF),
                       ),
                     ),
-                    if (!ready || _bottomVideoLoading)
-                      Padding(
-                        padding: const EdgeInsets.only(left: 3, top: 0),
-                        child: Text(
-                          statusText,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(color: _mcPlayerSub.withOpacity(.82), fontSize: 9.5, fontWeight: FontWeight.w600),
-                        ),
+                    if ((!ready || _bottomVideoLoading) && !compactTimeline)
+                      Text(
+                        statusText,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.commentMeta(color: _mcPlayerSub)
+                            .copyWith(fontSize: 9.0),
                       ),
                   ],
                 ),
               ),
-              const SizedBox(width: 10),
-              Text(hasDuration ? _formatMatchPlayerTime(duration) : '00:00', style: TextStyle(color: _mcPlayerSub, fontSize: 10.5, fontWeight: FontWeight.w600)),
-              const SizedBox(width: 14),
-              InkWell(
-                onTap: () => _openMatchLive(video: source),
-                borderRadius: BorderRadius.circular(6),
-                child: _analysisBottomButton(
-                  'Онлайн-матч',
-                  icon: Icons.sensors_rounded,
-                  compact: compactTimeline,
-                ),
-              ),
               const SizedBox(width: 8),
-              InkWell(
-                onTap: _openMatchRecordingAnalysis,
-                borderRadius: BorderRadius.circular(6),
-                child: _analysisBottomButton(
-                  'Анализ записи',
-                  icon: Icons.auto_awesome_motion_rounded,
-                  primary: true,
-                  compact: compactTimeline,
-                ),
+              Text(
+                hasDuration ? _formatMatchPlayerTime(duration) : '00:00',
+                style: AppTypography.commentMeta(color: _mcPlayerSub)
+                    .copyWith(fontSize: 9.8),
               ),
-              const SizedBox(width: 14),
+              const SizedBox(width: 10),
+              if (!compactTimeline) ...[
+                InkWell(
+                  onTap: _openMatchRecordingAnalysis,
+                  borderRadius: BorderRadius.circular(10),
+                  child: _analysisBottomButton(
+                    'Анализ записи',
+                    icon: Icons.auto_awesome_motion_rounded,
+                    primary: true,
+                  ),
+                ),
+                const SizedBox(width: 8),
+              ],
               IconButton(
                 tooltip: 'Во весь экран',
                 onPressed: _openActiveMatchVideoFullscreen,
-                icon: Icon(Icons.fullscreen_rounded, color: _mcPlayerText, size: 24),
+                icon: Icon(Icons.fullscreen_rounded,
+                    color: _mcPlayerText, size: 22),
               ),
-              const SizedBox(width: 10),
             ],
           ),
         );
@@ -15056,14 +18244,14 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
     );
   }
 
-
-
   Widget _aiMatchReviewBottomTimeline() {
     final position = _aiReviewPlayback.position;
     final duration = _aiReviewPlayback.duration;
     final hasDuration = duration.inMilliseconds > 0;
     final progress = hasDuration
-        ? (position.inMilliseconds / duration.inMilliseconds).clamp(0.0, 1.0).toDouble()
+        ? (position.inMilliseconds / duration.inMilliseconds)
+            .clamp(0.0, 1.0)
+            .toDouble()
         : 0.0;
     final disabled = !_aiReviewPlayback.attached || !_aiReviewPlayback.isReady;
     final compactTimeline =
@@ -15082,33 +18270,65 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                _aiPlayerIconButton(icon: Icons.fast_rewind_rounded, onTap: disabled ? null : () { _aiReviewPlayback.seekRelative(-10); }),
+                _aiPlayerIconButton(
+                    icon: Icons.fast_rewind_rounded,
+                    onTap: disabled
+                        ? null
+                        : () {
+                            _aiReviewPlayback.seekRelative(-10);
+                          }),
                 const SizedBox(width: 12),
                 _aiPlayerIconButton(
-                  icon: _aiReviewPlayback.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                  icon: _aiReviewPlayback.isPlaying
+                      ? Icons.pause_rounded
+                      : Icons.play_arrow_rounded,
                   large: true,
                   filled: true,
                   active: _aiReviewPlayback.isPlaying,
-                  onTap: disabled ? null : () { _aiReviewPlayback.togglePlayPause(); },
+                  onTap: disabled
+                      ? null
+                      : () {
+                          _aiReviewPlayback.togglePlayPause();
+                        },
                 ),
                 const SizedBox(width: 12),
-                _aiPlayerIconButton(icon: Icons.fast_forward_rounded, onTap: disabled ? null : () { _aiReviewPlayback.seekRelative(10); }),
+                _aiPlayerIconButton(
+                    icon: Icons.fast_forward_rounded,
+                    onTap: disabled
+                        ? null
+                        : () {
+                            _aiReviewPlayback.seekRelative(10);
+                          }),
                 const SizedBox(width: 14),
                 InkWell(
                   borderRadius: BorderRadius.circular(8),
-                  onTap: disabled ? null : () { _aiReviewPlayback.cycleSpeed(); },
+                  onTap: disabled
+                      ? null
+                      : () {
+                          _aiReviewPlayback.cycleSpeed();
+                        },
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 5),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 4, vertical: 5),
                     child: Text(
                       '${_aiReviewPlayback.speed.toStringAsFixed(_aiReviewPlayback.speed == _aiReviewPlayback.speed.roundToDouble() ? 0 : 2)}x',
-                      style: TextStyle(color: disabled ? _mcPlayerSub.withOpacity(.45) : _mcPlayerSub, fontSize: 11.5, fontWeight: FontWeight.w600),
+                      style: TextStyle(
+                          color: disabled
+                              ? _mcPlayerSub.withOpacity(.45)
+                              : _mcPlayerSub,
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w600),
                     ),
                   ),
                 ),
               ],
             ),
           ),
-          Text(_formatMatchPlayerTime(position), style: TextStyle(color: _mcPlayerSub, fontSize: 10.5, fontWeight: FontWeight.w600)),
+          Text(_formatMatchPlayerTime(position),
+              style: TextStyle(
+                  color: _mcPlayerSub,
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w600)),
           const SizedBox(width: 10),
           Expanded(
             child: SliderTheme(
@@ -15121,14 +18341,22 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                 value: progress,
                 min: 0,
                 max: 1,
-                onChanged: disabled || !hasDuration ? null : (value) { _aiReviewPlayback.seekToFraction(value); },
+                onChanged: disabled || !hasDuration
+                    ? null
+                    : (value) {
+                        _aiReviewPlayback.seekToFraction(value);
+                      },
                 activeColor: _mcGreen,
                 inactiveColor: const Color(0xFFE5E7EB),
               ),
             ),
           ),
           const SizedBox(width: 10),
-          Text(_formatMatchPlayerTime(duration), style: TextStyle(color: _mcPlayerSub, fontSize: 10.5, fontWeight: FontWeight.w600)),
+          Text(_formatMatchPlayerTime(duration),
+              style: TextStyle(
+                  color: _mcPlayerSub,
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w600)),
           const SizedBox(width: 14),
           InkWell(
             onTap: () => _openMatchLive(video: _primaryAiVideo()),
@@ -15153,16 +18381,17 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
           const SizedBox(width: 14),
           IconButton(
             tooltip: 'Во весь экран',
-            onPressed: disabled ? null : () => _aiReviewPlayback.toggleFullscreen(),
-            icon: Icon(Icons.fullscreen_rounded, color: disabled ? _mcPlayerSub.withOpacity(.45) : _mcPlayerText, size: 24),
+            onPressed:
+                disabled ? null : () => _aiReviewPlayback.toggleFullscreen(),
+            icon: Icon(Icons.fullscreen_rounded,
+                color: disabled ? _mcPlayerSub.withOpacity(.45) : _mcPlayerText,
+                size: 24),
           ),
           const SizedBox(width: 10),
         ],
       ),
     );
   }
-
-
 
   Widget _aiPlayerIconButton({
     required IconData icon,
@@ -15263,14 +18492,12 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
     );
   }
 
-
   String _formatMatchPlayerTime(Duration value) {
     final totalSeconds = value.inSeconds;
     final minutes = (totalSeconds ~/ 60).toString().padLeft(2, '0');
     final seconds = (totalSeconds % 60).toString().padLeft(2, '0');
     return '$minutes:$seconds';
   }
-
 
   Widget _analysisBottomButton(
     String text, {
@@ -15328,7 +18555,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
-        final useWorkspace = width >= 720 || widget.embedded;
+        // Team Match теперь один адаптивный Tracker-workspace на Mac/iPad/iPhone.
+        final useWorkspace = true;
         final isPhone = width < 600 && !widget.embedded;
         final compact = width < 980;
 
@@ -15339,7 +18567,8 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      CircularProgressIndicator(color: useWorkspace ? _mcGreen : primary),
+                      CircularProgressIndicator(
+                          color: useWorkspace ? _mcGreen : primary),
                       const SizedBox(height: 16),
                       Text(
                         "Загрузка данных матча...",
@@ -15359,33 +18588,34 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
                     : widget.videoOnly
                         ? _buildEmbeddedVideoOnlySurface()
                         : useWorkspace
-                    ? _buildMatchAnalysisWorkspace(
-                        title: title,
-                        opponent: opponent,
-                        date: date,
-                        competition: competition,
-                        score: score,
-                      )
-                    : Column(
-                    children: [
-                      _buildCmrTopBar(
-                        compact: compact,
-                        title: title,
-                        opponent: opponent,
-                        date: date,
-                        competition: competition,
-                        showBackButton: !widget.embedded,
-                      ),
-                      Expanded(
-                        child: Column(
-                          children: [
-                            if (!isPhone) _buildCmrCompactNav(),
-                            Expanded(child: _buildActiveTabContent()),
-                          ],
-                        ),
-                      ),
-                    ],
-                  );
+                            ? _buildMatchAnalysisWorkspace(
+                                title: title,
+                                opponent: opponent,
+                                date: date,
+                                competition: competition,
+                                score: score,
+                              )
+                            : Column(
+                                children: [
+                                  _buildCmrTopBar(
+                                    compact: compact,
+                                    title: title,
+                                    opponent: opponent,
+                                    date: date,
+                                    competition: competition,
+                                    showBackButton: !widget.embedded,
+                                  ),
+                                  Expanded(
+                                    child: Column(
+                                      children: [
+                                        if (!isPhone) _buildCmrCompactNav(),
+                                        Expanded(
+                                            child: _buildActiveTabContent()),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              );
 
         final baseTheme = Theme.of(context);
         final themedBody = Theme(
@@ -15435,8 +18665,9 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
           child: Scaffold(
             backgroundColor: Colors.white,
             body: themedBody,
-            bottomNavigationBar:
-                isPhone ? _buildMatchMobileBottomMenu(context) : null,
+            bottomNavigationBar: isPhone && !useWorkspace
+                ? _buildMatchMobileBottomMenu(context)
+                : null,
           ),
         );
       },
@@ -15444,6 +18675,355 @@ Future<void> _deleteVideo(Map<String, dynamic> video) async {
   }
 }
 
+class _MatchVideoPitchPerspective extends StatefulWidget {
+  const _MatchVideoPitchPerspective({
+    required this.enabled,
+    required this.child,
+    this.compact = false,
+  });
+
+  final bool enabled;
+  final Widget child;
+  final bool compact;
+
+  @override
+  State<_MatchVideoPitchPerspective> createState() =>
+      _MatchVideoPitchPerspectiveState();
+}
+
+class _MatchVideoPitchPerspectiveState
+    extends State<_MatchVideoPitchPerspective> {
+  // Те же стартовые параметры камеры, что у Tracker 3D PRO, но поле чуть
+  // крупнее по умолчанию — для видеоанализа важнее видеть игроков и рисунок.
+  double _yawDeg = 0.0;
+  double _tiltRad = -.34;
+  double _zoom = 1.08;
+
+  void _orbit(Offset delta) {
+    if (!widget.enabled) return;
+    setState(() {
+      _yawDeg = (_yawDeg + delta.dx * .48) % 360.0;
+      _tiltRad = (_tiltRad - delta.dy * .0065).clamp(-.70, -.10).toDouble();
+    });
+  }
+
+  void _zoomBy(double delta) {
+    if (!widget.enabled) return;
+    setState(() {
+      _zoom = (_zoom + delta).clamp(.96, 1.38).toDouble();
+    });
+  }
+
+  void _reset() {
+    if (!widget.enabled) return;
+    setState(() {
+      _yawDeg = 0.0;
+      _tiltRad = -.34;
+      _zoom = 1.08;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!widget.enabled) return widget.child;
+
+    final safeTilt = _tiltRad.clamp(-.70, -.10).toDouble();
+    final safeZoom = _zoom.clamp(.96, 1.38).toDouble();
+    final yaw = _yawDeg * pi / 180.0;
+    final transform = Matrix4.identity()
+      ..setEntry(3, 2, .00135)
+      ..rotateX(safeTilt)
+      ..rotateZ(yaw)
+      ..scale(safeZoom);
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 160),
+      padding: EdgeInsets.fromLTRB(
+        widget.compact ? 3 : 6,
+        widget.compact ? 3 : 5,
+        widget.compact ? 3 : 6,
+        widget.compact ? 2 : 4,
+      ),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: <Color>[Color(0xFFDDE7E1), Color(0xFFF6F8F7)],
+        ),
+      ),
+      child: Stack(
+        fit: StackFit.expand,
+        clipBehavior: Clip.hardEdge,
+        children: [
+          IgnorePointer(
+            child: Transform.translate(
+              offset: Offset(0, widget.compact ? 6 : 8),
+              child: Transform(
+                alignment: Alignment.center,
+                transform: transform,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF284B38),
+                    borderRadius:
+                        BorderRadius.circular(widget.compact ? 10 : 14),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(.20),
+                        blurRadius: widget.compact ? 12 : 18,
+                        spreadRadius: -6,
+                        offset: Offset(0, widget.compact ? 8 : 12),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Transform.translate(
+            offset: Offset(0, widget.compact ? -3 : -5),
+            child: Transform(
+              alignment: Alignment.center,
+              transform: transform,
+              transformHitTests: true,
+              child: RepaintBoundary(child: widget.child),
+            ),
+          ),
+          Positioned(
+            right: widget.compact ? 7 : 12,
+            bottom: widget.compact ? 7 : 12,
+            child: _MatchVideoCameraControl(
+              compact: widget.compact,
+              onOrbitDelta: _orbit,
+              onZoomIn: () => _zoomBy(.08),
+              onZoomOut: () => _zoomBy(-.08),
+              onReset: _reset,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MatchVideoCameraControl extends StatelessWidget {
+  const _MatchVideoCameraControl({
+    required this.onOrbitDelta,
+    required this.onZoomIn,
+    required this.onZoomOut,
+    required this.onReset,
+    required this.compact,
+  });
+
+  final ValueChanged<Offset> onOrbitDelta;
+  final VoidCallback onZoomIn;
+  final VoidCallback onZoomOut;
+  final VoidCallback onReset;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _MatchVideoCameraRoundButton(
+              icon: Icons.add_rounded,
+              tooltip: 'Приблизить',
+              onTap: onZoomIn,
+              compact: compact,
+            ),
+            SizedBox(height: compact ? 3 : 5),
+            _MatchVideoCameraRoundButton(
+              icon: Icons.remove_rounded,
+              tooltip: 'Отдалить',
+              onTap: onZoomOut,
+              compact: compact,
+            ),
+            SizedBox(height: compact ? 3 : 5),
+            _MatchVideoCameraRoundButton(
+              icon: Icons.center_focus_strong_rounded,
+              tooltip: 'Сбросить камеру',
+              onTap: onReset,
+              compact: true,
+            ),
+          ],
+        ),
+        SizedBox(width: compact ? 5 : 7),
+        _MatchVideoOrbitPad(
+          onOrbitDelta: onOrbitDelta,
+          onReset: onReset,
+          compact: compact,
+        ),
+      ],
+    );
+  }
+}
+
+class _MatchVideoOrbitPad extends StatefulWidget {
+  const _MatchVideoOrbitPad({
+    required this.onOrbitDelta,
+    required this.onReset,
+    required this.compact,
+  });
+
+  final ValueChanged<Offset> onOrbitDelta;
+  final VoidCallback onReset;
+  final bool compact;
+
+  @override
+  State<_MatchVideoOrbitPad> createState() => _MatchVideoOrbitPadState();
+}
+
+class _MatchVideoOrbitPadState extends State<_MatchVideoOrbitPad> {
+  Offset _thumb = Offset.zero;
+
+  void _updateThumb(Offset local, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    var delta = local - center;
+    final maxRadius = widget.compact ? 16.0 : 20.0;
+    if (delta.distance > maxRadius) {
+      delta = Offset.fromDirection(delta.direction, maxRadius);
+    }
+    setState(() => _thumb = delta);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final side = widget.compact ? 64.0 : 78.0;
+    final thumb = widget.compact ? 26.0 : 30.0;
+    return Tooltip(
+      message: 'Тяните: влево/вправо — поворот, вверх/вниз — наклон',
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onDoubleTap: widget.onReset,
+        onPanStart: (details) =>
+            _updateThumb(details.localPosition, Size(side, side)),
+        onPanUpdate: (details) {
+          _updateThumb(details.localPosition, Size(side, side));
+          widget.onOrbitDelta(details.delta);
+        },
+        onPanEnd: (_) => setState(() => _thumb = Offset.zero),
+        onPanCancel: () => setState(() => _thumb = Offset.zero),
+        child: Container(
+          width: side,
+          height: side,
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(.95),
+            shape: BoxShape.circle,
+            border: Border.all(color: const Color(0xFFDDE3DF), width: 1),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(.12),
+                blurRadius: 12,
+                spreadRadius: -4,
+                offset: const Offset(0, 5),
+              ),
+            ],
+          ),
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Positioned(
+                top: widget.compact ? 4 : 6,
+                child: const Icon(Icons.keyboard_arrow_up_rounded,
+                    size: 17, color: Color(0xFF667085)),
+              ),
+              Positioned(
+                bottom: widget.compact ? 4 : 6,
+                child: const Icon(Icons.keyboard_arrow_down_rounded,
+                    size: 17, color: Color(0xFF667085)),
+              ),
+              Positioned(
+                left: widget.compact ? 4 : 6,
+                child: const Icon(Icons.keyboard_arrow_left_rounded,
+                    size: 17, color: Color(0xFF667085)),
+              ),
+              Positioned(
+                right: widget.compact ? 4 : 6,
+                child: const Icon(Icons.keyboard_arrow_right_rounded,
+                    size: 17, color: Color(0xFF667085)),
+              ),
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 70),
+                transform: Matrix4.translationValues(_thumb.dx, _thumb.dy, 0),
+                width: thumb,
+                height: thumb,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF00A750),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 2),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF00A750).withOpacity(.24),
+                      blurRadius: 8,
+                      spreadRadius: -2,
+                    ),
+                  ],
+                ),
+                child: const Icon(Icons.open_with_rounded,
+                    size: 14, color: Colors.white),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MatchVideoCameraRoundButton extends StatelessWidget {
+  const _MatchVideoCameraRoundButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+    required this.compact,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final side = compact ? 27.0 : 31.0;
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: Colors.transparent,
+        shape: const CircleBorder(),
+        child: InkWell(
+          onTap: onTap,
+          customBorder: const CircleBorder(),
+          child: Container(
+            width: side,
+            height: side,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(.95),
+              shape: BoxShape.circle,
+              border: Border.all(color: const Color(0xFFDDE3DF), width: 1),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(.09),
+                  blurRadius: 8,
+                  spreadRadius: -3,
+                  offset: const Offset(0, 3),
+                ),
+              ],
+            ),
+            child: Icon(icon,
+                size: compact ? 13 : 16, color: const Color(0xFF111827)),
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 class _MatchProfileBrandDots extends StatelessWidget {
   const _MatchProfileBrandDots();
@@ -15460,7 +19040,9 @@ class _MatchProfileBrandDots extends StatelessWidget {
             width: 5.5,
             height: 5.5,
             decoration: BoxDecoration(
-              color: index == 1 ? const Color(0xFF0B8F55) : const Color(0xFFB8D9C6),
+              color: index == 1
+                  ? const Color(0xFF0B8F55)
+                  : const Color(0xFFB8D9C6),
               shape: BoxShape.circle,
             ),
           ),
@@ -15470,25 +19052,49 @@ class _MatchProfileBrandDots extends StatelessWidget {
   }
 }
 
-
-
 class _MatchHistogramPainter extends CustomPainter {
   const _MatchHistogramPainter();
   @override
   void paint(Canvas canvas, Size size) {
-    final left = 36.0, top = 14.0, bottom = size.height - 28, right = size.width - 10;
+    final left = 36.0,
+        top = 14.0,
+        bottom = size.height - 28,
+        right = size.width - 10;
     final chartH = bottom - top, chartW = right - left;
-    final grid = Paint()..color = const Color(0xFFD8E2EA)..strokeWidth = 1;
-    final axis = Paint()..color = const Color(0xFF64748B)..strokeWidth = 1.2;
-    for (int i = 0; i <= 5; i++) canvas.drawLine(Offset(left, top + chartH * i / 5), Offset(right, top + chartH * i / 5), grid);
-    for (int i = 0; i <= 6; i++) canvas.drawLine(Offset(left + chartW * i / 6, top), Offset(left + chartW * i / 6, bottom), Paint()..color = const Color(0xFFEAF1F7));
+    final grid = Paint()
+      ..color = const Color(0xFFD8E2EA)
+      ..strokeWidth = 1;
+    final axis = Paint()
+      ..color = const Color(0xFF64748B)
+      ..strokeWidth = 1.2;
+    for (int i = 0; i <= 5; i++)
+      canvas.drawLine(Offset(left, top + chartH * i / 5),
+          Offset(right, top + chartH * i / 5), grid);
+    for (int i = 0; i <= 6; i++)
+      canvas.drawLine(
+          Offset(left + chartW * i / 6, top),
+          Offset(left + chartW * i / 6, bottom),
+          Paint()..color = const Color(0xFFEAF1F7));
     canvas.drawLine(Offset(left, top - 2), Offset(left, bottom), axis);
     canvas.drawLine(Offset(left, bottom), Offset(right + 2, bottom), axis);
     final tp = TextPainter(textDirection: TextDirection.ltr);
-    void label(String text, Offset o, {double fs = 9}) { tp.text = TextSpan(text: text, style: TextStyle(color: const Color(0xFF64748B), fontSize: fs, fontWeight: FontWeight.w600)); tp.layout(); tp.paint(canvas, o - Offset(tp.width / 2, tp.height / 2)); }
-    for (int i = 0; i <= 4; i++) label('${i * 200}', Offset(18, bottom - chartH * i / 4));
-    const labs = ['-5','-2.5','0','2.5','5'];
-    for (int i = 0; i < labs.length; i++) label(labs[i], Offset(left + chartW * i / (labs.length - 1), size.height - 13));
+    void label(String text, Offset o, {double fs = 9}) {
+      tp.text = TextSpan(
+          text: text,
+          style: TextStyle(
+              color: const Color(0xFF64748B),
+              fontSize: fs,
+              fontWeight: FontWeight.w600));
+      tp.layout();
+      tp.paint(canvas, o - Offset(tp.width / 2, tp.height / 2));
+    }
+
+    for (int i = 0; i <= 4; i++)
+      label('${i * 200}', Offset(18, bottom - chartH * i / 4));
+    const labs = ['-5', '-2.5', '0', '2.5', '5'];
+    for (int i = 0; i < labs.length; i++)
+      label(labs[i],
+          Offset(left + chartW * i / (labs.length - 1), size.height - 13));
     const n = 72;
     final bar = Paint()..color = const Color(0xFF159DE8);
     final rnd = Random(4);
@@ -15498,9 +19104,12 @@ class _MatchHistogramPainter extends CustomPainter {
       final tail = max(0.0, 1 - (i - n * .54).abs() / (n * .55)) * .18;
       final v = (peak * .94 + tail + rnd.nextDouble() * .035).clamp(.02, 1.0);
       final h = chartH * v * .86;
-      canvas.drawRect(Rect.fromLTWH(left + i * chartW / n, bottom - h, chartW / n * .82, h), bar);
+      canvas.drawRect(
+          Rect.fromLTWH(left + i * chartW / n, bottom - h, chartW / n * .82, h),
+          bar);
     }
   }
+
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
@@ -15509,26 +19118,69 @@ class _MatchStackedBarsPainter extends CustomPainter {
   const _MatchStackedBarsPainter();
   @override
   void paint(Canvas canvas, Size size) {
-    final left = 38.0, top = 18.0, bottom = size.height - 32, right = size.width - 8;
+    final left = 38.0,
+        top = 18.0,
+        bottom = size.height - 32,
+        right = size.width - 8;
     final h = bottom - top, w = right - left;
-    final grid = Paint()..color = const Color(0xFFD8E2EA)..strokeWidth = 1;
-    for (int i = 0; i <= 5; i++) canvas.drawLine(Offset(left, top + h * i / 5), Offset(right, top + h * i / 5), grid);
-    canvas.drawLine(Offset(left, top), Offset(left, bottom), Paint()..color = const Color(0xFF64748B)..strokeWidth = 1.2);
-    canvas.drawLine(Offset(left, bottom), Offset(right, bottom), Paint()..color = const Color(0xFF64748B)..strokeWidth = 1.2);
+    final grid = Paint()
+      ..color = const Color(0xFFD8E2EA)
+      ..strokeWidth = 1;
+    for (int i = 0; i <= 5; i++)
+      canvas.drawLine(
+          Offset(left, top + h * i / 5), Offset(right, top + h * i / 5), grid);
+    canvas.drawLine(
+        Offset(left, top),
+        Offset(left, bottom),
+        Paint()
+          ..color = const Color(0xFF64748B)
+          ..strokeWidth = 1.2);
+    canvas.drawLine(
+        Offset(left, bottom),
+        Offset(right, bottom),
+        Paint()
+          ..color = const Color(0xFF64748B)
+          ..strokeWidth = 1.2);
     const vals = [52, 48, 54, 59, 47, 40];
-    const labels = ['0-15','15-30','30-45','45-60','60-75','75-90'];
+    const labels = ['0-15', '15-30', '30-45', '45-60', '60-75', '75-90'];
     final barW = w / vals.length * .48;
-    final tp = TextPainter(textDirection: TextDirection.ltr, textAlign: TextAlign.center);
+    final tp = TextPainter(
+        textDirection: TextDirection.ltr, textAlign: TextAlign.center);
     for (int i = 0; i < vals.length; i++) {
       final x = left + w * (i + .5) / vals.length - barW / 2;
       final redH = h * vals[i] / 100;
       final greenH = h - redH;
-      canvas.drawRect(Rect.fromLTWH(x, bottom - redH, barW, redH), Paint()..color = const Color(0xFFA9333E));
-      canvas.drawRect(Rect.fromLTWH(x, top, barW, greenH), Paint()..color = const Color(0xFF0EA63B));
-      for (final pair in [[vals[i], bottom - redH / 2], [100 - vals[i], top + greenH / 2]]) { tp.text = TextSpan(text: '${pair[0]}%', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w600)); tp.layout(); tp.paint(canvas, Offset(x + barW / 2 - tp.width / 2, (pair[1] as num).toDouble() - tp.height / 2)); }
-      tp.text = TextSpan(text: labels[i], style: TextStyle(color: const Color(0xFF64748B), fontSize: 9, fontWeight: FontWeight.w600)); tp.layout(); tp.paint(canvas, Offset(x + barW / 2 - tp.width / 2, size.height - 18));
+      canvas.drawRect(Rect.fromLTWH(x, bottom - redH, barW, redH),
+          Paint()..color = const Color(0xFFA9333E));
+      canvas.drawRect(Rect.fromLTWH(x, top, barW, greenH),
+          Paint()..color = const Color(0xFF0EA63B));
+      for (final pair in [
+        [vals[i], bottom - redH / 2],
+        [100 - vals[i], top + greenH / 2]
+      ]) {
+        tp.text = TextSpan(
+            text: '${pair[0]}%',
+            style: const TextStyle(
+                color: Colors.white,
+                fontSize: 10,
+                fontWeight: FontWeight.w600));
+        tp.layout();
+        tp.paint(
+            canvas,
+            Offset(x + barW / 2 - tp.width / 2,
+                (pair[1] as num).toDouble() - tp.height / 2));
+      }
+      tp.text = TextSpan(
+          text: labels[i],
+          style: TextStyle(
+              color: const Color(0xFF64748B),
+              fontSize: 9,
+              fontWeight: FontWeight.w600));
+      tp.layout();
+      tp.paint(canvas, Offset(x + barW / 2 - tp.width / 2, size.height - 18));
     }
   }
+
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
@@ -15537,24 +19189,53 @@ class _MatchLoadBarsPainter extends CustomPainter {
   const _MatchLoadBarsPainter();
   @override
   void paint(Canvas canvas, Size size) {
-    final left = 34.0, top = 18.0, bottom = size.height - 30, right = size.width - 10;
+    final left = 34.0,
+        top = 18.0,
+        bottom = size.height - 30,
+        right = size.width - 10;
     final h = bottom - top, w = right - left;
-    final grid = Paint()..color = const Color(0xFFD8E2EA)..strokeWidth = 1;
-    for (int i = 0; i <= 5; i++) canvas.drawLine(Offset(left, top + h * i / 5), Offset(right, top + h * i / 5), grid);
-    canvas.drawLine(Offset(left, bottom), Offset(right, bottom), Paint()..color = const Color(0xFF64748B));
-    canvas.drawLine(Offset(left, top), Offset(left, bottom), Paint()..color = const Color(0xFF64748B));
-    final colors = [const Color(0xFF18A9D4), const Color(0xFF7BC56B), const Color(0xFFE7C13C), const Color(0xFFE45B45), const Color(0xFF8B3DB6)];
-    const vals = [78,64,82,91,72,68];
-    const labels = ['0-15','15-30','30-45','45-60','60-75','75-90'];
+    final grid = Paint()
+      ..color = const Color(0xFFD8E2EA)
+      ..strokeWidth = 1;
+    for (int i = 0; i <= 5; i++)
+      canvas.drawLine(
+          Offset(left, top + h * i / 5), Offset(right, top + h * i / 5), grid);
+    canvas.drawLine(Offset(left, bottom), Offset(right, bottom),
+        Paint()..color = const Color(0xFF64748B));
+    canvas.drawLine(Offset(left, top), Offset(left, bottom),
+        Paint()..color = const Color(0xFF64748B));
+    final colors = [
+      const Color(0xFF18A9D4),
+      const Color(0xFF7BC56B),
+      const Color(0xFFE7C13C),
+      const Color(0xFFE45B45),
+      const Color(0xFF8B3DB6)
+    ];
+    const vals = [78, 64, 82, 91, 72, 68];
+    const labels = ['0-15', '15-30', '30-45', '45-60', '60-75', '75-90'];
     final barW = w / vals.length * .46;
     final tp = TextPainter(textDirection: TextDirection.ltr);
     for (int i = 0; i < vals.length; i++) {
       final x = left + w * (i + .5) / vals.length - barW / 2;
       var y = bottom;
-      for (int j = 0; j < colors.length; j++) { final hh = h * vals[i] / 100 / colors.length * (.72 + .1 * ((i + j) % 3)); y -= hh; canvas.drawRect(Rect.fromLTWH(x, y, barW, hh - 1), Paint()..color = colors[j].withOpacity(.82)); }
-      tp.text = TextSpan(text: labels[i], style: TextStyle(color: const Color(0xFF64748B), fontSize: 9, fontWeight: FontWeight.w600)); tp.layout(); tp.paint(canvas, Offset(x + barW / 2 - tp.width / 2, size.height - 18));
+      for (int j = 0; j < colors.length; j++) {
+        final hh =
+            h * vals[i] / 100 / colors.length * (.72 + .1 * ((i + j) % 3));
+        y -= hh;
+        canvas.drawRect(Rect.fromLTWH(x, y, barW, hh - 1),
+            Paint()..color = colors[j].withOpacity(.82));
+      }
+      tp.text = TextSpan(
+          text: labels[i],
+          style: TextStyle(
+              color: const Color(0xFF64748B),
+              fontSize: 9,
+              fontWeight: FontWeight.w600));
+      tp.layout();
+      tp.paint(canvas, Offset(x + barW / 2 - tp.width / 2, size.height - 18));
     }
   }
+
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
@@ -15586,7 +19267,8 @@ class _MatchPitchNetworkPainter extends CustomPainter {
       return;
     }
 
-    Offset p(double x, double y) => Offset(field.left + field.width * x, field.top + field.height * y);
+    Offset p(double x, double y) =>
+        Offset(field.left + field.width * x, field.top + field.height * y);
     final pts = <int, Offset>{
       77: p(.24, .32),
       10: p(.47, .35),
@@ -15612,7 +19294,8 @@ class _MatchPitchNetworkPainter extends CustomPainter {
       return;
     }
 
-    Offset p(double x, double y) => Offset(field.left + field.width * y, field.top + field.height * x);
+    Offset p(double x, double y) =>
+        Offset(field.left + field.width * y, field.top + field.height * x);
     final pts = <int, Offset>{
       77: p(.24, .32),
       10: p(.47, .35),
@@ -15632,37 +19315,150 @@ class _MatchPitchNetworkPainter extends CustomPainter {
   }
 
   void _paintField(Canvas canvas, Rect field, {required bool verticalMode}) {
-    canvas.drawRect(field, Paint()..color = const Color(0xFF08751B));
-    final stripeCount = verticalMode ? 11 : 9;
+    final rrect = RRect.fromRectAndRadius(field, const Radius.circular(18));
+    final grass = Paint()
+      ..shader = const LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: <Color>[
+          Color(0xFF113D2A),
+          Color(0xFF0D5B33),
+          Color(0xFF0C6A3A),
+        ],
+      ).createShader(field);
+    canvas.drawRRect(rrect, grass);
+
+    canvas.save();
+    canvas.clipRRect(rrect);
+    final stripeCount = verticalMode ? 11 : 10;
     for (int i = 0; i < stripeCount; i++) {
-      canvas.drawRect(
-        Rect.fromLTWH(field.left, field.top + field.height * i / stripeCount, field.width, field.height / (stripeCount * 2)),
-        Paint()..color = const Color(0xFFFFFFFF).withOpacity(.08),
-      );
+      final stripe = Paint()
+        ..color = i.isEven
+            ? Colors.white.withOpacity(.035)
+            : Colors.black.withOpacity(.025);
+      if (verticalMode) {
+        final h = field.height / stripeCount;
+        canvas.drawRect(
+          Rect.fromLTWH(field.left, field.top + h * i, field.width, h),
+          stripe,
+        );
+      } else {
+        final w = field.width / stripeCount;
+        canvas.drawRect(
+          Rect.fromLTWH(field.left + w * i, field.top, w, field.height),
+          stripe,
+        );
+      }
     }
+    canvas.restore();
 
     final line = Paint()
-      ..color = const Color(0xFFFFFFFF)
+      ..color = Colors.white.withOpacity(.90)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.35;
-    canvas.drawRect(field, line);
+      ..strokeWidth = 1.25;
+    final thin = Paint()
+      ..color = Colors.white.withOpacity(.70)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = .9;
+
+    canvas.drawRRect(rrect, line);
 
     if (verticalMode) {
-      canvas.drawLine(Offset(field.left, field.center.dy), Offset(field.right, field.center.dy), line);
-      canvas.drawCircle(field.center, min(field.width, field.height) * .22, line);
+      canvas.drawLine(
+        Offset(field.left, field.center.dy),
+        Offset(field.right, field.center.dy),
+        line,
+      );
+      canvas.drawCircle(
+          field.center, min(field.width, field.height) * .22, line);
       final penaltyW = field.width * .68;
       final penaltyH = field.height * .15;
       final sixW = field.width * .38;
       final sixH = field.height * .07;
-      canvas.drawRect(Rect.fromLTWH(field.center.dx - penaltyW / 2, field.top, penaltyW, penaltyH), line);
-      canvas.drawRect(Rect.fromLTWH(field.center.dx - penaltyW / 2, field.bottom - penaltyH, penaltyW, penaltyH), line);
-      canvas.drawRect(Rect.fromLTWH(field.center.dx - sixW / 2, field.top, sixW, sixH), line);
-      canvas.drawRect(Rect.fromLTWH(field.center.dx - sixW / 2, field.bottom - sixH, sixW, sixH), line);
+      canvas.drawRect(
+        Rect.fromLTWH(
+          field.center.dx - penaltyW / 2,
+          field.top,
+          penaltyW,
+          penaltyH,
+        ),
+        line,
+      );
+      canvas.drawRect(
+        Rect.fromLTWH(
+          field.center.dx - penaltyW / 2,
+          field.bottom - penaltyH,
+          penaltyW,
+          penaltyH,
+        ),
+        line,
+      );
+      canvas.drawRect(
+        Rect.fromLTWH(
+          field.center.dx - sixW / 2,
+          field.top,
+          sixW,
+          sixH,
+        ),
+        thin,
+      );
+      canvas.drawRect(
+        Rect.fromLTWH(
+          field.center.dx - sixW / 2,
+          field.bottom - sixH,
+          sixW,
+          sixH,
+        ),
+        thin,
+      );
     } else {
-      canvas.drawLine(Offset(field.center.dx, field.top), Offset(field.center.dx, field.bottom), line);
+      canvas.drawLine(
+        Offset(field.center.dx, field.top),
+        Offset(field.center.dx, field.bottom),
+        line,
+      );
       canvas.drawCircle(field.center, field.height * .14, line);
-      canvas.drawRect(Rect.fromLTWH(field.left, field.top + field.height * .28, field.width * .16, field.height * .44), line);
-      canvas.drawRect(Rect.fromLTWH(field.right - field.width * .16, field.top + field.height * .28, field.width * .16, field.height * .44), line);
+      canvas.drawCircle(
+        field.center,
+        2.2,
+        Paint()..color = Colors.white.withOpacity(.92),
+      );
+      canvas.drawRect(
+        Rect.fromLTWH(
+          field.left,
+          field.top + field.height * .28,
+          field.width * .16,
+          field.height * .44,
+        ),
+        line,
+      );
+      canvas.drawRect(
+        Rect.fromLTWH(
+          field.right - field.width * .16,
+          field.top + field.height * .28,
+          field.width * .16,
+          field.height * .44,
+        ),
+        line,
+      );
+      canvas.drawRect(
+        Rect.fromLTWH(
+          field.left,
+          field.top + field.height * .40,
+          field.width * .055,
+          field.height * .20,
+        ),
+        thin,
+      );
+      canvas.drawRect(
+        Rect.fromLTWH(
+          field.right - field.width * .055,
+          field.top + field.height * .40,
+          field.width * .055,
+          field.height * .20,
+        ),
+        thin,
+      );
     }
   }
 
@@ -15671,10 +19467,23 @@ class _MatchPitchNetworkPainter extends CustomPainter {
       ..color = const Color(0xFFEBD33D).withOpacity(.86)
       ..strokeWidth = 1.55;
     for (final pair in const [
-      [77, 10], [10, 25], [25, 21], [10, 8], [8, 21], [77, 6], [6, 4],
-      [4, 3], [3, 2], [4, 55], [55, 30], [30, 2], [10, 4], [6, 10],
+      [77, 10],
+      [10, 25],
+      [25, 21],
+      [10, 8],
+      [8, 21],
+      [77, 6],
+      [6, 4],
+      [4, 3],
+      [3, 2],
+      [4, 55],
+      [55, 30],
+      [30, 2],
+      [10, 4],
+      [6, 10],
     ]) {
-      if (pts[pair[0]] != null && pts[pair[1]] != null) canvas.drawLine(pts[pair[0]]!, pts[pair[1]]!, pass);
+      if (pts[pair[0]] != null && pts[pair[1]] != null)
+        canvas.drawLine(pts[pair[0]]!, pts[pair[1]]!, pass);
     }
   }
 
@@ -15685,7 +19494,8 @@ class _MatchPitchNetworkPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
 
-    Offset mapPoint(Offset p) => Offset(field.left + field.width * p.dx, field.top + field.height * p.dy);
+    Offset mapPoint(Offset p) => Offset(
+        field.left + field.width * p.dx, field.top + field.height * p.dy);
 
     for (final entry in liveTrails.entries) {
       final points = entry.value.map(mapPoint).toList();
@@ -15697,28 +19507,36 @@ class _MatchPitchNetworkPainter extends CustomPainter {
       canvas.drawPath(path, trailPaint);
     }
 
-    final tp = TextPainter(textDirection: TextDirection.ltr, textAlign: TextAlign.center);
+    final tp = TextPainter(
+        textDirection: TextDirection.ltr, textAlign: TextAlign.center);
     for (final entry in livePositions.entries) {
       final id = entry.key;
       final pos = mapPoint(entry.value);
       final speed = liveSpeeds[id] ?? 0.0;
-      final color = speed >= 22 ? const Color(0xFFFFB000) : const Color(0xFF00A750);
+      final color =
+          speed >= 22 ? const Color(0xFFFFB000) : const Color(0xFF00A750);
       final radius = speed >= 22 ? 7.2 : 6.2;
-      canvas.drawCircle(pos, radius + 2.4, Paint()..color = Colors.white.withOpacity(.94));
+      canvas.drawCircle(
+          pos, radius + 2.4, Paint()..color = Colors.white.withOpacity(.94));
       canvas.drawCircle(pos, radius, Paint()..color = color);
       final outline = Paint()
         ..color = const Color(0xFF111827).withOpacity(.20)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1;
       canvas.drawCircle(pos, radius, outline);
-      tp.text = TextSpan(text: '$id', style: const TextStyle(color: Colors.white, fontSize: 8.2, fontWeight: FontWeight.w600));
+      tp.text = TextSpan(
+          text: '$id',
+          style: const TextStyle(
+              color: Colors.white, fontSize: 8.2, fontWeight: FontWeight.w600));
       tp.layout();
       tp.paint(canvas, pos - Offset(tp.width / 2, tp.height / 2));
     }
   }
 
-  void _paintPlayerDots(Canvas canvas, Map<int, Offset> pts, double radius, double fontSize) {
-    final tp = TextPainter(textDirection: TextDirection.ltr, textAlign: TextAlign.center);
+  void _paintPlayerDots(
+      Canvas canvas, Map<int, Offset> pts, double radius, double fontSize) {
+    final tp = TextPainter(
+        textDirection: TextDirection.ltr, textAlign: TextAlign.center);
     pts.forEach((n, o) {
       canvas.drawCircle(o, radius, Paint()..color = const Color(0xFF1D7DE0));
       final stroke = Paint()
@@ -15726,7 +19544,12 @@ class _MatchPitchNetworkPainter extends CustomPainter {
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.2;
       canvas.drawCircle(o, radius, stroke);
-      tp.text = TextSpan(text: '$n', style: TextStyle(color: Colors.white, fontSize: fontSize, fontWeight: FontWeight.w600));
+      tp.text = TextSpan(
+          text: '$n',
+          style: TextStyle(
+              color: Colors.white,
+              fontSize: fontSize,
+              fontWeight: FontWeight.w600));
       tp.layout();
       tp.paint(canvas, o - Offset(tp.width / 2, tp.height / 2));
     });
@@ -15745,42 +19568,155 @@ class _MatchVideoFieldPainter extends CustomPainter {
   const _MatchVideoFieldPainter({required this.tactical});
   @override
   void paint(Canvas canvas, Size size) {
-    canvas.drawRect(Offset.zero & size, Paint()..shader=LinearGradient(begin:Alignment.topCenter,end:Alignment.bottomCenter,colors:[const Color(0xFF293036),const Color(0xFF11320F)]).createShader(Offset.zero & size));
-    final field=Path()..moveTo(size.width*.04,size.height*.84)..lineTo(size.width*.96,size.height*.82)..lineTo(size.width*.72,size.height*.36)..lineTo(size.width*.22,size.height*.38)..close();
-    canvas.drawPath(field,Paint()..color=const Color(0xFF3C7B25));
-    final line=Paint()..color=const Color(0xFFFFFFFF)..strokeWidth=1.1;
-    for(int i=0;i<6;i++) canvas.drawLine(Offset(size.width*(.08+.12*i),size.height*(.82-.08*i)),Offset(size.width*(.92-.05*i),size.height*(.80-.09*i)),line);
-    final player=Paint()..color=tactical?const Color(0xFF1D7DE0):const Color(0xFFEED843);
-    for(int i=0;i<12;i++) canvas.drawCircle(Offset(size.width*(.18+(i%6)*.13),size.height*(.50+(i~/6)*.17+((i%2)*.04))),3.8,player);
+    canvas.drawRect(
+        Offset.zero & size,
+        Paint()
+          ..shader = LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [const Color(0xFF293036), const Color(0xFF11320F)])
+              .createShader(Offset.zero & size));
+    final field = Path()
+      ..moveTo(size.width * .04, size.height * .84)
+      ..lineTo(size.width * .96, size.height * .82)
+      ..lineTo(size.width * .72, size.height * .36)
+      ..lineTo(size.width * .22, size.height * .38)
+      ..close();
+    canvas.drawPath(field, Paint()..color = const Color(0xFF3C7B25));
+    final line = Paint()
+      ..color = const Color(0xFFFFFFFF)
+      ..strokeWidth = 1.1;
+    for (int i = 0; i < 6; i++)
+      canvas.drawLine(
+          Offset(size.width * (.08 + .12 * i), size.height * (.82 - .08 * i)),
+          Offset(size.width * (.92 - .05 * i), size.height * (.80 - .09 * i)),
+          line);
+    final player = Paint()
+      ..color = tactical ? const Color(0xFF1D7DE0) : const Color(0xFFEED843);
+    for (int i = 0; i < 12; i++)
+      canvas.drawCircle(
+          Offset(size.width * (.18 + (i % 6) * .13),
+              size.height * (.50 + (i ~/ 6) * .17 + ((i % 2) * .04))),
+          3.8,
+          player);
   }
+
   @override
-  bool shouldRepaint(covariant _MatchVideoFieldPainter oldDelegate)=>oldDelegate.tactical!=tactical;
+  bool shouldRepaint(covariant _MatchVideoFieldPainter oldDelegate) =>
+      oldDelegate.tactical != tactical;
 }
 
 class _MatchEventTimelinePainter extends CustomPainter {
   const _MatchEventTimelinePainter();
   @override
-  void paint(Canvas canvas, Size size){
-    final mid=size.height*.54,left=18.0,right=size.width-14; final line=Paint()..color=const Color(0xFFD8E2EA)..strokeWidth=1; canvas.drawLine(Offset(left,mid),Offset(right,mid),line); final tp=TextPainter(textDirection:TextDirection.ltr);
-    for(int m=0;m<=90;m+=15){final x=left+(right-left)*m/90; canvas.drawLine(Offset(x,mid-7),Offset(x,mid+7),line); tp.text=TextSpan(text:'$m',style:TextStyle(color:const Color(0xFF64748B),fontSize:9,fontWeight:FontWeight.w600)); tp.layout(); tp.paint(canvas,Offset(x-tp.width/2,mid-27));}
-    const ev=[12,27,33,45,61,74,81,85]; final colors=[const Color(0xFF27B84A),const Color(0xFF27B84A),const Color(0xFFE9C232),const Color(0xFF27B84A),const Color(0xFFE9C232),const Color(0xFF2097E8),const Color(0xFF2097E8),const Color(0xFFE9C232)];
-    for(int i=0;i<ev.length;i++){final x=left+(right-left)*ev[i]/90; canvas.drawCircle(Offset(x,mid+(i.isEven?22:-2)),4,Paint()..color=colors[i]);}
+  void paint(Canvas canvas, Size size) {
+    final mid = size.height * .54, left = 18.0, right = size.width - 14;
+    final line = Paint()
+      ..color = const Color(0xFFD8E2EA)
+      ..strokeWidth = 1;
+    canvas.drawLine(Offset(left, mid), Offset(right, mid), line);
+    final tp = TextPainter(textDirection: TextDirection.ltr);
+    for (int m = 0; m <= 90; m += 15) {
+      final x = left + (right - left) * m / 90;
+      canvas.drawLine(Offset(x, mid - 7), Offset(x, mid + 7), line);
+      tp.text = TextSpan(
+          text: '$m',
+          style: TextStyle(
+              color: const Color(0xFF64748B),
+              fontSize: 9,
+              fontWeight: FontWeight.w600));
+      tp.layout();
+      tp.paint(canvas, Offset(x - tp.width / 2, mid - 27));
+    }
+    const ev = [12, 27, 33, 45, 61, 74, 81, 85];
+    final colors = [
+      const Color(0xFF27B84A),
+      const Color(0xFF27B84A),
+      const Color(0xFFE9C232),
+      const Color(0xFF27B84A),
+      const Color(0xFFE9C232),
+      const Color(0xFF2097E8),
+      const Color(0xFF2097E8),
+      const Color(0xFFE9C232)
+    ];
+    for (int i = 0; i < ev.length; i++) {
+      final x = left + (right - left) * ev[i] / 90;
+      canvas.drawCircle(
+          Offset(x, mid + (i.isEven ? 22 : -2)), 4, Paint()..color = colors[i]);
+    }
   }
+
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate)=>false;
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 class _MatchBottomScrubberPainter extends CustomPainter {
   const _MatchBottomScrubberPainter();
   @override
-  void paint(Canvas canvas, Size size){
-    final left=10.0,right=size.width-28,y=size.height*.55; canvas.drawLine(Offset(left,y),Offset(right,y),Paint()..color=const Color(0xFFD8E2EA)..strokeWidth=2); canvas.drawLine(Offset(left,y),Offset(right*.82,y),Paint()..color=const Color(0xFF228BE6)..strokeWidth=3); final tp=TextPainter(textDirection:TextDirection.ltr);
-    for(int m=0;m<=90;m+=15){final x=left+(right-left)*m/90; canvas.drawLine(Offset(x,y-5),Offset(x,y+5),Paint()..color=const Color(0xFF94A3B8)); tp.text=TextSpan(text:'$m',style:TextStyle(color:const Color(0xFF64748B),fontSize:10,fontWeight:FontWeight.w600)); tp.layout(); tp.paint(canvas,Offset(x-tp.width/2,y+9));}
-    final ev=[12,30,45,61,66,74,81,85]; final colors=[const Color(0xFF94A3B8),const Color(0xFFE9C232),const Color(0xFF27B84A),const Color(0xFFE9C232),const Color(0xFF2097E8),const Color(0xFF27B84A),const Color(0xFFE9C232),const Color(0xFFD64545)]; for(int i=0;i<ev.length;i++){final x=left+(right-left)*ev[i]/90; canvas.drawCircle(Offset(x,y-14-(i%3)*6),3.2,Paint()..color=colors[i]);}
-    tp.text=TextSpan(text:'00:00',style:TextStyle(color:const Color(0xFF64748B),fontSize:11,fontWeight:FontWeight.w600)); tp.layout(); tp.paint(canvas,Offset(left,y-31)); tp.text=TextSpan(text:'90:00',style:TextStyle(color:const Color(0xFF64748B),fontSize:11,fontWeight:FontWeight.w600)); tp.layout(); tp.paint(canvas,Offset(right-tp.width,y-31));
+  void paint(Canvas canvas, Size size) {
+    final left = 10.0, right = size.width - 28, y = size.height * .55;
+    canvas.drawLine(
+        Offset(left, y),
+        Offset(right, y),
+        Paint()
+          ..color = const Color(0xFFD8E2EA)
+          ..strokeWidth = 2);
+    canvas.drawLine(
+        Offset(left, y),
+        Offset(right * .82, y),
+        Paint()
+          ..color = const Color(0xFF228BE6)
+          ..strokeWidth = 3);
+    final tp = TextPainter(textDirection: TextDirection.ltr);
+    for (int m = 0; m <= 90; m += 15) {
+      final x = left + (right - left) * m / 90;
+      canvas.drawLine(Offset(x, y - 5), Offset(x, y + 5),
+          Paint()..color = const Color(0xFF94A3B8));
+      tp.text = TextSpan(
+          text: '$m',
+          style: TextStyle(
+              color: const Color(0xFF64748B),
+              fontSize: 10,
+              fontWeight: FontWeight.w600));
+      tp.layout();
+      tp.paint(canvas, Offset(x - tp.width / 2, y + 9));
+    }
+    final ev = [12, 30, 45, 61, 66, 74, 81, 85];
+    final colors = [
+      const Color(0xFF94A3B8),
+      const Color(0xFFE9C232),
+      const Color(0xFF27B84A),
+      const Color(0xFFE9C232),
+      const Color(0xFF2097E8),
+      const Color(0xFF27B84A),
+      const Color(0xFFE9C232),
+      const Color(0xFFD64545)
+    ];
+    for (int i = 0; i < ev.length; i++) {
+      final x = left + (right - left) * ev[i] / 90;
+      canvas.drawCircle(
+          Offset(x, y - 14 - (i % 3) * 6), 3.2, Paint()..color = colors[i]);
+    }
+    tp.text = TextSpan(
+        text: '00:00',
+        style: TextStyle(
+            color: const Color(0xFF64748B),
+            fontSize: 11,
+            fontWeight: FontWeight.w600));
+    tp.layout();
+    tp.paint(canvas, Offset(left, y - 31));
+    tp.text = TextSpan(
+        text: '90:00',
+        style: TextStyle(
+            color: const Color(0xFF64748B),
+            fontSize: 11,
+            fontWeight: FontWeight.w600));
+    tp.layout();
+    tp.paint(canvas, Offset(right - tp.width, y - 31));
   }
+
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate)=>false;
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 class _ProKpi {
@@ -15817,13 +19753,17 @@ class _SportotekaPitchPainter extends CustomPainter {
       ..strokeWidth = 1.4
       ..style = PaintingStyle.stroke;
 
-    final rect = RRect.fromRectAndRadius(Offset.zero & size, const Radius.circular(22));
+    final rect =
+        RRect.fromRectAndRadius(Offset.zero & size, const Radius.circular(22));
     canvas.drawRRect(rect, bg);
 
     final inset = Rect.fromLTWH(14, 14, size.width - 28, size.height - 28);
-    canvas.drawRRect(RRect.fromRectAndRadius(inset, const Radius.circular(16)), line);
-    canvas.drawLine(Offset(14, size.height / 2), Offset(size.width - 14, size.height / 2), line);
-    canvas.drawCircle(Offset(size.width / 2, size.height / 2), min(size.width, size.height) * .16, line);
+    canvas.drawRRect(
+        RRect.fromRectAndRadius(inset, const Radius.circular(16)), line);
+    canvas.drawLine(Offset(14, size.height / 2),
+        Offset(size.width - 14, size.height / 2), line);
+    canvas.drawCircle(Offset(size.width / 2, size.height / 2),
+        min(size.width, size.height) * .16, line);
 
     final penaltyWidth = size.width * .56;
     final penaltyHeight = size.height * .16;
@@ -15831,25 +19771,30 @@ class _SportotekaPitchPainter extends CustomPainter {
     final goalBoxHeight = size.height * .075;
 
     canvas.drawRect(
-      Rect.fromLTWH((size.width - penaltyWidth) / 2, 14, penaltyWidth, penaltyHeight),
+      Rect.fromLTWH(
+          (size.width - penaltyWidth) / 2, 14, penaltyWidth, penaltyHeight),
       line,
     );
     canvas.drawRect(
-      Rect.fromLTWH((size.width - penaltyWidth) / 2, size.height - 14 - penaltyHeight, penaltyWidth, penaltyHeight),
+      Rect.fromLTWH((size.width - penaltyWidth) / 2,
+          size.height - 14 - penaltyHeight, penaltyWidth, penaltyHeight),
       line,
     );
     canvas.drawRect(
-      Rect.fromLTWH((size.width - goalBoxWidth) / 2, 14, goalBoxWidth, goalBoxHeight),
+      Rect.fromLTWH(
+          (size.width - goalBoxWidth) / 2, 14, goalBoxWidth, goalBoxHeight),
       line,
     );
     canvas.drawRect(
-      Rect.fromLTWH((size.width - goalBoxWidth) / 2, size.height - 14 - goalBoxHeight, goalBoxWidth, goalBoxHeight),
+      Rect.fromLTWH((size.width - goalBoxWidth) / 2,
+          size.height - 14 - goalBoxHeight, goalBoxWidth, goalBoxHeight),
       line,
     );
   }
 
   @override
-  bool shouldRepaint(covariant _SportotekaPitchPainter oldDelegate) => oldDelegate.primary != primary;
+  bool shouldRepaint(covariant _SportotekaPitchPainter oldDelegate) =>
+      oldDelegate.primary != primary;
 }
 
 class _TacticalLinesPainter extends CustomPainter {
@@ -15879,10 +19824,13 @@ class _TacticalLinesPainter extends CustomPainter {
       field,
     );
     canvas.drawRRect(
-      RRect.fromRectAndRadius(Rect.fromLTWH(10, 10, size.width - 20, size.height - 20), const Radius.circular(14)),
+      RRect.fromRectAndRadius(
+          Rect.fromLTWH(10, 10, size.width - 20, size.height - 20),
+          const Radius.circular(14)),
       line,
     );
-    canvas.drawLine(Offset(size.width / 2, 10), Offset(size.width / 2, size.height - 10), line);
+    canvas.drawLine(Offset(size.width / 2, 10),
+        Offset(size.width / 2, size.height - 10), line);
 
     final points = <Offset>[
       Offset(size.width * .18, size.height * .52),
@@ -15908,7 +19856,8 @@ class _TacticalLinesPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _TacticalLinesPainter oldDelegate) => oldDelegate.primary != primary;
+  bool shouldRepaint(covariant _TacticalLinesPainter oldDelegate) =>
+      oldDelegate.primary != primary;
 }
 
 class _EditorFieldBlock {
@@ -15968,7 +19917,6 @@ class _MatchMobileMoreItem extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(18),
-            
           ),
           child: Row(
             children: [
@@ -16042,8 +19990,6 @@ class _OverviewMetricData {
   });
 }
 
-
-
 class _MatchDetailNavItem {
   final String title;
   final String subtitle;
@@ -16055,7 +20001,6 @@ class _MatchDetailNavItem {
     required this.icon,
   });
 }
-
 
 class _MatchRailColors {
   static const Color rail = Color(0xFF111827);
@@ -16094,9 +20039,13 @@ class _MatchRailButtonState extends State<_MatchRailButton> {
         : _hovered
             ? _MatchRailColors.railHover
             : _MatchRailColors.railPanel;
-    final borderColor = widget.active ? _MatchRailColors.active : _MatchRailColors.border;
-    final fg = widget.active ? _MatchRailColors.activeText : _MatchRailColors.railText;
-    final textColor = widget.active ? _MatchRailColors.activeText : _MatchRailColors.railMuted;
+    final borderColor =
+        widget.active ? _MatchRailColors.active : _MatchRailColors.border;
+    final fg =
+        widget.active ? _MatchRailColors.activeText : _MatchRailColors.railText;
+    final textColor = widget.active
+        ? _MatchRailColors.activeText
+        : _MatchRailColors.railMuted;
     var label = widget.item.title;
     if (label == 'Основные ТТД') label = 'ТТД';
     if (label == 'Видеоанализ ИИ') label = 'ИИ';
@@ -16196,7 +20145,8 @@ class _MatchRailUtilityButton extends StatefulWidget {
   });
 
   @override
-  State<_MatchRailUtilityButton> createState() => _MatchRailUtilityButtonState();
+  State<_MatchRailUtilityButton> createState() =>
+      _MatchRailUtilityButtonState();
 }
 
 class _MatchRailUtilityButtonState extends State<_MatchRailUtilityButton> {
@@ -16210,9 +20160,12 @@ class _MatchRailUtilityButtonState extends State<_MatchRailUtilityButton> {
         : _hovered
             ? _MatchRailColors.railHover
             : _MatchRailColors.railPanel;
-    final borderColor = selected ? _MatchRailColors.active : _MatchRailColors.border;
-    final iconColor = selected ? _MatchRailColors.activeText : _MatchRailColors.railText;
-    final textColor = selected ? _MatchRailColors.activeText : _MatchRailColors.railMuted;
+    final borderColor =
+        selected ? _MatchRailColors.active : _MatchRailColors.border;
+    final iconColor =
+        selected ? _MatchRailColors.activeText : _MatchRailColors.railText;
+    final textColor =
+        selected ? _MatchRailColors.activeText : _MatchRailColors.railMuted;
     var label = widget.label;
     if (label.length > 7 && label.contains(':')) label = 'Счёт';
 
@@ -16413,8 +20366,10 @@ class _MatchSidebarButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bgColor = active ? const Color(0xFFF3FBF7) : Colors.transparent;
-    final iconColor = active ? const Color(0xFF28A86B) : const Color(0xFF6B7280);
-    final textColor = active ? const Color(0xFF0B0F14) : const Color(0xFF344054);
+    final iconColor =
+        active ? const Color(0xFF28A86B) : const Color(0xFF6B7280);
+    final textColor =
+        active ? const Color(0xFF0B0F14) : const Color(0xFF344054);
 
     return Material(
       color: bgColor,
@@ -16430,7 +20385,9 @@ class _MatchSidebarButton extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 10),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
-            border: active ? Border.all(color: const Color(0xFFDCEFE5), width: 1) : null,
+            border: active
+                ? Border.all(color: const Color(0xFFDCEFE5), width: 1)
+                : null,
           ),
           child: Row(
             children: [
@@ -16454,7 +20411,8 @@ class _MatchSidebarButton extends StatelessWidget {
                 Container(
                   width: 6,
                   height: 6,
-                  decoration: const BoxDecoration(color: Color(0xFF28A86B), shape: BoxShape.circle),
+                  decoration: const BoxDecoration(
+                      color: Color(0xFF28A86B), shape: BoxShape.circle),
                 ),
             ],
           ),
@@ -16512,7 +20470,8 @@ class _VideoTile extends StatelessWidget {
                     color: const Color(0xFFEFF8F3),
                     borderRadius: BorderRadius.circular(14),
                   ),
-                  child: Icon(Icons.play_arrow_rounded, color: primary, size: 22),
+                  child:
+                      Icon(Icons.play_arrow_rounded, color: primary, size: 22),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
@@ -16887,7 +20846,8 @@ class ChunkUploadService {
     if (!['mp4', 'mov', 'm4v', 'avi'].contains(ext)) {
       return {
         'success': false,
-        'message': 'Неподдерживаемый формат видео. Поддерживаются MP4, MOV, M4V и AVI. AVI после загрузки конвертируется сервером в MP4.',
+        'message':
+            'Неподдерживаемый формат видео. Поддерживаются MP4, MOV, M4V и AVI. AVI после загрузки конвертируется сервером в MP4.',
       };
     }
 
@@ -17001,7 +20961,11 @@ class ChunkUploadService {
       raf.closeSync();
     }
 
-    onProgress(0.98, ext == "avi" ? "Сборка и конвертация AVI в MP4..." : "Сборка файла на сервере...");
+    onProgress(
+        0.98,
+        ext == "avi"
+            ? "Сборка и конвертация AVI в MP4..."
+            : "Сборка файла на сервере...");
 
     String? thumbnailBase64;
     String? thumbnailName;

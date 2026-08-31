@@ -12,6 +12,7 @@ import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 
 import 'package:sportoteka/core/theme/app_typography.dart';
+import 'package:sportoteka/core/subscription/club_subscription_policy.dart';
 
 import 'package:sportoteka/core/utils/pref_utils.dart';
 import 'package:sportoteka/presentation/chat_screen/chat_screen.dart';
@@ -228,8 +229,17 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
   bool hasActiveSubscription = false;
   String subscriptionPlanCode = '';
 
-  bool get _isClubBasic =>
-      subscriptionPlanCode.trim().toLowerCase() == 'club_basic';
+  ClubSubscriptionTier get _clubSubscriptionTier => hasActiveSubscription
+      ? ClubSubscriptionPolicy.tierForPlan(subscriptionPlanCode)
+      : ClubSubscriptionTier.none;
+
+  bool get _isClubBasic => _clubSubscriptionTier == ClubSubscriptionTier.basic;
+
+  bool get _isClubAnalytics =>
+      _clubSubscriptionTier == ClubSubscriptionTier.analyticsAi;
+
+  bool get _isClubEquipment =>
+      _clubSubscriptionTier == ClubSubscriptionTier.equipment;
 
   List<Map<String, dynamic>> teams = [];
   List<Map<String, dynamic>> trainers = [];
@@ -2366,35 +2376,58 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
     });
   }
 
-  bool _canOpenWorkspaceSection(ClubSection section) {
-    // Календарь = рабочее расписание клуба/команды и входит в club_basic.
-    // Держим явное правило, чтобы никакой старый PRO-флаг в меню не
-    // мог закрыть переход на CmrCalendarPanel.
-    if (_isClubBasic && section == ClubSection.calendar) {
-      return true;
+  ClubSubscriptionTier _requiredTierForWorkspaceSection(
+    ClubSection section,
+  ) {
+    switch (section) {
+      case ClubSection.videoAnalysis:
+      case ClubSection.manager:
+        return ClubSubscriptionTier.analyticsAi;
+
+      case ClubSection.tracker:
+        return ClubSubscriptionTier.equipment;
+
+      default:
+        return ClubSubscriptionTier.none;
+    }
+  }
+
+  bool _isWorkspaceSectionLocked(ClubSection section) {
+    final required = _requiredTierForWorkspaceSection(section);
+
+    if (required == ClubSubscriptionTier.none) {
+      return false;
     }
 
-    if (_isClubBasic) {
-      const excludedFromBasic = <ClubSection>{
-        ClubSection.coachDashboard,
-        ClubSection.tracker,
-        ClubSection.videoAnalysis,
-        ClubSection.videoLessons,
-        ClubSection.manager,
-      };
-      if (excludedFromBasic.contains(section)) {
-        Get.snackbar(
-          'Базовая подписка',
-          'Раздел «${_titleFor(section)}» не входит в базовый тариф.',
-        );
-        return false;
-      }
+    return !ClubSubscriptionPolicy.atLeast(
+      _clubSubscriptionTier,
+      required,
+    );
+  }
+
+  bool _canOpenWorkspaceSection(ClubSection section) {
+    final required = _requiredTierForWorkspaceSection(section);
+
+    if (required != ClubSubscriptionTier.none &&
+        _isWorkspaceSectionLocked(section)) {
+      Get.snackbar(
+        'Доступ по подписке',
+        'Раздел «${_titleFor(section)}» доступен начиная с тарифа '
+            '«${ClubSubscriptionPolicy.titleForTier(required)}». '
+            'Текущий тариф: '
+            '«${ClubSubscriptionPolicy.titleForTier(_clubSubscriptionTier)}».',
+      );
+      return false;
     }
 
     if (section == ClubSection.tracker && !_hasTeam) {
-      Get.snackbar('Команда', 'Сначала выберите команду');
+      Get.snackbar(
+        'Команда',
+        'Сначала выберите команду',
+      );
       return false;
     }
+
     return true;
   }
 
@@ -2431,37 +2464,45 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
     return null;
   }
 
-  void _openModuleWindow(ClubSection section) {
-    if (section == ClubSection.settings) {
-      _openWorkspaceSettings();
+ void _openModuleWindow(ClubSection section) {
+  // Редактор схем сразу открываем полноценным экраном.
+  if (section == ClubSection.graphics) {
+    _openFullGraphics();
+    return;
+  }
+
+  if (section == ClubSection.settings) {
+    _openWorkspaceSettings();
+    return;
+  }
+
+  if (!_canOpenWorkspaceSection(section)) return;
+
+  final existing = _workspaceWindowFor(section);
+
+  setState(() {
+    selectedSection = section;
+    panelLoading = false;
+
+    if (existing != null) {
+      existing.minimized = false;
+      existing.zIndex = ++_workspaceWindowZCounter;
       return;
     }
 
-    if (!_canOpenWorkspaceSection(section)) return;
+    final offset = (_openWorkspaceWindows.length % 6) * 34.0;
 
-    final existing = _workspaceWindowFor(section);
-    setState(() {
-      selectedSection = section;
-      panelLoading = false;
-
-      if (existing != null) {
-        existing.minimized = false;
-        existing.zIndex = ++_workspaceWindowZCounter;
-        return;
-      }
-
-      final offset = (_openWorkspaceWindows.length % 6) * 34.0;
-      _openWorkspaceWindows.add(
-        _WorkspaceWindowState(
-          id: 'window_${section.name}_${DateTime.now().microsecondsSinceEpoch}',
-          section: section,
-          position: Offset(72 + offset, 52 + offset),
-          size: const Size(1040, 680),
-          zIndex: ++_workspaceWindowZCounter,
-        ),
-      );
-    });
-  }
+    _openWorkspaceWindows.add(
+      _WorkspaceWindowState(
+        id: 'window_${section.name}_${DateTime.now().microsecondsSinceEpoch}',
+        section: section,
+        position: Offset(72 + offset, 52 + offset),
+        size: const Size(1040, 680),
+        zIndex: ++_workspaceWindowZCounter,
+      ),
+    );
+  });
+}
 
   void _bringWorkspaceWindowToFront(_WorkspaceWindowState window) {
     setState(() {
@@ -3839,19 +3880,37 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
   }
 
   double _mobileBottomDockInset(BuildContext context) {
-    final bottom = MediaQuery.paddingOf(context).bottom;
-    return bottom > 0 ? math.max(12.0, math.min(16.0, bottom * .45)) : 10.0;
+    final media = MediaQuery.of(context);
+
+    // На Android системная navigation bar может быть заметно выше обычного
+    // home indicator (3 кнопки, gesture area, оболочка производителя).
+    // viewPadding сохраняет реальный системный inset даже при edge-to-edge.
+    final isAndroid = defaultTargetPlatform == TargetPlatform.android;
+    final systemBottom =
+        math.max(media.viewPadding.bottom, media.padding.bottom);
+    final gestureBottom = media.systemGestureInsets.bottom;
+    final protectedBottom =
+        isAndroid ? math.max(systemBottom, gestureBottom) : systemBottom;
+
+    // Android: полностью поднимаем dock над системной навигацией.
+    // iOS: оставляем компактный зазор над home indicator.
+    return isAndroid
+        ? math.max(5.0, protectedBottom + 2.0)
+        : protectedBottom > 0
+            ? math.min(11.0, protectedBottom * .34)
+            : 8.0;
   }
 
   double _mobileBottomDockReservedHeight(BuildContext context) {
-    const dockHeight = 56.0;
-    const breathingRoom = 10.0;
+    const dockHeight = 54.0;
+    const breathingRoom = 8.0;
     return dockHeight + _mobileBottomDockInset(context) + breathingRoom;
   }
 
   Widget _buildMobileBottomNav() {
-    final width = MediaQuery.of(context).size.width;
-    final horizontal = width < 380 ? 14.0 : 22.0;
+    final media = MediaQuery.of(context);
+    final width = media.size.width;
+    final horizontal = width < 380 ? 8.0 : 12.0;
     final activeIndex = _mobileBottomMenuIndex();
 
     Widget dockIcon({
@@ -3869,10 +3928,10 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 170),
               curve: Curves.easeOutCubic,
-              width: active ? 44 : 34,
+              width: active ? 42 : 37,
               height: 36,
               decoration: BoxDecoration(
-                color: active ? const Color(0xB8EAF8F0) : Colors.transparent,
+                color: active ? const Color(0xFFDDF2E6) : Colors.transparent,
                 borderRadius: BorderRadius.circular(999),
               ),
               child: Stack(
@@ -3881,33 +3940,37 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
                 children: [
                   Icon(
                     icon,
-                    size: active ? 22 : 21,
+                    size: active ? 21 : 20,
                     color: active
-                        ? const Color(0xFF111827)
-                        : const Color(0xFF344054),
+                        ? const Color(0xFF067A46)
+                        : const Color(0xFF475467),
                   ),
                   if (badge > 0)
                     Positioned(
-                      top: 1,
-                      right: active ? 6 : 0,
+                      top: 0,
+                      right: active ? 5 : -1,
                       child: Container(
-                        constraints:
-                            const BoxConstraints(minWidth: 16, minHeight: 16),
+                        constraints: const BoxConstraints(
+                          minWidth: 17,
+                          minHeight: 17,
+                        ),
                         padding: const EdgeInsets.symmetric(horizontal: 4),
                         decoration: BoxDecoration(
                           color: const Color(0xFFFF0050),
                           borderRadius: BorderRadius.circular(999),
-                          border: Border.all(color: Colors.white, width: 1.6),
+                          border: Border.all(
+                            color: const Color(0xFFF0F4F1),
+                            width: 1.7,
+                          ),
                         ),
-                        child: Center(
-                          child: Text(
-                            badge > 99 ? '99+' : '$badge',
-                            style: const TextStyle(
-                              fontSize: 8.5,
-                              height: 1,
-                              fontWeight: FontWeight.w900,
-                              color: Colors.white,
-                            ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          badge > 99 ? '99+' : '$badge',
+                          style: const TextStyle(
+                            fontSize: 8.5,
+                            height: 1,
+                            fontWeight: FontWeight.w900,
+                            color: Colors.white,
                           ),
                         ),
                       ),
@@ -3920,38 +3983,44 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
       );
     }
 
-    // В Workspace панель должна быть чуть выше края, иначе выглядит прилипшей к низу.
-    // Держим её ниже, чем старый вариант, но выше текущего слишком низкого положения.
     final bottomInset = _mobileBottomDockInset(context);
 
     return SafeArea(
       top: false,
       bottom: false,
       child: Padding(
-        padding: EdgeInsets.fromLTRB(horizontal, 0, horizontal, bottomInset),
+        padding: EdgeInsets.fromLTRB(
+          horizontal,
+          0,
+          horizontal,
+          bottomInset,
+        ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(30),
+          borderRadius: BorderRadius.circular(21),
           child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 26, sigmaY: 26),
+            filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
             child: Container(
-              height: 56,
-              padding: const EdgeInsets.symmetric(horizontal: 7),
+              height: 54,
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(.72),
-                borderRadius: BorderRadius.circular(30),
-                border:
-                    Border.all(color: Colors.white.withOpacity(.92), width: .9),
+                // Тот же серо-зелёный мобильный dock, что и в профиле.
+                color: const Color(0xFFF0F4F1).withOpacity(.97),
+                borderRadius: BorderRadius.circular(21),
+                border: Border.all(
+                  color: const Color(0xFFDCE6E0),
+                  width: 1,
+                ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(.10),
-                    blurRadius: 30,
-                    spreadRadius: -12,
-                    offset: const Offset(0, 14),
+                    color: Colors.black.withOpacity(.12),
+                    blurRadius: 26,
+                    spreadRadius: -10,
+                    offset: const Offset(0, 12),
                   ),
                   BoxShadow(
-                    color: Colors.black.withOpacity(.04),
-                    blurRadius: 8,
-                    spreadRadius: -5,
+                    color: const Color(0xFF067A46).withOpacity(.05),
+                    blurRadius: 12,
+                    spreadRadius: -7,
                     offset: const Offset(0, 3),
                   ),
                 ],
@@ -3959,31 +4028,36 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
               child: Row(
                 children: [
                   dockIcon(
-                      index: 0,
-                      icon: Icons.home_rounded,
-                      onTap: () => _activateInlineSection(ClubSection.teams)),
+                    index: 0,
+                    icon: Icons.home_rounded,
+                    onTap: () => _activateInlineSection(ClubSection.teams),
+                  ),
                   dockIcon(
-                      index: 1,
-                      icon: Icons.groups_2_outlined,
-                      onTap: () => _activateInlineSection(ClubSection.roster)),
+                    index: 1,
+                    icon: Icons.groups_2_outlined,
+                    onTap: () => _activateInlineSection(ClubSection.roster),
+                  ),
                   dockIcon(
-                      index: 2,
-                      icon: Icons.sports_soccer_outlined,
-                      onTap: () => _activateInlineSection(ClubSection.matches)),
+                    index: 2,
+                    icon: Icons.sports_soccer_outlined,
+                    onTap: () => _activateInlineSection(ClubSection.matches),
+                  ),
                   dockIcon(
-                      index: 3,
-                      icon: Icons.calendar_month_outlined,
-                      onTap: () =>
-                          _activateInlineSection(ClubSection.calendar)),
+                    index: 3,
+                    icon: Icons.calendar_month_outlined,
+                    onTap: () => _activateInlineSection(ClubSection.calendar),
+                  ),
                   dockIcon(
-                      index: 4,
-                      icon: Icons.forum_outlined,
-                      badge: _chatUnreadCount,
-                      onTap: () => _activateInlineSection(ClubSection.chat)),
+                    index: 4,
+                    icon: Icons.forum_outlined,
+                    badge: _chatUnreadCount,
+                    onTap: () => _activateInlineSection(ClubSection.chat),
+                  ),
                   dockIcon(
-                      index: 5,
-                      icon: Icons.more_horiz_rounded,
-                      onTap: _openMobileMoreMenu),
+                    index: 5,
+                    icon: Icons.more_horiz_rounded,
+                    onTap: _openMobileMoreMenu,
+                  ),
                 ],
               ),
             ),

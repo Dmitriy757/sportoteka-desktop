@@ -648,7 +648,11 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
       }
 
       if (!mounted) return;
-      Navigator.pop(context, {"deleted": true});
+      if (widget.embedded) {
+        widget.onClose?.call();
+      } else {
+        Navigator.pop(context, {"deleted": true});
+      }
     } catch (e) {
       _snack("Ошибка удаления: $e");
     }
@@ -1184,27 +1188,26 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
                 tag: hero,
                 child: Container(
                   color: Colors.black,
-                  child: AspectRatio(
-                    aspectRatio: 16 / 10,
-                    child: Image.network(
-                      url,
-                      fit: BoxFit.contain,
-                      errorBuilder: (_, __, ___) => Container(
-                        color: Colors.grey.shade200,
-                        child: const Center(child: Icon(Icons.broken_image)),
-                      ),
-                      loadingBuilder: (c, child, p) {
-                        if (p == null) return child;
-                        return const Center(
-                          child: Padding(
-                            padding: EdgeInsets.all(18),
-                            child: CircularProgressIndicator(
-                              color: NewsPalette.primaryGreen,
-                            ),
-                          ),
-                        );
-                      },
+                  child: Image.network(
+                    url,
+                    width: double.infinity,
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) => Container(
+                      constraints: const BoxConstraints(minHeight: 180),
+                      color: Colors.grey.shade200,
+                      child: const Center(child: Icon(Icons.broken_image)),
                     ),
+                    loadingBuilder: (c, child, p) {
+                      if (p == null) return child;
+                      return const SizedBox(
+                        height: 220,
+                        child: Center(
+                          child: CircularProgressIndicator(
+                            color: NewsPalette.primaryGreen,
+                          ),
+                        ),
+                      );
+                    },
                   ),
                 ),
               ),
@@ -1480,19 +1483,30 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
                           tag: heroNews,
                           child: Container(
                             width: double.infinity,
-                            color: Colors.black,
-                            child: AspectRatio(
-                              aspectRatio: screenWidth >= 720 ? 2.1 : 16 / 9,
-                              child: Image.network(
-                                cover,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => Container(
-                                  color: Colors.grey.shade200,
-                                  child: const Center(
-                                    child: Icon(Icons.broken_image),
-                                  ),
+                            color: const Color(0xFFF4F5F4),
+                            child: Image.network(
+                              cover,
+                              width: double.infinity,
+                              fit: BoxFit.contain,
+                              errorBuilder: (_, __, ___) => Container(
+                                constraints: const BoxConstraints(minHeight: 220),
+                                color: Colors.grey.shade200,
+                                child: const Center(
+                                  child: Icon(Icons.broken_image),
                                 ),
                               ),
+                              loadingBuilder: (context, child, progress) {
+                                if (progress == null) return child;
+                                return const SizedBox(
+                                  height: 260,
+                                  child: Center(
+                                    child: CircularProgressIndicator(
+                                      color: NewsPalette.primaryGreen,
+                                      strokeWidth: 2,
+                                    ),
+                                  ),
+                                );
+                              },
                             ),
                           ),
                         ),
@@ -2197,17 +2211,17 @@ class _ThreadNode extends StatelessWidget {
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(14),
                         child: Container(
-                          color: Colors.black,
-                          child: AspectRatio(
-                            aspectRatio: 16 / 10,
-                            child: Image.network(
-                              imgUrl,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => Container(
-                                color: Colors.grey.shade200,
-                                child: const Center(
-                                  child: Icon(Icons.broken_image),
-                                ),
+                          width: double.infinity,
+                          color: const Color(0xFFF4F5F4),
+                          child: Image.network(
+                            imgUrl,
+                            width: double.infinity,
+                            fit: BoxFit.contain,
+                            errorBuilder: (_, __, ___) => Container(
+                              constraints: const BoxConstraints(minHeight: 140),
+                              color: Colors.grey.shade200,
+                              child: const Center(
+                                child: Icon(Icons.broken_image),
                               ),
                             ),
                           ),

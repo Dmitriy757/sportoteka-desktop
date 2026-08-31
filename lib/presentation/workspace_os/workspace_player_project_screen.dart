@@ -13,6 +13,7 @@ class SportotekaPlayerProjectScreen extends StatelessWidget {
     this.onRefresh,
     this.onOpenLegacyProfile,
     this.onClose,
+    this.currentUserId = 0,
   });
 
   final Map<String, dynamic> player;
@@ -22,6 +23,7 @@ class SportotekaPlayerProjectScreen extends StatelessWidget {
   final Future<void> Function()? onRefresh;
   final VoidCallback? onOpenLegacyProfile;
   final VoidCallback? onClose;
+  final int currentUserId;
 
   static const _green = Color(0xFF0B8F55);
   static const _text = Color(0xFF101814);
@@ -102,6 +104,7 @@ class SportotekaPlayerProjectScreen extends StatelessWidget {
             teamId: teamId,
             teamName: teamName,
             section: file.section,
+            currentUserId: currentUserId,
             onRefresh: onRefresh,
           )
         : WorkspacePlayerSectionBrowser(
@@ -111,6 +114,7 @@ class SportotekaPlayerProjectScreen extends StatelessWidget {
             teamName: teamName,
             section: file.section,
             createOnOpen: createNote,
+            currentUserId: currentUserId,
             onRefresh: onRefresh,
           );
 

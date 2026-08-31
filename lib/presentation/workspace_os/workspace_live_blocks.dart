@@ -138,25 +138,44 @@ class WorkspaceLiveBlocksRepository {
   final String documentKey;
 
   static String _prefsKey(String key) => 'sportoteka_workspace_live_blocks_v1_$key';
+  static String _pendingKey(String key) => 'sportoteka_workspace_live_blocks_pending_v1_$key';
 
   Future<List<WorkspaceLiveBlock>> load() async {
     final prefs = await SharedPreferences.getInstance();
-    List<WorkspaceLiveBlock> local = _decode(prefs.getString(_prefsKey(documentKey)) ?? '');
+    final localRaw = prefs.getString(_prefsKey(documentKey)) ?? '';
+    final local = _decode(localRaw);
+    final pending = prefs.getBool(_pendingKey(documentKey)) ?? false;
 
     final clubId = await PrefUtils.getUserClubId() ?? 0;
     final userId = await PrefUtils.getUserId() ?? 0;
     if (clubId <= 0) return local;
 
+    final storage = WorkspaceServerStorage(clubId: clubId, userId: userId);
+
+    // A pending local edit must never be replaced by an older server snapshot.
+    if (pending) {
+      try {
+        await storage.saveLiveBlocks(
+          documentKey: documentKey,
+          blocksJson: localRaw.trim().isEmpty ? '[]' : localRaw,
+        );
+        await prefs.setBool(_pendingKey(documentKey), false);
+      } catch (_) {
+        return local;
+      }
+      return local;
+    }
+
     try {
-      final storage = WorkspaceServerStorage(clubId: clubId, userId: userId);
       final raw = await storage.loadLiveBlocks(documentKey);
       final server = _decode(raw);
-      if (server.isNotEmpty) {
-        await prefs.setString(_prefsKey(documentKey), raw);
-        return server;
-      }
+      await prefs.setString(_prefsKey(documentKey), raw);
+      if (server.isNotEmpty) return server;
       if (raw.trim() == '[]' && local.isNotEmpty) {
-        await storage.saveLiveBlocks(documentKey: documentKey, blocksJson: jsonEncode(local.map((e) => e.toJson()).toList()));
+        await storage.saveLiveBlocks(
+          documentKey: documentKey,
+          blocksJson: jsonEncode(local.map((e) => e.toJson()).toList()),
+        );
         return local;
       }
       if (raw.trim() == '[]') return <WorkspaceLiveBlock>[];
@@ -168,15 +187,17 @@ class WorkspaceLiveBlocksRepository {
     final raw = jsonEncode(blocks.map((e) => e.toJson()).toList());
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_prefsKey(documentKey), raw);
+    await prefs.setBool(_pendingKey(documentKey), true);
 
     final clubId = await PrefUtils.getUserClubId() ?? 0;
     final userId = await PrefUtils.getUserId() ?? 0;
     if (clubId <= 0) return;
+    final storage = WorkspaceServerStorage(clubId: clubId, userId: userId);
     try {
-      final storage = WorkspaceServerStorage(clubId: clubId, userId: userId);
       await storage.saveLiveBlocks(documentKey: documentKey, blocksJson: raw);
-    } catch (_) {
-      // Local cache remains authoritative until Phase 26 server API is deployed.
+      await prefs.setBool(_pendingKey(documentKey), false);
+    } catch (e) {
+      throw Exception('Блоки документа сохранены локально, но не синхронизированы с сервером: $e');
     }
   }
 

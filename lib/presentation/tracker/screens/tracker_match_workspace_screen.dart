@@ -1920,18 +1920,18 @@ class _TrackerMatchWorkspaceScreenState
             _fieldCalibrationEditingIndex!.clamp(0, 3)
           ];
     final instruction = editingLabel != null
-        ? 'Точка $editingLabel выбрана — нажмите новое место на карте.'
+        ? 'Точка $editingLabel активна — перетащите её или нажмите новое место на карте.'
         : (showingSavedCalibration
             ? 'Поле сохранено. Для изменения нажмите «Перекалибровать».'
             : (_fieldCalibrationRectangleMode
-            ? (_calibrationCorners.isEmpty
-                ? '1. Нажмите первый угол прямоугольника'
-                : (_calibrationCorners.length == 1
-                    ? '2. Нажмите противоположный угол'
-                    : 'Контур готов — сохраните поле'))
-            : (_calibrationCorners.length >= 4
-                ? 'Контур готов — сохраните поле'
-                : 'Нажмите угол ${const ['A', 'B', 'C', 'D'][_calibrationCorners.length.clamp(0, 3)]}')));
+                ? (_calibrationCorners.isEmpty
+                    ? '1. Нажмите первый угол прямоугольника'
+                    : (_calibrationCorners.length == 1
+                        ? '2. Нажмите противоположный угол'
+                        : 'Контур готов — точки можно перетаскивать для точной настройки'))
+                : (_calibrationCorners.length >= 4
+                    ? 'Контур готов — перетаскивайте A–D для точной настройки'
+                    : 'Нажмите угол ${const ['A', 'B', 'C', 'D'][_calibrationCorners.length.clamp(0, 3)]}')));
 
     Widget modeButton({
       required String label,

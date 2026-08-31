@@ -89,6 +89,7 @@ class _SportotekaWorkspaceFinderPanelState
   final Map<String, List<WorkspaceFinderNode>> _localChildren =
       <String, List<WorkspaceFinderNode>>{};
   final Map<String, String> _noteBodies = <String, String>{};
+  final Set<String> _pendingSyncIds = <String>{};
   final List<WorkspaceWindowEntry> _windows = <WorkspaceWindowEntry>[];
   String? _activeWindowId;
   int _windowCascade = 0;
@@ -133,6 +134,7 @@ class _SportotekaWorkspaceFinderPanelState
 
   WorkspaceRootDataBridge get _rootDataBridge => WorkspaceRootDataBridge(
         clubId: widget.clubId,
+        currentUserId: widget.currentUserId,
         teams: widget.teams,
         players: widget.players,
         trainers: widget.trainers,
@@ -142,10 +144,21 @@ class _SportotekaWorkspaceFinderPanelState
 
   String get _storageKey => 'sportoteka_finder_v1_${widget.clubId}';
 
+  void _wsLog(String message) {
+    debugPrint(
+      '[WORKSPACE_SYNC][FINDER] club=${widget.clubId} user=${widget.currentUserId} '
+      'folder=$_folderKey pending=${_pendingSyncIds.length} $message',
+    );
+  }
+
   @override
   void initState() {
     super.initState();
     _serverStorage = WorkspaceServerStorage(clubId: widget.clubId, userId: widget.currentUserId);
+    _wsLog('INIT api=${_serverStorage.apiUrl}');
+    if (widget.currentUserId <= 0) {
+      _wsLog('WARNING currentUserId <= 0: server access may fail');
+    }
     _loadWorkspace();
   }
 
@@ -204,28 +217,111 @@ class _SportotekaWorkspaceFinderPanelState
   }
 
   Future<void> _loadWorkspace() async {
+    _wsLog('LOAD_WORKSPACE begin');
     await _loadLocalWorkspace();
+    _wsLog('LOAD_WORKSPACE local loaded nodes=${_localChildren.values.fold<int>(0, (sum, list) => sum + list.length)} notes=${_noteBodies.length} pending=${_pendingSyncIds.toList()}');
     await _loadServerWorkspace();
+    _wsLog('LOAD_WORKSPACE end serverAvailable=$_serverAvailable pending=${_pendingSyncIds.toList()}');
   }
 
   Future<void> _loadServerWorkspace() async {
     if (_serverLoading) return;
     _serverLoading = true;
+    _wsLog('SERVER_LOAD begin pending=${_pendingSyncIds.toList()}');
     try {
       var snapshot = await _serverStorage.load();
+      _wsLog('SERVER_LOAD bootstrap OK nodes=${snapshot.nodes.length} docs=${snapshot.noteBodies.length}');
       final localNodes = <WorkspaceFinderNode>[
         for (final list in _localChildren.values) ...list,
       ];
-      final serverIds = snapshot.nodes.map((e) => e.id).toSet();
-      final unsynced = localNodes.where((e) => !serverIds.contains(e.id)).toList();
-      if (unsynced.isNotEmpty) {
-        await _serverStorage.migrateLocal(nodes: unsynced, noteBodies: _noteBodies);
-        snapshot = await _serverStorage.load();
+      final localById = <String, WorkspaceFinderNode>{for (final node in localNodes) node.id: node};
+      final serverById = <String, WorkspaceFinderNode>{for (final node in snapshot.nodes) node.id: node};
+      final retryIds = <String>{..._pendingSyncIds};
+
+      // New local nodes that never reached the server are always retried.
+      for (final node in localNodes) {
+        final wasServerMirror = node.payload?['_workspace_server'] == true;
+        if (!serverById.containsKey(node.id) && (!wasServerMirror || _pendingSyncIds.contains(node.id))) {
+          retryIds.add(node.id);
+        }
       }
+
+      // Migration for documents created by older app versions: if the same ID
+      // exists on the server but the local body is newer, do not let bootstrap
+      // overwrite it. Mark it as pending and push it first.
+      for (final node in localNodes.where((n) => n.kind == WorkspaceFinderNodeKind.note)) {
+        final serverNode = serverById[node.id];
+        if (serverNode == null) continue;
+        final localBody = _noteBodies[node.id] ?? '';
+        final serverBody = snapshot.noteBodies[node.id] ?? '';
+        if (localBody == serverBody) continue;
+        final localUpdated = node.updatedAt;
+        final serverUpdated = serverNode.updatedAt;
+        final localLooksNewer = localUpdated != null &&
+            (serverUpdated == null || !localUpdated.isBefore(serverUpdated.subtract(const Duration(seconds: 5))));
+        if (localLooksNewer) retryIds.add(node.id);
+      }
+
+      var changedServer = false;
+      for (final id in retryIds.toList()) {
+        final node = localById[id];
+        if (node == null) {
+          _pendingSyncIds.remove(id);
+          continue;
+        }
+        _wsLog('SERVER_RETRY uid=$id kind=${node.kind.name} bodyLen=${(_noteBodies[id] ?? '').length} existsOnServer=${serverById.containsKey(id)}');
+        try {
+          if (node.kind == WorkspaceFinderNodeKind.note) {
+            await _serverStorage.syncNodeDocument(
+              node: node,
+              body: _noteBodies[id] ?? '',
+              createHint: !serverById.containsKey(id),
+            );
+          } else if (serverById.containsKey(id)) {
+            try {
+              await _serverStorage.updateNode(node);
+            } catch (_) {
+              await _serverStorage.createNode(node);
+            }
+          } else {
+            try {
+              await _serverStorage.createNode(node);
+            } catch (_) {
+              await _serverStorage.updateNode(node);
+            }
+          }
+          _pendingSyncIds.remove(id);
+          changedServer = true;
+          _wsLog('SERVER_RETRY OK uid=$id');
+        } catch (e, st) {
+          _pendingSyncIds.add(id);
+          _wsLog('SERVER_RETRY FAILED uid=$id error=$e');
+          _wsLog('SERVER_RETRY stack=${st.toString().split('\n').take(4).join(' | ')}');
+        }
+      }
+
+      if (changedServer) snapshot = await _serverStorage.load();
+
       final grouped = <String, List<WorkspaceFinderNode>>{};
       for (final node in snapshot.nodes) {
         (grouped[node.parentId ?? 'home'] ??= <WorkspaceFinderNode>[]).add(node);
       }
+      final mergedNotes = <String, String>{...snapshot.noteBodies};
+
+      // Pending local edits stay visible and cannot be replaced by an older
+      // server copy. They will be retried on the next refresh/save.
+      for (final id in _pendingSyncIds) {
+        final local = localById[id];
+        if (local == null) continue;
+        for (final list in grouped.values) {
+          list.removeWhere((item) => item.id == id);
+        }
+        (grouped[local.parentId ?? 'home'] ??= <WorkspaceFinderNode>[]).add(local);
+        if (local.kind == WorkspaceFinderNodeKind.note) {
+          mergedNotes[id] = _noteBodies[id] ?? '';
+        }
+      }
+
       if (!mounted) return;
       setState(() {
         _serverAvailable = true;
@@ -234,7 +330,7 @@ class _SportotekaWorkspaceFinderPanelState
           ..addAll(grouped);
         _noteBodies
           ..clear()
-          ..addAll(snapshot.noteBodies);
+          ..addAll(mergedNotes);
         if (snapshot.favorites.isNotEmpty) {
           _favoriteIds
             ..clear()
@@ -247,9 +343,12 @@ class _SportotekaWorkspaceFinderPanelState
         }
       });
       await _persistLocalWorkspace();
-    } catch (_) {
-      // Серверная Workspace FS ещё не развёрнута или временно недоступна.
-      // Продолжаем работать на локальном кеше без потери данных.
+    } catch (e, st) {
+      _serverAvailable = false;
+      _wsLog('SERVER_LOAD FAILED error=$e');
+      _wsLog('SERVER_LOAD stack=${st.toString().split('\n').take(5).join(' | ')}');
+      // Keep the local cache and pending queue intact. No local document is
+      // replaced when the server is unavailable.
     } finally {
       _serverLoading = false;
     }
@@ -287,6 +386,7 @@ class _SportotekaWorkspaceFinderPanelState
 
       final favoriteRaw = decoded['favorites'];
       final recentRaw = decoded['recent'];
+      final pendingRaw = decoded['pendingSyncIds'];
       final viewRaw = '${decoded['viewMode'] ?? ''}';
       if (!mounted) return;
       setState(() {
@@ -302,6 +402,9 @@ class _SportotekaWorkspaceFinderPanelState
         _recentIds
           ..clear()
           ..addAll(recentRaw is List ? recentRaw.map((e) => '$e') : const <String>[]);
+        _pendingSyncIds
+          ..clear()
+          ..addAll(pendingRaw is List ? pendingRaw.map((e) => '$e') : const <String>[]);
         _viewMode = WorkspaceFinderViewMode.list;
       });
     } catch (_) {
@@ -361,6 +464,7 @@ class _SportotekaWorkspaceFinderPanelState
         'noteBodies': _noteBodies,
         'favorites': _favoriteIds.toList(),
         'recent': _recentIds,
+        'pendingSyncIds': _pendingSyncIds.toList(),
         'viewMode': _viewMode.name,
       };
       await prefs.setString(_storageKey, jsonEncode(data));
@@ -377,27 +481,27 @@ class _SportotekaWorkspaceFinderPanelState
   }
 
   Future<void> _serverCreateNode(WorkspaceFinderNode node) async {
-    if (!_serverAvailable) return;
     try {
       await _serverStorage.createNode(node);
+      _serverAvailable = true;
     } catch (_) {
       _serverAvailable = false;
     }
   }
 
   Future<void> _serverUpdateNode(WorkspaceFinderNode node) async {
-    if (!_serverAvailable) return;
     try {
       await _serverStorage.updateNode(node);
+      _serverAvailable = true;
     } catch (_) {
       _serverAvailable = false;
     }
   }
 
   Future<void> _serverDeleteNode(String id) async {
-    if (!_serverAvailable) return;
     try {
       await _serverStorage.deleteNode(id);
+      _serverAvailable = true;
     } catch (_) {
       _serverAvailable = false;
     }
@@ -1005,6 +1109,7 @@ class _SportotekaWorkspaceFinderPanelState
       final project = SportotekaPlayerProjectScreen(
         player: player,
         clubId: widget.clubId,
+        currentUserId: widget.currentUserId,
         teamId: widget.selectedTeamId,
         teamName: widget.selectedTeamName,
         onRefresh: widget.onRefresh,
@@ -1020,6 +1125,7 @@ class _SportotekaWorkspaceFinderPanelState
       builder: (closeWindow) => SportotekaPlayerProjectScreen(
         player: player,
         clubId: widget.clubId,
+        currentUserId: widget.currentUserId,
         teamId: widget.selectedTeamId,
         teamName: widget.selectedTeamName,
         onRefresh: widget.onRefresh,
@@ -1034,7 +1140,7 @@ class _SportotekaWorkspaceFinderPanelState
     final title = '${team['name'] ?? team['team_name'] ?? team['title'] ?? 'Команда'}'.trim();
     final width = MediaQuery.sizeOf(context).width;
     if (width < 760) {
-      final project = SportotekaTeamProjectScreen(team: team, clubId: widget.clubId, players: widget.players, onRefresh: widget.onRefresh, onOpenModule: widget.onOpenModule);
+      final project = SportotekaTeamProjectScreen(team: team, clubId: widget.clubId, currentUserId: widget.currentUserId, players: widget.players, onRefresh: widget.onRefresh, onOpenModule: widget.onOpenModule);
       await Navigator.of(context).push<void>(MaterialPageRoute<void>(builder: (_) => Scaffold(backgroundColor: Colors.white, body: SafeArea(child: project))));
       return;
     }
@@ -1045,6 +1151,7 @@ class _SportotekaWorkspaceFinderPanelState
       builder: (closeWindow) => SportotekaTeamProjectScreen(
         team: team,
         clubId: widget.clubId,
+        currentUserId: widget.currentUserId,
         players: widget.players,
         onRefresh: widget.onRefresh,
         onOpenModule: widget.onOpenModule,
@@ -1062,7 +1169,7 @@ class _SportotekaWorkspaceFinderPanelState
     final title = <String>[last, first].where((e) => e.isNotEmpty).join(' ').trim();
     final width = MediaQuery.sizeOf(context).width;
     if (width < 760) {
-      final project = SportotekaTrainerProjectScreen(trainer: trainer, clubId: widget.clubId, teams: widget.teams, players: widget.players, onRefresh: widget.onRefresh);
+      final project = SportotekaTrainerProjectScreen(trainer: trainer, clubId: widget.clubId, currentUserId: widget.currentUserId, teams: widget.teams, players: widget.players, onRefresh: widget.onRefresh);
       await Navigator.of(context).push<void>(MaterialPageRoute<void>(builder: (_) => Scaffold(backgroundColor: Colors.white, body: SafeArea(child: project))));
       return;
     }
@@ -1073,6 +1180,7 @@ class _SportotekaWorkspaceFinderPanelState
       builder: (closeWindow) => SportotekaTrainerProjectScreen(
         trainer: trainer,
         clubId: widget.clubId,
+        currentUserId: widget.currentUserId,
         teams: widget.teams,
         players: widget.players,
         onRefresh: widget.onRefresh,
@@ -1182,31 +1290,103 @@ class _SportotekaWorkspaceFinderPanelState
       kind: WorkspaceFinderNodeKind.note,
       parentId: _folderKey,
       createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
     );
     setState(() {
       (_localChildren[_folderKey] ??= <WorkspaceFinderNode>[]).add(node);
       _noteBodies[id] = '';
+      _pendingSyncIds.add(id);
     });
     await _persistLocalWorkspace();
-    await _serverCreateNode(node);
-    if (_serverAvailable) {
-      try {
-        await _serverStorage.saveDocument(clientUid: node.id, title: node.title, body: '');
-      } catch (_) {
-        _serverAvailable = false;
-      }
+    _wsLog('CREATE_NOTE local uid=$id -> sync');
+    try {
+      await _serverStorage.syncNodeDocument(node: node, body: '', createHint: true);
+      _serverAvailable = true;
+      _pendingSyncIds.remove(id);
+      await _persistLocalWorkspace();
+      _wsLog('CREATE_NOTE sync OK uid=$id');
+    } catch (e, st) {
+      _serverAvailable = false;
+      _wsLog('CREATE_NOTE sync FAILED uid=$id error=$e');
+      _wsLog('CREATE_NOTE stack=${st.toString().split('\n').take(5).join(' | ')}');
+      // Keep pending. The editor save / next refresh retries it.
     }
     await _openNote(node);
   }
 
   Future<void> _openNote(WorkspaceFinderNode node) async {
+    _wsLog('OPEN_NOTE uid=${node.id} pending=${_pendingSyncIds.contains(node.id)} localBodyLen=${(_noteBodies[node.id] ?? '').length}');
+    // Always ask the server for the latest saved copy before opening the
+    // editor, unless this device has a known unsynced local edit. This makes
+    // cross-device saves visible as soon as the document is opened.
+    if (!_pendingSyncIds.contains(node.id)) {
+      try {
+        final remote = await _serverStorage.loadDocument(clientUid: node.id);
+        final remoteBodyForLog = '${remote?['body'] ?? ''}';
+        _wsLog(
+          "OPEN_NOTE remote uid=${node.id} exists=${remote?['exists']} "
+          "version=${remote?['version']} updated=${remote?['updated_at']} "
+          'bodyLen=${remoteBodyForLog.length}',
+        );
+        if (remote != null && remote['exists'] == true) {
+          final remoteBody = '${remote['body'] ?? ''}';
+          final remoteTitle = '${remote['title'] ?? ''}'.trim();
+          final remoteUpdated = DateTime.tryParse(
+            '${remote['updated_at'] ?? ''}'.replaceFirst(' ', 'T'),
+          );
+          final localBefore = _findLocalNode(node.id) ?? node;
+          final localBody = _noteBodies[node.id] ?? '';
+          final localUpdated = localBefore.updatedAt;
+
+          final localLooksNewer = localBody != remoteBody &&
+              localUpdated != null &&
+              (remoteUpdated == null ||
+                  localUpdated.isAfter(remoteUpdated.add(const Duration(seconds: 5))));
+
+          if (localLooksNewer) {
+            _wsLog('OPEN_NOTE local newer -> pending uid=${node.id} localUpdated=$localUpdated remoteUpdated=$remoteUpdated localLen=${localBody.length} remoteLen=${remoteBody.length}');
+            // Older application builds could leave a newer body only in the
+            // local cache. Do not overwrite it; queue it for upload instead.
+            _pendingSyncIds.add(node.id);
+          } else {
+            _wsLog("OPEN_NOTE applying remote uid=${node.id} version=${remote['version']} remoteLen=${remoteBody.length}");
+            if (mounted) {
+              setState(() {
+                _noteBodies[node.id] = remoteBody;
+                _replaceLocalNode(
+                  node.id,
+                  (old) => old.copyWith(
+                    title: remoteTitle.isEmpty ? old.title : remoteTitle,
+                    updatedAt: remoteUpdated ?? old.updatedAt,
+                  ),
+                );
+              });
+            } else {
+              _noteBodies[node.id] = remoteBody;
+            }
+          }
+        }
+        _serverAvailable = true;
+        await _persistLocalWorkspace();
+      } catch (e, st) {
+        // Offline: continue with the local cache. The pending-sync logic will
+        // retry when connectivity returns.
+        _serverAvailable = false;
+        _wsLog('OPEN_NOTE remote load FAILED uid=${node.id} error=$e');
+        _wsLog('OPEN_NOTE stack=${st.toString().split('\n').take(5).join(' | ')}');
+      }
+    }
+
     final currentBody = _noteBodies[node.id] ?? '';
     final localNode = _findLocalNode(node.id);
     final initialTitle = localNode?.title ?? node.title;
 
     Future<void> save(String title, String body) async {
+      final saveTitleForLog = title.isEmpty ? 'Без названия' : title;
+      _wsLog('SAVE begin uid=${node.id} title=$saveTitleForLog bodyLen=${body.length}');
       setState(() {
         _noteBodies[node.id] = body;
+        _pendingSyncIds.add(node.id);
         _replaceLocalNode(
           node.id,
           (old) => old.copyWith(
@@ -1216,18 +1396,23 @@ class _SportotekaWorkspaceFinderPanelState
         );
       });
       await _persistLocalWorkspace();
+      _wsLog('SAVE local persisted uid=${node.id} pending=${_pendingSyncIds.contains(node.id)}');
       final savedNode = _findLocalNode(node.id);
-      if (savedNode != null) await _serverUpdateNode(savedNode);
-      if (_serverAvailable) {
-        try {
-          await _serverStorage.saveDocument(
-            clientUid: node.id,
-            title: title.isEmpty ? 'Без названия' : title,
-            body: body,
-          );
-        } catch (_) {
-          _serverAvailable = false;
-        }
+      if (savedNode == null) {
+        _wsLog('SAVE ABORT uid=${node.id}: local node not found');
+        return;
+      }
+      try {
+        await _serverStorage.syncNodeDocument(node: savedNode, body: body);
+        _serverAvailable = true;
+        _pendingSyncIds.remove(node.id);
+        await _persistLocalWorkspace();
+        _wsLog('SAVE server sync OK uid=${node.id} bodyLen=${body.length}');
+      } catch (e, st) {
+        _serverAvailable = false;
+        _wsLog('SAVE server sync FAILED uid=${node.id} bodyLen=${body.length} error=$e');
+        _wsLog('SAVE stack=${st.toString().split('\n').take(6).join(' | ')}');
+        throw Exception('Документ сохранён локально, но серверная синхронизация не выполнена: $e');
       }
     }
 

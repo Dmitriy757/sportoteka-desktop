@@ -144,7 +144,15 @@ class _WorkspaceDocumentEditorState extends State<WorkspaceDocumentEditor> {
   }
 
   Future<void> _persistLiveBlocks() async {
-    await WorkspaceLiveBlocksRepository(documentKey: _effectiveLiveBlocksKey).save(_liveBlocks);
+    try {
+      await WorkspaceLiveBlocksRepository(documentKey: _effectiveLiveBlocksKey).save(_liveBlocks);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _saveError = true);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Изменение сохранено локально, но пока не синхронизировано с сервером')),
+      );
+    }
   }
 
   void _checkSlashLiveBlockCommand() {
@@ -1324,7 +1332,7 @@ class _EditorSaveState extends StatelessWidget {
     final text = readOnly
         ? 'Только чтение'
         : failed
-            ? 'Ошибка сохранения'
+            ? 'Не синхронизировано'
             : saving
                 ? 'Сохраняется'
                 : dirty

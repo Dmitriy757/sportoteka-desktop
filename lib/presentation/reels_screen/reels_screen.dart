@@ -1503,6 +1503,10 @@ class _ReelsScreenState extends State<ReelsScreen>
                     PageView.builder(
                       controller: _pageController,
                       scrollDirection: Axis.vertical,
+                      physics: const PageScrollPhysics(
+                        parent: ClampingScrollPhysics(),
+                      ),
+                      allowImplicitScrolling: true,
                       itemCount: reels.length,
                       onPageChanged: (index) async {
                         final prev = _currentPage;

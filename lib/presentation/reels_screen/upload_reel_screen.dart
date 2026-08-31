@@ -10,12 +10,63 @@ import 'package:sportoteka/core/constants/app_colors.dart';
 import 'package:sportoteka/core/theme/app_typography.dart';
 import 'package:sportoteka/core/utils/pref_utils.dart';
 
+
+class ReelComposerController extends ChangeNotifier {
+  Future<void> Function()? _submitHandler;
+  bool _saving = false;
+  bool _disposed = false;
+
+  bool get saving => _saving;
+  bool get attached => _submitHandler != null;
+
+  Future<void> submit() async {
+    final handler = _submitHandler;
+    if (handler != null && !_saving) {
+      await handler();
+    }
+  }
+
+  void _attach(Future<void> Function() handler) {
+    if (_disposed) return;
+    _submitHandler = handler;
+  }
+
+  void _detach() {
+    if (_disposed) return;
+    _submitHandler = null;
+    _saving = false;
+  }
+
+  void _setSaving(bool value) {
+    if (_disposed || _saving == value) return;
+    _saving = value;
+    notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    _submitHandler = null;
+    super.dispose();
+  }
+}
+
 class UploadReelScreen extends StatefulWidget {
   final VoidCallback onUploadComplete;
+  final ReelComposerController? composerController;
+  final bool embedded;
+  final bool hideChrome;
+  final VoidCallback? onClose;
+  final bool active;
 
   const UploadReelScreen({
     super.key,
     required this.onUploadComplete,
+    this.composerController,
+    this.embedded = false,
+    this.hideChrome = false,
+    this.onClose,
+    this.active = true,
   });
 
   @override
@@ -66,6 +117,7 @@ class _UploadReelScreenState extends State<UploadReelScreen>
   void initState() {
     super.initState();
     _descriptionController.addListener(_onDescriptionChanged);
+    widget.composerController?._attach(_uploadReel);
 
     _zoomAnim = AnimationController(
       vsync: this,
@@ -87,7 +139,27 @@ class _UploadReelScreenState extends State<UploadReelScreen>
   }
 
   @override
+  void didUpdateWidget(covariant UploadReelScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.composerController != widget.composerController) {
+      oldWidget.composerController?._detach();
+      widget.composerController?._attach(_uploadReel);
+    }
+    if (oldWidget.active != widget.active) {
+      final controller = _videoController;
+      if (controller != null && controller.value.isInitialized) {
+        if (widget.active) {
+          controller.play();
+        } else {
+          controller.pause();
+        }
+      }
+    }
+  }
+
+  @override
   void dispose() {
+    widget.composerController?._detach();
     _descriptionController.removeListener(_onDescriptionChanged);
     _descriptionController.dispose();
     _disposeVideoController();
@@ -302,6 +374,7 @@ class _UploadReelScreenState extends State<UploadReelScreen>
       _isUploading = true;
       _uploadProgress = 0.0;
     });
+    widget.composerController?._setSaving(true);
 
     try {
       final userId = await PrefUtils.getUserId();
@@ -382,7 +455,9 @@ class _UploadReelScreenState extends State<UploadReelScreen>
           const SnackBar(content: Text("Видео загружено")),
         );
         widget.onUploadComplete();
-        Navigator.pop(context);
+        if (!widget.embedded) {
+          Navigator.pop(context);
+        }
       } else {
         String errorMsg = "Ошибка при загрузке";
         if (data is Map && data['error'] != null) {
@@ -400,6 +475,7 @@ class _UploadReelScreenState extends State<UploadReelScreen>
         SnackBar(content: Text("Ошибка сети: $e")),
       );
     } finally {
+      widget.composerController?._setSaving(false);
       if (!mounted) return;
       setState(() {
         _isUploading = false;
@@ -475,6 +551,14 @@ class _UploadReelScreenState extends State<UploadReelScreen>
     );
   }
 
+  void _closeComposer() {
+    if (widget.embedded) {
+      widget.onClose?.call();
+      return;
+    }
+    Navigator.pop(context);
+  }
+
   @override
   Widget build(BuildContext context) {
     final canUpload = !_isUploading &&
@@ -482,6 +566,85 @@ class _UploadReelScreenState extends State<UploadReelScreen>
         _descriptionController.text.trim().isNotEmpty;
 
     final base = Theme.of(context);
+
+    Widget content() {
+      return Column(
+        children: [
+          if (_isUploading) _buildSlimUploadProgress(),
+          Expanded(
+            child: ListView(
+              physics: const BouncingScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 28),
+              children: [
+                _buildInstagramVideoComposer(),
+                const SizedBox(height: 12),
+                _buildInstagramCaption(),
+                const SizedBox(height: 18),
+                if (_videoFile == null)
+                  Center(
+                    child: Text(
+                      'Сначала выберите ролик из галереи',
+                      style: _t(
+                        9.4,
+                        color: const Color(0xFF98A2B3),
+                      ),
+                    ),
+                  )
+                else if (_descriptionController.text.trim().isEmpty)
+                  Center(
+                    child: Text(
+                      'Добавьте короткую подпись, чтобы опубликовать Reels',
+                      textAlign: TextAlign.center,
+                      style: _t(
+                        9.4,
+                        color: const Color(0xFF98A2B3),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      );
+    }
+
+    final themedContent = Theme(
+      data: base.copyWith(
+        textTheme: base.textTheme.apply(
+          fontFamily: AppTypography.fontFamily,
+          bodyColor: const Color(0xFF0B0F14),
+          displayColor: const Color(0xFF0B0F14),
+        ),
+      ),
+      child: content(),
+    );
+
+    if (widget.hideChrome) {
+      return Container(
+        color: Colors.white,
+        child: themedContent,
+      );
+    }
+
+    if (widget.embedded) {
+      return SafeArea(
+        bottom: false,
+        child: Container(
+          color: Colors.white,
+          child: Column(
+            children: [
+              _instagramHeader(canUpload),
+              const Divider(
+                height: 1,
+                thickness: .6,
+                color: Color(0xFFEEF1EF),
+              ),
+              Expanded(child: themedContent),
+            ],
+          ),
+        ),
+      );
+    }
 
     return Theme(
       data: base.copyWith(
@@ -496,44 +659,13 @@ class _UploadReelScreenState extends State<UploadReelScreen>
         body: SafeArea(
           child: Column(
             children: [
-              _header(canUpload),
+              _instagramHeader(canUpload),
               const Divider(
                 height: 1,
                 thickness: .6,
                 color: Color(0xFFEEF1EF),
               ),
-              Expanded(
-                child: ListView(
-                  padding: const EdgeInsets.fromLTRB(14, 12, 14, 24),
-                  children: [
-                    _section(
-                      title: 'Видео',
-                      subtitle: _videoFile == null
-                          ? 'Выберите ролик из галереи'
-                          : 'Видео готово к публикации',
-                      color: _videoFile == null
-                          ? const Color(0xFF98A2B3)
-                          : const Color(0xFFF59E0B),
-                      child: _buildVideoCard(),
-                    ),
-                    const SizedBox(height: 8),
-                    _section(
-                      title: 'Описание',
-                      subtitle: 'Коротко опишите момент или тренировку',
-                      color: _descriptionController.text.trim().isEmpty
-                          ? const Color(0xFF98A2B3)
-                          : const Color(0xFF00A750),
-                      child: _buildDescriptionCard(),
-                    ),
-                    if (_isUploading) ...[
-                      const SizedBox(height: 8),
-                      _buildUploadingCard(),
-                    ],
-                    const SizedBox(height: 10),
-                    _buildActions(canUpload),
-                  ],
-                ),
-              ),
+              Expanded(child: content()),
             ],
           ),
         ),
@@ -541,282 +673,363 @@ class _UploadReelScreenState extends State<UploadReelScreen>
     );
   }
 
-  Widget _header(bool canUpload) {
-    return Container(
-      constraints: const BoxConstraints(minHeight: 62),
-      padding: const EdgeInsets.fromLTRB(10, 8, 12, 8),
-      child: Row(
-        children: [
-          Material(
-            color: const Color(0xFFF7F9F8),
-            borderRadius: BorderRadius.circular(9),
-            child: InkWell(
-              onTap: _isUploading ? null : () => Navigator.pop(context),
-              borderRadius: BorderRadius.circular(9),
-              child: const SizedBox(
-                width: 36,
-                height: 36,
-                child: Icon(
-                  Icons.arrow_back_ios_new_rounded,
-                  size: 15,
-                  color: Color(0xFF0B0F14),
+  Widget _instagramHeader(bool canUpload) {
+    return SizedBox(
+      height: 52,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        child: Row(
+          children: [
+            IconButton(
+              tooltip: 'Назад',
+              onPressed: _isUploading ? null : _closeComposer,
+              visualDensity: VisualDensity.compact,
+              icon: const Icon(
+                Icons.arrow_back_ios_new_rounded,
+                size: 18,
+                color: Color(0xFF111827),
+              ),
+            ),
+            const SizedBox(width: 2),
+            _brandDots(),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Новый Reels',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: _t(
+                  14.6,
+                  weight: FontWeight.w700,
                 ),
               ),
             ),
-          ),
-          const SizedBox(width: 10),
-          _brandDots(),
-          const SizedBox(width: 9),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Новый Reels',
-                  style: _t(
-                    14.2,
-                    weight: FontWeight.w600,
+            TextButton(
+              onPressed: canUpload ? _uploadReel : null,
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFF00A750),
+                disabledForegroundColor: const Color(0xFFB8C1BC),
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                minimumSize: const Size(0, 38),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: _isUploading
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Color(0xFF00A750),
+                      ),
+                    )
+                  : Text(
+                      'Поделиться',
+                      style: _t(
+                        10.5,
+                        weight: FontWeight.w700,
+                        color: canUpload
+                            ? const Color(0xFF00A750)
+                            : const Color(0xFFB8C1BC),
+                      ),
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSlimUploadProgress() {
+    final value = (_uploadProgress <= 0 || _uploadProgress.isNaN)
+        ? null
+        : _uploadProgress.clamp(0.0, 1.0);
+
+    return SizedBox(
+      height: 3,
+      child: LinearProgressIndicator(
+        value: value,
+        minHeight: 3,
+        backgroundColor: const Color(0xFFE9EEF3),
+        color: const Color(0xFF00A750),
+      ),
+    );
+  }
+
+  Widget _buildInstagramVideoComposer() {
+    final hasVideo = _videoFile != null;
+
+    return Column(
+      children: [
+        Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 330),
+            child: hasVideo
+                ? _buildVideoPreview()
+                : AspectRatio(
+                    aspectRatio: 9 / 16,
+                    child: Material(
+                      color: const Color(0xFFF2F6F3),
+                      borderRadius: BorderRadius.circular(16),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(16),
+                        onTap: _isUploading ? null : _pickVideo,
+                        child: Stack(
+                          children: [
+                            Positioned.fill(
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(16),
+                                  gradient: const LinearGradient(
+                                    begin: Alignment.topCenter,
+                                    end: Alignment.bottomCenter,
+                                    colors: [
+                                      Color(0xFFF4F8F5),
+                                      Color(0xFFEAF5EE),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                            Center(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Container(
+                                    width: 54,
+                                    height: 54,
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      shape: BoxShape.circle,
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withOpacity(.06),
+                                          blurRadius: 18,
+                                          offset: const Offset(0, 7),
+                                        ),
+                                      ],
+                                    ),
+                                    child: const Icon(
+                                      Icons.add_rounded,
+                                      size: 30,
+                                      color: Color(0xFF00A750),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 13),
+                                  Text(
+                                    'Выбрать видео',
+                                    style: _t(
+                                      12.2,
+                                      weight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'MP4 / MOV · из галереи',
+                                    style: _t(
+                                      9.5,
+                                      color: const Color(0xFF667085),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   ),
+          ),
+        ),
+        if (hasVideo) ...[
+          const SizedBox(height: 10),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            child: Row(
+              children: [
+                _reelTool(
+                  icon: Icons.video_library_outlined,
+                  label: 'Заменить',
+                  onTap: _isUploading ? null : _pickVideo,
                 ),
-                const SizedBox(height: 2),
+                _reelTool(
+                  icon: _previewReelsMode
+                      ? Icons.crop_portrait_rounded
+                      : Icons.fit_screen_rounded,
+                  label: _previewReelsMode ? 'Заполнить' : 'Вписать',
+                  active: _previewReelsMode,
+                  onTap: _isUploading
+                      ? null
+                      : () => _toggleMode(!_previewReelsMode),
+                ),
+                _reelTool(
+                  icon: Icons.rotate_90_degrees_cw_rounded,
+                  label: 'Повернуть',
+                  onTap: _isUploading ? null : _rotate90,
+                ),
+                _reelTool(
+                  icon: Icons.grid_3x3_rounded,
+                  label: 'Сетка',
+                  active: _showGrid,
+                  onTap: _isUploading ? null : _toggleGrid,
+                ),
+                _reelTool(
+                  icon: Icons.restart_alt_rounded,
+                  label: 'Сбросить',
+                  onTap: _isUploading ? null : _resetCrop,
+                ),
+                _reelTool(
+                  icon: Icons.delete_outline_rounded,
+                  label: 'Удалить',
+                  danger: true,
+                  onTap: _isUploading ? null : _removeVideo,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _reelTool({
+    required IconData icon,
+    required String label,
+    required VoidCallback? onTap,
+    bool active = false,
+    bool danger = false,
+  }) {
+    final foreground = danger
+        ? const Color(0xFFD92D20)
+        : active
+            ? const Color(0xFF067A46)
+            : const Color(0xFF344054);
+    final background = danger
+        ? const Color(0xFFFFF3F2)
+        : active
+            ? const Color(0xFFF1FBF6)
+            : const Color(0xFFF6F7F6);
+
+    return Padding(
+      padding: const EdgeInsets.only(right: 6),
+      child: Material(
+        color: onTap == null ? const Color(0xFFF3F4F6) : background,
+        borderRadius: BorderRadius.circular(10),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(10),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  icon,
+                  size: 15,
+                  color: onTap == null
+                      ? const Color(0xFFB8C1BC)
+                      : foreground,
+                ),
+                const SizedBox(width: 5),
                 Text(
-                  'Подготовьте видео и описание',
+                  label,
                   style: _t(
-                    9.5,
-                    color: const Color(0xFF667085),
+                    9.1,
+                    weight: FontWeight.w600,
+                    color: onTap == null
+                        ? const Color(0xFFB8C1BC)
+                        : foreground,
                   ),
                 ),
               ],
             ),
           ),
-          if (_videoFile != null)
-            Material(
-              color: _showGrid
-                  ? const Color(0xFFF3FAF6)
-                  : const Color(0xFFF7F9F8),
-              borderRadius: BorderRadius.circular(8),
-              child: InkWell(
-                onTap: _toggleGrid,
-                borderRadius: BorderRadius.circular(8),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 7,
-                  ),
-                  child: Row(
-                    children: [
-                      _dot(
-                        _showGrid
-                            ? const Color(0xFF00A750)
-                            : const Color(0xFF98A2B3),
-                        size: 4.5,
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        'Сетка',
-                        style: _t(
-                          9.1,
-                          weight: FontWeight.w600,
-                          color: _showGrid
-                              ? const Color(0xFF067A46)
-                              : const Color(0xFF667085),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _section({
-    required String title,
-    required String subtitle,
-    required Color color,
-    required Widget child,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(11),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF7F9F8),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              _dot(
-                color,
-                size: 6,
-                glow: color != const Color(0xFF98A2B3),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: _t(
-                        11.4,
-                        weight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      style: _t(
-                        9.3,
-                        color: const Color(0xFF667085),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          child,
-        ],
-      ),
-    );
-  }
-
-  Widget _buildVideoCard() {
-    final hasVideo = _videoFile != null;
-
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(9),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (!hasVideo)
-            InkWell(
-              borderRadius: BorderRadius.circular(9),
-              onTap: _isUploading ? null : _pickVideo,
-              child: Container(
-                height: 210,
-                decoration: BoxDecoration(
-                  color: AppColors.primaryGreen.withOpacity(0.10),
-                  borderRadius: BorderRadius.circular(9),
-                ),
-                child: Center(
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _brandDots(
-                        color: const Color(0xFFF59E0B),
-                      ),
-                      const SizedBox(width: 9),
-                      Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Выбрать видео',
-                            style: _t(
-                              11.2,
-                              weight: FontWeight.w600,
-                            ),
-                          ),
-                          const SizedBox(height: 3),
-                          Text(
-                            'MP4 / MOV · из галереи',
-                            style: _t(
-                              9.4,
-                              color: const Color(0xFF667085),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            )
-          else
-            _buildVideoPreview(),
-
-          const SizedBox(height: 12),
-
-          // ✅ ВСЕ КНОПКИ УДАЛЕНЫ - только кнопки замены и удаления
-          Row(
-            children: [
-              Expanded(
-                child: _softAction(
-                  label: 'Заменить',
-                  color: const Color(0xFF067A46),
-                  onTap: _isUploading ? null : _pickVideo,
-                ),
-              ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: _softAction(
-                  label: 'Убрать',
-                  color: const Color(0xFFD92D20),
-                  onTap: (_isUploading || _videoFile == null)
-                      ? null
-                      : _removeVideo,
-                  danger: true,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _softAction({
-    required String label,
-    required Color color,
-    required VoidCallback? onTap,
-    bool danger = false,
-  }) {
-    return Material(
-      color: danger
-          ? const Color(0xFFFFF1F1)
-          : const Color(0xFFF3FAF6),
-      borderRadius: BorderRadius.circular(8),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: 9,
-            vertical: 8,
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              _dot(
-                onTap == null
-                    ? const Color(0xFF98A2B3)
-                    : color,
-                size: 4.5,
-              ),
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: _t(
-                  9.4,
-                  weight: FontWeight.w600,
-                  color: onTap == null
-                      ? const Color(0xFF98A2B3)
-                      : color,
-                ),
-              ),
-            ],
-          ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildInstagramCaption() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(
+          top: BorderSide(color: Color(0xFFEEF1EF), width: .7),
+          bottom: BorderSide(color: Color(0xFFEEF1EF), width: .7),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFF1FBF6),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.person_outline_rounded,
+                  size: 18,
+                  color: Color(0xFF00A750),
+                ),
+              ),
+              const SizedBox(width: 9),
+              Expanded(
+                child: TextField(
+                  controller: _descriptionController,
+                  enabled: !_isUploading,
+                  minLines: 1,
+                  maxLines: 5,
+                  maxLength: 500,
+                  style: _t(
+                    10.8,
+                    color: const Color(0xFF111827),
+                    height: 1.38,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: 'Добавьте подпись…  #тренировка #гол',
+                    hintStyle: _t(
+                      10.4,
+                      color: const Color(0xFF98A2B3),
+                    ),
+                    border: InputBorder.none,
+                    counterText: '',
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Padding(
+            padding: const EdgeInsets.only(left: 43),
+            child: Row(
+              children: [
+                Text(
+                  '${_descriptionController.text.characters.length}/500',
+                  style: _t(
+                    8.8,
+                    color: const Color(0xFF98A2B3),
+                  ),
+                ),
+                const Spacer(),
+                if (_videoFile != null)
+                  Text(
+                    _previewReelsMode ? '9:16 · Reels' : 'Исходный формат',
+                    style: _t(
+                      8.8,
+                      color: const Color(0xFF98A2B3),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -826,7 +1039,7 @@ class _UploadReelScreenState extends State<UploadReelScreen>
 
     if (_previewReelsMode) {
       return ClipRRect(
-        borderRadius: BorderRadius.circular(9),
+        borderRadius: BorderRadius.circular(16),
         child: AspectRatio(
           aspectRatio: 9 / 16,
           child: LayoutBuilder(
@@ -837,7 +1050,6 @@ class _UploadReelScreenState extends State<UploadReelScreen>
                 fit: StackFit.expand,
                 children: [
                   Container(color: Colors.black),
-
                   if (c != null && c.value.isInitialized)
                     GestureDetector(
                       behavior: HitTestBehavior.opaque,
@@ -853,7 +1065,8 @@ class _UploadReelScreenState extends State<UploadReelScreen>
                         _startFocal = d.focalPoint;
                       },
                       onScaleUpdate: (d) {
-                        final nextScale = (_startScale * d.scale).clamp(_minScale, _maxScale);
+                        final nextScale =
+                            (_startScale * d.scale).clamp(_minScale, _maxScale);
                         final delta = d.focalPoint - _startFocal;
                         var nextOffset = _startOffset + delta;
 
@@ -878,7 +1091,6 @@ class _UploadReelScreenState extends State<UploadReelScreen>
                             scale: _cropScale,
                             offset: _cropOffset,
                           ),
-
                           Positioned.fill(
                             child: IgnorePointer(
                               child: DecoratedBox(
@@ -887,57 +1099,57 @@ class _UploadReelScreenState extends State<UploadReelScreen>
                                     begin: Alignment.topCenter,
                                     end: Alignment.bottomCenter,
                                     colors: [
-                                      Colors.black.withOpacity(0.20),
+                                      Colors.black.withOpacity(0.10),
                                       Colors.transparent,
-                                      Colors.black.withOpacity(0.30),
+                                      Colors.black.withOpacity(0.18),
                                     ],
-                                    stops: const [0.0, 0.62, 1.0],
+                                    stops: const [0.0, 0.68, 1.0],
                                   ),
                                 ),
                               ),
                             ),
                           ),
-
                           if (_showGrid)
                             const Positioned.fill(
                               child: IgnorePointer(child: _InstaGridOverlay()),
                             ),
-
                           Center(
                             child: AnimatedOpacity(
                               duration: const Duration(milliseconds: 160),
                               opacity: c.value.isPlaying ? 0.0 : 1.0,
                               child: Container(
-                                width: 58,
-                                height: 58,
+                                width: 54,
+                                height: 54,
                                 decoration: BoxDecoration(
-                                  color: Colors.black.withOpacity(0.35),
+                                  color: Colors.black.withOpacity(0.34),
                                   shape: BoxShape.circle,
                                 ),
                                 child: const Icon(
                                   Icons.play_arrow_rounded,
                                   color: Colors.white,
-                                  size: 36,
+                                  size: 34,
                                 ),
                               ),
                             ),
                           ),
-
                           Positioned(
-                            top: 10,
-                            left: 10,
+                            right: 9,
+                            bottom: 9,
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 5,
+                              ),
                               decoration: BoxDecoration(
-                                color: Colors.black.withOpacity(0.45),
-                                borderRadius: BorderRadius.circular(999),
+                                color: Colors.black.withOpacity(.42),
+                                borderRadius: BorderRadius.circular(99),
                               ),
                               child: Text(
-                                "FILL 9:16  •  x${_cropScale.toStringAsFixed(2)}",
-                                style: const TextStyle(
+                                '×${_cropScale.toStringAsFixed(1)}',
+                                style: _t(
+                                  8.7,
+                                  weight: FontWeight.w600,
                                   color: Colors.white,
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 11,
                                 ),
                               ),
                             ),
@@ -966,230 +1178,52 @@ class _UploadReelScreenState extends State<UploadReelScreen>
         : 16 / 9;
 
     return ClipRRect(
-      borderRadius: BorderRadius.circular(9),
+      borderRadius: BorderRadius.circular(16),
       child: AspectRatio(
         aspectRatio: ar,
-        child: _previewStackFit(c),
-      ),
-    );
-  }
-
-  Widget _previewStackFit(VideoPlayerController? c) {
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        Container(color: Colors.black),
-
-        if (c != null && c.value.isInitialized)
-          GestureDetector(
-            onTap: _togglePlay,
-            child: _FitVideoWithRotate(
-              controller: c,
-              manualRotateDeg: _manualRotateDeg,
-            ),
-          )
-        else
-          const Center(
-            child: SizedBox(
-              width: 22,
-              height: 22,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
-          ),
-
-        Positioned.fill(
-          child: IgnorePointer(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.black.withOpacity(0.15),
-                    Colors.transparent,
-                    Colors.black.withOpacity(0.25),
-                  ],
-                  stops: const [0.0, 0.55, 1.0],
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            Container(color: Colors.black),
+            if (c != null && c.value.isInitialized)
+              GestureDetector(
+                onTap: _togglePlay,
+                child: _FitVideoWithRotate(
+                  controller: c,
+                  manualRotateDeg: _manualRotateDeg,
+                ),
+              )
+            else
+              const Center(
+                child: SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(strokeWidth: 2),
                 ),
               ),
-            ),
-          ),
-        ),
-
-        if (c != null && c.value.isInitialized)
-          Center(
-            child: AnimatedOpacity(
-              duration: const Duration(milliseconds: 180),
-              opacity: c.value.isPlaying ? 0.0 : 1.0,
-              child: Container(
-                width: 58,
-                height: 58,
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.35),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.play_arrow_rounded,
-                  color: Colors.white,
-                  size: 36,
-                ),
-              ),
-            ),
-          ),
-
-        Positioned(
-          top: 10,
-          left: 10,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.45),
-              borderRadius: BorderRadius.circular(999),
-            ),
-            child: Text(
-              "FIT  •  rotate=$_manualRotateDeg°",
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w600,
-                fontSize: 11,
-                letterSpacing: 0.2,
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildDescriptionCard() {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(9),
-      ),
-      child: TextField(
-        controller: _descriptionController,
-        enabled: !_isUploading,
-        maxLines: 4,
-        style: _t(
-          10.2,
-          color: const Color(0xFF0B0F14),
-        ),
-        decoration: InputDecoration(
-          hintText: "Например: Лучший момент тренировки / гол / техника…",
-          hintStyle: _t(
-            9.7,
-            color: const Color(0xFF98A2B3),
-          ),
-          filled: true,
-          fillColor: const Color(0xFFF7F9F8),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(9),
-            borderSide: BorderSide.none,
-          ),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildUploadingCard() {
-    final percent = (_uploadProgress * 100).clamp(0, 100).toStringAsFixed(0);
-
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF7F9F8),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              _dot(
-                const Color(0xFF00A750),
-                size: 5,
-                glow: true,
-              ),
-              const SizedBox(width: 7),
-              Text(
-                'Загрузка…',
-                style: _t(
-                  10.5,
-                  weight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(999),
-            child: LinearProgressIndicator(
-              value: (_uploadProgress <= 0 || _uploadProgress.isNaN) ? null : _uploadProgress,
-              minHeight: 10,
-              backgroundColor: const Color(0xFFE5E7EB),
-              color: AppColors.primaryGreen,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            "$percent%",
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: AppColors.textSecondary,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildActions(bool canUpload) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.end,
-      children: [
-        _softAction(
-          label: 'Отмена',
-          color: const Color(0xFF667085),
-          onTap: _isUploading ? null : () => Navigator.pop(context),
-        ),
-        const SizedBox(width: 6),
-        FilledButton(
-          onPressed: canUpload ? _uploadReel : null,
-          style: FilledButton.styleFrom(
-            elevation: 0,
-            backgroundColor: const Color(0xFF00A750),
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(
-              horizontal: 15,
-              vertical: 10,
-            ),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(9),
-            ),
-          ),
-          child: _isUploading
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Colors.white,
-                  ),
-                )
-              : Text(
-                  'Опубликовать',
-                  style: _t(
-                    9.8,
-                    weight: FontWeight.w600,
-                    color: Colors.white,
+            if (c != null && c.value.isInitialized)
+              Center(
+                child: AnimatedOpacity(
+                  duration: const Duration(milliseconds: 160),
+                  opacity: c.value.isPlaying ? 0.0 : 1.0,
+                  child: Container(
+                    width: 54,
+                    height: 54,
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.34),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.play_arrow_rounded,
+                      color: Colors.white,
+                      size: 34,
+                    ),
                   ),
                 ),
+              ),
+          ],
         ),
-      ],
+      ),
     );
   }
 

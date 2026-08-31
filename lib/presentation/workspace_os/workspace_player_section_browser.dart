@@ -24,6 +24,7 @@ class WorkspacePlayerSectionBrowser extends StatefulWidget {
     this.teamName = '',
     this.createOnOpen = false,
     this.onRefresh,
+    this.currentUserId = 0,
   });
 
   final Map<String, dynamic> player;
@@ -33,6 +34,7 @@ class WorkspacePlayerSectionBrowser extends StatefulWidget {
   final bool createOnOpen;
   final WorkspacePlayerSection section;
   final Future<void> Function()? onRefresh;
+  final int currentUserId;
 
   @override
   State<WorkspacePlayerSectionBrowser> createState() => _WorkspacePlayerSectionBrowserState();
@@ -111,7 +113,10 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
   @override
   void initState() {
     super.initState();
-    _serverStorage = WorkspaceServerStorage(clubId: widget.clubId);
+    _serverStorage = WorkspaceServerStorage(
+      clubId: widget.clubId,
+      userId: widget.currentUserId,
+    );
     _search.addListener(_onSearch);
     _load().then((_) {
       if (mounted && widget.createOnOpen && _canCreateDiary) _createLocalRecord();
@@ -273,6 +278,8 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
       for (final row in local) {
         final id = '${row['id'] ?? ''}';
         if (id.isEmpty) continue;
+        final needsSync = row['_workspace_pending_sync'] == true || row['_workspace_server'] != true;
+        if (!needsSync) continue;
         final localTitle = '${row['title'] ?? 'Рабочая заметка'}';
         final localSubtitle = '${row['subtitle'] ?? 'Редактируемая заметка'}';
         final localBody = '${row['workspace_note'] ?? ''}';
@@ -289,8 +296,7 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
             createdAt: DateTime.tryParse('${row['created_at'] ?? ''}'),
             updatedAt: localUpdated,
           );
-          await _serverStorage.createNode(node);
-          await _serverStorage.saveDocument(clientUid: id, title: node.title, body: localBody);
+          await _serverStorage.syncNodeDocument(node: node, body: localBody, createHint: true);
           serverChanged = true;
           continue;
         }
@@ -315,8 +321,7 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
             createdAt: existing.createdAt,
             updatedAt: localUpdated ?? DateTime.now(),
           );
-          await _serverStorage.updateNode(node);
-          await _serverStorage.saveDocument(clientUid: id, title: node.title, body: localBody);
+          await _serverStorage.syncNodeDocument(node: node, body: localBody);
           serverChanged = true;
         }
       }
@@ -337,6 +342,7 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
         });
       }
       _serverAvailable = true;
+      await prefs.setString(_localStorageKey, jsonEncode(rows));
       return rows;
     } catch (_) {
       _serverAvailable = false;
@@ -563,6 +569,7 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
       'id': 'workspace_${now.microsecondsSinceEpoch}',
       '_workspace_local': true,
       '_workspace_document': true,
+      '_workspace_pending_sync': true,
       'title': 'Новый документ',
       'subtitle': 'Документ Sportoteka OS',
       'type': 'Документ Sportoteka OS',
@@ -761,6 +768,7 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
         'subtitle': _bodyPreview(body),
         'workspace_note': body,
         'updated_at': now,
+        '_workspace_pending_sync': true,
       };
     }
 
@@ -777,53 +785,77 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
     if (matches.isNotEmpty) await _syncUpdateRecord(matches.first);
   }
 
-  Future<void> _syncCreateRecord(Map<String, dynamic> row) async {
-    if (!_serverAvailable) {
-      try {
-        await _serverStorage.load();
-        _serverAvailable = true;
-      } catch (_) {
-        return;
-      }
+  Future<void> _markRecordSynced(String id) async {
+    if (id.isEmpty) return;
+    Map<String, dynamic> clean(Map<String, dynamic> row) {
+      if ('${row['id'] ?? ''}' != id) return row;
+      return <String, dynamic>{
+        ...row,
+        '_workspace_server': true,
+        '_workspace_pending_sync': false,
+      };
     }
+    if (mounted) {
+      setState(() {
+        _localRecords = _localRecords.map(clean).toList();
+        _records = _records.map(clean).toList();
+      });
+    } else {
+      _localRecords = _localRecords.map(clean).toList();
+      _records = _records.map(clean).toList();
+    }
+    await _persistLocalRecords();
+  }
+
+  Future<void> _syncCreateRecord(Map<String, dynamic> row) async {
     final id = '${row['id'] ?? ''}';
     if (id.isEmpty) return;
+    final node = WorkspaceFinderNode(
+      id: id,
+      title: '${row['title'] ?? 'Рабочая заметка'}',
+      subtitle: '${row['subtitle'] ?? 'Редактируемая заметка'}',
+      kind: WorkspaceFinderNodeKind.note,
+      payload: <String, dynamic>{'workspace_document': row['_workspace_document'] == true},
+      parentId: _serverParentKey,
+      createdAt: DateTime.tryParse('${row['created_at'] ?? ''}'),
+      updatedAt: DateTime.tryParse('${row['updated_at'] ?? ''}'),
+    );
     try {
-      final node = WorkspaceFinderNode(
-        id: id,
-        title: '${row['title'] ?? 'Рабочая заметка'}',
-        subtitle: '${row['subtitle'] ?? 'Редактируемая заметка'}',
-        kind: WorkspaceFinderNodeKind.note,
-        payload: <String, dynamic>{'workspace_document': row['_workspace_document'] == true},
-        parentId: _serverParentKey,
-        createdAt: DateTime.tryParse('${row['created_at'] ?? ''}'),
-        updatedAt: DateTime.tryParse('${row['updated_at'] ?? ''}'),
+      await _serverStorage.syncNodeDocument(
+        node: node,
+        body: '${row['workspace_note'] ?? ''}',
+        createHint: true,
       );
-      await _serverStorage.createNode(node);
-      await _serverStorage.saveDocument(clientUid: id, title: node.title, body: '${row['workspace_note'] ?? ''}');
+      _serverAvailable = true;
+      await _markRecordSynced(id);
     } catch (_) {
       _serverAvailable = false;
+      // Keep the local pending copy. Editing it will retry the server again.
     }
   }
 
   Future<void> _syncUpdateRecord(Map<String, dynamic> row) async {
-    if (!_serverAvailable) return;
     final id = '${row['id'] ?? ''}';
     if (id.isEmpty) return;
+    final node = WorkspaceFinderNode(
+      id: id,
+      title: '${row['title'] ?? 'Рабочая заметка'}',
+      subtitle: '${row['subtitle'] ?? ''}',
+      kind: WorkspaceFinderNodeKind.note,
+      payload: <String, dynamic>{'workspace_document': row['_workspace_document'] == true},
+      parentId: _serverParentKey,
+      updatedAt: DateTime.now(),
+    );
     try {
-      final node = WorkspaceFinderNode(
-        id: id,
-        title: '${row['title'] ?? 'Рабочая заметка'}',
-        subtitle: '${row['subtitle'] ?? ''}',
-        kind: WorkspaceFinderNodeKind.note,
-        payload: <String, dynamic>{'workspace_document': row['_workspace_document'] == true},
-        parentId: _serverParentKey,
-        updatedAt: DateTime.now(),
+      await _serverStorage.syncNodeDocument(
+        node: node,
+        body: '${row['workspace_note'] ?? ''}',
       );
-      await _serverStorage.updateNode(node);
-      await _serverStorage.saveDocument(clientUid: id, title: node.title, body: '${row['workspace_note'] ?? ''}');
-    } catch (_) {
+      _serverAvailable = true;
+      await _markRecordSynced(id);
+    } catch (e) {
       _serverAvailable = false;
+      throw Exception('Документ сохранён локально, но серверная синхронизация не выполнена: $e');
     }
   }
 
@@ -944,6 +976,7 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
       section: widget.section,
       record: openRecord,
       recordTitle: _titleOf(openRecord),
+      currentUserId: widget.currentUserId,
       onRefresh: () async {
         await _load();
         await widget.onRefresh?.call();

@@ -65,6 +65,8 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
   static const String _createChatUrl = '$_apiBase/create_chat.php';
   static const String _joinGroupUrl = '$_apiBase/join_group.php';
   static const String _markReadUrl = '$_apiBase/mark_chat_read.php';
+  static const String _callsUnreadUrl = '$_apiBase/calls/unread.php';
+  static const String _callsMarkSeenUrl = '$_apiBase/calls/mark_seen.php';
 
   final TextEditingController _search = TextEditingController();
 
@@ -74,6 +76,7 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
   bool _notificationsSelected = false;
   bool _callsSelected = false;
   int _notificationsUnread = 0;
+  int _callsUnread = 0;
   bool _aiSelected = false;
   bool _openingAiRoute = false;
 
@@ -252,9 +255,49 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
 
   void _startUnreadPolling() {
     _unreadTimer?.cancel();
-    _fetchUnreadTotal();
-    _unreadTimer =
-        Timer.periodic(const Duration(seconds: 6), (_) => _fetchUnreadTotal());
+
+    unawaited(_fetchUnreadTotal());
+    unawaited(_fetchCallsUnread());
+
+    _unreadTimer = Timer.periodic(
+      const Duration(seconds: 6),
+      (_) {
+        unawaited(_fetchUnreadTotal());
+        unawaited(_fetchCallsUnread());
+      },
+    );
+  }
+
+  Future<void> _fetchCallsUnread() async {
+    try {
+      final response = await http
+          .get(
+            Uri.parse(
+              '$_callsUnreadUrl?user_id=${widget.userId}',
+            ),
+          )
+          .timeout(const Duration(seconds: 8));
+
+      if (response.statusCode != 200) return;
+
+      final decoded = _decodeJson(response.body);
+
+      if (decoded is! Map || decoded['success'] != true) {
+        return;
+      }
+
+      final unread = _asInt(decoded['unread']).clamp(0, 999).toInt();
+
+      if (!mounted) return;
+
+      if (_callsUnread != unread) {
+        setState(() {
+          _callsUnread = unread;
+        });
+      }
+    } catch (_) {
+      // Badge звонков не должен ломать экран чатов.
+    }
   }
 
   int _sumUnreadRows(dynamic raw) {
@@ -616,15 +659,44 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
     });
   }
 
+  Future<void> _markCallsSeen() async {
+    try {
+      final response = await http.post(
+        Uri.parse(_callsMarkSeenUrl),
+        body: {
+          'user_id': widget.userId.toString(),
+        },
+      ).timeout(const Duration(seconds: 8));
+
+      if (response.statusCode != 200) {
+        await _fetchCallsUnread();
+        return;
+      }
+
+      if (!mounted) return;
+
+      if (_callsUnread != 0) {
+        setState(() {
+          _callsUnread = 0;
+        });
+      }
+    } catch (_) {
+      // Следующий polling восстановит значение при ошибке сети.
+    }
+  }
+
   void _selectCalls() {
     setState(() {
       _callsSelected = true;
+      _callsUnread = 0;
       _notificationsSelected = false;
       _aiSelected = false;
       _selectedChat = null;
       _selectedChatId = null;
       _selectedChatName = 'Звонки';
     });
+
+    unawaited(_markCallsSeen());
   }
 
   void _selectAiClub() {
@@ -1044,6 +1116,7 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
           SizedBox(height: mobile ? 6 : 7),
           _CallsPinnedRow(
             selected: _callsSelected,
+            unread: _callsUnread,
             mobile: mobile,
             onTap: _selectCalls,
           ),
@@ -1353,7 +1426,7 @@ class _NotificationsPinnedRow extends StatelessWidget {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: _CmrChatText.title(
-                              mobile ? 13.2 : 13.8,
+                              mobile ? 13.5 : 13.8,
                             ),
                           ),
                         ),
@@ -1407,11 +1480,13 @@ class _NotificationsPinnedRow extends StatelessWidget {
 
 class _CallsPinnedRow extends StatelessWidget {
   final bool selected;
+  final int unread;
   final bool mobile;
   final VoidCallback onTap;
 
   const _CallsPinnedRow({
     required this.selected,
+    required this.unread,
     required this.mobile,
     required this.onTap,
   });
@@ -1464,18 +1539,52 @@ class _CallsPinnedRow extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Звонки',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: _CmrChatText.title(mobile ? 13.2 : 13.8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Звонки',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: _CmrChatText.title(
+                              mobile ? 13.5 : 13.8,
+                            ),
+                          ),
+                        ),
+                        if (unread > 0) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            constraints: const BoxConstraints(
+                              minWidth: 20,
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFD92D20),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            alignment: Alignment.center,
+                            child: Text(
+                              unread > 99 ? '99+' : unread.toString(),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                height: 1,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                     const SizedBox(height: 4),
                     Text(
                       'Входящие, исходящие и пропущенные',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: _CmrChatText.muted(mobile ? 10.8 : 11.2),
+                      style: _CmrChatText.muted(mobile ? 12.8 : 12.8),
                     ),
                   ],
                 ),
@@ -1556,7 +1665,7 @@ class _AiPinnedChatRow extends StatelessWidget {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style:
-                                    _CmrChatText.title(mobile ? 13.2 : 13.8))),
+                                    _CmrChatText.title(mobile ? 13.5 : 13.8))),
                         Container(
                           padding: const EdgeInsets.symmetric(
                               horizontal: 7, vertical: 3),
@@ -1576,7 +1685,7 @@ class _AiPinnedChatRow extends StatelessWidget {
                     Text('Найду отчет, игрока, тренировку, PDF и аналитику',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: _CmrChatText.muted(mobile ? 10.8 : 11.2)),
+                        style: _CmrChatText.muted(mobile ? 12.8 : 12.8)),
                   ],
                 ),
               ),
@@ -1901,7 +2010,7 @@ class _ChatSearch extends StatelessWidget {
                 border: InputBorder.none,
                 isDense: true,
               ),
-              style: _CmrChatText.value(mobile ? 12.5 : 13),
+              style: _CmrChatText.value(mobile ? 13.0 : 13.3),
             ),
           ),
           if (controller.text.trim().isNotEmpty)
@@ -2227,7 +2336,7 @@ class _ChatRow extends StatelessWidget {
                             title,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: _CmrChatText.title(mobile ? 12.8 : 13.2),
+                            style: _CmrChatText.title(mobile ? 13.5 : 13.8),
                           ),
                         ),
                         if (lastTime.isNotEmpty) ...[
@@ -2249,7 +2358,7 @@ class _ChatRow extends StatelessWidget {
                       meta,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: _CmrChatText.muted(mobile ? 10.8 : 11.2).copyWith(
+                      style: _CmrChatText.muted(mobile ? 12.8 : 12.8).copyWith(
                         color: canOpen
                             ? unread > 0
                                 ? _CmrChatColors.text2
@@ -2381,12 +2490,12 @@ class _UserRow extends StatelessWidget {
                     Text(title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: _CmrChatText.title(mobile ? 12.8 : 13.2)),
+                        style: _CmrChatText.title(mobile ? 13.5 : 13.8)),
                     const SizedBox(height: 4),
                     Text(subtitle,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: _CmrChatText.muted(mobile ? 10.8 : 11.2)),
+                        style: _CmrChatText.muted(mobile ? 12.8 : 12.8)),
                   ],
                 ),
               ),

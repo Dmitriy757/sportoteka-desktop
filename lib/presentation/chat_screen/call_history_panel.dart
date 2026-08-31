@@ -194,20 +194,24 @@ class _CallHistoryPanelState extends State<CallHistoryPanel> {
 
     switch (status) {
       case 'accepted':
-        return incoming ? 'Входящий · принят' : 'Исходящий · принят';
       case 'ended':
-        return incoming ? 'Входящий · завершён' : 'Исходящий · завершён';
+        return incoming ? 'Входящий' : 'Исходящий';
+
       case 'missed':
         return incoming ? 'Пропущенный' : 'Без ответа';
+
       case 'declined':
         return incoming ? 'Отклонён' : 'Не принят';
+
       case 'canceled':
       case 'cancelled':
         return incoming ? 'Пропущенный' : 'Отменён';
+
       case 'ringing':
         return incoming ? 'Пропущенный' : 'Без ответа';
+
       default:
-        return incoming ? 'Входящий звонок' : 'Исходящий звонок';
+        return incoming ? 'Входящий' : 'Исходящий';
     }
   }
 
@@ -244,9 +248,13 @@ class _CallHistoryPanelState extends State<CallHistoryPanel> {
         final lastPeer = _asInt(last['peer_id']);
         final lastDate = _callDate(last);
 
+        final sameKind = _incoming(call) == _incoming(last) &&
+            _status(call) == _status(last);
+
         if (peerId > 0 &&
             peerId == lastPeer &&
-            _sameCalendarDay(callDate, lastDate)) {
+            _sameCalendarDay(callDate, lastDate) &&
+            sameKind) {
           final count = _asInt(last['_group_count']);
           last['_group_count'] = count <= 0 ? 2 : count + 1;
 
@@ -281,32 +289,38 @@ class _CallHistoryPanelState extends State<CallHistoryPanel> {
 
   String _callCountText(int count) {
     if (count <= 1) return '';
-    final mod10 = count % 10;
-    final mod100 = count % 100;
-    final word = (mod10 == 1 && mod100 != 11)
-        ? 'звонок'
-        : (mod10 >= 2 && mod10 <= 4 && !(mod100 >= 12 && mod100 <= 14))
-            ? 'звонка'
-            : 'звонков';
-    return '$count $word';
+    return ' ($count)';
   }
 
   String _durationLabel(Map<String, dynamic> call) {
     final seconds = _asInt(call['duration_seconds']);
     if (seconds <= 0) return '';
+
     final minutes = seconds ~/ 60;
     final rest = seconds % 60;
+
     return '${minutes.toString().padLeft(2, '0')}:'
         '${rest.toString().padLeft(2, '0')}';
   }
 
   String _statusLine(Map<String, dynamic> call) {
-    final parts = <String>[_status(call)];
+    final count = _asInt(call['_group_count']);
+
+    final label = '${_status(call)}${_callCountText(count)}';
+
+    // Для группы звонков не показываем длительность
+    // одного случайного звонка из всей пачки.
+    if (count > 1) {
+      return label;
+    }
+
     final duration = _durationLabel(call);
-    if (duration.isNotEmpty) parts.add(duration);
-    final countText = _callCountText(_asInt(call['_group_count']));
-    if (countText.isNotEmpty) parts.add(countText);
-    return parts.join(' · ');
+
+    if (duration.isEmpty) {
+      return label;
+    }
+
+    return '$label · $duration';
   }
 
   IconData _directionIcon(Map<String, dynamic> call) {
@@ -644,7 +658,7 @@ class _CallHistoryPanelState extends State<CallHistoryPanel> {
                             name,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: _CallText.title(11.8),
+                            style: _CallText.title(13.5),
                           ),
                           const SizedBox(height: 3),
                           Row(
@@ -661,7 +675,7 @@ class _CallHistoryPanelState extends State<CallHistoryPanel> {
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: _CallText.muted(
-                                    9.8,
+                                    12.8,
                                     color: _isMissed(call)
                                         ? const Color(0xFFD92D20)
                                         : const Color(0xFF667085),
@@ -678,7 +692,7 @@ class _CallHistoryPanelState extends State<CallHistoryPanel> {
                       Text(
                         time,
                         style: _CallText.muted(
-                          8.9,
+                          10.5,
                           color: const Color(0xFF98A2B3),
                         ),
                       ),
@@ -748,7 +762,7 @@ class _CallAvatar extends StatelessWidget {
       child: Text(
         initials,
         style: _CallText.title(
-          size >= 60 ? 16 : 11,
+          size >= 60 ? 16 : 12.5,
           color: const Color(0xFF067A46),
         ),
       ),

@@ -17,16 +17,19 @@ import 'package:image_picker/image_picker.dart';
 
 import 'package:sportoteka/core/theme/app_typography.dart';
 import 'package:sportoteka/core/utils/pref_utils.dart';
+import 'package:sportoteka/core/auth/club_access_guard.dart';
+import 'package:sportoteka/presentation/auth/club_access_screen.dart';
 import 'package:sportoteka/presentation/community_screen/news_detail_screen.dart';
+import 'package:sportoteka/presentation/community_screen/create_content_screen.dart';
 import 'package:sportoteka/presentation/community_screen/sport_community_screen.dart';
 import 'package:sportoteka/widgets/player_skills_fifa_stub.dart';
-import 'package:sportoteka/presentation/reels_screen/upload_reel_screen.dart';
 import 'package:sportoteka/presentation/reels_screen/user_reels_screen.dart';
 import 'package:sportoteka/presentation/reels_screen/reels_screen.dart';
 import 'package:sportoteka/presentation/chat_screen/chat_room_screen.dart';
 import 'package:sportoteka/presentation/chat_screen/chat_screen.dart';
 import 'package:sportoteka/presentation/chat_screen/cmr_notifications_panel.dart';
 import 'package:sportoteka/presentation/club_workspace/club_workspace_screen.dart';
+import 'package:sportoteka/presentation/club_workspace/cmr_press_assistant_screen.dart';
 import 'package:sportoteka/presentation/booking_screen/booking_screen.dart';
 import 'package:sportoteka/presentation/catalog/events_list_screen.dart';
 import 'package:sportoteka/presentation/catalog/team_list_screen.dart';
@@ -818,6 +821,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
   String lastName = "";
   String email = "";
   String role = "";
+  Map<String, dynamic>? _pressAssistantAssignment;
   String? photo;
   String? bio;
   String? location;
@@ -845,6 +849,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
   int _importantNotificationCount = 0;
   int _chatUnreadCount = 0;
   Timer? _badgePollingTimer;
+  ClubAccessGuard? _clubAccessGuard;
 
   // Мобильные окна поверх профиля. Так нижний Instagram-dock не исчезает
   // при открытии ленты, Reels, чата, сервисов и рабочей зоны.
@@ -913,6 +918,56 @@ class _MyProfileScreenState extends State<MyProfileScreen>
     return r == 'club' || r == 'клуб' || r.contains('club');
   }
 
+  bool get hasPressAssistantAccess {
+    final r = role.trim().toLowerCase();
+    if (r == 'press_assistant' ||
+        r == 'press' ||
+        r == 'press_service' ||
+        r.contains('press_assistant') ||
+        r.contains('пресс')) {
+      return true;
+    }
+
+    final assignment = _pressAssistantAssignment;
+    if (assignment == null) return false;
+    final profile =
+        '${assignment['profile'] ?? assignment['link_profile'] ?? assignment['staff_role'] ?? ''}'
+            .trim()
+            .toLowerCase();
+    return profile.contains('press') || profile.contains('пресс');
+  }
+
+  // Отдельный пресс-доступ не должен отнимать основную должность.
+  // Тренер/медик/ассистент сохраняет свой обычный Workspace и получает
+  // «Пресс-службу» дополнительным модулем. Только пользователь без другой
+  // рабочей роли открывает пресс-кабинет как основной.
+  bool get isPressAssistantRole {
+    if (!hasPressAssistantAccess) return false;
+
+    final r = role.trim().toLowerCase();
+    final hasOtherPrimaryRole =
+        r == 'coach' ||
+        r == 'trainer' ||
+        r == 'тренер' ||
+        r.contains('coach') ||
+        r.contains('trainer') ||
+        r == 'club' ||
+        r == 'клуб' ||
+        r.contains('club') ||
+        r == 'player' ||
+        r == 'игрок' ||
+        r.contains('player') ||
+        r.contains('игрок') ||
+        r == 'parent' ||
+        r == 'родитель' ||
+        r == 'guardian' ||
+        r.contains('parent') ||
+        r.contains('родител') ||
+        r.contains('guardian');
+
+    return !hasOtherPrimaryRole;
+  }
+
   bool get isCoachRole {
     final r = role.trim().toLowerCase();
     return r == 'coach' ||
@@ -959,6 +1014,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
   }
 
   String get _roleLabel {
+    if (isPressAssistantRole) return 'пресс-служба';
     if (isClubRole) return 'клуб';
     if (isCoachRole) return 'тренер';
     if (isPlayer) return 'игрок';
@@ -971,6 +1027,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
     if (_isPublicProfileView) return _publicProfileTitle;
     final team = (playerTeamName ?? '').trim();
     final club = (playerClubName ?? '').trim();
+    if (isPressAssistantRole) return 'Вы вошли как пресс-служба';
     if (isClubRole) return 'Вы вошли как клуб';
     if (isCoachRole)
       return team.isNotEmpty
@@ -995,6 +1052,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
   }
 
   String get _primaryZoneTitle {
+    if (isPressAssistantRole) return 'Пресс-служба';
     if (isPlayer) return 'Мой кабинет';
     if (isCoachRole) return 'Кабинет тренера';
     if (isClubRole) return 'Кабинет клуба';
@@ -1003,6 +1061,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
   }
 
   String get _primaryZoneSubtitle {
+    if (isPressAssistantRole) return 'создание и редактирование новостей команды';
     if (isPlayer) return 'личный прогресс, тренировки и матчи';
     if (isCoachRole) return 'команда, состав, календарь и матчи';
     if (isClubRole) return 'команды, тренеры, состав и аналитика';
@@ -1012,6 +1071,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
   }
 
   IconData get _primaryZoneIcon {
+    if (isPressAssistantRole) return Icons.campaign_outlined;
     if (isPlayer) return Icons.dashboard_customize_outlined;
     if (isCoachRole) return Icons.sports_soccer_outlined;
     if (isClubRole) return Icons.apartment_outlined;
@@ -1283,6 +1343,11 @@ class _MyProfileScreenState extends State<MyProfileScreen>
       return;
     }
 
+    if (isPressAssistantRole) {
+      await _openPressAssistantArea();
+      return;
+    }
+
     if (isParentRole) {
       _openCmrWindow(
         title: 'Мои дети',
@@ -1315,6 +1380,37 @@ class _MyProfileScreenState extends State<MyProfileScreen>
     }
 
     _openProPanel();
+  }
+
+  Future<void> _openPressAssistantArea() async {
+    final myId = await PrefUtils.getUserId() ?? widget.userId ?? 0;
+    if (!mounted || myId <= 0) return;
+
+    final assignment = _pressAssistantAssignment ?? const <String, dynamic>{};
+    int asInt(dynamic value) =>
+        value is num ? value.toInt() : int.tryParse('${value ?? ''}') ?? 0;
+    String clean(dynamic value) {
+      final text = '${value ?? ''}'.trim();
+      return text.toLowerCase() == 'null' ? '' : text;
+    }
+
+    _openCmrWindow(
+      title: 'Пресс-служба',
+      icon: Icons.campaign_outlined,
+      maxWidth: 1240,
+      maxHeight: 840,
+      child: CmrPressAssistantScreen(
+        userId: myId,
+        clubId: asInt(assignment['club_id'] ?? assignment['clubId']),
+        teamId: asInt(assignment['team_id'] ?? assignment['teamId']),
+        clubName: clean(assignment['club_name'] ?? assignment['clubName']),
+        teamName: clean(assignment['team_name'] ?? assignment['teamName']),
+        sportName: clean(assignment['sport']).isEmpty
+            ? 'Футбол'
+            : clean(assignment['sport']),
+        embedded: true,
+      ),
+    );
   }
 
   void _goToWorkspaceHub() {
@@ -1366,6 +1462,11 @@ class _MyProfileScreenState extends State<MyProfileScreen>
   }
 
   Future<void> _openProPanel() async {
+    if (isPressAssistantRole) {
+      await _openPressAssistantArea();
+      return;
+    }
+
     // Панель клуба/тренера — это отдельный рабочий стол Workspace.
     // Важно открывать через Get.to с arguments: ClubWorkspaceScreen читает
     // Get.arguments и так получает режим, club_id/trainer_id и нужную команду.
@@ -2078,10 +2179,82 @@ class _MyProfileScreenState extends State<MyProfileScreen>
     });
   }
 
+
+  // =============================
+  // CLUB ACCESS GUARD
+  // =============================
+  //
+  // Для club-аккаунта регулярно проверяем серверный status.php.
+  // Если администратор нажал
+  // «Сбросить доступ и выдать новый ключ»,
+  // сервер вернёт requires_activation=true.
+  //
+  // Legacy-клубы сервер помечает legacy=true, поэтому они
+  // никогда не будут выброшены этим guard.
+  Future<void> _startClubAccessGuard() async {
+    if (_isPublicProfileView) return;
+
+    final userId = await PrefUtils.getUserId() ?? 0;
+    if (userId <= 0) return;
+
+    final savedRole = await PrefUtils.getRole();
+    final normalizedRole = savedRole.trim().toLowerCase();
+
+    final bool isClubAccount = normalizedRole == 'club' ||
+        normalizedRole == 'клуб' ||
+        normalizedRole.contains('club');
+
+    if (!isClubAccount) {
+      _clubAccessGuard?.dispose();
+      _clubAccessGuard = null;
+      return;
+    }
+
+    final savedEmail = await PrefUtils.getUserEmail();
+
+    _clubAccessGuard?.dispose();
+
+    _clubAccessGuard = ClubAccessGuard(
+      userId: userId,
+      email: savedEmail,
+      interval: const Duration(seconds: 20),
+      onAccessBlocked: () async {
+        final guard = _clubAccessGuard;
+        _clubAccessGuard = null;
+        guard?.dispose();
+
+        final clubNameForAccess = fullName;
+        final emailForAccess =
+            savedEmail.trim().isNotEmpty ? savedEmail : email;
+
+        await PrefUtils.clearAll();
+
+        if (!mounted) return;
+
+        Get.offAll<void>(
+          () => ClubAccessScreen(
+            userId: userId,
+            clubName: clubNameForAccess,
+            email: emailForAccess,
+          ),
+          transition: Transition.noTransition,
+          duration: Duration.zero,
+        );
+      },
+    );
+
+    _clubAccessGuard!.start();
+  }
+
   @override
   void initState() {
     super.initState();
     _startBadgePolling();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _startClubAccessGuard();
+    });
     _aiCardSeed = _rnd.nextInt(999999);
     _pulseController = AnimationController(
       vsync: this,
@@ -2096,6 +2269,9 @@ class _MyProfileScreenState extends State<MyProfileScreen>
 
   @override
   void dispose() {
+    _clubAccessGuard?.dispose();
+    _clubAccessGuard = null;
+
     _badgePollingTimer?.cancel();
     _newPostText.dispose();
 
@@ -2390,6 +2566,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
         _loadFollowersData(),
         // Дизайн профиля больше не загружаем с сервера: белый социальный профиль по умолчанию.
       ]);
+      await _resolvePressAssistantAssignment();
     } catch (_) {
       // ignore
     } finally {
@@ -2552,6 +2729,113 @@ class _MyProfileScreenState extends State<MyProfileScreen>
             lastName = '';
           });
         }
+      }
+    }
+  }
+
+  Future<void> _resolvePressAssistantAssignment() async {
+    final currentUserId = await PrefUtils.getUserId() ?? 0;
+    final viewedUserId = widget.userId ?? currentUserId;
+    if (currentUserId <= 0 || viewedUserId != currentUserId) return;
+
+    bool isPressValue(dynamic value) {
+      final v = '${value ?? ''}'.trim().toLowerCase();
+      return v == 'press_assistant' ||
+          v == 'press' ||
+          v == 'press_service' ||
+          v.contains('press_assistant') ||
+          v.contains('пресс');
+    }
+
+    Map<String, dynamic>? firstPressFrom(dynamic node) {
+      if (node is Map) {
+        final map = Map<String, dynamic>.from(node);
+
+        // Новый get_trainer_profile.php возвращает отдельный массив
+        // press_assignments из club_press_staff. Используем его первым.
+        for (final key in const <String>[
+          'press_assignments',
+          'press_teams',
+        ]) {
+          final raw = map[key];
+          if (raw is List) {
+            for (final item in raw.whereType<Map>()) {
+              final assignment = Map<String, dynamic>.from(item);
+              if (isPressValue(assignment['profile']) ||
+                  isPressValue(assignment['link_profile'])) {
+                return assignment;
+              }
+            }
+          }
+        }
+
+        if (isPressValue(map['profile']) ||
+            isPressValue(map['link_profile']) ||
+            isPressValue(map['staff_role']) ||
+            isPressValue(map['position_code'])) {
+          return map;
+        }
+
+        for (final value in map.values) {
+          final found = firstPressFrom(value);
+          if (found != null) return found;
+        }
+      } else if (node is List) {
+        for (final value in node) {
+          final found = firstPressFrom(value);
+          if (found != null) return found;
+        }
+      }
+
+      return null;
+    }
+
+    try {
+      final response = await http
+          .post(
+            Uri.parse('$_apiBase/get_trainer_profile.php'),
+            headers: const <String, String>{
+              'Content-Type': 'application/json; charset=utf-8',
+            },
+            body: jsonEncode(<String, dynamic>{
+              'trainer_id': currentUserId,
+              'user_id': currentUserId,
+            }),
+          )
+          .timeout(const Duration(seconds: 12));
+
+      dynamic decoded;
+      try {
+        decoded = jsonDecode(utf8.decode(response.bodyBytes));
+      } catch (_) {
+        decoded = null;
+      }
+
+      final found = firstPressFrom(decoded);
+
+      if (!mounted) return;
+
+      if (found != null) {
+        setState(() => _pressAssistantAssignment = found);
+        return;
+      }
+
+      final r = role.trim().toLowerCase();
+      if (r.contains('press') || r.contains('пресс')) {
+        setState(() {
+          _pressAssistantAssignment = <String, dynamic>{
+            'profile': 'press_assistant',
+          };
+        });
+      }
+    } catch (_) {
+      final r = role.trim().toLowerCase();
+      if (mounted && (r.contains('press') || r.contains('пресс'))) {
+        setState(() {
+          _pressAssistantAssignment = <String, dynamic>{
+            'profile': 'press_assistant',
+          };
+        });
       }
     }
   }
@@ -3037,148 +3321,47 @@ class _MyProfileScreenState extends State<MyProfileScreen>
     }
   }
 
-  void _openCreatePostModal() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (_) {
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            return Padding(
-              padding: EdgeInsets.only(
-                  left: 16,
-                  right: 16,
-                  top: 20,
-                  bottom: MediaQuery.of(context).viewInsets.bottom + 16),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text("Новая публикация",
-                          style: TextStyle(
-                              fontSize: 18, fontWeight: FontWeight.w800)),
-                      IconButton(
-                          onPressed: () => Navigator.pop(context),
-                          icon: const Icon(Icons.close)),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Chip(
-                        label: const Text("Профиль"),
-                        avatar: const Icon(Icons.person, size: 18),
-                        backgroundColor:
-                            ProfilePalette.primaryGreen.withOpacity(0.10),
-                        side: BorderSide(
-                            color:
-                                ProfilePalette.primaryGreen.withOpacity(0.25)),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _newPostText,
-                    maxLines: 5,
-                    minLines: 1,
-                    decoration: InputDecoration(
-                      hintText: "Что нового?",
-                      border: InputBorder.none,
-                      hintStyle: TextStyle(color: Colors.grey.shade500),
-                    ),
-                  ),
-                  if (_newPostImage != null) ...[
-                    const SizedBox(height: 12),
-                    Stack(
-                      children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: Image.file(_newPostImage!,
-                              height: 200,
-                              width: double.infinity,
-                              fit: BoxFit.contain),
-                        ),
-                        Positioned(
-                          top: 8,
-                          right: 8,
-                          child: GestureDetector(
-                            onTap: () =>
-                                setModalState(() => _newPostImage = null),
-                            child: Container(
-                              decoration: BoxDecoration(
-                                  color: Colors.black.withOpacity(0.45),
-                                  shape: BoxShape.circle),
-                              padding: const EdgeInsets.all(6),
-                              child: const Icon(Icons.close,
-                                  color: Colors.white, size: 18),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      IconButton(
-                        onPressed: () async {
-                          final picked = await ImagePicker()
-                              .pickImage(source: ImageSource.gallery);
-                          if (picked != null) {
-                            setModalState(
-                                () => _newPostImage = File(picked.path));
-                          }
-                        },
-                        icon: const Icon(Icons.photo_library),
-                        color: ProfilePalette.primaryGreen,
-                      ),
-                      const Spacer(),
-                      ElevatedButton(
-                        onPressed: _posting ? null : _submitProfilePost,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: ProfilePalette.primaryGreen,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 22, vertical: 12),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(18)),
-                          elevation: 0,
-                        ),
-                        child: _posting
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                    strokeWidth: 2, color: Colors.white))
-                            : const Text("Опубликовать"),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                ],
-              ),
-            );
-          },
-        );
-      },
+  Future<void> _openContextualProfileCreate() async {
+    if (!isOwnProfile) return;
+
+    final initialType = _mode == _ProfileFeedMode.reels
+        ? CreateContentType.reel
+        : CreateContentType.post;
+
+    final createdType = await Navigator.of(context).push<CreateContentType>(
+      MaterialPageRoute<CreateContentType>(
+        builder: (_) => CreateContentScreen(
+          initialType: initialType,
+          sportName: 'Футбол',
+          postDestination: CreatePostDestination.profile,
+          authorLabel: fullName,
+        ),
+      ),
     );
+
+    if (!mounted || createdType == null) return;
+
+    if (createdType == CreateContentType.reel) {
+      await _fetchUserReels();
+      if (!mounted) return;
+      setState(() {
+        _mode = _ProfileFeedMode.reels;
+        _profileWorkspaceSection = 'reels';
+      });
+      return;
+    }
+
+    await Future.wait([
+      _fetchUserPosts(),
+      _fetchAuthorFeedPosts(),
+    ]);
+    if (!mounted) return;
+    setState(() {
+      _mode = _ProfileFeedMode.posts;
+      _profileWorkspaceSection = 'posts';
+    });
   }
 
-  Future<void> _openUploadReels() async {
-    await Navigator.push(
-      context,
-      MaterialPageRoute(
-          builder: (_) => UploadReelScreen(onUploadComplete: () async {
-                await _fetchUserReels();
-              })),
-    );
-    await _fetchUserReels();
-  }
 
   String get _profileMediaEditTitle =>
       isClubRole ? 'Изменить логотип / аватарку' : 'Изменить аватарку';
@@ -5809,9 +5992,15 @@ class _MyProfileScreenState extends State<MyProfileScreen>
                         key: ValueKey(
                             'tablet-profile-post-${_safeInt(selected['id'])}'),
                         color: Colors.white,
-                        child: _buildCmrPublicationDetail(
-                          selected,
-                          compact: compact,
+                        child: NewsDetailScreen(
+                          title: _safeStr(selected['title']).trim().isNotEmpty
+                              ? _safeStr(selected['title']).trim()
+                              : 'Публикация',
+                          body: _safeStr(selected['text']),
+                          newsId: _safeInt(selected['id']),
+                          imageUrl: _safeStr(selected['imageUrl']),
+                          embedded: true,
+                          onClose: _closeTabletProfilePost,
                         ),
                       ),
               ),
@@ -5953,12 +6142,15 @@ class _MyProfileScreenState extends State<MyProfileScreen>
                 if (imageUrl.isNotEmpty)
                   ClipRRect(
                     borderRadius: BorderRadius.circular(14),
-                    child: AspectRatio(
-                      aspectRatio: compact ? 1.05 : 1.18,
+                    child: Container(
+                      width: double.infinity,
+                      color: const Color(0xFFF4F5F4),
                       child: Image.network(
                         imageUrl,
-                        fit: BoxFit.cover,
+                        width: double.infinity,
+                        fit: BoxFit.contain,
                         errorBuilder: (_, __, ___) => Container(
+                          constraints: const BoxConstraints(minHeight: 180),
                           color: const Color(0xFFF2F4F2),
                           alignment: Alignment.center,
                           child: const Icon(
@@ -6152,6 +6344,8 @@ class _MyProfileScreenState extends State<MyProfileScreen>
   // =============================
 
   PreferredSizeWidget _buildFlagshipMobileAppBar(bool isVisitor) {
+    final creatingReel = _mode == _ProfileFeedMode.reels;
+
     return AppBar(
       toolbarHeight: 44,
       backgroundColor: Colors.white,
@@ -6170,11 +6364,45 @@ class _MyProfileScreenState extends State<MyProfileScreen>
         ),
       ),
       actions: [
-        if (!isVisitor)
+        if (!isVisitor) ...[
+          Tooltip(
+            message: 'Поиск',
+            child: IconButton(
+              onPressed: _openPeopleSearchWindow,
+              visualDensity: VisualDensity.compact,
+              icon: const Icon(
+                Icons.search_rounded,
+                size: 21,
+                color: Color(0xFF111827),
+              ),
+            ),
+          ),
+          Tooltip(
+            message: 'Создать',
+            child: IconButton(
+              onPressed: _openContextualProfileCreate,
+              visualDensity: VisualDensity.compact,
+              icon: Container(
+                width: 25,
+                height: 25,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF00A750),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.add_rounded,
+                  size: 18,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ),
           Padding(
-            padding: const EdgeInsets.only(right: 10),
+            padding: const EdgeInsets.only(right: 7),
             child: _buildImportantNotificationButton(),
           ),
+        ],
       ],
     );
   }
@@ -6411,8 +6639,8 @@ class _MyProfileScreenState extends State<MyProfileScreen>
     return [
       if (isOwnProfile)
         _ProfileFlagshipAction(
-            'К выбору Workspace',
-            'выбрать личный или рабочий кабинет',
+            'Выйти в Workspace',
+            'закрыть профиль и выбрать рабочий кабинет',
             Icons.account_tree_outlined,
             _goToWorkspaceHub,
             group: 'Навигация',
@@ -6710,7 +6938,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
             _buildTinyAction(
               Icons.add_rounded,
               'Создать',
-              _openCreateMenuSheet,
+              _openContextualProfileCreate,
             ),
           if (isOwnProfile) ...[
             const SizedBox(width: 8),
@@ -7172,33 +7400,6 @@ class _MyProfileScreenState extends State<MyProfileScreen>
                     ),
                   ),
           ),
-          if (isOwnProfile)
-            Positioned(
-              right: -2,
-              bottom: -2,
-              child: Container(
-                width: size < 60 ? 18 : 24,
-                height: size < 60 ? 18 : 24,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF00A750),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.white, width: 2),
-                ),
-                child: _uploadingProfilePhoto
-                    ? const Padding(
-                        padding: EdgeInsets.all(4),
-                        child: CircularProgressIndicator(
-                          strokeWidth: 1.8,
-                          color: Colors.white,
-                        ),
-                      )
-                    : const Icon(
-                        Icons.add_rounded,
-                        size: 14,
-                        color: Colors.white,
-                      ),
-              ),
-            ),
         ],
       ),
     );
@@ -7783,11 +7984,27 @@ class _MyProfileScreenState extends State<MyProfileScreen>
   }
 
   Widget _buildSocialBottomBar() {
-    final bottom = MediaQuery.of(context).padding.bottom;
-    final width = MediaQuery.of(context).size.width;
-    final horizontal = width < 380 ? 10.0 : 14.0;
+    final media = MediaQuery.of(context);
+    final width = media.size.width;
+    final horizontal = width < 380 ? 8.0 : 12.0;
 
-    final bottomInset = bottom > 0 ? math.min(14.0, bottom * .40) : 6.0;
+    // На Android системная navigation bar может занимать заметную высоту
+    // (3 кнопки, gesture area, фирменная панель производителя). Старый код
+    // ограничивал отступ 14 px, поэтому dock мог накладываться на неё.
+    // viewPadding сохраняет реальный системный inset даже при edge-to-edge.
+    final isAndroid = defaultTargetPlatform == TargetPlatform.android;
+    final systemBottom = math.max(media.viewPadding.bottom, media.padding.bottom);
+    final gestureBottom = media.systemGestureInsets.bottom;
+    final protectedBottom =
+        isAndroid ? math.max(systemBottom, gestureBottom) : systemBottom;
+
+    // Android: полностью поднимаем dock над системной навигацией.
+    // iOS: оставляем более привычный компактный зазор над home indicator.
+    final bottomInset = isAndroid
+        ? math.max(5.0, protectedBottom + 2.0)
+        : protectedBottom > 0
+            ? math.min(11.0, protectedBottom * .34)
+            : 8.0;
 
     Widget dockItem({
       required String keyName,
@@ -7805,10 +8022,10 @@ class _MyProfileScreenState extends State<MyProfileScreen>
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 170),
               curve: Curves.easeOutCubic,
-              width: active ? 44 : 34,
+              width: active ? 42 : 37,
               height: 36,
               decoration: BoxDecoration(
-                color: active ? const Color(0xB8EAF8F0) : Colors.transparent,
+                color: active ? const Color(0xFFDDF2E6) : Colors.transparent,
                 borderRadius: BorderRadius.circular(999),
               ),
               child: Stack(
@@ -7817,27 +8034,27 @@ class _MyProfileScreenState extends State<MyProfileScreen>
                 children: [
                   Icon(
                     icon,
-                    size: active ? 22 : 21,
+                    size: active ? 21 : 20,
                     color: active
-                        ? const Color(0xFF111827)
-                        : const Color(0xFF344054),
+                        ? const Color(0xFF067A46)
+                        : const Color(0xFF475467),
                   ),
                   if (badge > 0)
                     Positioned(
-                      top: 1,
-                      right: active ? 6 : 0,
+                      top: 0,
+                      right: active ? 5 : -1,
                       child: Container(
                         constraints: const BoxConstraints(
-                          minWidth: 16,
-                          minHeight: 16,
+                          minWidth: 17,
+                          minHeight: 17,
                         ),
                         padding: const EdgeInsets.symmetric(horizontal: 4),
                         decoration: BoxDecoration(
                           color: const Color(0xFFFF0050),
                           borderRadius: BorderRadius.circular(999),
                           border: Border.all(
-                            color: Colors.white,
-                            width: 1.6,
+                            color: const Color(0xFFF0F4F1),
+                            width: 1.7,
                           ),
                         ),
                         alignment: Alignment.center,
@@ -7872,30 +8089,32 @@ class _MyProfileScreenState extends State<MyProfileScreen>
           bottomInset,
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(21),
           child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 26, sigmaY: 26),
+            filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
             child: Container(
-              height: 52,
-              padding: const EdgeInsets.symmetric(horizontal: 7),
+              height: 54,
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(.72),
-                borderRadius: BorderRadius.circular(24),
+                // Чуть серо-зелёный фон: меню отделяется от белого контента,
+                // но остаётся лёгким и не превращается в яркую зелёную панель.
+                color: const Color(0xFFF0F4F1).withOpacity(.97),
+                borderRadius: BorderRadius.circular(21),
                 border: Border.all(
-                  color: Colors.white.withOpacity(.92),
-                  width: .9,
+                  color: const Color(0xFFDCE6E0),
+                  width: 1,
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(.10),
-                    blurRadius: 30,
-                    spreadRadius: -12,
-                    offset: const Offset(0, 14),
+                    color: Colors.black.withOpacity(.12),
+                    blurRadius: 26,
+                    spreadRadius: -10,
+                    offset: const Offset(0, 12),
                   ),
                   BoxShadow(
-                    color: Colors.black.withOpacity(.04),
-                    blurRadius: 8,
-                    spreadRadius: -5,
+                    color: const Color(0xFF067A46).withOpacity(.05),
+                    blurRadius: 12,
+                    spreadRadius: -7,
                     offset: const Offset(0, 3),
                   ),
                 ],
@@ -7956,24 +8175,20 @@ class _MyProfileScreenState extends State<MyProfileScreen>
     final actions = <_ProfileFlagshipAction>[
       if (isOwnProfile)
         _ProfileFlagshipAction(
-            'К выбору Workspace',
-            'выбрать личный или рабочий кабинет',
+            'Выйти в Workspace',
+            'закрыть профиль и выбрать рабочий кабинет',
             Icons.account_tree_outlined,
             _goToWorkspaceHub,
             group: 'Навигация',
             primary: true),
-      if (isOwnProfile)
+      if (isOwnProfile && hasPressAssistantAccess)
         _ProfileFlagshipAction(
-            'Новый пост',
-            'фото, текст и публикация в профиль',
-            Icons.add_photo_alternate_outlined,
-            _openCreatePostModal,
-            group: 'Создать'),
-      if (isOwnProfile)
-        _ProfileFlagshipAction('Новый Reels', 'короткое спортивное видео',
-            Icons.movie_creation_outlined, () {
-          _openUploadReels();
-        }, group: 'Создать'),
+            'Пресс-служба',
+            'новости назначенных команд',
+            Icons.campaign_outlined,
+            _openPressAssistantArea,
+            group: 'Работа',
+            primary: true),
       _ProfileFlagshipAction('Лента', 'новости и публикации сообщества',
           Icons.dynamic_feed_rounded, _openCommunityFeedHome,
           group: 'Основное'),
@@ -8958,59 +9173,6 @@ class _MyProfileScreenState extends State<MyProfileScreen>
     return result;
   }
 
-  void _openCreateMenuSheet() {
-    final width = MediaQuery.sizeOf(context).width;
-    if (width >= 720) {
-      // На планшете/ПК создание находится внутри общего flagship-меню «Ещё».
-      _openProfileHomeMoreSheet();
-      return;
-    }
-
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (context) {
-        return SafeArea(
-          top: false,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 18),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                    width: 42,
-                    height: 4,
-                    decoration: BoxDecoration(
-                        color: const Color(0xFFE5E7EB),
-                        borderRadius: BorderRadius.circular(999))),
-                const SizedBox(height: 16),
-                _buildSettingsRow(
-                  icon: Icons.add_photo_alternate_outlined,
-                  title: 'Новый пост',
-                  subtitle: 'Фото, текст и публикация в профиль',
-                  onTap: () {
-                    Navigator.pop(context);
-                    _openCreatePostModal();
-                  },
-                ),
-                _buildSettingsRow(
-                  icon: Icons.movie_creation_outlined,
-                  title: 'Новый Reels',
-                  subtitle: 'Короткое спортивное видео',
-                  onTap: () {
-                    Navigator.pop(context);
-                    _openUploadReels();
-                  },
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
 
   void _openProfileSettingsSheet() {
     final width = MediaQuery.sizeOf(context).width;
@@ -9108,8 +9270,8 @@ class _MyProfileScreenState extends State<MyProfileScreen>
             const SizedBox(height: 8),
             _buildSettingsRow(
               icon: Icons.account_tree_outlined,
-              title: 'К выбору Workspace',
-              subtitle: 'Выбрать личный или рабочий кабинет',
+              title: 'Выйти в Workspace',
+              subtitle: 'Закрыть профиль и выбрать рабочий кабинет',
               strong: true,
               onTap: _goToWorkspaceHub,
             ),
@@ -10358,24 +10520,30 @@ class _MyProfileScreenState extends State<MyProfileScreen>
                         size: 17, color: Color(0xFF667085)),
                   ),
                   const SizedBox(width: 10),
-                  const Expanded(
+                  Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
                           'Лента профиля',
-                          style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w900,
-                              color: Color(0xFF101828)),
+                          style: AppTypography.custom(
+                            size: 13,
+                            weight: FontWeight.w700,
+                            color: const Color(0xFF0B0F14),
+                            height: 1.18,
+                            letterSpacing: 0,
+                          ),
                         ),
-                        SizedBox(height: 2),
+                        const SizedBox(height: 2),
                         Text(
                           'Публикации, которые добавил этот пользователь',
-                          style: TextStyle(
-                              fontSize: 10.5,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFF98A2B3)),
+                          style: AppTypography.custom(
+                            size: 10.5,
+                            weight: FontWeight.w500,
+                            color: const Color(0xFF98A2B3),
+                            height: 1.25,
+                            letterSpacing: 0,
+                          ),
                         ),
                       ],
                     ),
@@ -10384,8 +10552,13 @@ class _MyProfileScreenState extends State<MyProfileScreen>
                     onPressed: () => _selectProfileWorkspaceSection('posts'),
                     style: TextButton.styleFrom(
                       foregroundColor: const Color(0xFF101828),
-                      textStyle: const TextStyle(
-                          fontSize: 10.5, fontWeight: FontWeight.w800),
+                      textStyle: AppTypography.custom(
+                        size: 10.5,
+                        weight: FontWeight.w600,
+                        color: const Color(0xFF101828),
+                        height: 1.15,
+                        letterSpacing: 0,
+                      ),
                     ),
                     child: const Text('Сетка'),
                   ),
@@ -10518,11 +10691,13 @@ class _MyProfileScreenState extends State<MyProfileScreen>
                           text,
                           maxLines: 3,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                              fontSize: 11,
-                              height: 1.35,
-                              fontWeight: FontWeight.w500,
-                              color: Color(0xFF475467)),
+                          style: AppTypography.custom(
+                            size: 11,
+                            weight: FontWeight.w400,
+                            color: const Color(0xFF475467),
+                            height: 1.35,
+                            letterSpacing: 0,
+                          ),
                         ),
                       ],
                       const SizedBox(height: 10),
@@ -10535,12 +10710,15 @@ class _MyProfileScreenState extends State<MyProfileScreen>
                               Icons.chat_bubble_outline_rounded,
                               '${_safeInt(post['comments'])}'),
                           const Spacer(),
-                          const Text(
+                          Text(
                             'Открыть',
-                            style: TextStyle(
-                                fontSize: 10.5,
-                                fontWeight: FontWeight.w900,
-                                color: Color(0xFF101828)),
+                            style: AppTypography.custom(
+                              size: 10.5,
+                              weight: FontWeight.w600,
+                              color: const Color(0xFF101828),
+                              height: 1.15,
+                              letterSpacing: 0,
+                            ),
                           ),
                           const SizedBox(width: 4),
                           const Icon(Icons.arrow_forward_ios_rounded,
@@ -10566,10 +10744,13 @@ class _MyProfileScreenState extends State<MyProfileScreen>
         const SizedBox(width: 4),
         Text(
           value,
-          style: const TextStyle(
-              fontSize: 10.5,
-              fontWeight: FontWeight.w700,
-              color: Color(0xFF667085)),
+          style: AppTypography.custom(
+            size: 10.5,
+            weight: FontWeight.w500,
+            color: const Color(0xFF667085),
+            height: 1.15,
+            letterSpacing: 0,
+          ),
         ),
       ],
     );

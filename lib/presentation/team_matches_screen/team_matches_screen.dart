@@ -11,6 +11,7 @@ import 'package:sportoteka/core/theme/app_typography.dart';
 
 import 'package:sportoteka/core/utils/pref_utils.dart';
 import 'package:sportoteka/presentation/team_matches_screen/team_match_detail_screen.dart';
+import 'package:sportoteka/presentation/team_video_analysis/team_match_video_workspace_screen.dart';
 
 class TeamMatchesScreen extends StatefulWidget {
   const TeamMatchesScreen({super.key});
@@ -517,20 +518,17 @@ class _TeamMatchesScreenState extends State<TeamMatchesScreen> {
   }
 
   Future<void> _openMatchDetail(Map<String, dynamic> match, int matchId) async {
-    final fullscreen = _shouldOpenMatchFullscreen(context);
-
-    await Get.to(
-      () => const TeamMatchDetailScreen(),
-      fullscreenDialog: fullscreen,
-      transition: fullscreen ? Transition.cupertino : Transition.fadeIn,
-      arguments: {
-        "match": match,
-        "match_id": matchId,
-        "team_id": teamId,
-        "force_fullscreen": fullscreen,
-        "force_mobile_layout": fullscreen,
-        "open_as_window": !fullscreen,
-      },
+    // Один новый маршрут детального матча: Tracker-подобный видео workspace.
+    // На desktop/tablet/phone используется один адаптивный экран.
+    await Navigator.of(context, rootNavigator: true).push(
+      MaterialPageRoute<void>(
+        builder: (_) => TeamMatchVideoWorkspaceScreen(
+          matchId: matchId,
+          teamId: teamId,
+          teamName: teamName,
+          initialMatch: Map<String, dynamic>.from(match),
+        ),
+      ),
     );
   }
 

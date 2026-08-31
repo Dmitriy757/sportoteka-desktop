@@ -179,7 +179,7 @@ class CallSessionService extends ChangeNotifier {
     required lk.RemoteParticipant participant,
     required int callId,
   }) async {
-    if (!Platform.isAndroid) return;
+    if (!kDebugMode || !Platform.isAndroid) return;
 
     for (var i = 0; i < 20; i++) {
       await Future<void>.delayed(
@@ -205,7 +205,7 @@ class CallSessionService extends ChangeNotifier {
     lk.RemoteAudioTrack track,
     int callId,
   ) async {
-    if (!Platform.isAndroid) return;
+    if (!kDebugMode || !Platform.isAndroid) return;
 
     for (var i = 0; i < 8; i++) {
       await Future<void>.delayed(

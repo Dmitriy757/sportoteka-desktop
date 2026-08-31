@@ -15,6 +15,7 @@ class SportotekaTrainerProjectScreen extends StatefulWidget {
     required this.players,
     this.onRefresh,
     this.onClose,
+    this.currentUserId = 0,
   });
 
   final Map<String, dynamic> trainer;
@@ -23,6 +24,7 @@ class SportotekaTrainerProjectScreen extends StatefulWidget {
   final List<Map<String, dynamic>> players;
   final Future<void> Function()? onRefresh;
   final VoidCallback? onClose;
+  final int currentUserId;
 
   @override
   State<SportotekaTrainerProjectScreen> createState() => _SportotekaTrainerProjectScreenState();
@@ -119,6 +121,7 @@ class _SportotekaTrainerProjectScreenState extends State<SportotekaTrainerProjec
       entityType: 'trainer',
       entityId: '$_trainerId',
       clubId: widget.clubId,
+      currentUserId: widget.currentUserId,
       serverParentKey: 'entity:trainer:$_trainerId',
       onEdit: _editTrainer,
       onRefresh: () async {
@@ -140,6 +143,7 @@ class _SportotekaTrainerProjectScreenState extends State<SportotekaTrainerProjec
       propertiesFor: (row) => _propertiesFor(file.section, row),
       localStorageKey: '',
       clubId: widget.clubId,
+      currentUserId: widget.currentUserId,
       serverParentKey: 'trainer:${_trainerId}:${file.section.name}',
       allowCreateDocuments: true,
       attachmentEntityType: 'trainer',
@@ -299,6 +303,7 @@ class _SportotekaTrainerProjectScreenState extends State<SportotekaTrainerProjec
         SportotekaTeamProjectScreen(
           team: Map<String, dynamic>.from(row),
           clubId: widget.clubId,
+          currentUserId: widget.currentUserId,
           players: widget.players,
           onRefresh: widget.onRefresh,
         ),
@@ -325,6 +330,7 @@ class _SportotekaTrainerProjectScreenState extends State<SportotekaTrainerProjec
       entityType: identity.type,
       entityId: identity.id,
       clubId: widget.clubId,
+      currentUserId: widget.currentUserId,
       serverParentKey: 'entity:${identity.type}:${identity.id}',
       fileUrl: _findFileUrl(row),
       onRefresh: widget.onRefresh,

@@ -9,6 +9,7 @@ import 'package:sportoteka/presentation/community_screen/app_video_player_screen
 import 'package:sportoteka/presentation/community_screen/in_app_web_video_screen.dart';
 import 'package:sportoteka/presentation/community_screen/news_detail_screen.dart';
 import 'package:sportoteka/presentation/community_screen/create_post_editor_screen.dart';
+import 'package:sportoteka/presentation/community_screen/create_content_screen.dart';
 import 'package:sportoteka/presentation/community_screen/post_blocks.dart';
 
 class FeedPalette {
@@ -59,8 +60,13 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
   bool isLoading = false;
   bool isRefreshing = false;
   bool _showCreateEditor = false;
+  Map<String, dynamic>? _editingPost;
   Map<String, dynamic>? _openedPost;
   bool _openedPostFocusComment = false;
+
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+  bool _onlyMine = false;
 
   int _currentUserId = 0;
 
@@ -68,6 +74,12 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
   void initState() {
     super.initState();
     _init();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _init() async {
@@ -257,11 +269,26 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
                 ? (decoded['posts'] as List)
                 : [];
 
-        final filtered = data.where(
-          (raw) =>
-              (raw['category'] ?? '').toString().toLowerCase() ==
-              widget.sportName.toLowerCase(),
-        );
+        // Community и профиль — разные источники публикаций.
+        // Даже если get_posts.php вернёт оба типа, профильные посты
+        // никогда не должны попадать в общую Community-ленту.
+        final filtered = data.where((raw) {
+          if (raw is! Map) return false;
+
+          final category =
+              (raw['category'] ?? '').toString().trim().toLowerCase();
+          if (category != widget.sportName.toLowerCase()) return false;
+
+          final visibility =
+              (raw['visibility'] ?? '').toString().trim().toLowerCase();
+          if (visibility == 'profile') return false;
+
+          final postType =
+              (raw['post_type'] ?? '').toString().trim().toLowerCase();
+          if (postType.isNotEmpty && postType != 'post') return false;
+
+          return true;
+        });
 
         final list = filtered.map((raw) {
           final firstName = _safeStr(raw['first_name']);
@@ -285,6 +312,10 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
             'id': _safeInt(raw['id']),
             'title': _safeStr(raw['title']),
             'text': plainBody,
+            'rawBody': rawBody,
+            'category': _safeStr(raw['category']),
+            'team': _safeStr(raw['team'] ?? raw['team_name']),
+            'coverUrl': image,
             'imageUrl': image.isNotEmpty ? image : previewImage,
             'hasVideo': hasVideo,
             'videoUrl': videoUrl,
@@ -321,21 +352,40 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
 
   Future<void> _openCreateEditor() async {
     if (!mounted) return;
-    setState(() => _showCreateEditor = true);
+    setState(() {
+      _editingPost = null;
+      _openedPost = null;
+      _showCreateEditor = true;
+    });
+  }
+
+  Future<void> _openEditEditor(Map<String, dynamic> post) async {
+    if (!mounted) return;
+    if (_safeInt(post['user_id']) != _currentUserId) return;
+    setState(() {
+      _editingPost = Map<String, dynamic>.from(post);
+      _openedPost = null;
+      _showCreateEditor = true;
+    });
   }
 
   Future<void> _closeCreateEditor({bool refresh = false}) async {
     if (!mounted) return;
-    setState(() => _showCreateEditor = false);
+    setState(() {
+      _showCreateEditor = false;
+      _editingPost = null;
+    });
     if (refresh) await _fetchPosts();
   }
 
-  Future<void> _toggleLike(int postId, int index) async {
+  Future<void> _toggleLike(int postId) async {
     if (_currentUserId <= 0) {
       _showError("Нужно войти в аккаунт");
       return;
     }
 
+    final index = posts.indexWhere((p) => _safeInt(p['id']) == postId);
+    if (index < 0) return;
     final bool wasLiked = (posts[index]['liked'] == true);
 
     setState(() {
@@ -387,6 +437,113 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
             (posts[index]['likes'] ?? 0) + (wasLiked ? 1 : -1);
         if ((posts[index]['likes'] ?? 0) < 0) posts[index]['likes'] = 0;
       });
+    }
+  }
+
+  List<String> _hashtagsForPost(Map<String, dynamic> post) {
+    final source = '${_safeStr(post['title'])} ${_safeStr(post['text'])}';
+    final matches = RegExp(r'#([A-Za-zА-Яа-яЁё0-9_]{2,40})', unicode: true)
+        .allMatches(source);
+    final out = <String>[];
+    final seen = <String>{};
+    for (final match in matches) {
+      final value = '#${match.group(1) ?? ''}';
+      final key = value.toLowerCase();
+      if (value.length > 1 && seen.add(key)) out.add(value);
+    }
+    return out;
+  }
+
+  List<Map<String, dynamic>> get _visiblePosts {
+    final q = _searchQuery.trim().toLowerCase();
+    return posts.where((post) {
+      if (_onlyMine && _safeInt(post['user_id']) != _currentUserId) {
+        return false;
+      }
+      if (q.isEmpty) return true;
+      final tags = _hashtagsForPost(post).join(' ');
+      final haystack = <String>[
+        _safeStr(post['title']),
+        _safeStr(post['text']),
+        _safeStr(post['authorName']),
+        _safeStr(post['team']),
+        _safeStr(post['category']),
+        tags,
+      ].join(' ').toLowerCase();
+      return haystack.contains(q);
+    }).toList(growable: false);
+  }
+
+  void _setSearch(String value) {
+    if (!mounted) return;
+    setState(() => _searchQuery = value);
+  }
+
+  void _activateHashtag(String hashtag) {
+    _searchController.text = hashtag;
+    _searchController.selection = TextSelection.collapsed(
+      offset: _searchController.text.length,
+    );
+    _setSearch(hashtag);
+  }
+
+  void _clearSearch() {
+    _searchController.clear();
+    _setSearch('');
+  }
+
+  Future<void> _deleteOwnPost(Map<String, dynamic> post) async {
+    final postId = _safeInt(post['id']);
+    if (postId <= 0 || _safeInt(post['user_id']) != _currentUserId) return;
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Удалить публикацию?'),
+        content: const Text('Публикация и её комментарии будут удалены.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.redAccent),
+            child: const Text('Удалить'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+
+    try {
+      final res = await http.post(
+        Uri.parse('$_apiBase/delete_post.php'),
+        body: {
+          'post_id': postId.toString(),
+          'user_id': _currentUserId.toString(),
+        },
+      );
+      if (res.statusCode != 200) {
+        _showError('Не удалось удалить публикацию');
+        return;
+      }
+      final decoded = json.decode(res.body);
+      final success = decoded is Map &&
+          (decoded['success'] == true ||
+              decoded['status'] == 'ok' ||
+              decoded['status'] == 'deleted');
+      if (!success) {
+        _showError('Не удалось удалить публикацию');
+        return;
+      }
+      if (!mounted) return;
+      setState(() {
+        posts.removeWhere((p) => _safeInt(p['id']) == postId);
+        if (_safeInt(_openedPost?['id']) == postId) _openedPost = null;
+      });
+    } catch (_) {
+      _showError('Ошибка сети при удалении');
     }
   }
 
@@ -576,57 +733,49 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
         final width = constraints.maxWidth;
         final mobile = width < 640;
         final desktop = width >= 700;
-        // Планшетный двухпанельный режим включаем раньше.
-        // На небольших планшетах лента остаётся слева, детали — справа.
         final supportsSidePanel = width >= 600;
-        final horizontal = mobile ? 6.0 : 10.0;
+        final horizontal = mobile ? 0.0 : 10.0;
+        final visiblePosts = _visiblePosts;
 
         final feed = RefreshIndicator(
           onRefresh: _fetchPosts,
           color: FeedPalette.primaryGreen,
           child: ListView(
-            physics: const AlwaysScrollableScrollPhysics(),
+            physics: mobile
+                ? const BouncingScrollPhysics(
+                    parent: AlwaysScrollableScrollPhysics(),
+                  )
+                : const AlwaysScrollableScrollPhysics(),
             padding: EdgeInsets.fromLTRB(
               horizontal,
-              mobile ? 8 : 10,
+              mobile ? 0 : 10,
               horizontal,
-              mobile ? 112 : 18,
+              mobile ? 116 : 18,
             ),
             children: [
-              _buildHeaderCard(),
-              const SizedBox(height: 10),
-              _buildCreatePostCard(),
-              const SizedBox(height: 10),
+              if (!mobile) ...[
+                _buildHeaderCard(),
+                const SizedBox(height: 10),
+              ],
+              _buildFeedControls(
+                mobile: mobile,
+                resultCount: visiblePosts.length,
+              ),
+              if (!mobile) ...[
+                const SizedBox(height: 10),
+                _buildCreatePostCard(),
+              ],
+              SizedBox(height: mobile ? 2 : 10),
               if (isLoading && posts.isEmpty) ...[
                 _buildSkeletonPost(),
                 const SizedBox(height: 8),
                 _buildSkeletonPost(),
-              ] else if (posts.isEmpty) ...[
-                _whiteCard(
-                  child: Column(
-                    children: [
-                      const Icon(
-                        Icons.dynamic_feed_outlined,
-                        size: 32,
-                        color: FeedPalette.secondary,
-                      ),
-                      const SizedBox(height: 10),
-                      Text('Пока нет публикаций', style: _title(14.5)),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Создайте первый пост — он появится в общей ленте.',
-                        textAlign: TextAlign.center,
-                        style: _text(11.8),
-                      ),
-                      const SizedBox(height: 12),
-                      _buildCreateButton(),
-                    ],
-                  ),
-                ),
+              ] else if (visiblePosts.isEmpty) ...[
+                _buildEmptyFeedState(),
               ] else ...[
                 ...List.generate(
-                  posts.length,
-                  (i) => _buildPostCard(posts[i], i),
+                  visiblePosts.length,
+                  (i) => _buildPostCard(visiblePosts[i], i),
                 ),
                 if (isRefreshing)
                   const Padding(
@@ -643,9 +792,6 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
           ),
         );
 
-        // Основная лента всегда сохраняет одинаковое дерево виджетов.
-        // Это повторяет CmrPlayerProfileScreen: открытие внутренней панели
-        // не заменяет весь экран и не вызывает визуальный скачок компоновки.
         final core = Container(
           color: Colors.white,
           child: Align(
@@ -661,13 +807,31 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
 
         Widget? sidePanel;
         if (_showCreateEditor) {
-          sidePanel = CreatePostEditorScreen(
-            sportName: widget.sportName,
-            isEdit: false,
-            embedded: true,
-            onClose: () => _closeCreateEditor(),
-            onSaved: () => _closeCreateEditor(refresh: true),
-          );
+          final editing = _editingPost;
+          if (editing == null) {
+            sidePanel = CreateContentScreen(
+              initialType: CreateContentType.post,
+              sportName: widget.sportName,
+              postDestination: CreatePostDestination.community,
+              allowReels: false,
+              embedded: true,
+              onClose: () => _closeCreateEditor(),
+              onPostSaved: () => _fetchPosts(),
+            );
+          } else {
+            final rawBody = _safeStr(editing['rawBody']);
+            sidePanel = CreatePostEditorScreen(
+              sportName: widget.sportName,
+              isEdit: true,
+              postId: _safeInt(editing['id']),
+              initialTitle: _safeStr(editing['title']),
+              initialCoverUrl: _safeStr(editing['coverUrl']),
+              initialBlocks: PostHtmlParser.htmlToBlocks(rawBody),
+              embedded: true,
+              onClose: () => _closeCreateEditor(),
+              onSaved: () => _closeCreateEditor(refresh: true),
+            );
+          }
         } else if (_openedPost != null) {
           final openedPost = _openedPost!;
           sidePanel = NewsDetailScreen(
@@ -686,42 +850,53 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
           );
         }
 
+        final workspaceBody = supportsSidePanel
+            ? Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(child: core),
+                  if (sidePanel != null) ...[
+                    Container(width: .7, color: FeedPalette.border),
+                    SizedBox(
+                      width: width >= 1400
+                          ? 560
+                          : width >= 1180
+                              ? 520
+                              : width >= 900
+                                  ? 480
+                                  : (width * .58).clamp(390.0, 460.0),
+                      child: ClipRect(child: sidePanel),
+                    ),
+                  ] else if (desktop) ...[
+                    Container(width: .7, color: FeedPalette.border),
+                    SizedBox(
+                      width: width >= 1240 ? 340 : width >= 900 ? 300 : 260,
+                      child: _buildDesktopInsightsRail(),
+                    ),
+                  ],
+                ],
+              )
+            : (sidePanel ?? core);
+
         final workspace = Container(
           color: Colors.white,
-          padding: EdgeInsets.zero,
-          child: supportsSidePanel
-                  ? Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Expanded(child: core),
-                        if (sidePanel != null) ...[
-                          Container(width: .7, color: FeedPalette.border),
-                          SizedBox(
-                            // Подробный просмотр специально шире основной
-                            // вспомогательной колонки: граница уходит левее,
-                            // поэтому тексту, фото и видео хватает места.
-                            width: width >= 1400
-                                ? 560
-                                : width >= 1180
-                                    ? 520
-                                    : width >= 900
-                                        ? 480
-                                        : (width * .58).clamp(390.0, 460.0),
-                            child: ClipRect(child: sidePanel),
-                          ),
-                        ] else if (desktop) ...[
-                          Container(width: .7, color: FeedPalette.border),
-                          SizedBox(
-                            width: width >= 1240 ? 340 : width >= 900 ? 300 : 260,
-                            child: _buildDesktopInsightsRail(),
-                          ),
-                        ],
-                      ],
-                    )
-                  : (sidePanel ?? core),
+          child: workspaceBody,
         );
 
-        if (widget.embedded) return workspace;
+        if (widget.embedded) {
+          // На телефоне Community открывается внутри оболочки профиля, где
+          // внешняя AppBar скрыта. Поэтому верхний safe-area должен учитывать
+          // сам embedded-экран, иначе поиск и кнопка создания попадают под
+          // status bar / Dynamic Island и часть зоны нажатия блокируется.
+          if (mobile) {
+            return SafeArea(
+              top: true,
+              bottom: false,
+              child: workspace,
+            );
+          }
+          return workspace;
+        }
 
         return Scaffold(
           backgroundColor: Colors.white,
@@ -732,14 +907,15 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
             titleSpacing: 14,
             title: Text('Соцлента и новости', style: _title(15.5)),
             actions: [
-              IconButton(
-                tooltip: 'Новый пост',
-                onPressed: _openCreateEditor,
-                icon: const Icon(
-                  Icons.add_rounded,
-                  color: FeedPalette.primaryGreen,
+              if (!mobile)
+                IconButton(
+                  tooltip: 'Создать',
+                  onPressed: _openCreateEditor,
+                  icon: const Icon(
+                    Icons.add_rounded,
+                    color: FeedPalette.primaryGreen,
+                  ),
                 ),
-              ),
               const SizedBox(width: 6),
             ],
           ),
@@ -1070,7 +1246,7 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
             ),
           ),
           item(Icons.dynamic_feed_rounded, 'Общая лента', 'публикации и новости', active: true),
-          item(Icons.add_box_outlined, 'Создать пост', 'фото, текст или видео', onTap: _openCreateEditor),
+          item(Icons.add_box_outlined, 'Создать', 'фото, текст или видео', onTap: _openCreateEditor),
           item(Icons.refresh_rounded, 'Обновить', 'загрузить новые записи', onTap: _fetchPosts),
           const Spacer(),
           Padding(
@@ -1079,6 +1255,295 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildFeedControls({
+    required bool mobile,
+    required int resultCount,
+  }) {
+    final hasQuery = _searchQuery.trim().isNotEmpty;
+
+    Widget filterButton({
+      required String label,
+      required bool selected,
+      required VoidCallback onTap,
+    }) {
+      return Material(
+        color: selected ? FeedPalette.graphite : FeedPalette.soft,
+        borderRadius: BorderRadius.circular(999),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(999),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
+            child: Text(
+              label,
+              style: _text(
+                10.4,
+                weight: FontWeight.w600,
+                color: selected ? Colors.white : FeedPalette.text,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      padding: EdgeInsets.fromLTRB(
+        mobile ? 10 : 12,
+        mobile ? 8 : 10,
+        mobile ? 10 : 12,
+        mobile ? 8 : 10,
+      ),
+      color: Colors.white,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _searchController,
+                  onChanged: _setSearch,
+                  textInputAction: TextInputAction.search,
+                  style: _text(12.2, color: FeedPalette.text),
+                  decoration: InputDecoration(
+                    hintText: 'Поиск публикаций и #хэштегов',
+                    hintStyle:
+                        _text(11.5, color: const Color(0xFF98A2B3)),
+                    prefixIcon: const Icon(
+                      Icons.search_rounded,
+                      size: 20,
+                      color: FeedPalette.secondary,
+                    ),
+                    suffixIcon: hasQuery
+                        ? IconButton(
+                            tooltip: 'Очистить поиск',
+                            onPressed: _clearSearch,
+                            icon: const Icon(Icons.close_rounded, size: 18),
+                          )
+                        : null,
+                    filled: true,
+                    fillColor: FeedPalette.soft,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 11),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(
+                        color: FeedPalette.greenBorder,
+                        width: 1,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              if (_currentUserId > 0) ...[
+                const SizedBox(width: 4),
+                Tooltip(
+                  message: 'Создать',
+                  child: IconButton(
+                    onPressed: _openCreateEditor,
+                    visualDensity: VisualDensity.compact,
+                    padding: const EdgeInsets.all(6),
+                    constraints: const BoxConstraints(
+                      minWidth: 36,
+                      minHeight: 36,
+                    ),
+                    icon: Container(
+                      width: 25,
+                      height: 25,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: FeedPalette.primaryGreen,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(
+                        Icons.add_rounded,
+                        size: 18,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 9),
+          Row(
+            children: [
+              filterButton(
+                label: 'Все',
+                selected: !_onlyMine,
+                onTap: () => setState(() => _onlyMine = false),
+              ),
+              const SizedBox(width: 7),
+              filterButton(
+                label: 'Мои',
+                selected: _onlyMine,
+                onTap: () => setState(() => _onlyMine = true),
+              ),
+              const Spacer(),
+              Text(
+                '$resultCount',
+                style: _text(
+                  10.2,
+                  weight: FontWeight.w600,
+                  color: FeedPalette.textMuted,
+                ),
+              ),
+            ],
+          ),
+          if (hasQuery && _searchQuery.trim().startsWith('#')) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                const Icon(
+                  Icons.tag_rounded,
+                  size: 15,
+                  color: FeedPalette.primaryGreenDark,
+                ),
+                const SizedBox(width: 5),
+                Expanded(
+                  child: Text(
+                    'Публикации по ${_searchQuery.trim()}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: _text(
+                      10.2,
+                      weight: FontWeight.w600,
+                      color: FeedPalette.primaryGreenDark,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyFeedState() {
+    final hasQuery = _searchQuery.trim().isNotEmpty;
+    final title = hasQuery
+        ? 'Ничего не найдено'
+        : _onlyMine
+            ? 'У вас пока нет публикаций'
+            : 'Пока нет публикаций';
+    final subtitle = hasQuery
+        ? 'Попробуйте другой текст или нажмите на хэштег в публикации.'
+        : _onlyMine
+            ? 'Создайте свой первый пост — он появится здесь и в общей ленте.'
+            : 'Создайте первый пост — он появится в общей ленте.';
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 12),
+      child: _whiteCard(
+        child: Column(
+          children: [
+            Icon(
+              hasQuery ? Icons.search_off_rounded : Icons.dynamic_feed_outlined,
+              size: 32,
+              color: FeedPalette.secondary,
+            ),
+            const SizedBox(height: 10),
+            Text(title, style: _title(14.5)),
+            const SizedBox(height: 4),
+            Text(
+              subtitle,
+              textAlign: TextAlign.center,
+              style: _text(11.8),
+            ),
+            if (!hasQuery && _currentUserId > 0) ...[
+              const SizedBox(height: 12),
+              _buildCreateButton(),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPostHashtags(Map<String, dynamic> post) {
+    final tags = _hashtagsForPost(post);
+    if (tags.isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
+      child: Wrap(
+        spacing: 7,
+        runSpacing: 6,
+        children: [
+          for (final tag in tags.take(6))
+            InkWell(
+              onTap: () => _activateHashtag(tag),
+              borderRadius: BorderRadius.circular(8),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+                child: Text(
+                  tag,
+                  style: _text(
+                    11.6,
+                    weight: FontWeight.w600,
+                    color: FeedPalette.primaryGreenDark,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOwnPostMenu(Map<String, dynamic> post) {
+    if (_safeInt(post['user_id']) != _currentUserId || _currentUserId <= 0) {
+      return const SizedBox.shrink();
+    }
+
+    return PopupMenuButton<String>(
+      tooltip: 'Действия с публикацией',
+      padding: EdgeInsets.zero,
+      icon: const Icon(
+        Icons.more_horiz_rounded,
+        size: 21,
+        color: FeedPalette.text,
+      ),
+      onSelected: (value) {
+        if (value == 'edit') _openEditEditor(post);
+        if (value == 'delete') _deleteOwnPost(post);
+      },
+      itemBuilder: (_) => const [
+        PopupMenuItem<String>(
+          value: 'edit',
+          child: Row(
+            children: [
+              Icon(Icons.edit_outlined, size: 18),
+              SizedBox(width: 9),
+              Text('Редактировать'),
+            ],
+          ),
+        ),
+        PopupMenuItem<String>(
+          value: 'delete',
+          child: Row(
+            children: [
+              Icon(Icons.delete_outline_rounded, size: 18, color: Colors.red),
+              SizedBox(width: 9),
+              Text('Удалить', style: TextStyle(color: Colors.red)),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -1092,7 +1557,7 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
       icon: const Icon(Icons.add_rounded, size: 17),
-      label: Text('Создать пост', style: _text(11.5, weight: FontWeight.w600, color: Colors.white)),
+      label: Text('Создать', style: _text(11.5, weight: FontWeight.w600, color: Colors.white)),
     );
   }
 
@@ -1226,7 +1691,7 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => MyProfileScreen(userId: userId),
+                        builder: (_) => MyProfileScreen(userId: userId, publicView: true),
                       ),
                     );
                   },
@@ -1251,43 +1716,43 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
                           ],
                         ),
                       ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 9,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: FeedPalette.greenSoft,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            _statusDot(
-                              color: _postAccent(post),
-                              size: 4.5,
-                              glow: false,
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 9,
+                              vertical: 6,
                             ),
-                            const SizedBox(width: 6),
-                            Text(
-                              widget.sportName,
-                              style: _text(
-                                9.6,
-                                weight: FontWeight.w600,
-                                color: FeedPalette.primaryGreenDark,
-                              ),
+                            decoration: BoxDecoration(
+                              color: FeedPalette.greenSoft,
+                              borderRadius: BorderRadius.circular(8),
                             ),
-                            const SizedBox(width: 5),
-                            Text(
-                              '· ${_postKind(post)}',
-                              style: _text(
-                                9.2,
-                                weight: FontWeight.w500,
-                                color: FeedPalette.textMuted,
-                              ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                _statusDot(
+                                  color: _postAccent(post),
+                                  size: 4.5,
+                                  glow: false,
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  widget.sportName,
+                                  style: _text(
+                                    9.6,
+                                    weight: FontWeight.w600,
+                                    color: FeedPalette.primaryGreenDark,
+                                  ),
+                                ),
+                              ],
                             ),
+                          ),
+                          if (_safeInt(post['user_id']) == _currentUserId) ...[
+                            const SizedBox(width: 2),
+                            _buildOwnPostMenu(post),
                           ],
-                        ),
+                        ],
                       ),
                     ],
                   ),
@@ -1320,22 +1785,20 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
                 ),
               if (text.trim().isNotEmpty)
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+                  padding: const EdgeInsets.fromLTRB(14, 0, 14, 8),
                   child: Text(
                     text,
                     style: _text(13.2, weight: FontWeight.w400, color: FeedPalette.text),
-                    maxLines: img.isEmpty ? 5 : 3,
+                    maxLines: img.isEmpty ? 6 : 4,
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
+              _buildPostHashtags(post),
               if (img.isNotEmpty)
                 ClipRRect(
-                  borderRadius: const BorderRadius.only(
-                    bottomLeft: Radius.circular(14),
-                    bottomRight: Radius.circular(14),
-                  ),
+                  borderRadius: BorderRadius.zero,
                   child: AspectRatio(
-                    aspectRatio: 16 / 9,
+                    aspectRatio: 1,
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
@@ -1343,7 +1806,7 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
                         Image.network(
                           img,
                           width: double.infinity,
-                          fit: BoxFit.contain,
+                          fit: BoxFit.cover,
                           errorBuilder: (_, __, ___) => Container(
                             color: Colors.grey[200],
                             child: const Center(
@@ -1381,108 +1844,84 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
                   ),
                 ),
               Padding(
-                padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+                padding: const EdgeInsets.fromLTRB(12, 9, 12, 2),
                 child: Row(
                   children: [
-                    InkWell(
-                      onTap: () => _toggleLike(_safeInt(post['id']), index),
-                      borderRadius: BorderRadius.circular(999),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: FeedPalette.background,
-                          borderRadius: BorderRadius.circular(999),
-                                                  ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            _statusDot(
-                              color: liked
-                                  ? const Color(0xFFD92D20)
-                                  : const Color(0xFF8A9099),
-                              size: 4.5,
-                              glow: liked,
-                            ),
-                            const SizedBox(width: 6),
-                            AnimatedSwitcher(
-                              duration: const Duration(milliseconds: 160),
-                              transitionBuilder: (child, anim) =>
-                                  ScaleTransition(scale: anim, child: child),
-                              child: Icon(
-                                liked ? Icons.favorite : Icons.favorite_border,
-                                key: ValueKey(liked),
-                                size: 18,
-                                color: liked
-                                    ? Colors.redAccent
-                                    : FeedPalette.textMuted,
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              likes.toString(),
-                              style: _text(11.5, weight: FontWeight.w600),
-                            ),
-                          ],
+                    IconButton(
+                      tooltip: liked ? 'Убрать отметку' : 'Нравится',
+                      onPressed: () => _toggleLike(_safeInt(post['id'])),
+                      icon: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 160),
+                        transitionBuilder: (child, anim) =>
+                            ScaleTransition(scale: anim, child: child),
+                        child: Icon(
+                          liked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                          key: ValueKey(liked),
+                          size: 24,
+                          color: liked ? const Color(0xFFE53935) : FeedPalette.text,
                         ),
                       ),
                     ),
-                    const SizedBox(width: 10),
-                    InkWell(
-                      onTap: () => _openPost(post, focusComment: true),
-                      borderRadius: BorderRadius.circular(999),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: FeedPalette.background,
-                          borderRadius: BorderRadius.circular(999),
-                                                  ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            _statusDot(
-                              color: comments > 0
-                                  ? FeedPalette.primaryGreenDark
-                                  : const Color(0xFF8A9099),
-                              size: 4.5,
-                              glow: false,
-                            ),
-                            const SizedBox(width: 6),
-                            const Icon(
-                              Icons.comment_outlined,
-                              size: 18,
-                              color: FeedPalette.textMuted,
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              comments.toString(),
-                              style: _text(11.5, weight: FontWeight.w600),
-                            ),
-                          ],
-                        ),
+                    IconButton(
+                      tooltip: 'Комментарий',
+                      onPressed: () => _openPost(post, focusComment: true),
+                      icon: const Icon(
+                        Icons.mode_comment_outlined,
+                        size: 23,
+                        color: FeedPalette.text,
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Открыть публикацию',
+                      onPressed: () => _openPost(post, focusComment: false),
+                      icon: const Icon(
+                        Icons.open_in_new_rounded,
+                        size: 21,
+                        color: FeedPalette.text,
                       ),
                     ),
                     const Spacer(),
-                    TextButton(
-                      onPressed: () => _openPost(post, focusComment: false),
-                      style: TextButton.styleFrom(
-                        foregroundColor: FeedPalette.primaryGreen,
-                      ),
-                      child: Text(
-                        "Подробнее",
-                        style: _title(
-                          11.8,
-                          weight: FontWeight.w600,
-                          color: FeedPalette.primaryGreenDark,
-                        ),
+                    Text(
+                      _postKind(post),
+                      style: _text(
+                        9.8,
+                        weight: FontWeight.w500,
+                        color: FeedPalette.textMuted,
                       ),
                     ),
                   ],
+                ),
+              ),
+              if (likes > 0)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+                  child: Text(
+                    '$likes ${likes == 1 ? 'отметка' : 'отметок'}',
+                    style: _text(
+                      11.2,
+                      weight: FontWeight.w600,
+                      color: FeedPalette.text,
+                    ),
+                  ),
+                ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 2, 16, 12),
+                child: InkWell(
+                  onTap: () => _openPost(post, focusComment: true),
+                  borderRadius: BorderRadius.circular(6),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Text(
+                      comments > 0
+                          ? 'Посмотреть все комментарии ($comments)'
+                          : 'Добавить комментарий…',
+                      style: _text(
+                        11.6,
+                        weight: FontWeight.w500,
+                        color: const Color(0xFF8A9099),
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ],

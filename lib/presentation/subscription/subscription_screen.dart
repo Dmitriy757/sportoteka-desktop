@@ -7,7 +7,7 @@ import 'package:intl/intl.dart';
 
 import 'package:sportoteka/core/theme/app_typography.dart';
 import 'package:sportoteka/core/utils/pref_utils.dart';
-import 'package:sportoteka/core/subscription/subscription_activation_service.dart';
+import 'package:sportoteka/core/subscription/subscription_request_service.dart';
 
 class SubscriptionScreen extends StatefulWidget {
   final String? source;
@@ -175,8 +175,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                   : null,
             ),
           ),
-          if (i != values.length - 1)
-            const SizedBox(width: 3),
+          if (i != values.length - 1) const SizedBox(width: 3),
         ],
       ],
     );
@@ -219,8 +218,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
         utf8.decode(response.bodyBytes),
       );
 
-      if (data is Map<String, dynamic> &&
-          data['success'] == true) {
+      if (data is Map<String, dynamic> && data['success'] == true) {
         final sub = data['subscription'];
 
         setState(() {
@@ -241,17 +239,6 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
   }
 
   Future<void> _selectPlan(_PlanModel plan) async {
-    if (plan.requestOnly) {
-      Get.snackbar(
-        'Оборудование Sportoteka',
-        'Комплект на 12–24 трекера рассчитывается индивидуально. '
-            'Подключение оформляется по запросу.',
-        snackPosition: SnackPosition.BOTTOM,
-        margin: const EdgeInsets.all(12),
-      );
-      return;
-    }
-
     final userId = await PrefUtils.getUserId();
 
     if (userId == null || userId <= 0) {
@@ -264,9 +251,6 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
       return;
     }
 
-    // Все новые коммерческие тарифы относятся к клубному workspace.
-    const role = 'club';
-
     Get.dialog(
       const Center(
         child: CircularProgressIndicator(
@@ -277,12 +261,11 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
       barrierDismissible: false,
     );
 
-    final result =
-        await SubscriptionActivationService.activatePlan(
+    final result = await SubscriptionRequestService.submit(
       userId: userId,
-      role: role,
       planCode: plan.id,
-      isYearly: true,
+      billingPeriod: 'yearly',
+      source: widget.source ?? 'subscription_screen',
     );
 
     if (Get.isDialogOpen == true) {
@@ -290,11 +273,24 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     }
 
     if (result['success'] == true) {
+      final alreadyPending = result['already_pending'] == true;
+      final alreadyActive = result['already_active'] == true;
+
       Get.snackbar(
-        'Подписка активирована',
-        'Тариф «${plan.title}» подключён',
+        alreadyActive
+            ? 'Тариф уже активен'
+            : alreadyPending
+                ? 'Заявка уже отправлена'
+                : 'Заявка отправлена',
+        alreadyActive
+            ? 'Тариф «${plan.title}» уже подключён.'
+            : alreadyPending
+                ? 'Заявка на тариф «${plan.title}» уже находится на рассмотрении.'
+                : 'Мы получили заявку на тариф «${plan.title}». '
+                    'После проверки администратор подтвердит подключение.',
         snackPosition: SnackPosition.BOTTOM,
         margin: const EdgeInsets.all(12),
+        duration: const Duration(seconds: 5),
       );
 
       await _loadCurrentSubscription();
@@ -302,10 +298,8 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     }
 
     Get.snackbar(
-      'Ошибка',
-      (result['message'] ??
-              'Не удалось активировать тариф')
-          .toString(),
+      'Не удалось отправить заявку',
+      (result['message'] ?? 'Повторите попытку позже').toString(),
       snackPosition: SnackPosition.BOTTOM,
       margin: const EdgeInsets.all(12),
     );
@@ -314,8 +308,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
   bool _isCurrentPlan(_PlanModel plan) {
     if (_subscription == null) return false;
 
-    return _subscription!.planCode == plan.id &&
-        _subscription!.isActive;
+    return _subscription!.planCode == plan.id && _subscription!.isActive;
   }
 
   @override
@@ -343,9 +336,17 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                 onRefresh: _loadCurrentSubscription,
                 child: ListView(
                   padding: EdgeInsets.fromLTRB(
-                    wide ? 20 : medium ? 16 : 12,
+                    wide
+                        ? 20
+                        : medium
+                            ? 16
+                            : 12,
                     12,
-                    wide ? 20 : medium ? 16 : 12,
+                    wide
+                        ? 20
+                        : medium
+                            ? 16
+                            : 12,
                     28,
                   ),
                   children: <Widget>[
@@ -360,12 +361,9 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                     const SizedBox(height: 9),
                     if (wide)
                       Row(
-                        crossAxisAlignment:
-                            CrossAxisAlignment.start,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: <Widget>[
-                          for (int i = 0;
-                              i < _plans.length;
-                              i++) ...<Widget>[
+                          for (int i = 0; i < _plans.length; i++) ...<Widget>[
                             Expanded(
                               child: _planCard(_plans[i]),
                             ),
@@ -377,8 +375,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                     else
                       ..._plans.map(
                         (plan) => Padding(
-                          padding:
-                              const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.only(bottom: 8),
                           child: _planCard(plan),
                         ),
                       ),
@@ -504,8 +501,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
               const SizedBox(width: 11),
               Expanded(
                 child: Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     Text(
                       'Один контур для управления клубом',
@@ -606,8 +602,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
             const SizedBox(width: 8),
             Expanded(
               child: Column(
-                crossAxisAlignment:
-                    CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
                   Text(
                     'Подписка не активирована',
@@ -632,9 +627,8 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
       );
     }
 
-    final statusColor = subscription.isActive
-        ? _SubscriptionUi.green
-        : _SubscriptionUi.red;
+    final statusColor =
+        subscription.isActive ? _SubscriptionUi.green : _SubscriptionUi.red;
 
     return Container(
       padding: const EdgeInsets.all(11),
@@ -658,8 +652,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
           const SizedBox(width: 8),
           Expanded(
             child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
                 Text(
                   subscription.isActive
@@ -699,9 +692,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                       _SubscriptionUi.amber,
                     ),
                     _statusPill(
-                      subscription.isActive
-                          ? 'Осталось'
-                          : 'Статус',
+                      subscription.isActive ? 'Осталось' : 'Статус',
                       subscription.isActive
                           ? '${subscription.daysLeft} дн.'
                           : 'Завершена',
@@ -766,11 +757,10 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
         const SizedBox(width: 8),
         Expanded(
           child: Column(
-            crossAxisAlignment:
-                CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
               Text(
-                'Выберите уровень',
+                'Выберите тариф и отправьте заявку',
                 style: _t(
                   12,
                   weight: FontWeight.w600,
@@ -778,7 +768,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
               ),
               const SizedBox(height: 2),
               Text(
-                'Все тарифы рассчитаны на организацию, а не на одного пользователя.',
+                'Платные тарифы подключаются после заявки и подтверждения администратором.',
                 style: _t(
                   9.2,
                   color: _SubscriptionUi.muted,
@@ -804,8 +794,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Row(
-            crossAxisAlignment:
-                CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
               _brandDots(
                 color: plan.accent,
@@ -814,8 +803,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
               const SizedBox(width: 8),
               Expanded(
                 child: Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     Row(
                       children: <Widget>[
@@ -858,8 +846,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
           ),
           const SizedBox(height: 13),
           Row(
-            crossAxisAlignment:
-                CrossAxisAlignment.end,
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: <Widget>[
               Flexible(
                 child: Text(
@@ -875,8 +862,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
               if (plan.period.isNotEmpty) ...<Widget>[
                 const SizedBox(width: 6),
                 Padding(
-                  padding:
-                      const EdgeInsets.only(bottom: 2),
+                  padding: const EdgeInsets.only(bottom: 2),
                   child: Text(
                     plan.period,
                     style: _t(
@@ -922,15 +908,12 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
           const SizedBox(height: 13),
           ...plan.features.map(
             (feature) => Padding(
-              padding:
-                  const EdgeInsets.only(bottom: 7),
+              padding: const EdgeInsets.only(bottom: 7),
               child: Row(
-                crossAxisAlignment:
-                    CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
                   Padding(
-                    padding:
-                        const EdgeInsets.only(top: 5),
+                    padding: const EdgeInsets.only(top: 5),
                     child: _dot(
                       plan.accent,
                       size: 4.5,
@@ -960,23 +943,17 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                   : plan.requestOnly
                       ? plan.light
                       : plan.accent,
-              borderRadius:
-                  BorderRadius.circular(9),
+              borderRadius: BorderRadius.circular(9),
               child: InkWell(
-                onTap: current
-                    ? null
-                    : () => _selectPlan(plan),
-                borderRadius:
-                    BorderRadius.circular(9),
+                onTap: current ? null : () => _selectPlan(plan),
+                borderRadius: BorderRadius.circular(9),
                 child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(
+                  padding: const EdgeInsets.symmetric(
                     horizontal: 11,
                     vertical: 10,
                   ),
                   child: Row(
-                    mainAxisAlignment:
-                        MainAxisAlignment.center,
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: <Widget>[
                       _dot(
                         current
@@ -991,8 +968,8 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                         current
                             ? 'Тариф активен'
                             : plan.requestOnly
-                                ? 'Запросить предложение'
-                                : 'Выбрать тариф',
+                                ? 'Оставить заявку'
+                                : 'Подать заявку',
                         style: _t(
                           9.7,
                           weight: FontWeight.w600,
@@ -1057,8 +1034,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
         borderRadius: BorderRadius.circular(10),
       ),
       child: Row(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           _dot(
             _SubscriptionUi.amber,
@@ -1196,8 +1172,7 @@ class _SubscriptionInfo {
     required this.daysLeft,
   });
 
-  bool get isActive =>
-      status.toLowerCase() == 'active';
+  bool get isActive => status.toLowerCase() == 'active';
 
   factory _SubscriptionInfo.fromJson(
     Map<String, dynamic> json,
@@ -1214,8 +1189,7 @@ class _SubscriptionInfo {
       return int.tryParse(value.toString()) ?? 0;
     }
 
-    final planCode =
-        (json['plan_code'] ?? '').toString();
+    final planCode = (json['plan_code'] ?? '').toString();
 
     String displayTitle;
     switch (planCode) {
@@ -1230,17 +1204,13 @@ class _SubscriptionInfo {
         break;
       default:
         displayTitle =
-            (json['plan_title'] ??
-                    json['plan_code'] ??
-                    'Подписка')
-                .toString();
+            (json['plan_title'] ?? json['plan_code'] ?? 'Подписка').toString();
     }
 
     return _SubscriptionInfo(
       planCode: planCode,
       planTitle: displayTitle,
-      status:
-          (json['status'] ?? 'inactive').toString(),
+      status: (json['status'] ?? 'inactive').toString(),
       startedAt: parseDate(json['started_at']),
       expiresAt: parseDate(json['expires_at']),
       daysLeft: parseInt(json['days_left']),

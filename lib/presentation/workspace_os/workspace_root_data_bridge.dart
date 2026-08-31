@@ -12,6 +12,7 @@ import 'package:sportoteka/presentation/workspace_os/workspace_player_data_bridg
 class WorkspaceRootDataBridge {
   WorkspaceRootDataBridge({
     required this.clubId,
+    this.currentUserId = 0,
     required this.teams,
     required this.players,
     required this.trainers,
@@ -20,6 +21,7 @@ class WorkspaceRootDataBridge {
   });
 
   final int clubId;
+  final int currentUserId;
   final List<Map<String, dynamic>> teams;
   final List<Map<String, dynamic>> players;
   final List<Map<String, dynamic>> trainers;
