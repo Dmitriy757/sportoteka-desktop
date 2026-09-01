@@ -8,10 +8,11 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:sportoteka/core/app_export.dart';
 import 'package:sportoteka/core/push/push_service.dart';
 import 'package:sportoteka/core/utils/pref_utils.dart';
+import 'package:sportoteka/core/staff_access/staff_access_service.dart';
+import 'package:sportoteka/presentation/staff_access/staff_key_activation_screen.dart';
 import 'package:sportoteka/core/utils/validation_functions.dart';
 import 'package:sportoteka/core/theme/app_typography.dart';
 import 'package:sportoteka/presentation/my_profile_screen/my_profile_screen.dart';
-import 'package:sportoteka/presentation/workspace_hub/workspace_hub_screen.dart';
 
 import 'controller/login_controller.dart';
 
@@ -676,6 +677,39 @@ class _LoginScreenState extends State<LoginScreen> {
 
         final role = (user['role'] ?? '').toString().trim();
 
+        // Staff Key: обычный email/password остаётся первым шагом.
+        // Если клуб выпустил Staff Key и он ещё не активирован,
+        // до сохранения обычной сессии показываем экран активации.
+        final normalizedRole = role.toLowerCase();
+        if (normalizedRole == 'coach' ||
+            normalizedRole == 'trainer' ||
+            normalizedRole == 'тренер') {
+          final staffState = await StaffAccessService.loadMyStatus(userId);
+
+          final hasStaffRows = staffState['success'] == true &&
+              staffState['has_access_rows'] == true;
+
+          final pendingStaffKeys =
+              int.tryParse('${staffState['pending_count'] ?? 0}') ?? 0;
+
+          if (hasStaffRows && pendingStaffKeys > 0) {
+            if (!mounted) return;
+
+            final canContinue = await Navigator.of(context).push<bool>(
+              MaterialPageRoute<bool>(
+                settings: const RouteSettings(
+                  name: 'staff_key_activation',
+                ),
+                builder: (_) => StaffKeyActivationScreen(userId: userId),
+              ),
+            );
+
+            if (canContinue != true) {
+              return;
+            }
+          }
+        }
+
         // Чистим старые данные, чтобы после входа
         // не подтягивались данные прошлого пользователя.
         await PrefUtils.clearAll();
@@ -719,11 +753,15 @@ class _LoginScreenState extends State<LoginScreen> {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted) return;
 
-          // Login подтверждает только email + пароль.
-          // Все рабочие ключи вводятся уже в Workspace Hub:
-          // Staff Key / Club Key / Parent Key.
+          // После входа для ВСЕХ ролей открываем главный профиль.
+          // MyProfileScreen уже определяет роль пользователя:
+          // player / coach / club / parent.
+          //
+          // Для parent/родитель основной рабочий блок ведёт в
+          // «Мои дети», где активируется Parent Key и открывается
+          // дневник привязанного игрока.
           Get.offAll<void>(
-            () => const WorkspaceHubScreen(),
+            () => const MyProfileScreen(),
             transition: Transition.noTransition,
             duration: Duration.zero,
           );

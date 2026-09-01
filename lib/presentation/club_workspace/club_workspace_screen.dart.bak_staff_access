@@ -15,7 +15,6 @@ import 'package:sportoteka/core/theme/app_typography.dart';
 import 'package:sportoteka/core/subscription/club_subscription_policy.dart';
 
 import 'package:sportoteka/core/utils/pref_utils.dart';
-import 'package:sportoteka/core/staff_access/staff_access_service.dart';
 import 'package:sportoteka/presentation/chat_screen/chat_screen.dart';
 import 'package:sportoteka/presentation/player_game_zone/create_challenge_screen.dart';
 import 'package:sportoteka/presentation/player_game_zone/create_quiz_screen.dart';
@@ -723,29 +722,6 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
               team['teamLogo']) ??
           '';
       normalized.add(team);
-    }
-
-    // Staff Access becomes authoritative only after migration/issue
-    // has created at least one row for this employee. Legacy trainers without
-    // staff_access rows keep the old behaviour until migration is applied.
-    try {
-      final staffState =
-          await StaffAccessService.loadMyStatus(trainerWorkspaceId);
-
-      if (staffState['success'] == true &&
-          staffState['has_access_rows'] == true) {
-        final activeClubIds = StaffAccessService.activeClubIds(staffState);
-
-        normalized.removeWhere((team) {
-          final teamClubId = _asInt(team['club_id'] ?? team['clubId']);
-
-          if (teamClubId <= 0) return false;
-
-          return !activeClubIds.contains(teamClubId);
-        });
-      }
-    } catch (error) {
-      debugPrint('Staff Access team filter error: $error');
     }
 
     teams = normalized;
@@ -1860,13 +1836,6 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
   }
 
   void _openGameModule(ClubSection section) {
-    // Меню «Ещё» передаёт сюда и обычные модули.
-    if (section == ClubSection.graphics) {
-      if (!_canOpenWorkspaceSection(section)) return;
-      _openFullGraphics();
-      return;
-    }
-
     final isGameSection = section == ClubSection.challengeCreate ||
         section == ClubSection.challenges ||
         section == ClubSection.quizCreate ||
@@ -2409,13 +2378,6 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
   }
 
   void _selectWorkspaceSection(ClubSection section) {
-    // Редактор схем всегда открываем сразу полноценным экраном.
-    if (section == ClubSection.graphics) {
-      if (!_canOpenWorkspaceSection(section)) return;
-      _openFullGraphics();
-      return;
-    }
-
     if (section == ClubSection.trainers ||
         section == ClubSection.teamTrainers) {
       _showOwnTrainerProfile = false;
@@ -2439,14 +2401,6 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
   }
 
   void _activateInlineSection(ClubSection section) {
-    // При ширине окна меньше desktop-wide Workspace работает inline.
-    // Для редактора схем промежуточную панель всё равно пропускаем.
-    if (section == ClubSection.graphics) {
-      if (!_canOpenWorkspaceSection(section)) return;
-      _openFullGraphics();
-      return;
-    }
-
     if (!_canOpenWorkspaceSection(section)) return;
 
     // Повторное нажатие на «Чаты» всегда возвращает к общему списку.
@@ -2560,9 +2514,8 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
   }
 
   void _openModuleWindow(ClubSection section) {
-    // На широком macOS/Windows тоже сразу открываем настоящий редактор.
+    // Редактор схем сразу открываем полноценным экраном.
     if (section == ClubSection.graphics) {
-      if (!_canOpenWorkspaceSection(section)) return;
       _openFullGraphics();
       return;
     }
@@ -3940,7 +3893,7 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
     required double fontSize,
   }) {
     return InkWell(
-      onTap: () => _selectWorkspaceSection(section),
+      onTap: () => setState(() => selectedSection = section),
       borderRadius: BorderRadius.circular(18),
       child: Container(
         decoration: _mobileCardDecoration(radius: 18),
@@ -4337,7 +4290,7 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
         color: Colors.transparent,
         borderRadius: BorderRadius.circular(14),
         child: InkWell(
-          onTap: () => _selectWorkspaceSection(section),
+          onTap: () => setState(() => selectedSection = section),
           borderRadius: BorderRadius.circular(14),
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 3),
@@ -4944,7 +4897,9 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
       case 'training_graphics':
       case 'graphics':
       case 'tactical_board':
-        _selectWorkspaceSection(ClubSection.graphics);
+        setState(() {
+          selectedSection = ClubSection.graphics;
+        });
         return;
 
       case 'calendar':
@@ -5405,7 +5360,8 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
           hasTeam: _hasTeam,
           onOpenPlans: () =>
               setState(() => selectedSection = ClubSection.plans),
-          onOpenGraphics: _openFullGraphics,
+          onOpenGraphics: () =>
+              setState(() => selectedSection = ClubSection.graphics),
           onOpenCalendar: () =>
               setState(() => selectedSection = ClubSection.calendar),
           onOpenFullTeam: _openFullTeamDashboard,
@@ -5533,8 +5489,8 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
           quickActions: [
             _ModuleQuickAction('Планы', Icons.folder_copy_rounded,
                 () => setState(() => selectedSection = ClubSection.plans)),
-            _ModuleQuickAction(
-                'Графика', Icons.draw_rounded, _openFullGraphics),
+            _ModuleQuickAction('Графика', Icons.draw_rounded,
+                () => setState(() => selectedSection = ClubSection.graphics)),
             _ModuleQuickAction('Состав', Icons.groups_2_rounded,
                 () => setState(() => selectedSection = ClubSection.roster)),
           ],
