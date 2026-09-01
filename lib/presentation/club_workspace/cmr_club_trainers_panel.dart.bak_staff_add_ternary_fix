@@ -1306,16 +1306,16 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
                           )
                         : _addTrainerOpen
                             ? CmrStaffAddRightPanel(
-                                clubId: widget.clubId,
-                                clubName: widget.clubName,
-                                teams: widget.teams,
-                                onClose: _closeAddTrainerRightPanel,
-                                onSaved: () async {
-                                  _trainerProfileFutures.clear();
-                                  await _load();
-                                  widget.onChanged?.call();
-                                },
-                              )
+                            ?   clubId: widget.clubId,
+                            ?   clubName: widget.clubName,
+                            ?   teams: widget.teams,
+                            ?   onClose: _closeAddTrainerRightPanel,
+                            ?   onSaved: () async {
+                            ?     _trainerProfileFutures.clear();
+                            ?     await _load();
+                            ?     widget.onChanged?.call();
+                            ?   },
+                            ? )
                             : list,
                   ),
                 ),
@@ -1383,16 +1383,16 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
                                     )
                                   : _addTrainerOpen
                                       ? CmrStaffAddRightPanel(
-                                          clubId: widget.clubId,
-                                          clubName: widget.clubName,
-                                          teams: widget.teams,
-                                          onClose: _closeAddTrainerRightPanel,
-                                          onSaved: () async {
-                                            _trainerProfileFutures.clear();
-                                            await _load();
-                                            widget.onChanged?.call();
-                                          },
-                                        )
+                                      ?   clubId: widget.clubId,
+                                      ?   clubName: widget.clubName,
+                                      ?   teams: widget.teams,
+                                      ?   onClose: _closeAddTrainerRightPanel,
+                                      ?   onSaved: () async {
+                                      ?     _trainerProfileFutures.clear();
+                                      ?     await _load();
+                                      ?     widget.onChanged?.call();
+                                      ?   },
+                                      ? )
                                       : pressMode
                                           ? _PressServiceDetailPanel(
                                               trainer: selected,

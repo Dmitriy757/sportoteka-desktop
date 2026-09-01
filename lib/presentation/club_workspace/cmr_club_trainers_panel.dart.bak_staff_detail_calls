@@ -15,7 +15,6 @@ import 'package:sportoteka/core/theme/app_typography.dart';
 import 'package:sportoteka/core/utils/pref_utils.dart';
 import 'package:sportoteka/presentation/club_workspace/cmr_staff_access_panel.dart';
 import 'package:sportoteka/presentation/club_workspace/cmr_staff_invite_dialog.dart';
-import 'package:sportoteka/presentation/club_workspace/cmr_staff_add_right_panel.dart';
 import 'package:sportoteka/presentation/chat_screen/chat_room_screen.dart';
 import 'package:sportoteka/presentation/trainer_profile_screen/cmr_trainer_profile_screen.dart';
 
@@ -1305,16 +1304,21 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
                             ),
                           )
                         : _addTrainerOpen
-                            ? CmrStaffAddRightPanel(
-                                clubId: widget.clubId,
+                            ? _TrainerAddRightPanel(
                                 clubName: widget.clubName,
                                 teams: widget.teams,
+                                pressMode: pressMode,
+                                saving: _saving,
+                                trainerIdOf: _trainerId,
+                                trainerNameOf: _trainerName,
+                                trainerEmailOf: _trainerEmail,
+                                trainerPhotoOf: _trainerPhoto,
+                                teamIdOf: _teamId,
+                                teamNameOf: _teamName,
                                 onClose: _closeAddTrainerRightPanel,
-                                onSaved: () async {
-                                  _trainerProfileFutures.clear();
-                                  await _load();
-                                  widget.onChanged?.call();
-                                },
+                                onSearch: _searchTrainerByEmailRight,
+                                onAddClub: _addTrainerToClubRight,
+                                onAssignTeam: _assignTrainerRight,
                               )
                             : list,
                   ),
@@ -1382,16 +1386,21 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
                                       ),
                                     )
                                   : _addTrainerOpen
-                                      ? CmrStaffAddRightPanel(
-                                          clubId: widget.clubId,
+                                      ? _TrainerAddRightPanel(
                                           clubName: widget.clubName,
                                           teams: widget.teams,
+                                          pressMode: pressMode,
+                                          saving: _saving,
+                                          trainerIdOf: _trainerId,
+                                          trainerNameOf: _trainerName,
+                                          trainerEmailOf: _trainerEmail,
+                                          trainerPhotoOf: _trainerPhoto,
+                                          teamIdOf: _teamId,
+                                          teamNameOf: _teamName,
                                           onClose: _closeAddTrainerRightPanel,
-                                          onSaved: () async {
-                                            _trainerProfileFutures.clear();
-                                            await _load();
-                                            widget.onChanged?.call();
-                                          },
+                                          onSearch: _searchTrainerByEmailRight,
+                                          onAddClub: _addTrainerToClubRight,
+                                          onAssignTeam: _assignTrainerRight,
                                         )
                                       : pressMode
                                           ? _PressServiceDetailPanel(
@@ -1424,9 +1433,6 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
                                             )
                                           : _TrainerDetailPanel(
                                               trainer: selected,
-                                              clubId: widget.clubId,
-                                              allTeams: widget.teams,
-                                              onAccessChanged: _load,
                                               clubName: widget.clubName,
                                               selectedTeamName:
                                                   widget.selectedTeamName,

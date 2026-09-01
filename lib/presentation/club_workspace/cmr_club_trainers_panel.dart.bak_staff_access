@@ -13,9 +13,6 @@ import 'package:image_picker/image_picker.dart';
 import 'package:sportoteka/core/theme/app_typography.dart';
 
 import 'package:sportoteka/core/utils/pref_utils.dart';
-import 'package:sportoteka/presentation/club_workspace/cmr_staff_access_panel.dart';
-import 'package:sportoteka/presentation/club_workspace/cmr_staff_invite_dialog.dart';
-import 'package:sportoteka/presentation/club_workspace/cmr_staff_add_right_panel.dart';
 import 'package:sportoteka/presentation/chat_screen/chat_room_screen.dart';
 import 'package:sportoteka/presentation/trainer_profile_screen/cmr_trainer_profile_screen.dart';
 
@@ -59,63 +56,40 @@ String _trainerName(Map<String, dynamic> t) {
 }
 
 String _trainerRole(Map<String, dynamic> t) {
-  final assignmentRole =
-      _s(t['profile'] ?? t['link_profile'] ?? t['staff_role']);
+  final assignmentRole = _s(t['profile'] ?? t['link_profile'] ?? t['staff_role']);
   final assignmentLower = assignmentRole.toLowerCase();
   if (assignmentLower.contains('press') || assignmentLower.contains('пресс')) {
     return 'Пресс-служба';
   }
-  final raw = _s(t['position'] ??
-      t['role_title'] ??
-      t['specialization'] ??
-      t['staff_role'] ??
-      t['role'] ??
-      t['profile']);
+  final raw = _s(t['position'] ?? t['role_title'] ?? t['specialization'] ?? t['staff_role'] ?? t['role'] ?? t['profile']);
   if (raw.isEmpty || raw == 'extra') return 'Тренер';
   if (raw == 'main') return 'Главный тренер';
   if (raw == 'doctor') return 'Медик';
   if (raw == 'assistant') return 'Ассистент';
-  if (raw == 'press_assistant' || raw == 'press' || raw == 'press_service')
-    return 'Пресс-служба';
+  if (raw == 'press_assistant' || raw == 'press' || raw == 'press_service') return 'Пресс-служба';
   return raw;
 }
 
-String _trainerPhoto(Map<String, dynamic> t) => _normalizeImage(_s(t['photo'] ??
-    t['avatar'] ??
-    t['image'] ??
-    t['photo_url'] ??
-    t['avatar_url']));
+String _trainerPhoto(Map<String, dynamic> t) => _normalizeImage(_s(t['photo'] ?? t['avatar'] ?? t['image'] ?? t['photo_url'] ?? t['avatar_url']));
 
 bool _isMain(Map<String, dynamic> trainer) {
   if (_b(trainer['is_main_any']) || _b(trainer['is_main'])) return true;
-  final raw =
-      '${_s(trainer['profile'])} ${_s(trainer['link_profile'])} ${_s(trainer['role'])}'
-          .toLowerCase();
-  if (raw.contains('main') || raw.contains('head') || raw.contains('глав'))
-    return true;
+  final raw = '${_s(trainer['profile'])} ${_s(trainer['link_profile'])} ${_s(trainer['role'])}'.toLowerCase();
+  if (raw.contains('main') || raw.contains('head') || raw.contains('глав')) return true;
   return false;
 }
 
 String _trainerEmail(Map<String, dynamic> t) => _s(t['email']);
-String _trainerPhone(Map<String, dynamic> t) =>
-    _s(t['phone'] ?? t['telephone'] ?? t['phone_number'] ?? t['mobile']);
-String _trainerBirthday(Map<String, dynamic> t) =>
-    _s(t['birthday'] ?? t['birth_date'] ?? t['date_birth'] ?? t['dob']);
-String _trainerExperience(Map<String, dynamic> t) =>
-    _s(t['experience'] ?? t['experience_text'] ?? t['work_experience']);
-String _trainerBio(Map<String, dynamic> t) =>
-    _s(t['bio'] ?? t['description'] ?? t['about'] ?? t['about_me']);
+String _trainerPhone(Map<String, dynamic> t) => _s(t['phone'] ?? t['telephone'] ?? t['phone_number'] ?? t['mobile']);
+String _trainerBirthday(Map<String, dynamic> t) => _s(t['birthday'] ?? t['birth_date'] ?? t['date_birth'] ?? t['dob']);
+String _trainerExperience(Map<String, dynamic> t) => _s(t['experience'] ?? t['experience_text'] ?? t['work_experience']);
+String _trainerBio(Map<String, dynamic> t) => _s(t['bio'] ?? t['description'] ?? t['about'] ?? t['about_me']);
 String _trainerCity(Map<String, dynamic> t) => _s(t['city'] ?? t['town']);
-String _trainerSpecialization(Map<String, dynamic> t) =>
-    _s(t['specialization'] ?? t['speciality'] ?? t['category']);
+String _trainerSpecialization(Map<String, dynamic> t) => _s(t['specialization'] ?? t['speciality'] ?? t['category']);
 
 List<Map<String, dynamic>> _trainerTeams(Map<String, dynamic> t) {
   final rawTeams = t['teams'];
-  if (rawTeams is List)
-    return rawTeams
-        .whereType<Map>()
-        .map((e) => Map<String, dynamic>.from(e))
-        .toList();
+  if (rawTeams is List) return rawTeams.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
   final teamId = _i(t['team_id'] ?? t['teamId']);
   final teamName = _s(t['team_name'] ?? t['teamName']);
   if (teamId > 0 || teamName.isNotEmpty) {
@@ -165,31 +139,24 @@ List<Map<String, dynamic>> _trainerPressTeams(Map<String, dynamic> trainer) {
       .toList();
 }
 
+
 List<Map<String, dynamic>> _trainerSchedule(Map<String, dynamic> t) {
   final raw = t['_schedule'];
   if (raw is List) {
-    return raw
-        .whereType<Map>()
-        .map((e) => Map<String, dynamic>.from(e))
-        .toList();
+    return raw.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
   }
   return const <Map<String, dynamic>>[];
 }
 
-String _teamName(Map<String, dynamic> team) =>
-    _s(team['name'] ?? team['team_name'] ?? team['title']).isEmpty
-        ? 'Команда'
-        : _s(team['name'] ?? team['team_name'] ?? team['title']);
-String _teamLogo(Map<String, dynamic> team) => _normalizeImage(
-    _s(team['logo_url'] ?? team['logo'] ?? team['team_logo'] ?? team['photo']));
+String _teamName(Map<String, dynamic> team) => _s(team['name'] ?? team['team_name'] ?? team['title']).isEmpty ? 'Команда' : _s(team['name'] ?? team['team_name'] ?? team['title']);
+String _teamLogo(Map<String, dynamic> team) => _normalizeImage(_s(team['logo_url'] ?? team['logo'] ?? team['team_logo'] ?? team['photo']));
 
 String _profileTitle(String raw) {
   final v = raw.trim().toLowerCase();
   if (v == 'main' || v == 'head' || v.contains('глав')) return 'Главный тренер';
   if (v.contains('press') || v.contains('пресс')) return 'Пресс-служба';
   if (v.contains('assistant') || v.contains('ассист')) return 'Ассистент';
-  if (v.contains('doctor') || v.contains('med') || v.contains('мед'))
-    return 'Медик';
+  if (v.contains('doctor') || v.contains('med') || v.contains('мед')) return 'Медик';
   if (v.contains('manager') || v.contains('admin')) return 'Администратор';
   return 'Тренер';
 }
@@ -242,11 +209,13 @@ class _CmrColors {
   static const Color pinkSoft = Color(0xFFFFF1F8);
 }
 
+
 Color _cmrAccent(int index) => _CmrColors.green;
 
 Color _cmrAccentSoft(int index) => _CmrColors.greenSoft;
 
 // ==================== Текстовые стили ====================
+
 
 class _CmrText {
   static TextStyle title(double size) => AppTypography.custom(
@@ -285,14 +254,17 @@ class _CmrText {
   static TextStyle caption() =>
       AppTypography.captionMedium(color: _CmrColors.muted2);
 
-  static TextStyle pill() => AppTypography.chip(color: _CmrColors.text);
+  static TextStyle pill() =>
+      AppTypography.chip(color: _CmrColors.text);
 
-  static TextStyle tab() => AppTypography.tab(color: _CmrColors.text);
+  static TextStyle tab() =>
+      AppTypography.tab(color: _CmrColors.text);
 
   static TextStyle tabSelected() =>
       AppTypography.tab(color: _CmrColors.text, active: true);
 
-  static TextStyle action() => AppTypography.action(color: _CmrColors.text);
+  static TextStyle action() =>
+      AppTypography.action(color: _CmrColors.text);
 
   static TextStyle danger() => AppTypography.custom(
         size: 11.8,
@@ -307,10 +279,10 @@ class _CmrText {
         weight: active ? FontWeight.w600 : FontWeight.w500,
       );
 
-  static TextStyle navSubtitle({required bool active}) =>
-      AppTypography.menuSubtitle(
-        color:
-            active ? _CmrColors.greenDark.withOpacity(.68) : _CmrColors.muted2,
+  static TextStyle navSubtitle({required bool active}) => AppTypography.menuSubtitle(
+        color: active
+            ? _CmrColors.greenDark.withOpacity(.68)
+            : _CmrColors.muted2,
       );
 }
 
@@ -348,17 +320,14 @@ class _CmrDecor {
         color: _CmrColors.bg,
       );
 
-  static BoxDecoration panel(
-          {double radius = tabletCardRadius, bool elevated = true}) =>
-      BoxDecoration(
+  static BoxDecoration panel({double radius = tabletCardRadius, bool elevated = true}) => BoxDecoration(
         color: _CmrColors.panel,
         borderRadius: BorderRadius.circular(radius),
         border: Border.all(color: _CmrColors.line.withOpacity(.55), width: .7),
         boxShadow: elevated ? cardShadow : null,
       );
 
-  static BoxDecoration unifiedWindow({double radius = tabletWindowRadius}) =>
-      BoxDecoration(
+  static BoxDecoration unifiedWindow({double radius = tabletWindowRadius}) => BoxDecoration(
         color: _CmrColors.glass,
         borderRadius: BorderRadius.circular(radius),
         border: Border.all(color: Colors.transparent, width: 0),
@@ -370,9 +339,7 @@ class _CmrDecor {
         borderRadius: BorderRadius.circular(radius),
       );
 
-  static BoxDecoration softCard(
-          {double radius = mobileInnerRadius, bool active = false}) =>
-      BoxDecoration(
+  static BoxDecoration softCard({double radius = mobileInnerRadius, bool active = false}) => BoxDecoration(
         color: active
             ? Color.alphaBlend(
                 _CmrColors.green.withOpacity(.055),
@@ -397,24 +364,19 @@ class _CmrDecor {
     Color accent = _CmrColors.green,
     bool active = false,
     bool compact = false,
-  }) =>
-      BoxDecoration(
+  }) => BoxDecoration(
         color: active ? _CmrColors.greenSoft : _CmrColors.panel,
         borderRadius: BorderRadius.circular(radius),
-        border: Border.all(
-            color: active
-                ? accent.withOpacity(.22)
-                : _CmrColors.line.withOpacity(.78),
-            width: .85),
+        border: Border.all(color: active ? accent.withOpacity(.22) : _CmrColors.line.withOpacity(.78), width: .85),
       );
 
-  static BoxDecoration greenCard({double radius = mobileInnerRadius}) =>
-      fluentSurface(
+  static BoxDecoration greenCard({double radius = mobileInnerRadius}) => fluentSurface(
         radius: radius,
         accent: _CmrColors.green,
         active: true,
       ).copyWith(boxShadow: cardShadow);
 }
+
 
 class _CmrGlowDot extends StatelessWidget {
   final Color color;
@@ -596,27 +558,18 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
   static const String getClubTrainersUrl = '$apiBase/get_club_trainers.php';
   static const String getTeamTrainersUrl = '$apiBase/get_team_trainers.php';
   static const String getTeamEventsUrl = '$apiBase/get_team_events.php';
-  static const String searchTrainerByEmailUrl =
-      '$apiBase/search_trainer_by_email.php';
+  static const String searchTrainerByEmailUrl = '$apiBase/search_trainer_by_email.php';
   static const String searchUsersUrl = '$apiBase/search_users.php';
-  static const String linkTrainerToClubUrl =
-      '$apiBase/link_trainer_to_club.php';
-  static const String unlinkTrainerFromClubUrl =
-      '$apiBase/unlink_trainer_from_club.php';
-  static const String linkTrainerToTeamUrl =
-      '$apiBase/link_trainer_to_team.php';
-  static const String setPressStaffScopeUrl =
-      '$apiBase/set_press_staff_scope.php';
+  static const String linkTrainerToClubUrl = '$apiBase/link_trainer_to_club.php';
+  static const String unlinkTrainerFromClubUrl = '$apiBase/unlink_trainer_from_club.php';
+  static const String linkTrainerToTeamUrl = '$apiBase/link_trainer_to_team.php';
+  static const String setPressStaffScopeUrl = '$apiBase/set_press_staff_scope.php';
   static const String removePressStaffUrl = '$apiBase/remove_press_staff.php';
-  static const String unlinkTrainerFromTeamUrl =
-      '$apiBase/unlink_trainer_from_team.php';
+  static const String unlinkTrainerFromTeamUrl = '$apiBase/unlink_trainer_from_team.php';
   static const String getTrainerProfileUrl = '$apiBase/get_trainer_profile.php';
-  static const String updateTrainerProfileUrl =
-      '$apiBase/update_trainer_profile.php';
-  static const String updateClubStaffAccountUrl =
-      '$apiBase/update_club_staff_account.php';
-  static const String resetClubStaffPasswordUrl =
-      '$apiBase/reset_club_staff_password.php';
+  static const String updateTrainerProfileUrl = '$apiBase/update_trainer_profile.php';
+  static const String updateClubStaffAccountUrl = '$apiBase/update_club_staff_account.php';
+  static const String resetClubStaffPasswordUrl = '$apiBase/reset_club_staff_password.php';
   static const String createChatUrl = '$apiBase/create_chat.php';
 
   final TextEditingController _searchC = TextEditingController();
@@ -680,14 +633,15 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
     if (_canManageAllTrainers()) return true;
 
     final trainerId = _trainerId(trainer);
-    return trainerId > 0 && _currentUserId > 0 && trainerId == _currentUserId;
+    return trainerId > 0 &&
+        _currentUserId > 0 &&
+        trainerId == _currentUserId;
   }
 
   @override
   void didUpdateWidget(covariant CmrClubTrainersPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.clubId != widget.clubId ||
-        oldWidget.teams.length != widget.teams.length) {
+    if (oldWidget.clubId != widget.clubId || oldWidget.teams.length != widget.teams.length) {
       _load();
     }
   }
@@ -728,12 +682,11 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
   Future<List<Map<String, dynamic>>> _loadClubTrainers() async {
     if (widget.clubId <= 0) return [];
     try {
-      final resp = await http.post(Uri.parse(getClubTrainersUrl), body: {
-        'club_id': '${widget.clubId}'
-      }).timeout(const Duration(seconds: 12));
+      final resp = await http
+          .post(Uri.parse(getClubTrainersUrl), body: {'club_id': '${widget.clubId}'})
+          .timeout(const Duration(seconds: 12));
       final data = _tryDecode(resp.body);
-      return _extractList(
-          data, const ['trainers', 'coaches', 'users', 'items', 'data']);
+      return _extractList(data, const ['trainers', 'coaches', 'users', 'items', 'data']);
     } catch (_) {
       return [];
     }
@@ -746,12 +699,10 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
       if (teamId <= 0) continue;
       try {
         dynamic data = await _postJson(getTeamTrainersUrl, {'team_id': teamId});
-        var list = _extractList(
-            data, const ['trainers', 'coaches', 'users', 'items', 'data']);
+        var list = _extractList(data, const ['trainers', 'coaches', 'users', 'items', 'data']);
         if (list.isEmpty) {
           data = await _postForm(getTeamTrainersUrl, {'team_id': '$teamId'});
-          list = _extractList(
-              data, const ['trainers', 'coaches', 'users', 'items', 'data']);
+          list = _extractList(data, const ['trainers', 'coaches', 'users', 'items', 'data']);
         }
         for (final raw in list) {
           final item = Map<String, dynamic>.from(raw);
@@ -771,11 +722,7 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
       final item = Map<String, dynamic>.from(raw);
       final id = _trainerId(item);
       final email = _s(item['email']).toLowerCase();
-      final key = id > 0
-          ? 'id:$id'
-          : email.isNotEmpty
-              ? 'email:$email'
-              : 'name:${_trainerName(item).toLowerCase()}';
+      final key = id > 0 ? 'id:$id' : email.isNotEmpty ? 'email:$email' : 'name:${_trainerName(item).toLowerCase()}';
       final existing = map[key];
       if (existing == null) {
         item['id'] = id > 0 ? id : item['id'];
@@ -785,13 +732,11 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
         final mergedTeams = _trainerTeams(existing);
         for (final team in _trainerTeams(item)) {
           final tid = _teamId(team);
-          if (!mergedTeams.any((t) => _teamId(t) == tid && tid > 0))
-            mergedTeams.add(team);
+          if (!mergedTeams.any((t) => _teamId(t) == tid && tid > 0)) mergedTeams.add(team);
         }
         existing['teams'] = mergedTeams;
         for (final e in item.entries) {
-          if (_s(existing[e.key]).isEmpty && _s(e.value).isNotEmpty)
-            existing[e.key] = e.value;
+          if (_s(existing[e.key]).isEmpty && _s(e.value).isNotEmpty) existing[e.key] = e.value;
         }
       }
     }
@@ -801,9 +746,7 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
       final mainA = _isMain(a) ? 0 : 1;
       final mainB = _isMain(b) ? 0 : 1;
       if (mainA != mainB) return mainA.compareTo(mainB);
-      return _trainerName(a)
-          .toLowerCase()
-          .compareTo(_trainerName(b).toLowerCase());
+      return _trainerName(a).toLowerCase().compareTo(_trainerName(b).toLowerCase());
     });
     return out;
   }
@@ -844,20 +787,10 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
 
   _CmrStaffFilter _detectGroup(Map<String, dynamic> trainer) {
     if (_isMain(trainer)) return _CmrStaffFilter.main;
-    final raw =
-        '${_trainerRole(trainer)} ${_s(trainer['profile'])} ${_s(trainer['link_profile'])} ${_s(trainer['staff_role'])} ${_s(trainer['role_code'])} ${_s(trainer['position_code'])}'
-            .toLowerCase();
-    if (raw.contains('press') || raw.contains('пресс'))
-      return _CmrStaffFilter.press;
-    if (raw.contains('press') || raw.contains('пресс'))
-      return _CmrStaffFilter.press;
-    if (raw.contains('мед') ||
-        raw.contains('врач') ||
-        raw.contains('doctor') ||
-        raw.contains('med')) return _CmrStaffFilter.doctors;
-    if (raw.contains('ассист') ||
-        raw.contains('помощ') ||
-        raw.contains('assistant')) return _CmrStaffFilter.assistants;
+    final raw = '${_trainerRole(trainer)} ${_s(trainer['profile'])} ${_s(trainer['link_profile'])} ${_s(trainer['staff_role'])} ${_s(trainer['role_code'])} ${_s(trainer['position_code'])}'.toLowerCase();
+    if (raw.contains('press') || raw.contains('пресс')) return _CmrStaffFilter.press;
+    if (raw.contains('мед') || raw.contains('врач') || raw.contains('doctor') || raw.contains('med')) return _CmrStaffFilter.doctors;
+    if (raw.contains('ассист') || raw.contains('помощ') || raw.contains('assistant')) return _CmrStaffFilter.assistants;
     return _CmrStaffFilter.coaches;
   }
 
@@ -878,8 +811,7 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
     return fallback.isEmpty ? '' : 'fallback:$fallback';
   }
 
-  Map<String, dynamic>? _selectedTrainerFrom(
-      List<Map<String, dynamic>> visible) {
+  Map<String, dynamic>? _selectedTrainerFrom(List<Map<String, dynamic>> visible) {
     if (visible.isEmpty) return null;
     if (_selectedTrainerKey.isNotEmpty) {
       for (final trainer in visible) {
@@ -955,26 +887,33 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
       setState(() {
         _selectedTrainerKey = key;
         _addTrainerOpen = false;
-        _openedTrainerProfile = Map<String, dynamic>.from(trainer);
+        _openedTrainerProfile =
+            Map<String, dynamic>.from(trainer);
       });
     }
 
     // Данные профиля и расписание догружаем уже после перехода.
-    final profileData = await _loadTrainerProfileForCard(trainer);
+    final profileData =
+        await _loadTrainerProfileForCard(trainer);
 
     if (!mounted || _openedTrainerProfile == null) return;
 
     // Если пользователь успел открыть другого тренера,
     // результат предыдущего запроса не должен заменить новый профиль.
-    final openedKey = _trainerIdentity(_openedTrainerProfile);
-    if (openedKey.isNotEmpty && key.isNotEmpty && openedKey != key) {
+    final openedKey =
+        _trainerIdentity(_openedTrainerProfile);
+    if (openedKey.isNotEmpty &&
+        key.isNotEmpty &&
+        openedKey != key) {
       return;
     }
 
-    final profileKey = _trainerIdentity(profileData);
+    final profileKey =
+        _trainerIdentity(profileData);
 
     setState(() {
-      _selectedTrainerKey = profileKey.isEmpty ? key : profileKey;
+      _selectedTrainerKey =
+          profileKey.isEmpty ? key : profileKey;
 
       _openedTrainerProfile = <String, dynamic>{
         ...?_openedTrainerProfile,
@@ -1019,6 +958,7 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
     });
   }
 
+
   @override
   Widget build(BuildContext context) {
     final opened = _openedTrainerProfile;
@@ -1030,77 +970,92 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
           clubId: widget.clubId,
           clubName: widget.clubName,
           embeddedInWorkspace: true,
-          allowEdit: _canEditTrainerProfile(opened),
+          allowEdit:
+              _canEditTrainerProfile(opened),
           onClose: _closeTrainerProfile,
-          onMessage: () => _messageTrainer(opened),
+          onMessage: () =>
+              _messageTrainer(opened),
           onAssign: null,
           availableTeams: widget.teams,
-          onAssignTeam: _canManageAllTrainers()
-              ? (teamId, profile) async {
-                  final trainerId = _trainerId(opened);
+          onAssignTeam:
+              _canManageAllTrainers()
+                  ? (teamId, profile) async {
+                      final trainerId =
+                          _trainerId(opened);
 
-                  if (trainerId <= 0 || teamId <= 0) {
-                    return false;
-                  }
+                      if (trainerId <= 0 ||
+                          teamId <= 0) {
+                        return false;
+                      }
 
-                  final ok = await _linkTrainerToTeam(
-                    trainerId,
-                    teamId,
-                    profile,
-                  );
+                      final ok =
+                          await _linkTrainerToTeam(
+                        trainerId,
+                        teamId,
+                        profile,
+                      );
 
-                  if (!ok) return false;
+                      if (!ok) return false;
 
-                  _trainerProfileFutures.clear();
-                  await _load();
+                      _trainerProfileFutures.clear();
+                      await _load();
 
-                  if (!mounted) return true;
+                      if (!mounted) return true;
 
-                  Map<String, dynamic> base = opened;
+                      Map<String, dynamic> base =
+                          opened;
 
-                  final identity = _trainerIdentity(opened);
+                      final identity =
+                          _trainerIdentity(opened);
 
-                  for (final item in _trainers) {
-                    if (_trainerIdentity(
-                          item,
-                        ) ==
-                        identity) {
-                      base = item;
-                      break;
+                      for (final item
+                          in _trainers) {
+                        if (_trainerIdentity(
+                              item,
+                            ) ==
+                            identity) {
+                          base = item;
+                          break;
+                        }
+                      }
+
+                      final refreshed =
+                          await _loadTrainerProfileForCard(
+                        base,
+                      );
+
+                      if (mounted) {
+                        setState(() {
+                          _openedTrainerProfile =
+                              refreshed;
+                        });
+                      }
+
+                      widget.onChanged?.call();
+                      return true;
                     }
-                  }
-
-                  final refreshed = await _loadTrainerProfileForCard(
-                    base,
-                  );
-
-                  if (mounted) {
-                    setState(() {
-                      _openedTrainerProfile = refreshed;
-                    });
-                  }
-
-                  widget.onChanged?.call();
-                  return true;
-                }
-              : null,
+                  : null,
           onChanged: () async {
             _trainerProfileFutures.clear();
             await _load();
             widget.onChanged?.call();
 
-            final active = _openedTrainerProfile;
-            if (!mounted || active == null) {
+            final active =
+                _openedTrainerProfile;
+            if (!mounted ||
+                active == null) {
               return;
             }
 
-            final refreshed = await _loadTrainerProfileForCard(
+            final refreshed =
+                await _loadTrainerProfileForCard(
               active,
             );
 
             if (mounted) {
               setState(() {
-                _openedTrainerProfile = refreshed;
+                _openedTrainerProfile =
+                    refreshed;
               });
             }
           },
@@ -1109,9 +1064,12 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
 
       return LayoutBuilder(
         builder: (context, constraints) {
-          final chatOpen = _sideChatId > 0 && _sideChatUserId > 0;
+          final chatOpen =
+              _sideChatId > 0 &&
+              _sideChatUserId > 0;
 
-          final desktop = constraints.maxWidth >= 920;
+          final desktop =
+              constraints.maxWidth >= 920;
 
           if (!chatOpen) {
             return profileCore();
@@ -1149,7 +1107,8 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
     }
 
     final visible = _visibleTrainers;
-    final assigned = _trainers.where((t) => _trainerTeams(t).isNotEmpty).length;
+    final assigned =
+        _trainers.where((t) => _trainerTeams(t).isNotEmpty).length;
     final mainCount = _trainers.where(_isMain).length;
     final doctorsCount = _trainers
         .where((t) => _detectGroup(t) == _CmrStaffFilter.doctors)
@@ -1182,16 +1141,17 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
     int mainCount,
     int doctorsCount,
   ) {
-    final selected = _selectedTrainerFrom(visible);
-    final selectedKey = _trainerIdentity(selected);
+    final selected =
+        _selectedTrainerFrom(visible);
+    final selectedKey =
+        _trainerIdentity(selected);
 
     return LayoutBuilder(
       builder: (context, constraints) {
         final mobile = constraints.maxWidth < 640;
         final compact = constraints.maxWidth < 980;
         final pressMode = _filter == _CmrStaffFilter.press;
-        final listWidth = math.min(compact ? 430.0 : 480.0,
-            constraints.maxWidth * (compact ? .43 : .45));
+        final listWidth = math.min(compact ? 430.0 : 480.0, constraints.maxWidth * (compact ? .43 : .45));
 
         final list = _TrainerListPanel(
           clubName: widget.clubName,
@@ -1239,11 +1199,15 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
               _selectTrainerForInspector(trainer);
             }
           },
-          onAddTrainer: pressMode || !_canManageAllTrainers() || _saving
+          onAddTrainer: pressMode ||
+                  !_canManageAllTrainers() ||
+                  _saving
               ? null
               : _openAddTrainerRightPanel,
           onAssignTrainer:
-              !_canManageAllTrainers() || _saving || _trainers.isEmpty
+              !_canManageAllTrainers() ||
+                      _saving ||
+                      _trainers.isEmpty
                   ? null
                   : () => _assignTrainer(
                         selected ??
@@ -1305,18 +1269,37 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
                             ),
                           )
                         : _addTrainerOpen
-                            ? CmrStaffAddRightPanel(
-                                clubId: widget.clubId,
-                                clubName: widget.clubName,
-                                teams: widget.teams,
-                                onClose: _closeAddTrainerRightPanel,
-                                onSaved: () async {
-                                  _trainerProfileFutures.clear();
-                                  await _load();
-                                  widget.onChanged?.call();
-                                },
-                              )
-                            : list,
+                        ? _TrainerAddRightPanel(
+                            clubName:
+                                widget.clubName,
+                            teams:
+                                widget.teams,
+                            pressMode:
+                                pressMode,
+                            saving:
+                                _saving,
+                            trainerIdOf:
+                                _trainerId,
+                            trainerNameOf:
+                                _trainerName,
+                            trainerEmailOf:
+                                _trainerEmail,
+                            trainerPhotoOf:
+                                _trainerPhoto,
+                            teamIdOf:
+                                _teamId,
+                            teamNameOf:
+                                _teamName,
+                            onClose:
+                                _closeAddTrainerRightPanel,
+                            onSearch:
+                                _searchTrainerByEmailRight,
+                            onAddClub:
+                                _addTrainerToClubRight,
+                            onAssignTeam:
+                                _assignTrainerRight,
+                          )
+                        : list,
                   ),
                 ),
               )
@@ -1338,12 +1321,17 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
                         SizedBox(width: listWidth, child: list),
                         Container(width: 1, color: _CmrColors.line),
                         Expanded(
-                          child: _sideChatId > 0 && _sideChatUserId > 0
+                          child: _sideChatId > 0 &&
+                                  _sideChatUserId > 0
                               ? _TrainerChatSidePanel(
-                                  chatId: _sideChatId,
-                                  userId: _sideChatUserId,
-                                  chatName: _sideChatName,
-                                  onClose: _closeSideChat,
+                                  chatId:
+                                      _sideChatId,
+                                  userId:
+                                      _sideChatUserId,
+                                  chatName:
+                                      _sideChatName,
+                                  onClose:
+                                      _closeSideChat,
                                 )
                               : _assigningTrainer != null
                                   ? _TrainerAssignRightPanel(
@@ -1381,100 +1369,119 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
                                         profile: profile,
                                       ),
                                     )
-                                  : _addTrainerOpen
-                                      ? CmrStaffAddRightPanel(
-                                          clubId: widget.clubId,
-                                          clubName: widget.clubName,
-                                          teams: widget.teams,
-                                          onClose: _closeAddTrainerRightPanel,
-                                          onSaved: () async {
-                                            _trainerProfileFutures.clear();
-                                            await _load();
-                                            widget.onChanged?.call();
-                                          },
-                                        )
-                                      : pressMode
-                                          ? _PressServiceDetailPanel(
-                                              trainer: selected,
-                                              clubName: widget.clubName,
-                                              allTeamsCount:
-                                                  widget.teams.length,
-                                              onManageTeams: selected == null ||
-                                                      !_canManageAllTrainers()
-                                                  ? null
-                                                  : () => _assignTrainer(
-                                                        selected,
-                                                        initialProfile:
-                                                            'press_assistant',
-                                                      ),
-                                              onRemovePress: selected == null ||
-                                                      !_canManageAllTrainers() ||
-                                                      _trainerPressTeams(
-                                                              selected)
-                                                          .isEmpty
-                                                  ? null
-                                                  : () => _removePressScope(
-                                                      selected),
-                                              onOpenProfile: selected == null
-                                                  ? null
-                                                  : () => _handleOpenTrainer(
-                                                        selected,
-                                                        false,
-                                                      ),
-                                            )
-                                          : _TrainerDetailPanel(
-                                              trainer: selected,
-                                              clubId: widget.clubId,
-                                              allTeams: widget.teams,
-                                              onAccessChanged: _load,
-                                              clubName: widget.clubName,
-                                              selectedTeamName:
-                                                  widget.selectedTeamName,
-                                              onMessage: selected == null
-                                                  ? null
-                                                  : () => _messageTrainer(
-                                                        selected,
-                                                      ),
-                                              onEdit: selected == null ||
-                                                      !_canEditTrainerProfile(
-                                                        selected,
-                                                      )
-                                                  ? null
-                                                  : () => _editTrainer(
-                                                        selected,
-                                                      ),
-                                              onAssign: selected == null ||
-                                                      !_canManageAllTrainers()
-                                                  ? null
-                                                  : () => _assignTrainer(
-                                                        selected,
-                                                      ),
-                                              onUnlinkTeam: selected == null ||
-                                                      !_canManageAllTrainers()
-                                                  ? null
-                                                  : () =>
-                                                      _unlinkTrainerFromTeam(
-                                                        selected,
-                                                      ),
-                                              onRemoveClub: selected == null ||
-                                                      !_canManageAllTrainers()
-                                                  ? null
-                                                  : () => _removeFromClub(
-                                                        selected,
-                                                      ),
-                                              onAddTrainer:
-                                                  !_canManageAllTrainers() ||
-                                                          _saving
-                                                      ? null
-                                                      : _openAddTrainerRightPanel,
-                                              onOpenDetailedProfile: selected ==
-                                                      null
-                                                  ? null
-                                                  : () => _handleOpenTrainer(
-                                                        selected,
-                                                        false,
-                                                      ),
-                                            ),
+                              : _addTrainerOpen
+                                  ? _TrainerAddRightPanel(
+                                  clubName:
+                                      widget.clubName,
+                                  teams:
+                                      widget.teams,
+                                  pressMode:
+                                      pressMode,
+                                  saving:
+                                      _saving,
+                                  trainerIdOf:
+                                      _trainerId,
+                                  trainerNameOf:
+                                      _trainerName,
+                                  trainerEmailOf:
+                                      _trainerEmail,
+                                  trainerPhotoOf:
+                                      _trainerPhoto,
+                                  teamIdOf:
+                                      _teamId,
+                                  teamNameOf:
+                                      _teamName,
+                                  onClose:
+                                      _closeAddTrainerRightPanel,
+                                  onSearch:
+                                      _searchTrainerByEmailRight,
+                                  onAddClub:
+                                      _addTrainerToClubRight,
+                                  onAssignTeam:
+                                      _assignTrainerRight,
+                                )
+                              : pressMode
+                                  ? _PressServiceDetailPanel(
+                                      trainer: selected,
+                                      clubName: widget.clubName,
+                                      allTeamsCount: widget.teams.length,
+                                      onManageTeams: selected == null ||
+                                              !_canManageAllTrainers()
+                                          ? null
+                                          : () => _assignTrainer(
+                                                selected,
+                                                initialProfile:
+                                                    'press_assistant',
+                                              ),
+                                      onRemovePress: selected == null ||
+                                              !_canManageAllTrainers() ||
+                                              _trainerPressTeams(selected).isEmpty
+                                          ? null
+                                          : () => _removePressScope(selected),
+                                      onOpenProfile: selected == null
+                                          ? null
+                                          : () => _handleOpenTrainer(
+                                                selected,
+                                                false,
+                                              ),
+                                    )
+                                  : _TrainerDetailPanel(
+                                  trainer: selected,
+                                  clubName:
+                                      widget.clubName,
+                                  selectedTeamName:
+                                      widget.selectedTeamName,
+                                  onMessage: selected == null
+                                      ? null
+                                      : () =>
+                                          _messageTrainer(
+                                            selected,
+                                          ),
+                                  onEdit: selected == null ||
+                                          !_canEditTrainerProfile(
+                                            selected,
+                                          )
+                                      ? null
+                                      : () =>
+                                          _editTrainer(
+                                            selected,
+                                          ),
+                                  onAssign:
+                                      selected == null ||
+                                              !_canManageAllTrainers()
+                                          ? null
+                                          : () =>
+                                              _assignTrainer(
+                                                selected,
+                                              ),
+                                  onUnlinkTeam:
+                                      selected == null ||
+                                              !_canManageAllTrainers()
+                                          ? null
+                                          : () =>
+                                              _unlinkTrainerFromTeam(
+                                                selected,
+                                              ),
+                                  onRemoveClub:
+                                      selected == null ||
+                                              !_canManageAllTrainers()
+                                          ? null
+                                          : () =>
+                                              _removeFromClub(
+                                                selected,
+                                              ),
+                                  onAddTrainer: !_canManageAllTrainers() || _saving
+                                      ? null
+                                      : _openAddTrainerRightPanel,
+                                  onOpenDetailedProfile:
+                                      selected == null
+                                          ? null
+                                          : () =>
+                                              _handleOpenTrainer(
+                                                selected,
+                                                false,
+                                              ),
+                                ),
                         ),
                       ],
                     ),
@@ -1523,12 +1530,10 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
     );
   }
 
-  Future<void> _openTrainerModal(Map<String, dynamic> trainer,
-      {bool loadProfile = true}) async {
+  Future<void> _openTrainerModal(Map<String, dynamic> trainer, {bool loadProfile = true}) async {
     if (!mounted) return;
 
-    final profileData =
-        loadProfile ? await _loadTrainerProfileForCard(trainer) : trainer;
+    final profileData = loadProfile ? await _loadTrainerProfileForCard(trainer) : trainer;
     if (!mounted) return;
 
     await showModalBottomSheet<void>(
@@ -1581,32 +1586,20 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
 
   // ==================== Вспомогательные методы ====================
 
-  int _trainerId(Map<String, dynamic> t) => _i(t['user_id'] ??
-      t['userId'] ??
-      t['trainer_id'] ??
-      t['trainerId'] ??
-      t['coach_id'] ??
-      t['id']);
-  int _teamId(Map<String, dynamic> team) =>
-      _i(team['id'] ?? team['team_id'] ?? team['teamId']);
+  int _trainerId(Map<String, dynamic> t) => _i(t['user_id'] ?? t['userId'] ?? t['trainer_id'] ?? t['trainerId'] ?? t['coach_id'] ?? t['id']);
+  int _teamId(Map<String, dynamic> team) => _i(team['id'] ?? team['team_id'] ?? team['teamId']);
 
-  Future<Map<String, dynamic>> _postForm(
-      String url, Map<String, String> body) async {
-    final resp = await http
-        .post(Uri.parse(url), body: body)
-        .timeout(const Duration(seconds: 16));
+  Future<Map<String, dynamic>> _postForm(String url, Map<String, String> body) async {
+    final resp = await http.post(Uri.parse(url), body: body).timeout(const Duration(seconds: 16));
     final data = _tryDecode(resp.body);
     if (data is Map<String, dynamic>) return data;
     if (data is Map) return Map<String, dynamic>.from(data);
     return {'success': false, 'message': 'Некорректный ответ сервера'};
   }
 
-  Future<Map<String, dynamic>> _postJson(
-      String url, Map<String, dynamic> body) async {
+  Future<Map<String, dynamic>> _postJson(String url, Map<String, dynamic> body) async {
     final resp = await http
-        .post(Uri.parse(url),
-            headers: const {'Content-Type': 'application/json; charset=utf-8'},
-            body: jsonEncode(body))
+        .post(Uri.parse(url), headers: const {'Content-Type': 'application/json; charset=utf-8'}, body: jsonEncode(body))
         .timeout(const Duration(seconds: 16));
     final data = _tryDecode(resp.body);
     if (data is Map<String, dynamic>) return data;
@@ -1618,11 +1611,7 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
     try {
       final start = body.indexOf('{');
       final arrayStart = body.indexOf('[');
-      final cut = start >= 0 && (arrayStart < 0 || start < arrayStart)
-          ? body.substring(start)
-          : arrayStart >= 0
-              ? body.substring(arrayStart)
-              : body;
+      final cut = start >= 0 && (arrayStart < 0 || start < arrayStart) ? body.substring(start) : arrayStart >= 0 ? body.substring(arrayStart) : body;
       return jsonDecode(cut);
     } catch (_) {
       return null;
@@ -1630,21 +1619,12 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
   }
 
   List<Map<String, dynamic>> _extractList(dynamic data, List<String> keys) {
-    if (data is List)
-      return data
-          .whereType<Map>()
-          .map((e) => Map<String, dynamic>.from(e))
-          .toList();
+    if (data is List) return data.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
     if (data is Map) {
       for (final key in keys) {
         final value = data[key];
-        if (value is List)
-          return value
-              .whereType<Map>()
-              .map((e) => Map<String, dynamic>.from(e))
-              .toList();
-        if (value is Map && (key == 'trainer' || key == 'user'))
-          return [Map<String, dynamic>.from(value)];
+        if (value is List) return value.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+        if (value is Map && (key == 'trainer' || key == 'user')) return [Map<String, dynamic>.from(value)];
       }
       for (final key in keys) {
         final nested = data[key];
@@ -1665,20 +1645,16 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
     return null;
   }
 
-  Future<List<Map<String, dynamic>>> _loadTrainerSchedule(
-      Map<String, dynamic> trainer) async {
+  Future<List<Map<String, dynamic>>> _loadTrainerSchedule(Map<String, dynamic> trainer) async {
     final rows = <Map<String, dynamic>>[];
     for (final team in _trainerTeams(trainer)) {
       final teamId = _teamId(team);
       if (teamId <= 0) continue;
       try {
-        final uri = Uri.parse(getTeamEventsUrl)
-            .replace(queryParameters: {'team_id': '$teamId'});
-        final response =
-            await http.get(uri).timeout(const Duration(seconds: 12));
+        final uri = Uri.parse(getTeamEventsUrl).replace(queryParameters: {'team_id': '$teamId'});
+        final response = await http.get(uri).timeout(const Duration(seconds: 12));
         final data = _tryDecode(response.body);
-        final events =
-            _extractList(data, const ['events', 'items', 'rows', 'data']);
+        final events = _extractList(data, const ['events', 'items', 'rows', 'data']);
         for (final event in events) {
           rows.add(<String, dynamic>{
             ...event,
@@ -1689,11 +1665,9 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
       } catch (_) {}
     }
 
-    DateTime? parseDate(dynamic value) =>
-        DateTime.tryParse(_s(value).replaceAll(' ', 'T'));
+    DateTime? parseDate(dynamic value) => DateTime.tryParse(_s(value).replaceAll(' ', 'T'));
     final now = DateTime.now();
-    final floor = DateTime(now.year, now.month, now.day)
-        .subtract(const Duration(days: 1));
+    final floor = DateTime(now.year, now.month, now.day).subtract(const Duration(days: 1));
     final upcoming = rows.where((event) {
       final date = parseDate(event['start_at'] ?? event['date']);
       return date != null && !date.isBefore(floor);
@@ -1706,16 +1680,13 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
     return upcoming.take(30).toList();
   }
 
-  Future<Map<String, dynamic>> _loadTrainerProfileForCard(
-      Map<String, dynamic> trainer) async {
+  Future<Map<String, dynamic>> _loadTrainerProfileForCard(Map<String, dynamic> trainer) async {
     final trainerId = _trainerId(trainer);
     if (trainerId <= 0) return trainer;
 
     try {
-      final data =
-          await _postJson(getTrainerProfileUrl, {'trainer_id': trainerId});
-      final raw =
-          _pickMap(data, const ['profile', 'trainer', 'user', 'data']) ?? data;
+      final data = await _postJson(getTrainerProfileUrl, {'trainer_id': trainerId});
+      final raw = _pickMap(data, const ['profile', 'trainer', 'user', 'data']) ?? data;
       final merged = <String, dynamic>{...trainer};
 
       if (raw is Map) {
@@ -1748,7 +1719,8 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
       return;
     }
 
-    final currentUserId = await PrefUtils.getUserId() ?? 0;
+    final currentUserId =
+        await PrefUtils.getUserId() ?? 0;
 
     if (currentUserId <= 0) {
       Get.snackbar(
@@ -1787,12 +1759,15 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
       final data = _tryDecode(response.body);
 
       final ok =
-          response.statusCode == 200 && data is Map && data['success'] == true;
+          response.statusCode == 200 &&
+          data is Map &&
+          data['success'] == true;
 
       if (!ok) {
         final msg = data is Map
             ? _s(
-                data['error'] ?? data['message'],
+                data['error'] ??
+                    data['message'],
               )
             : '';
 
@@ -1804,13 +1779,16 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
 
         Get.snackbar(
           'Чат',
-          msg.isEmpty ? 'Не удалось открыть чат' : msg,
+          msg.isEmpty
+              ? 'Не удалось открыть чат'
+              : msg,
         );
         return;
       }
 
       final chatId = _i(
-        data['chat_id'] ?? data['id'],
+        data['chat_id'] ??
+            data['id'],
       );
 
       if (chatId <= 0) {
@@ -1829,14 +1807,16 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
 
       if (!mounted) return;
 
-      if (closeCurrentSheet && Navigator.of(context).canPop()) {
+      if (closeCurrentSheet &&
+          Navigator.of(context).canPop()) {
         Navigator.of(context).pop();
       }
 
       setState(() {
         _sideChatId = chatId;
         _sideChatUserId = currentUserId;
-        _sideChatName = _trainerName(trainer);
+        _sideChatName =
+            _trainerName(trainer);
         _sideChatOpening = false;
       });
     } catch (_) {
@@ -1852,6 +1832,7 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
       );
     }
   }
+
 
   void _openAddTrainerRightPanel() {
     if (!_canManageAllTrainers()) {
@@ -1875,7 +1856,8 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
     setState(() => _addTrainerOpen = false);
   }
 
-  Future<List<Map<String, dynamic>>> _searchTrainerByEmailRight(
+  Future<List<Map<String, dynamic>>>
+      _searchTrainerByEmailRight(
     String email,
   ) async {
     final value = email.trim();
@@ -1942,7 +1924,8 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
       return false;
     }
 
-    final trainerId = _trainerId(trainer);
+    final trainerId =
+        _trainerId(trainer);
 
     if (trainerId <= 0) {
       Get.snackbar(
@@ -1990,9 +1973,11 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
       return false;
     }
 
-    final trainerId = _trainerId(trainer);
+    final trainerId =
+        _trainerId(trainer);
 
-    if (trainerId <= 0 || teamId == 0) {
+    if (trainerId <= 0 ||
+        teamId == 0) {
       return false;
     }
 
@@ -2042,26 +2027,6 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
     return true;
   }
 
-  Future<void> _openStaffInviteDialog() async {
-    if (!mounted || _saving) return;
-
-    final changed = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => CmrStaffInviteDialog(
-        clubId: widget.clubId,
-        clubName: widget.clubName,
-        teams: widget.teams,
-      ),
-    );
-
-    if (changed == true) {
-      await _afterMutation(
-        'Сотрудник добавлен. Staff Key отправлен на почту',
-      );
-    }
-  }
-
   Future<void> _searchAndAddTrainer() async {
     if (!mounted) return;
 
@@ -2093,10 +2058,8 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
                 setSheet(() => searching = true);
 
                 try {
-                  final data = await _postForm(
-                      searchTrainerByEmailUrl, {'email': email});
-                  final list = _extractList(data,
-                      const ['trainers', 'trainer', 'users', 'data', 'items']);
+                  final data = await _postForm(searchTrainerByEmailUrl, {'email': email});
+                  final list = _extractList(data, const ['trainers', 'trainer', 'users', 'data', 'items']);
                   if (!sheetContext.mounted) return;
                   setSheet(() {
                     found
@@ -2129,8 +2092,7 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
                     _CmrSheetTitle(
                       icon: Icons.person_add_alt_1_rounded,
                       title: 'Добавить сотрудника',
-                      subtitle:
-                          'Найдите пользователя по email, добавьте в клуб или сразу назначьте в команду.',
+                      subtitle: 'Найдите пользователя по email, добавьте в клуб или сразу назначьте в команду.',
                     ),
                     const SizedBox(height: 16),
                     _CmrInput(
@@ -2139,9 +2101,7 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
                       icon: Icons.alternate_email_rounded,
                       keyboardType: TextInputType.emailAddress,
                       onSubmitted: (_) => search(),
-                      suffix: IconButton(
-                          onPressed: search,
-                          icon: const Icon(Icons.search_rounded)),
+                      suffix: IconButton(onPressed: search, icon: const Icon(Icons.search_rounded)),
                     ),
                     const SizedBox(height: 14),
                     if (searching)
@@ -2153,14 +2113,12 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
                       const _CmrNotice(
                         icon: Icons.search_rounded,
                         title: 'Введите email',
-                        text:
-                            'После поиска здесь появятся найденные пользователи с ролью тренера.',
+                        text: 'После поиска здесь появятся найденные пользователи с ролью тренера.',
                       )
                     else
                       ConstrainedBox(
                         constraints: BoxConstraints(
-                          maxHeight:
-                              MediaQuery.sizeOf(sheetContext).height * .42,
+                          maxHeight: MediaQuery.sizeOf(sheetContext).height * .42,
                         ),
                         child: ListView.builder(
                           shrinkWrap: true,
@@ -2175,8 +2133,7 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
                               email: email,
                               photo: photo,
                               onAddClub: () => closeWithAction('club', trainer),
-                              onAssignTeam: () =>
-                                  closeWithAction('team', trainer),
+                              onAssignTeam: () => closeWithAction('team', trainer),
                             );
                           },
                         ),
@@ -2257,8 +2214,7 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
   }
 
   Future<Map<String, dynamic>> _loadTrainerEditProfile(int trainerId) async {
-    final data =
-        await _postJson(getTrainerProfileUrl, {'trainer_id': trainerId});
+    final data = await _postJson(getTrainerProfileUrl, {'trainer_id': trainerId});
     return _pickMap(data, const ['profile', 'trainer', 'user', 'data']) ?? data;
   }
 
@@ -2272,8 +2228,10 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
     required String bio,
     XFile? pickedPhoto,
   }) async {
-    final canEdit = _canManageAllTrainers() ||
-        (_currentUserId > 0 && _currentUserId == trainerId);
+    final canEdit =
+        _canManageAllTrainers() ||
+        (_currentUserId > 0 &&
+            _currentUserId == trainerId);
 
     if (!canEdit) {
       Get.snackbar(
@@ -2286,8 +2244,7 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
     try {
       http.Response resp;
       if (pickedPhoto != null) {
-        final req =
-            http.MultipartRequest('POST', Uri.parse(updateTrainerProfileUrl));
+        final req = http.MultipartRequest('POST', Uri.parse(updateTrainerProfileUrl));
         req.fields['trainer_id'] = '$trainerId';
         req.fields['actor_user_id'] = '$_currentUserId';
         req.fields['actor_role'] = _currentUserRole;
@@ -2297,11 +2254,9 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
         req.fields['birthday'] = birthday.trim();
         req.fields['experience'] = experience.trim();
         req.fields['bio'] = bio.trim();
-        req.files.add(await http.MultipartFile.fromPath(
-            'photo', File(pickedPhoto.path).path));
+        req.files.add(await http.MultipartFile.fromPath('photo', File(pickedPhoto.path).path));
         final streamed = await req.send();
-        resp = http.Response(
-            await streamed.stream.bytesToString(), streamed.statusCode);
+        resp = http.Response(await streamed.stream.bytesToString(), streamed.statusCode);
       } else {
         resp = await http.post(
           Uri.parse(updateTrainerProfileUrl),
@@ -2321,12 +2276,10 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
       }
 
       final data = _tryDecode(resp.body);
-      final ok = data is Map &&
-          (data['success'] == true || data['status'] == 'success');
+      final ok = data is Map && (data['success'] == true || data['status'] == 'success');
       if (!ok) {
         final msg = data is Map ? _s(data['message'] ?? data['error']) : '';
-        Get.snackbar(
-            'Ошибка', msg.isEmpty ? 'Не удалось сохранить профиль' : msg);
+        Get.snackbar('Ошибка', msg.isEmpty ? 'Не удалось сохранить профиль' : msg);
       }
       return ok;
     } catch (_) {
@@ -2387,8 +2340,11 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
     }
 
     final validTeamIds = teamIds.where((id) => id > 0).toSet().toList();
-    final allClubTeamIds =
-        widget.teams.map(_teamId).where((id) => id > 0).toSet().toList();
+    final allClubTeamIds = widget.teams
+        .map(_teamId)
+        .where((id) => id > 0)
+        .toSet()
+        .toList();
 
     if (!allTeams && validTeamIds.isEmpty) {
       Get.snackbar('Назначение', 'Выберите хотя бы одну команду');
@@ -2732,8 +2688,7 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
     }
   }
 
-  Future<bool> _linkTrainerToTeam(
-      int trainerId, int teamId, String profile) async {
+  Future<bool> _linkTrainerToTeam(int trainerId, int teamId, String profile) async {
     if (!_canManageAllTrainers()) {
       Get.snackbar(
         'Доступ',
@@ -2842,7 +2797,7 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
       Navigator.of(context).pop();
       await Future.delayed(const Duration(milliseconds: 220));
     }
-
+    
     final trainerId = _trainerId(trainer);
     if (trainerId <= 0) return;
     final ok = await _confirm(
@@ -2852,11 +2807,10 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
       danger: true,
     );
     if (ok != true) return;
-    final success =
-        await _saveAction(() => _postForm(unlinkTrainerFromClubUrl, {
-              'club_id': '${widget.clubId}',
-              'trainer_id': '$trainerId',
-            }));
+    final success = await _saveAction(() => _postForm(unlinkTrainerFromClubUrl, {
+          'club_id': '${widget.clubId}',
+          'trainer_id': '$trainerId',
+        }));
     if (success) await _afterMutation('Тренер удалён из клуба');
   }
 
@@ -2914,9 +2868,7 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
     widget.onChanged?.call();
   }
 
-  Future<Map<String, dynamic>?> _pickTeam(
-      {List<Map<String, dynamic>>? from,
-      String title = 'Выберите команду'}) async {
+  Future<Map<String, dynamic>?> _pickTeam({List<Map<String, dynamic>>? from, String title = 'Выберите команду'}) async {
     final source = from ?? widget.teams;
     if (source.isEmpty) {
       Get.snackbar('Команды', 'Сначала добавьте команду клуба');
@@ -2931,11 +2883,7 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const _CmrSheetHandle(),
-            _CmrSheetTitle(
-                icon: Icons.groups_2_rounded,
-                title: title,
-                subtitle:
-                    'Назначение тренера будет привязано к выбранной команде.'),
+            _CmrSheetTitle(icon: Icons.groups_2_rounded, title: title, subtitle: 'Назначение тренера будет привязано к выбранной команде.'),
             const SizedBox(height: 12),
             ConstrainedBox(
               constraints: const BoxConstraints(maxHeight: 420),
@@ -2961,27 +2909,11 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
 
   Future<String?> _pickProfileType() {
     const variants = [
-      (
-        'main',
-        'Главный тренер',
-        Icons.workspace_premium_rounded,
-        _CmrColors.green
-      ),
+      ('main', 'Главный тренер', Icons.workspace_premium_rounded, _CmrColors.green),
       ('extra', 'Тренер / специалист', Icons.sports_rounded, _CmrColors.blue),
       ('assistant', 'Ассистент', Icons.support_agent_rounded, _CmrColors.amber),
       ('doctor', 'Медик', Icons.health_and_safety_rounded, _CmrColors.red),
-      (
-        'manager',
-        'Администратор',
-        Icons.admin_panel_settings_rounded,
-        _CmrColors.muted
-      ),
-      (
-        'press_assistant',
-        'Пресс-служба',
-        Icons.campaign_outlined,
-        _CmrColors.green
-      ),
+      ('manager', 'Администратор', Icons.admin_panel_settings_rounded, _CmrColors.muted),
     ];
     return showModalBottomSheet<String>(
       context: context,
@@ -2992,10 +2924,7 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const _CmrSheetHandle(),
-            _CmrSheetTitle(
-                icon: Icons.badge_rounded,
-                title: 'Роль в команде',
-                subtitle: 'Выберите роль сотрудника в штабе команды.'),
+            _CmrSheetTitle(icon: Icons.badge_rounded, title: 'Роль в команде', subtitle: 'Выберите роль сотрудника в штабе команды.'),
             const SizedBox(height: 12),
             for (final item in variants)
               Padding(
@@ -3013,11 +2942,7 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
     );
   }
 
-  Future<bool?> _confirm(
-      {required String title,
-      required String text,
-      required String confirmText,
-      bool danger = false}) {
+  Future<bool?> _confirm({required String title, required String text, required String confirmText, bool danger = false}) {
     return showModalBottomSheet<bool>(
       context: context,
       backgroundColor: Colors.transparent,
@@ -3026,12 +2951,7 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
           mainAxisSize: MainAxisSize.min,
           children: [
             const _CmrSheetHandle(),
-            _CmrRoundIcon(
-                icon: danger
-                    ? Icons.warning_amber_rounded
-                    : Icons.verified_rounded,
-                color: danger ? _CmrColors.red : _CmrColors.green,
-                size: 52),
+            _CmrRoundIcon(icon: danger ? Icons.warning_amber_rounded : Icons.verified_rounded, color: danger ? _CmrColors.red : _CmrColors.green, size: 52),
             const SizedBox(height: 14),
             Text(title, textAlign: TextAlign.center, style: _CmrText.title(20)),
             const SizedBox(height: 8),
@@ -3039,17 +2959,9 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
             const SizedBox(height: 18),
             Row(
               children: [
-                Expanded(
-                    child: _CmrSecondaryButton(
-                        title: 'Отмена',
-                        onTap: () => Navigator.pop(context, false))),
+                Expanded(child: _CmrSecondaryButton(title: 'Отмена', onTap: () => Navigator.pop(context, false))),
                 const SizedBox(width: 10),
-                Expanded(
-                    child: _CmrPrimaryButton(
-                        icon: Icons.check_rounded,
-                        title: confirmText,
-                        color: danger ? _CmrColors.red : _CmrColors.green,
-                        onTap: () => Navigator.pop(context, true))),
+                Expanded(child: _CmrPrimaryButton(icon: Icons.check_rounded, title: confirmText, color: danger ? _CmrColors.red : _CmrColors.green, onTap: () => Navigator.pop(context, true))),
               ],
             ),
           ],
@@ -3059,7 +2971,9 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
   }
 }
 
+
 // ==================== Панель тренеров в стиле раздела «Состав» ====================
+
 
 class _TrainerListPanel extends StatelessWidget {
   final String clubName;
@@ -3123,12 +3037,10 @@ class _TrainerListPanel extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Container(
-            padding: EdgeInsets.symmetric(
-                horizontal: mobile ? 10 : 12, vertical: 10),
+            padding: EdgeInsets.symmetric(horizontal: mobile ? 10 : 12, vertical: 10),
             decoration: const BoxDecoration(
               color: Colors.transparent,
-              border: Border(
-                  bottom: BorderSide(color: _CmrColors.line, width: .55)),
+              border: Border(bottom: BorderSide(color: _CmrColors.line, width: .55)),
             ),
             child: _TrainerHeader(
               clubName: clubName,
@@ -3146,8 +3058,7 @@ class _TrainerListPanel extends StatelessWidget {
             ),
           ),
           Container(
-            padding:
-                EdgeInsets.symmetric(horizontal: mobile ? 10 : 12, vertical: 8),
+            padding: EdgeInsets.symmetric(horizontal: mobile ? 10 : 12, vertical: 8),
             color: Colors.transparent,
             child: _TrainerSearch(
               controller: searchController,
@@ -3157,18 +3068,14 @@ class _TrainerListPanel extends StatelessWidget {
           ),
           Container(
             height: 46,
-            padding:
-                EdgeInsets.symmetric(horizontal: mobile ? 10 : 12, vertical: 6),
+            padding: EdgeInsets.symmetric(horizontal: mobile ? 10 : 12, vertical: 6),
             color: Colors.transparent,
-            child: _TrainerFilterBar(
-                value: filter, onChanged: onFilterChanged, mobile: mobile),
+            child: _TrainerFilterBar(value: filter, onChanged: onFilterChanged, mobile: mobile),
           ),
           Expanded(
             child: trainers.isEmpty
                 ? _TrainerEmptyState(
-                    title: trainersCount == 0
-                        ? 'Тренеры пока не добавлены'
-                        : 'Ничего не найдено',
+                    title: trainersCount == 0 ? 'Тренеры пока не добавлены' : 'Ничего не найдено',
                     text: trainersCount == 0
                         ? 'Добавьте тренера по email или назначьте специалиста в команду.'
                         : 'Измените поиск или фильтр.',
@@ -3271,11 +3178,7 @@ class _TrainerHeader extends StatelessWidget {
           ),
         ),
         if (onRefresh != null && !mobile) ...[
-          _TrainerIconButton(
-              icon: Icons.refresh_rounded,
-              tooltip: 'Обновить',
-              onTap: onRefresh!,
-              compact: true),
+          _TrainerIconButton(icon: Icons.refresh_rounded, tooltip: 'Обновить', onTap: onRefresh!, compact: true),
           const SizedBox(width: 6),
         ],
         _TrainerIconButton(
@@ -3285,6 +3188,7 @@ class _TrainerHeader extends StatelessWidget {
           emphasized: true,
           compact: true,
         ),
+
       ],
     );
   }
@@ -3301,8 +3205,7 @@ class _TinyCounter extends StatelessWidget {
       height: 28,
       alignment: Alignment.center,
       padding: const EdgeInsets.symmetric(horizontal: 8),
-      decoration: _CmrDecor.fluentSurface(
-          radius: 8, accent: _CmrColors.green, active: true, compact: true),
+      decoration: _CmrDecor.fluentSurface(radius: 8, accent: _CmrColors.green, active: true, compact: true),
       child: Text(
         text,
         style: const TextStyle(
@@ -3321,8 +3224,7 @@ class _TrainerStatChip extends StatelessWidget {
   final String label;
   final IconData icon;
 
-  const _TrainerStatChip(
-      {required this.value, required this.label, required this.icon});
+  const _TrainerStatChip({required this.value, required this.label, required this.icon});
 
   @override
   Widget build(BuildContext context) {
@@ -3351,15 +3253,9 @@ class _TrainerStatChip extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(value,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: _CmrText.title(18)),
+                Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrText.title(18)),
                 const SizedBox(height: 3),
-                Text(label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: _CmrText.muted(10.5)),
+                Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrText.muted(10.5)),
               ],
             ),
           ),
@@ -3392,25 +3288,19 @@ class _TrainerIconButton extends StatelessWidget {
         color: Colors.transparent,
         borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
         child: Ink(
-          decoration: _CmrDecor.fluentSurface(
-              radius: 10,
-              accent: _CmrColors.green,
-              active: emphasized,
-              compact: true),
+          decoration: _CmrDecor.fluentSurface(radius: 10, accent: _CmrColors.green, active: emphasized, compact: true),
           child: InkWell(
-            borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
-            onTap: onTap,
-            child: Opacity(
-              opacity: onTap == null ? .45 : 1,
-              child: SizedBox(
-                width: compact ? 34 : 38,
-                height: compact ? 34 : 38,
-                child: Icon(icon,
-                    color: emphasized ? _CmrColors.green : _CmrColors.text,
-                    size: compact ? 15 : 16),
-              ),
+          borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
+          onTap: onTap,
+          child: Opacity(
+            opacity: onTap == null ? .45 : 1,
+            child: SizedBox(
+              width: compact ? 34 : 38,
+              height: compact ? 34 : 38,
+              child: Icon(icon, color: emphasized ? _CmrColors.green : _CmrColors.text, size: compact ? 15 : 16),
             ),
           ),
+        ),
         ),
       ),
     );
@@ -3486,26 +3376,18 @@ class _TrainerFilterBar extends StatelessWidget {
   final ValueChanged<_CmrStaffFilter> onChanged;
   final bool mobile;
 
-  const _TrainerFilterBar(
-      {required this.value, required this.onChanged, required this.mobile});
+  const _TrainerFilterBar({required this.value, required this.onChanged, required this.mobile});
 
   @override
   Widget build(BuildContext context) {
     final items = <_CmrStaffFilter, _StaffFilterData>{
-      _CmrStaffFilter.all:
-          const _StaffFilterData('Все', Icons.groups_2_rounded),
-      _CmrStaffFilter.main:
-          const _StaffFilterData('Главные', Icons.workspace_premium_rounded),
-      _CmrStaffFilter.coaches:
-          const _StaffFilterData('Тренеры', Icons.sports_rounded),
-      _CmrStaffFilter.assistants:
-          const _StaffFilterData('Ассистенты', Icons.support_agent_rounded),
-      _CmrStaffFilter.doctors:
-          const _StaffFilterData('Медики', Icons.health_and_safety_rounded),
-      _CmrStaffFilter.press:
-          const _StaffFilterData('Пресс-служба', Icons.campaign_outlined),
-      _CmrStaffFilter.noTeam:
-          const _StaffFilterData('Без команды', Icons.link_off_rounded),
+      _CmrStaffFilter.all: const _StaffFilterData('Все', Icons.groups_2_rounded),
+      _CmrStaffFilter.main: const _StaffFilterData('Главные', Icons.workspace_premium_rounded),
+      _CmrStaffFilter.coaches: const _StaffFilterData('Тренеры', Icons.sports_rounded),
+      _CmrStaffFilter.assistants: const _StaffFilterData('Ассистенты', Icons.support_agent_rounded),
+      _CmrStaffFilter.doctors: const _StaffFilterData('Медики', Icons.health_and_safety_rounded),
+      _CmrStaffFilter.press: const _StaffFilterData('Пресс-служба', Icons.campaign_outlined),
+      _CmrStaffFilter.noTeam: const _StaffFilterData('Без команды', Icons.link_off_rounded),
     };
 
     return SizedBox(
@@ -3536,6 +3418,7 @@ class _StaffFilterData {
   final IconData icon;
   const _StaffFilterData(this.label, this.icon);
 }
+
 
 class _StaffFilterPill extends StatelessWidget {
   final String label;
@@ -3583,9 +3466,12 @@ class _StaffFilterPill extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: _CmrText.action().copyWith(
-              color: active ? _CmrColors.greenDark : _CmrColors.muted2,
+              color: active
+                  ? _CmrColors.greenDark
+                  : _CmrColors.muted2,
               fontSize: dense ? 12.0 : 11.4,
-              fontWeight: active ? FontWeight.w600 : FontWeight.w500,
+              fontWeight:
+                  active ? FontWeight.w600 : FontWeight.w500,
               height: 1,
             ),
           ),
@@ -3738,7 +3624,9 @@ class _TrainerListBadge extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           _CmrGlowDot(
-            color: active ? _CmrColors.green : _CmrColors.muted2,
+            color: active
+                ? _CmrColors.green
+                : _CmrColors.muted2,
             size: active ? 5.5 : 4.5,
             opacity: active ? 1 : .62,
             halo: active,
@@ -3750,7 +3638,9 @@ class _TrainerListBadge extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                color: active ? _CmrColors.greenDark : _CmrColors.muted,
+                color: active
+                    ? _CmrColors.greenDark
+                    : _CmrColors.muted,
                 fontSize: 10.3,
                 fontWeight: FontWeight.w600,
                 height: 1,
@@ -3762,6 +3652,7 @@ class _TrainerListBadge extends StatelessWidget {
     );
   }
 }
+
 
 class _TrainerStatusBadge extends StatelessWidget {
   final bool main;
@@ -3789,7 +3680,9 @@ class _TrainerStatusBadge extends StatelessWidget {
         borderRadius: BorderRadius.circular(9),
       ),
       child: _CmrGlowDot(
-        color: enabled ? _CmrColors.green : _CmrColors.muted2,
+        color: enabled
+            ? _CmrColors.green
+            : _CmrColors.muted2,
         size: 5.5,
         opacity: enabled ? 1 : .62,
         halo: enabled,
@@ -3811,15 +3704,14 @@ class _ChevronBadge extends StatelessWidget {
       decoration: BoxDecoration(
         color: active ? _CmrColors.green.withOpacity(.10) : _CmrColors.soft,
         borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
-        border: Border.all(
-            color:
-                active ? _CmrColors.green.withOpacity(.18) : _CmrColors.line),
+        border: Border.all(color: active ? _CmrColors.green.withOpacity(.18) : _CmrColors.line),
       ),
-      child: Icon(Icons.chevron_right_rounded,
-          size: 16, color: active ? _CmrColors.green : _CmrColors.muted2),
+      child: Icon(Icons.chevron_right_rounded, size: 16, color: active ? _CmrColors.green : _CmrColors.muted2),
     );
   }
 }
+
+
 
 class _TrainerChatSidePanel extends StatelessWidget {
   final int chatId;
@@ -3843,47 +3735,60 @@ class _TrainerChatSidePanel extends StatelessWidget {
           SizedBox(
             height: 54,
             child: Padding(
-              padding: const EdgeInsets.symmetric(
+              padding:
+                  const EdgeInsets.symmetric(
                 horizontal: 11,
               ),
               child: Row(
                 children: <Widget>[
                   const _CmrDotCluster(
-                    color: _CmrColors.green,
+                    color:
+                        _CmrColors.green,
                   ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment:
+                          MainAxisAlignment.center,
+                      crossAxisAlignment:
+                          CrossAxisAlignment.start,
                       children: <Widget>[
                         Text(
-                          chatName.isEmpty ? 'Чат' : chatName,
+                          chatName.isEmpty
+                              ? 'Чат'
+                              : chatName,
                           maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: _CmrText.title(11.7),
+                          overflow:
+                              TextOverflow.ellipsis,
+                          style:
+                              _CmrText.title(11.7),
                         ),
                         const SizedBox(height: 2),
                         Text(
                           'Личная переписка',
-                          style: _CmrText.muted(8.6),
+                          style:
+                              _CmrText.muted(8.6),
                         ),
                       ],
                     ),
                   ),
                   Material(
-                    color: _CmrColors.soft2,
-                    borderRadius: BorderRadius.circular(8),
+                    color:
+                        _CmrColors.soft2,
+                    borderRadius:
+                        BorderRadius.circular(8),
                     child: InkWell(
                       onTap: onClose,
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius:
+                          BorderRadius.circular(8),
                       child: const SizedBox(
                         width: 30,
                         height: 30,
                         child: Icon(
                           Icons.close_rounded,
                           size: 15,
-                          color: _CmrColors.muted2,
+                          color:
+                              _CmrColors.muted2,
                         ),
                       ),
                     ),
@@ -3973,6 +3878,7 @@ class _CmrTextActionButton extends StatelessWidget {
   }
 }
 
+
 class _TrainerAssignRightPanel extends StatefulWidget {
   final Map<String, dynamic> trainer;
   final String clubName;
@@ -4010,7 +3916,8 @@ class _TrainerAssignRightPanel extends StatefulWidget {
       _TrainerAssignRightPanelState();
 }
 
-class _TrainerAssignRightPanelState extends State<_TrainerAssignRightPanel> {
+class _TrainerAssignRightPanelState
+    extends State<_TrainerAssignRightPanel> {
   final Set<int> _teamIds = <int>{};
   bool _allTeams = false;
   late String _profile;
@@ -4077,7 +3984,8 @@ class _TrainerAssignRightPanelState extends State<_TrainerAssignRightPanel> {
     _repeatPasswordC = TextEditingController();
 
     final requested = widget.initialProfile.trim().toLowerCase();
-    _profile = roles.any((role) => role.$1 == requested) ? requested : 'extra';
+    _profile =
+        roles.any((role) => role.$1 == requested) ? requested : 'extra';
     _syncScopeFromExisting();
   }
 
@@ -4248,7 +4156,9 @@ class _TrainerAssignRightPanelState extends State<_TrainerAssignRightPanel> {
     } else {
       for (final item in _trainerTeams(widget.trainer)) {
         final currentProfile = _s(
-          item['profile'] ?? item['link_profile'] ?? item['role_code'],
+          item['profile'] ??
+              item['link_profile'] ??
+              item['role_code'],
         ).trim().toLowerCase();
 
         if (currentProfile == _profile) {
@@ -4493,7 +4403,9 @@ class _TrainerAssignRightPanelState extends State<_TrainerAssignRightPanel> {
                 SizedBox(
                   width: double.infinity,
                   child: _CmrTextActionButton(
-                    label: _savingPassword ? 'Изменение...' : 'Изменить пароль',
+                    label: _savingPassword
+                        ? 'Изменение...'
+                        : 'Изменить пароль',
                     color: _CmrColors.greenDark,
                     onTap: _savingPassword || _working || widget.saving
                         ? null
@@ -4503,6 +4415,7 @@ class _TrainerAssignRightPanelState extends State<_TrainerAssignRightPanel> {
               ],
             ),
           ),
+
           if (current.isNotEmpty || pressCurrent.isNotEmpty) ...[
             const SizedBox(height: 14),
             Text('Текущие назначения', style: _CmrText.value(11.2)),
@@ -4595,8 +4508,9 @@ class _TrainerAssignRightPanelState extends State<_TrainerAssignRightPanel> {
             Padding(
               padding: const EdgeInsets.only(bottom: 7),
               child: Material(
-                color:
-                    _profile == role.$1 ? _CmrColors.greenSoft : Colors.white,
+                color: _profile == role.$1
+                    ? _CmrColors.greenSoft
+                    : Colors.white,
                 borderRadius: BorderRadius.circular(10),
                 child: InkWell(
                   onTap: _working
@@ -4627,8 +4541,9 @@ class _TrainerAssignRightPanelState extends State<_TrainerAssignRightPanel> {
                         Icon(
                           role.$3,
                           size: 18,
-                          color:
-                              _profile == role.$1 ? role.$4 : _CmrColors.muted2,
+                          color: _profile == role.$1
+                              ? role.$4
+                              : _CmrColors.muted2,
                         ),
                         const SizedBox(width: 9),
                         Expanded(
@@ -4656,7 +4571,9 @@ class _TrainerAssignRightPanelState extends State<_TrainerAssignRightPanel> {
                 child: Text('Команды', style: _CmrText.value(11.2)),
               ),
               Text(
-                _allTeams ? 'Все $totalTeams' : 'Выбрано ${_teamIds.length}',
+                _allTeams
+                    ? 'Все $totalTeams'
+                    : 'Выбрано ${_teamIds.length}',
                 style: _CmrText.muted(9.2),
               ),
             ],
@@ -4696,7 +4613,9 @@ class _TrainerAssignRightPanelState extends State<_TrainerAssignRightPanel> {
                           ? Icons.check_circle_rounded
                           : Icons.circle_outlined,
                       size: 18,
-                      color: _allTeams ? _CmrColors.green : _CmrColors.muted2,
+                      color: _allTeams
+                          ? _CmrColors.green
+                          : _CmrColors.muted2,
                     ),
                     const SizedBox(width: 9),
                     Expanded(
@@ -4783,7 +4702,9 @@ class _TrainerAssignRightPanelState extends State<_TrainerAssignRightPanel> {
             color: _profile == 'press_assistant'
                 ? _CmrColors.violet
                 : _CmrColors.green,
-            onTap: _working || widget.saving || (!_allTeams && _teamIds.isEmpty)
+            onTap: _working ||
+                    widget.saving ||
+                    (!_allTeams && _teamIds.isEmpty)
                 ? null
                 : _submit,
           ),
@@ -4793,18 +4714,25 @@ class _TrainerAssignRightPanelState extends State<_TrainerAssignRightPanel> {
   }
 }
 
+
 class _TrainerAddRightPanel extends StatefulWidget {
   final String clubName;
   final List<Map<String, dynamic>> teams;
   final bool pressMode;
   final bool saving;
 
-  final int Function(Map<String, dynamic>) trainerIdOf;
-  final String Function(Map<String, dynamic>) trainerNameOf;
-  final String Function(Map<String, dynamic>) trainerEmailOf;
-  final String Function(Map<String, dynamic>) trainerPhotoOf;
-  final int Function(Map<String, dynamic>) teamIdOf;
-  final String Function(Map<String, dynamic>) teamNameOf;
+  final int Function(Map<String, dynamic>)
+      trainerIdOf;
+  final String Function(Map<String, dynamic>)
+      trainerNameOf;
+  final String Function(Map<String, dynamic>)
+      trainerEmailOf;
+  final String Function(Map<String, dynamic>)
+      trainerPhotoOf;
+  final int Function(Map<String, dynamic>)
+      teamIdOf;
+  final String Function(Map<String, dynamic>)
+      teamNameOf;
 
   final VoidCallback onClose;
 
@@ -4840,17 +4768,22 @@ class _TrainerAddRightPanel extends StatefulWidget {
   });
 
   @override
-  State<_TrainerAddRightPanel> createState() => _TrainerAddRightPanelState();
+  State<_TrainerAddRightPanel>
+      createState() =>
+          _TrainerAddRightPanelState();
 }
 
-class _TrainerAddRightPanelState extends State<_TrainerAddRightPanel> {
-  final TextEditingController _emailC = TextEditingController();
+class _TrainerAddRightPanelState
+    extends State<_TrainerAddRightPanel> {
+  final TextEditingController _emailC =
+      TextEditingController();
 
   bool _searching = false;
   bool _working = false;
   String _message = '';
 
-  List<Map<String, dynamic>> _found = <Map<String, dynamic>>[];
+  List<Map<String, dynamic>> _found =
+      <Map<String, dynamic>>[];
 
   Map<String, dynamic>? _selected;
   int _teamId = 0;
@@ -4865,7 +4798,8 @@ class _TrainerAddRightPanelState extends State<_TrainerAddRightPanel> {
     }
 
     if (widget.teams.isNotEmpty) {
-      _teamId = widget.teamIdOf(
+      _teamId =
+          widget.teamIdOf(
         widget.teams.first,
       );
     }
@@ -4878,21 +4812,26 @@ class _TrainerAddRightPanelState extends State<_TrainerAddRightPanel> {
   }
 
   Future<void> _search() async {
-    final email = _emailC.text.trim();
+    final email =
+        _emailC.text.trim();
 
-    if (email.isEmpty || _searching || _working) {
+    if (email.isEmpty ||
+        _searching ||
+        _working) {
       return;
     }
 
     setState(() {
       _searching = true;
       _message = '';
-      _found = <Map<String, dynamic>>[];
+      _found =
+          <Map<String, dynamic>>[];
       _selected = null;
     });
 
     try {
-      final rows = await widget.onSearch(
+      final rows =
+          await widget.onSearch(
         email,
       );
 
@@ -4903,7 +4842,8 @@ class _TrainerAddRightPanelState extends State<_TrainerAddRightPanel> {
         _found = rows;
 
         if (rows.isEmpty) {
-          _message = 'Пользователь с таким email не найден.';
+          _message =
+              'Пользователь с таким email не найден.';
         }
       });
     } catch (e) {
@@ -4911,7 +4851,8 @@ class _TrainerAddRightPanelState extends State<_TrainerAddRightPanel> {
 
       setState(() {
         _searching = false;
-        _message = 'Ошибка поиска: $e';
+        _message =
+            'Ошибка поиска: $e';
       });
     }
   }
@@ -4941,7 +4882,10 @@ class _TrainerAddRightPanelState extends State<_TrainerAddRightPanel> {
   Future<void> _assign() async {
     final trainer = _selected;
 
-    if (trainer == null || _teamId == 0 || _working || widget.saving) {
+    if (trainer == null ||
+        _teamId == 0 ||
+        _working ||
+        widget.saving) {
       return;
     }
 
@@ -4996,49 +4940,62 @@ class _TrainerAddRightPanelState extends State<_TrainerAddRightPanel> {
           SizedBox(
             height: 58,
             child: Padding(
-              padding: const EdgeInsets.symmetric(
+              padding:
+                  const EdgeInsets.symmetric(
                 horizontal: 12,
               ),
               child: Row(
                 children: <Widget>[
                   const _CmrDotCluster(
-                    color: _CmrColors.green,
+                    color:
+                        _CmrColors.green,
                   ),
                   const SizedBox(width: 9),
                   Expanded(
                     child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment:
+                          MainAxisAlignment.center,
+                      crossAxisAlignment:
+                          CrossAxisAlignment.start,
                       children: <Widget>[
                         Text(
                           widget.pressMode
                               ? 'Добавить в пресс-службу'
                               : 'Добавить сотрудника',
-                          style: _CmrText.title(13),
+                          style:
+                              _CmrText.title(13),
                         ),
                         const SizedBox(height: 2),
                         Text(
                           widget.clubName,
                           maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: _CmrText.muted(9),
+                          overflow:
+                              TextOverflow.ellipsis,
+                          style:
+                              _CmrText.muted(9),
                         ),
                       ],
                     ),
                   ),
                   Material(
-                    color: _CmrColors.soft2,
-                    borderRadius: BorderRadius.circular(8),
+                    color:
+                        _CmrColors.soft2,
+                    borderRadius:
+                        BorderRadius.circular(8),
                     child: InkWell(
-                      onTap: _working ? null : widget.onClose,
-                      borderRadius: BorderRadius.circular(8),
+                      onTap: _working
+                          ? null
+                          : widget.onClose,
+                      borderRadius:
+                          BorderRadius.circular(8),
                       child: const SizedBox(
                         width: 30,
                         height: 30,
                         child: Icon(
                           Icons.close_rounded,
                           size: 15,
-                          color: _CmrColors.muted2,
+                          color:
+                              _CmrColors.muted2,
                         ),
                       ),
                     ),
@@ -5052,7 +5009,8 @@ class _TrainerAddRightPanelState extends State<_TrainerAddRightPanel> {
             color: _CmrColors.line,
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(
+            padding:
+                const EdgeInsets.fromLTRB(
               12,
               10,
               12,
@@ -5063,33 +5021,47 @@ class _TrainerAddRightPanelState extends State<_TrainerAddRightPanel> {
                 Expanded(
                   child: TextField(
                     controller: _emailC,
-                    onSubmitted: (_) => _search(),
+                    onSubmitted:
+                        (_) => _search(),
                     style: AppTypography.formText(color: _CmrColors.text),
-                    decoration: InputDecoration(
-                      hintText: 'Email сотрудника',
-                      hintStyle:
-                          AppTypography.formHint(color: _CmrColors.muted2),
+                    decoration:
+                        InputDecoration(
+                      hintText:
+                          'Email сотрудника',
+                      hintStyle: AppTypography.formHint(color: _CmrColors.muted2),
                       filled: true,
-                      fillColor: _CmrColors.soft,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(
+                      fillColor:
+                          _CmrColors.soft,
+                      border:
+                          OutlineInputBorder(
+                        borderRadius:
+                            BorderRadius.circular(
                           8,
                         ),
-                        borderSide: BorderSide.none,
+                        borderSide:
+                            BorderSide.none,
                       ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(
+                      enabledBorder:
+                          OutlineInputBorder(
+                        borderRadius:
+                            BorderRadius.circular(
                           8,
                         ),
-                        borderSide: BorderSide.none,
+                        borderSide:
+                            BorderSide.none,
                       ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(
+                      focusedBorder:
+                          OutlineInputBorder(
+                        borderRadius:
+                            BorderRadius.circular(
                           8,
                         ),
-                        borderSide: BorderSide.none,
+                        borderSide:
+                            BorderSide.none,
                       ),
-                      contentPadding: const EdgeInsets.symmetric(
+                      contentPadding:
+                          const EdgeInsets
+                              .symmetric(
                         horizontal: 10,
                         vertical: 9,
                       ),
@@ -5098,9 +5070,15 @@ class _TrainerAddRightPanelState extends State<_TrainerAddRightPanel> {
                 ),
                 const SizedBox(width: 6),
                 _CmrTextActionButton(
-                  label: _searching ? 'Поиск...' : 'Найти',
-                  color: _CmrColors.green,
-                  onTap: _searching || _working ? null : _search,
+                  label: _searching
+                      ? 'Поиск...'
+                      : 'Найти',
+                  color:
+                      _CmrColors.green,
+                  onTap: _searching ||
+                          _working
+                      ? null
+                      : _search,
                 ),
               ],
             ),
@@ -5109,39 +5087,52 @@ class _TrainerAddRightPanelState extends State<_TrainerAddRightPanel> {
             child: _found.isEmpty
                 ? Center(
                     child: Padding(
-                      padding: const EdgeInsets.all(18),
+                      padding:
+                          const EdgeInsets
+                              .all(18),
                       child: Text(
                         _message.isEmpty
                             ? (widget.pressMode
                                 ? 'Введите email нового сотрудника. После выбора назначьте его на одну или все команды.'
                                 : 'Введите email пользователя SPORTOTEKA.')
                             : _message,
-                        textAlign: TextAlign.center,
-                        style: _CmrText.muted(
+                        textAlign:
+                            TextAlign.center,
+                        style:
+                            _CmrText.muted(
                           9.5,
                         ),
                       ),
                     ),
                   )
                 : ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(
+                    padding:
+                        const EdgeInsets
+                            .fromLTRB(
                       12,
                       5,
                       12,
                       16,
                     ),
-                    itemCount: _found.length,
-                    separatorBuilder: (_, __) => const SizedBox(
+                    itemCount:
+                        _found.length,
+                    separatorBuilder:
+                        (_, __) =>
+                            const SizedBox(
                       height: 6,
                     ),
-                    itemBuilder: (context, index) {
-                      final trainer = _found[index];
+                    itemBuilder:
+                        (context, index) {
+                      final trainer =
+                          _found[index];
 
-                      final selected = identical(
+                      final selected =
+                          identical(
                             _selected,
                             trainer,
                           ) ||
-                          (_selected != null &&
+                          (_selected !=
+                                  null &&
                               widget.trainerIdOf(
                                     _selected!,
                                   ) ==
@@ -5150,25 +5141,40 @@ class _TrainerAddRightPanelState extends State<_TrainerAddRightPanel> {
                                   ));
 
                       return Material(
-                        color:
-                            selected ? _CmrColors.greenSoft : _CmrColors.soft,
-                        borderRadius: BorderRadius.circular(9),
+                        color: selected
+                            ? _CmrColors
+                                .greenSoft
+                            : _CmrColors.soft,
+                        borderRadius:
+                            BorderRadius
+                                .circular(9),
                         child: InkWell(
-                          onTap: () => setState(
-                            () => _selected = trainer,
+                          onTap: () =>
+                              setState(
+                            () => _selected =
+                                trainer,
                           ),
-                          borderRadius: BorderRadius.circular(9),
+                          borderRadius:
+                              BorderRadius
+                                  .circular(9),
                           child: Padding(
-                            padding: const EdgeInsets.all(10),
+                            padding:
+                                const EdgeInsets
+                                    .all(10),
                             child: Column(
                               children: <Widget>[
                                 Row(
-                                  children: <Widget>[
+                                  children: <
+                                      Widget>[
                                     _CmrAvatar(
-                                      photo: widget.trainerPhotoOf(
+                                      photo:
+                                          widget
+                                              .trainerPhotoOf(
                                         trainer,
                                       ),
-                                      name: widget.trainerNameOf(
+                                      name:
+                                          widget
+                                              .trainerNameOf(
                                         trainer,
                                       ),
                                       size: 36,
@@ -5179,15 +5185,23 @@ class _TrainerAddRightPanelState extends State<_TrainerAddRightPanel> {
                                     Expanded(
                                       child: Column(
                                         crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: <Widget>[
+                                            CrossAxisAlignment
+                                                .start,
+                                        children: <
+                                            Widget>[
                                           Text(
-                                            widget.trainerNameOf(
+                                            widget
+                                                .trainerNameOf(
                                               trainer,
                                             ),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: _CmrText.value(
+                                            maxLines:
+                                                1,
+                                            overflow:
+                                                TextOverflow
+                                                    .ellipsis,
+                                            style:
+                                                _CmrText
+                                                    .value(
                                               10.5,
                                             ),
                                           ),
@@ -5195,12 +5209,17 @@ class _TrainerAddRightPanelState extends State<_TrainerAddRightPanel> {
                                             height: 2,
                                           ),
                                           Text(
-                                            widget.trainerEmailOf(
+                                            widget
+                                                .trainerEmailOf(
                                               trainer,
                                             ),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: _CmrText.muted(
+                                            maxLines:
+                                                1,
+                                            overflow:
+                                                TextOverflow
+                                                    .ellipsis,
+                                            style:
+                                                _CmrText.muted(
                                               8.8,
                                             ),
                                           ),
@@ -5217,26 +5236,46 @@ class _TrainerAddRightPanelState extends State<_TrainerAddRightPanel> {
                                       ),
                                   ],
                                 ),
-                                if (selected) ...<Widget>[
+                                if (selected) ...<
+                                    Widget>[
                                   const SizedBox(
                                     height: 10,
                                   ),
-                                  if (widget.teams.isNotEmpty)
-                                    DropdownButtonFormField<int>(
-                                      value: _teamId > 0 ? _teamId : null,
-                                      decoration: InputDecoration(
-                                        filled: true,
-                                        fillColor: Colors.white,
-                                        border: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(
+                                  if (widget
+                                      .teams
+                                      .isNotEmpty)
+                                    DropdownButtonFormField<
+                                        int>(
+                                      value:
+                                          _teamId >
+                                                  0
+                                              ? _teamId
+                                              : null,
+                                      decoration:
+                                          InputDecoration(
+                                        filled:
+                                            true,
+                                        fillColor:
+                                            Colors
+                                                .white,
+                                        border:
+                                            OutlineInputBorder(
+                                          borderRadius:
+                                              BorderRadius
+                                                  .circular(
                                             8,
                                           ),
-                                          borderSide: BorderSide.none,
+                                          borderSide:
+                                              BorderSide
+                                                  .none,
                                         ),
                                         contentPadding:
-                                            const EdgeInsets.symmetric(
-                                          horizontal: 9,
-                                          vertical: 8,
+                                            const EdgeInsets
+                                                .symmetric(
+                                          horizontal:
+                                              9,
+                                          vertical:
+                                              8,
                                         ),
                                       ),
                                       items: <DropdownMenuItem<int>>[
@@ -5258,16 +5297,20 @@ class _TrainerAddRightPanelState extends State<_TrainerAddRightPanel> {
                                           ),
                                         ),
                                       ],
-                                      onChanged: _working
-                                          ? null
-                                          : (value) {
-                                              if (value == null) {
-                                                return;
-                                              }
-                                              setState(
-                                                () => _teamId = value,
-                                              );
-                                            },
+                                      onChanged:
+                                          _working
+                                              ? null
+                                              : (value) {
+                                                  if (value ==
+                                                      null) {
+                                                    return;
+                                                  }
+                                                  setState(
+                                                    () =>
+                                                        _teamId =
+                                                            value,
+                                                  );
+                                                },
                                     ),
                                   const SizedBox(height: 7),
                                   if (!widget.pressMode)
@@ -5290,8 +5333,11 @@ class _TrainerAddRightPanelState extends State<_TrainerAddRightPanel> {
                                     ),
                                   const SizedBox(height: 8),
                                   Align(
-                                    alignment: Alignment.centerRight,
-                                    child: _CmrTextActionButton(
+                                    alignment:
+                                        Alignment
+                                            .centerRight,
+                                    child:
+                                        _CmrTextActionButton(
                                       label: _working
                                           ? 'Назначение...'
                                           : widget.pressMode
@@ -5299,10 +5345,14 @@ class _TrainerAddRightPanelState extends State<_TrainerAddRightPanel> {
                                                   ? 'Назначить на все команды'
                                                   : 'Назначить в пресс-службу')
                                               : 'Назначить в команду',
-                                      color: _CmrColors.green,
-                                      onTap: _working || _teamId == 0
-                                          ? null
-                                          : _assign,
+                                      color:
+                                          _CmrColors
+                                              .green,
+                                      onTap:
+                                          _working ||
+                                                  _teamId == 0
+                                              ? null
+                                              : _assign,
                                     ),
                                   ),
                                 ],
@@ -5334,21 +5384,27 @@ class _CmrRoleChoice extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: active ? _CmrColors.greenSoft : Colors.white,
+      color: active
+          ? _CmrColors.greenSoft
+          : Colors.white,
       borderRadius: BorderRadius.circular(8),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(8),
         child: Padding(
-          padding: const EdgeInsets.symmetric(
+          padding:
+              const EdgeInsets.symmetric(
             horizontal: 8,
             vertical: 7,
           ),
           child: Row(
-            mainAxisSize: MainAxisSize.min,
+            mainAxisSize:
+                MainAxisSize.min,
             children: <Widget>[
               _CmrGlowDot(
-                color: active ? _CmrColors.green : _CmrColors.muted2,
+                color: active
+                    ? _CmrColors.green
+                    : _CmrColors.muted2,
                 size: active ? 5 : 4,
               ),
               const SizedBox(width: 5),
@@ -5357,8 +5413,13 @@ class _CmrRoleChoice extends StatelessWidget {
                 style: _CmrText.muted(
                   8.5,
                 ).copyWith(
-                  color: active ? _CmrColors.greenDark : _CmrColors.muted,
-                  fontWeight: active ? FontWeight.w600 : FontWeight.w500,
+                  color: active
+                      ? _CmrColors.greenDark
+                      : _CmrColors.muted,
+                  fontWeight:
+                      active
+                          ? FontWeight.w600
+                          : FontWeight.w500,
                 ),
               ),
             ],
@@ -5368,6 +5429,7 @@ class _CmrRoleChoice extends StatelessWidget {
     );
   }
 }
+
 
 class _PressServiceDetailPanel extends StatelessWidget {
   final Map<String, dynamic>? trainer;
@@ -5413,7 +5475,8 @@ class _PressServiceDetailPanel extends StatelessWidget {
     final bio = _trainerBio(t);
     final pressTeams = _trainerPressTeams(t);
 
-    final hasAllTeams = allTeamsCount > 0 && pressTeams.length >= allTeamsCount;
+    final hasAllTeams = allTeamsCount > 0 &&
+        pressTeams.length >= allTeamsCount;
 
     final pressScopeText = pressTeams.isEmpty
         ? 'Не назначен'
@@ -5449,7 +5512,8 @@ class _PressServiceDetailPanel extends StatelessWidget {
             const SizedBox(height: 14),
             _PressServiceActionsGroup(
               onManageTeams: onManageTeams,
-              onRemovePress: pressTeams.isEmpty ? null : onRemovePress,
+              onRemovePress:
+                  pressTeams.isEmpty ? null : onRemovePress,
             ),
             const SizedBox(height: 18),
             _PressMetricsStrip(
@@ -5492,7 +5556,9 @@ class _PressServiceDetailPanel extends StatelessWidget {
                 _TrainerDetailRow(
                   icon: Icons.auto_awesome_rounded,
                   label: 'Специализация',
-                  value: specialization.isEmpty ? 'Не указана' : specialization,
+                  value: specialization.isEmpty
+                      ? 'Не указана'
+                      : specialization,
                 ),
               ],
             ),
@@ -5574,7 +5640,9 @@ class _PressOpenWorkProfileButton extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      email.trim().isEmpty ? 'Имя · фамилия · профиль' : email,
+                      email.trim().isEmpty
+                          ? 'Имя · фамилия · профиль'
+                          : email,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: _CmrText.muted(9.3),
@@ -5712,13 +5780,11 @@ class _PressMetricsStrip extends StatelessWidget {
   }
 }
 
+
 class _TrainerDetailPanel extends StatelessWidget {
   final Map<String, dynamic>? trainer;
-  final int clubId;
-  final List<Map<String, dynamic>> allTeams;
   final String clubName;
   final String selectedTeamName;
-  final Future<void> Function()? onAccessChanged;
   final VoidCallback? onMessage;
   final VoidCallback? onEdit;
   final VoidCallback? onAssign;
@@ -5729,11 +5795,8 @@ class _TrainerDetailPanel extends StatelessWidget {
 
   const _TrainerDetailPanel({
     required this.trainer,
-    required this.clubId,
-    required this.allTeams,
     required this.clubName,
     required this.selectedTeamName,
-    required this.onAccessChanged,
     required this.onMessage,
     required this.onEdit,
     required this.onAssign,
@@ -5783,36 +5846,6 @@ class _TrainerDetailPanel extends StatelessWidget {
               main: main,
             ),
             const SizedBox(height: 12),
-            if (_i(
-                  t['id'] ??
-                      t['trainer_id'] ??
-                      t['trainerId'] ??
-                      t['user_id'] ??
-                      t['userId'],
-                ) >
-                0)
-              CmrStaffAccessPanel(
-                key: ValueKey(
-                  'staff-access-$clubId-${_i(
-                    t['id'] ??
-                        t['trainer_id'] ??
-                        t['trainerId'] ??
-                        t['user_id'] ??
-                        t['userId'],
-                  )}',
-                ),
-                clubId: clubId,
-                staffUserId: _i(
-                  t['id'] ??
-                      t['trainer_id'] ??
-                      t['trainerId'] ??
-                      t['user_id'] ??
-                      t['userId'],
-                ),
-                allTeams: allTeams,
-                onChanged: onAccessChanged,
-              ),
-            const SizedBox(height: 12),
             if (onOpenDetailedProfile != null)
               _TrainerOpenWorkProfileButton(
                 onTap: onOpenDetailedProfile!,
@@ -5836,46 +5869,20 @@ class _TrainerDetailPanel extends StatelessWidget {
             _TrainerDetailSection(
               title: 'Данные тренера',
               children: [
-                _TrainerDetailRow(
-                    icon: Icons.badge_rounded, label: 'Роль', value: role),
-                _TrainerDetailRow(
-                    icon: Icons.apartment_rounded,
-                    label: 'Клуб',
-                    value: clubName),
-                _TrainerDetailRow(
-                    icon: Icons.groups_2_rounded,
-                    label: 'Команды',
-                    value: teams.isEmpty
-                        ? 'Команда не назначена'
-                        : teams.map(_teamName).join(', ')),
-                if (selectedTeamName.trim().isNotEmpty)
-                  _TrainerDetailRow(
-                      icon: Icons.flag_rounded,
-                      label: 'Активная команда',
-                      value: selectedTeamName),
-                _TrainerDetailRow(
-                    icon: Icons.location_city_rounded,
-                    label: 'Город',
-                    value: city.isEmpty ? 'Не указан' : city),
-                _TrainerDetailRow(
-                    icon: Icons.auto_awesome_rounded,
-                    label: 'Специализация',
-                    value:
-                        specialization.isEmpty ? 'Не указана' : specialization),
+                _TrainerDetailRow(icon: Icons.badge_rounded, label: 'Роль', value: role),
+                _TrainerDetailRow(icon: Icons.apartment_rounded, label: 'Клуб', value: clubName),
+                _TrainerDetailRow(icon: Icons.groups_2_rounded, label: 'Команды', value: teams.isEmpty ? 'Команда не назначена' : teams.map(_teamName).join(', ')),
+                if (selectedTeamName.trim().isNotEmpty) _TrainerDetailRow(icon: Icons.flag_rounded, label: 'Активная команда', value: selectedTeamName),
+                _TrainerDetailRow(icon: Icons.location_city_rounded, label: 'Город', value: city.isEmpty ? 'Не указан' : city),
+                _TrainerDetailRow(icon: Icons.auto_awesome_rounded, label: 'Специализация', value: specialization.isEmpty ? 'Не указана' : specialization),
               ],
             ),
             const SizedBox(height: 14),
             _TrainerDetailSection(
               title: 'Контакты',
               children: [
-                _TrainerDetailRow(
-                    icon: Icons.mail_outline_rounded,
-                    label: 'Email',
-                    value: email.isEmpty ? 'Не указан' : email),
-                _TrainerDetailRow(
-                    icon: Icons.phone_rounded,
-                    label: 'Телефон',
-                    value: phone.isEmpty ? 'Не указан' : phone),
+                _TrainerDetailRow(icon: Icons.mail_outline_rounded, label: 'Email', value: email.isEmpty ? 'Не указан' : email),
+                _TrainerDetailRow(icon: Icons.phone_rounded, label: 'Телефон', value: phone.isEmpty ? 'Не указан' : phone),
               ],
             ),
             const SizedBox(height: 14),
@@ -5894,6 +5901,7 @@ class _TrainerDetailPanel extends StatelessWidget {
     );
   }
 }
+
 
 class _TrainerDetailHeader extends StatelessWidget {
   final String name;
@@ -5989,11 +5997,7 @@ class _TrainerSummaryCard extends StatelessWidget {
   final int teamsCount;
   final bool main;
 
-  const _TrainerSummaryCard(
-      {required this.role,
-      required this.clubName,
-      required this.teamsCount,
-      required this.main});
+  const _TrainerSummaryCard({required this.role, required this.clubName, required this.teamsCount, required this.main});
 
   @override
   Widget build(BuildContext context) {
@@ -6002,25 +6006,15 @@ class _TrainerSummaryCard extends StatelessWidget {
       decoration: _CmrDecor.greenCard(radius: 26),
       child: Row(
         children: [
-          _CmrRoundIcon(
-              icon:
-                  main ? Icons.workspace_premium_rounded : Icons.sports_rounded,
-              color: _CmrColors.green,
-              size: 48),
+          _CmrRoundIcon(icon: main ? Icons.workspace_premium_rounded : Icons.sports_rounded, color: _CmrColors.green, size: 48),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(role,
-                    style: _CmrText.title(17),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis),
+                Text(role, style: _CmrText.title(17), maxLines: 1, overflow: TextOverflow.ellipsis),
                 const SizedBox(height: 5),
-                Text(clubName,
-                    style: _CmrText.muted(12.5),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis),
+                Text(clubName, style: _CmrText.muted(12.5), maxLines: 2, overflow: TextOverflow.ellipsis),
               ],
             ),
           ),
@@ -6030,9 +6024,8 @@ class _TrainerSummaryCard extends StatelessWidget {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
-            ),
-            child: Text(teamsCount == 0 ? 'Без команды' : '$teamsCount ком.',
-                style: _CmrText.title(15)),
+                  ),
+            child: Text(teamsCount == 0 ? 'Без команды' : '$teamsCount ком.', style: _CmrText.title(15)),
           ),
         ],
       ),
@@ -6045,8 +6038,7 @@ class _TrainerMiniMetric extends StatelessWidget {
   final String label;
   final String value;
 
-  const _TrainerMiniMetric(
-      {required this.icon, required this.label, required this.value});
+  const _TrainerMiniMetric({required this.icon, required this.label, required this.value});
 
   @override
   Widget build(BuildContext context) {
@@ -6061,15 +6053,9 @@ class _TrainerMiniMetric extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label,
-                    style: _CmrText.caption(),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis),
+                Text(label, style: _CmrText.caption(), maxLines: 1, overflow: TextOverflow.ellipsis),
                 const SizedBox(height: 4),
-                Text(value,
-                    style: _CmrText.title(15.5),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis),
+                Text(value, style: _CmrText.title(15.5), maxLines: 1, overflow: TextOverflow.ellipsis),
               ],
             ),
           ),
@@ -6078,6 +6064,9 @@ class _TrainerMiniMetric extends StatelessWidget {
     );
   }
 }
+
+
+
 
 class _TrainerOpenWorkProfileButton extends StatelessWidget {
   final VoidCallback onTap;
@@ -6182,6 +6171,7 @@ class _TrainerActionsGroup extends StatelessWidget {
   }
 }
 
+
 class _TrainerInspectorAction extends StatelessWidget {
   final IconData icon;
   final String title;
@@ -6199,7 +6189,8 @@ class _TrainerInspectorAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final accentColor = accent ? _CmrColors.green : _CmrColors.muted2;
+    final accentColor =
+        accent ? _CmrColors.green : _CmrColors.muted2;
 
     return Material(
       color: Colors.transparent,
@@ -6296,6 +6287,7 @@ class _TrainerDangerActionsGroup extends StatelessWidget {
     );
   }
 }
+
 
 class _TrainerQuietDangerAction extends StatelessWidget {
   final IconData icon;
@@ -6419,6 +6411,7 @@ class _TrainerMetricsStrip extends StatelessWidget {
   }
 }
 
+
 class _TrainerScheduleSection extends StatelessWidget {
   final List<Map<String, dynamic>> schedule;
   final bool compact;
@@ -6433,11 +6426,14 @@ class _TrainerScheduleSection extends StatelessWidget {
   DateTime? _date(dynamic value) =>
       DateTime.tryParse(_s(value).replaceAll(' ', 'T'));
 
-  String _two(int value) => value.toString().padLeft(2, '0');
+  String _two(int value) =>
+      value.toString().padLeft(2, '0');
 
-  String _dateLabel(DateTime date) => '${_two(date.day)}.${_two(date.month)}';
+  String _dateLabel(DateTime date) =>
+      '${_two(date.day)}.${_two(date.month)}';
 
-  String _timeLabel(DateTime date) => '${_two(date.hour)}:${_two(date.minute)}';
+  String _timeLabel(DateTime date) =>
+      '${_two(date.hour)}:${_two(date.minute)}';
 
   @override
   Widget build(BuildContext context) {
@@ -6447,7 +6443,8 @@ class _TrainerScheduleSection extends StatelessWidget {
         .toSet()
         .toList();
 
-    final shown = schedule.take(compact ? 3 : 5).toList();
+    final shown =
+        schedule.take(compact ? 3 : 5).toList();
 
     return Container(
       width: double.infinity,
@@ -6513,9 +6510,11 @@ class _TrainerScheduleSection extends StatelessWidget {
                   final location = _s(event['location']);
 
                   return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 7),
+                    padding:
+                        const EdgeInsets.symmetric(vertical: 7),
                     child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      crossAxisAlignment:
+                          CrossAxisAlignment.start,
                       children: [
                         SizedBox(
                           width: 54,
@@ -6530,23 +6529,29 @@ class _TrainerScheduleSection extends StatelessWidget {
                         const SizedBox(width: 8),
                         Expanded(
                           child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                            crossAxisAlignment:
+                                CrossAxisAlignment.start,
                             children: [
                               Text(
                                 title,
                                 maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: _CmrText.value(11.5),
+                                overflow:
+                                    TextOverflow.ellipsis,
+                                style:
+                                    _CmrText.value(11.5),
                               ),
                               const SizedBox(height: 2),
                               Text(
                                 [
                                   if (team.isNotEmpty) team,
-                                  if (location.isNotEmpty) location,
+                                  if (location.isNotEmpty)
+                                    location,
                                 ].join(' · '),
                                 maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: _CmrText.muted(10.3),
+                                overflow:
+                                    TextOverflow.ellipsis,
+                                style:
+                                    _CmrText.muted(10.3),
                               ),
                             ],
                           ),
@@ -6568,6 +6573,7 @@ class _TrainerScheduleSection extends StatelessWidget {
     );
   }
 }
+
 
 class _TrainerDetailSection extends StatelessWidget {
   final String title;
@@ -6607,6 +6613,7 @@ class _TrainerDetailSection extends StatelessWidget {
     );
   }
 }
+
 
 class _TrainerDetailRow extends StatelessWidget {
   final IconData icon;
@@ -6662,6 +6669,7 @@ class _TrainerDetailRow extends StatelessWidget {
   }
 }
 
+
 class _TrainerCommentBox extends StatelessWidget {
   final String title;
   final String text;
@@ -6697,7 +6705,8 @@ class _TrainerCommentBox extends StatelessWidget {
           color: _CmrColors.line,
         ),
         Padding(
-          padding: const EdgeInsets.symmetric(vertical: 11),
+          padding:
+              const EdgeInsets.symmetric(vertical: 11),
           child: Text(
             text,
             style: _CmrText.muted(11.4),
@@ -6713,8 +6722,7 @@ class _TrainerPrimaryActionButton extends StatelessWidget {
   final String text;
   final VoidCallback? onTap;
 
-  const _TrainerPrimaryActionButton(
-      {required this.icon, required this.text, required this.onTap});
+  const _TrainerPrimaryActionButton({required this.icon, required this.text, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -6735,14 +6743,7 @@ class _TrainerPrimaryActionButton extends StatelessWidget {
               border: Border.all(color: _CmrColors.green, width: .7),
             ),
             child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-              Flexible(
-                  child: Text(text,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 10.8,
-                          fontWeight: FontWeight.w600))),
+              Flexible(child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 10.8, fontWeight: FontWeight.w600))),
             ]),
           ),
         ),
@@ -6751,13 +6752,13 @@ class _TrainerPrimaryActionButton extends StatelessWidget {
   }
 }
 
+
 class _TrainerSecondaryActionButton extends StatelessWidget {
   final IconData icon;
   final String text;
   final VoidCallback? onTap;
 
-  const _TrainerSecondaryActionButton(
-      {required this.icon, required this.text, required this.onTap});
+  const _TrainerSecondaryActionButton({required this.icon, required this.text, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -6778,11 +6779,7 @@ class _TrainerSecondaryActionButton extends StatelessWidget {
               border: Border.all(color: _CmrColors.line, width: .7),
             ),
             child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-              Flexible(
-                  child: Text(text,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: _CmrText.action())),
+              Flexible(child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrText.action())),
             ]),
           ),
         ),
@@ -6791,17 +6788,14 @@ class _TrainerSecondaryActionButton extends StatelessWidget {
   }
 }
 
+
 class _TrainerDangerActionButton extends StatelessWidget {
   final IconData icon;
   final String text;
   final VoidCallback? onTap;
   final Color color;
 
-  const _TrainerDangerActionButton(
-      {required this.icon,
-      required this.text,
-      required this.onTap,
-      required this.color});
+  const _TrainerDangerActionButton({required this.icon, required this.text, required this.onTap, required this.color});
 
   @override
   Widget build(BuildContext context) {
@@ -6822,14 +6816,7 @@ class _TrainerDangerActionButton extends StatelessWidget {
               border: Border.all(color: color.withOpacity(.35), width: .7),
             ),
             child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-              Flexible(
-                  child: Text(text,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                          color: color,
-                          fontSize: 10.8,
-                          fontWeight: FontWeight.w600))),
+              Flexible(child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: color, fontSize: 10.8, fontWeight: FontWeight.w600))),
             ]),
           ),
         ),
@@ -6838,13 +6825,13 @@ class _TrainerDangerActionButton extends StatelessWidget {
   }
 }
 
+
 class _TrainerEmptyState extends StatelessWidget {
   final String title;
   final String text;
   final VoidCallback? onTap;
 
-  const _TrainerEmptyState(
-      {required this.title, required this.text, required this.onTap});
+  const _TrainerEmptyState({required this.title, required this.text, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -6859,21 +6846,13 @@ class _TrainerEmptyState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _CmrRoundIcon(
-                icon: Icons.badge_rounded, color: _CmrColors.muted, size: 42),
+            _CmrRoundIcon(icon: Icons.badge_rounded, color: _CmrColors.muted, size: 42),
             const SizedBox(height: 10),
-            Text(title,
-                textAlign: TextAlign.center, style: _CmrText.title(14.2)),
+            Text(title, textAlign: TextAlign.center, style: _CmrText.title(14.2)),
             const SizedBox(height: 5),
-            Text(text,
-                textAlign: TextAlign.center, style: _CmrText.muted(11.2)),
+            Text(text, textAlign: TextAlign.center, style: _CmrText.muted(11.2)),
             const SizedBox(height: 12),
-            SizedBox(
-                width: 190,
-                child: _CmrPrimaryButton(
-                    icon: Icons.person_add_alt_1_rounded,
-                    title: 'Добавить тренера',
-                    onTap: onTap)),
+            SizedBox(width: 190, child: _CmrPrimaryButton(icon: Icons.person_add_alt_1_rounded, title: 'Добавить тренера', onTap: onTap)),
           ],
         ),
       ),
@@ -6942,14 +6921,11 @@ class _TrainerEditSidePanelState extends State<_TrainerEditSidePanel> {
   @override
   void initState() {
     super.initState();
-    _firstNameC = TextEditingController(
-        text: _s(widget.trainer['first_name'] ?? widget.trainer['firstName']));
-    _lastNameC = TextEditingController(
-        text: _s(widget.trainer['last_name'] ?? widget.trainer['lastName']));
+    _firstNameC = TextEditingController(text: _s(widget.trainer['first_name'] ?? widget.trainer['firstName']));
+    _lastNameC = TextEditingController(text: _s(widget.trainer['last_name'] ?? widget.trainer['lastName']));
     _positionC = TextEditingController(text: _trainerRole(widget.trainer));
     _birthdayC = TextEditingController(text: _trainerBirthday(widget.trainer));
-    _experienceC =
-        TextEditingController(text: _trainerExperience(widget.trainer));
+    _experienceC = TextEditingController(text: _trainerExperience(widget.trainer));
     _bioC = TextEditingController(text: _trainerBio(widget.trainer));
     _newPasswordC = TextEditingController();
     _repeatPasswordC = TextEditingController();
@@ -6960,12 +6936,9 @@ class _TrainerEditSidePanelState extends State<_TrainerEditSidePanel> {
   @override
   void didUpdateWidget(covariant _TrainerEditSidePanel oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (_trainerIdentityLocal(oldWidget.trainer) !=
-        _trainerIdentityLocal(widget.trainer)) {
-      _firstNameC.text =
-          _s(widget.trainer['first_name'] ?? widget.trainer['firstName']);
-      _lastNameC.text =
-          _s(widget.trainer['last_name'] ?? widget.trainer['lastName']);
+    if (_trainerIdentityLocal(oldWidget.trainer) != _trainerIdentityLocal(widget.trainer)) {
+      _firstNameC.text = _s(widget.trainer['first_name'] ?? widget.trainer['firstName']);
+      _lastNameC.text = _s(widget.trainer['last_name'] ?? widget.trainer['lastName']);
       _positionC.text = _trainerRole(widget.trainer);
       _birthdayC.text = _trainerBirthday(widget.trainer);
       _experienceC.text = _trainerExperience(widget.trainer);
@@ -6992,12 +6965,7 @@ class _TrainerEditSidePanelState extends State<_TrainerEditSidePanel> {
     super.dispose();
   }
 
-  int _trainerIdLocal(Map<String, dynamic> trainer) => _i(trainer['user_id'] ??
-      trainer['userId'] ??
-      trainer['trainer_id'] ??
-      trainer['trainerId'] ??
-      trainer['coach_id'] ??
-      trainer['id']);
+  int _trainerIdLocal(Map<String, dynamic> trainer) => _i(trainer['user_id'] ?? trainer['userId'] ?? trainer['trainer_id'] ?? trainer['trainerId'] ?? trainer['coach_id'] ?? trainer['id']);
 
   String _trainerIdentityLocal(Map<String, dynamic> trainer) {
     final id = _trainerIdLocal(trainer);
@@ -7018,16 +6986,11 @@ class _TrainerEditSidePanelState extends State<_TrainerEditSidePanel> {
       if (!mounted) return;
       final firstName = _s(p['first_name'] ?? p['firstName']);
       final lastName = _s(p['last_name'] ?? p['lastName']);
-      final position =
-          _s(p['position'] ?? p['role_title'] ?? p['specialization']);
-      final birthday =
-          _s(p['birthday'] ?? p['birth_date'] ?? p['date_birth'] ?? p['dob']);
-      final experience =
-          _s(p['experience'] ?? p['experience_text'] ?? p['work_experience']);
-      final bio =
-          _s(p['bio'] ?? p['description'] ?? p['about'] ?? p['about_me']);
-      final photo = _normalizeImage(
-          _s(p['photo'] ?? p['photo_url'] ?? p['avatar'] ?? p['avatar_url']));
+      final position = _s(p['position'] ?? p['role_title'] ?? p['specialization']);
+      final birthday = _s(p['birthday'] ?? p['birth_date'] ?? p['date_birth'] ?? p['dob']);
+      final experience = _s(p['experience'] ?? p['experience_text'] ?? p['work_experience']);
+      final bio = _s(p['bio'] ?? p['description'] ?? p['about'] ?? p['about_me']);
+      final photo = _normalizeImage(_s(p['photo'] ?? p['photo_url'] ?? p['avatar'] ?? p['avatar_url']));
 
       setState(() {
         if (firstName.isNotEmpty) _firstNameC.text = firstName;
@@ -7045,8 +7008,7 @@ class _TrainerEditSidePanelState extends State<_TrainerEditSidePanel> {
   }
 
   Future<void> _pickPhoto() async {
-    final x =
-        await _picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
+    final x = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
     if (x != null && mounted) setState(() => _pickedPhoto = x);
   }
 
@@ -7179,15 +7141,18 @@ class _TrainerEditSidePanelState extends State<_TrainerEditSidePanel> {
               vertical: 14,
             ),
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
+              borderRadius:
+                  BorderRadius.circular(_CmrDecor.mobileInnerRadius),
               borderSide: BorderSide.none,
             ),
             enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
+              borderRadius:
+                  BorderRadius.circular(_CmrDecor.mobileInnerRadius),
               borderSide: BorderSide.none,
             ),
             focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
+              borderRadius:
+                  BorderRadius.circular(_CmrDecor.mobileInnerRadius),
               borderSide: const BorderSide(
                 color: _CmrColors.green,
                 width: 1,
@@ -7207,9 +7172,7 @@ class _TrainerEditSidePanelState extends State<_TrainerEditSidePanel> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final mobile = constraints.maxWidth < 640;
-        final width = mobile
-            ? math.max(0.0, constraints.maxWidth - 16)
-            : math.min(448.0, math.max(390.0, constraints.maxWidth * .38));
+        final width = mobile ? math.max(0.0, constraints.maxWidth - 16) : math.min(448.0, math.max(390.0, constraints.maxWidth * .38));
         final radius = mobile ? 18.0 : 20.0;
 
         return Align(
@@ -7219,14 +7182,12 @@ class _TrainerEditSidePanelState extends State<_TrainerEditSidePanel> {
             child: Container(
               width: width,
               height: double.infinity,
-              margin: EdgeInsets.fromLTRB(mobile ? 8 : 0, mobile ? 8 : 0,
-                  mobile ? 8 : 0, mobile ? 8 : 0),
+              margin: EdgeInsets.fromLTRB(mobile ? 8 : 0, mobile ? 8 : 0, mobile ? 8 : 0, mobile ? 8 : 0),
               decoration: BoxDecoration(
-                  color: _CmrColors.glass,
-                  borderRadius: BorderRadius.horizontal(
-                      left: Radius.circular(4),
-                      right: Radius.circular(mobile ? 4 : 0)),
-                  border: Border.all(color: Colors.white.withOpacity(.86))),
+                color: _CmrColors.glass,
+                borderRadius: BorderRadius.horizontal(left: Radius.circular(4), right: Radius.circular(mobile ? 4 : 0)),
+                border: Border.all(color: Colors.white.withOpacity(.86))
+              ),
               clipBehavior: Clip.antiAlias,
               child: Column(
                 children: [
@@ -7244,27 +7205,16 @@ class _TrainerEditSidePanelState extends State<_TrainerEditSidePanel> {
                               Center(
                                 child: InkWell(
                                   onTap: _pickPhoto,
-                                  borderRadius: BorderRadius.circular(
-                                      _CmrDecor.mobileInnerRadius),
+                                  borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
                                   child: Stack(
                                     clipBehavior: Clip.none,
                                     children: [
                                       _pickedPhoto != null
                                           ? ClipRRect(
-                                              borderRadius:
-                                                  BorderRadius.circular(
-                                                      _CmrDecor
-                                                          .mobileInnerRadius),
-                                              child: Image.file(
-                                                  File(_pickedPhoto!.path),
-                                                  width: 106,
-                                                  height: 106,
-                                                  fit: BoxFit.cover),
+                                              borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
+                                              child: Image.file(File(_pickedPhoto!.path), width: 106, height: 106, fit: BoxFit.cover),
                                             )
-                                          : _CmrAvatar(
-                                              photo: _currentPhoto,
-                                              name: name,
-                                              size: 106),
+                                          : _CmrAvatar(photo: _currentPhoto, name: name, size: 106),
                                       Positioned(
                                         right: -3,
                                         bottom: -3,
@@ -7273,15 +7223,10 @@ class _TrainerEditSidePanelState extends State<_TrainerEditSidePanel> {
                                           height: 30,
                                           decoration: BoxDecoration(
                                             color: _CmrColors.green,
-                                            borderRadius: BorderRadius.circular(
-                                                _CmrDecor.mobileInnerRadius),
-                                            border: Border.all(
-                                                color: Colors.white, width: 2),
+                                            borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
+                                            border: Border.all(color: Colors.white, width: 2),
                                           ),
-                                          child: const Icon(
-                                              Icons.photo_camera_rounded,
-                                              color: Colors.white,
-                                              size: 14),
+                                          child: const Icon(Icons.photo_camera_rounded, color: Colors.white, size: 14),
                                         ),
                                       ),
                                     ],
@@ -7289,13 +7234,9 @@ class _TrainerEditSidePanelState extends State<_TrainerEditSidePanel> {
                                 ),
                               ),
                               const SizedBox(height: 14),
-                              Text(name,
-                                  textAlign: TextAlign.center,
-                                  style: _CmrText.title(18)),
+                              Text(name, textAlign: TextAlign.center, style: _CmrText.title(18)),
                               const SizedBox(height: 4),
-                              Text(role,
-                                  textAlign: TextAlign.center,
-                                  style: _CmrText.muted(12.5)),
+                              Text(role, textAlign: TextAlign.center, style: _CmrText.muted(12.5)),
                               const SizedBox(height: 18),
                               Row(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -7490,8 +7431,7 @@ class _TrainerEditSidePanelState extends State<_TrainerEditSidePanel> {
                               _CmrNotice(
                                 icon: Icons.info_outline_rounded,
                                 title: 'Редактирование сотрудника',
-                                text:
-                                    'Имя, фамилия, карточка тренера и пароль управляются в этом правом окне.',
+                                text: 'Имя, фамилия, карточка тренера и пароль управляются в этом правом окне.',
                               ),
                             ],
                           ),
@@ -7516,34 +7456,24 @@ class _TrainerEditSideHeader extends StatelessWidget {
   final String subtitle;
   final VoidCallback onClose;
 
-  const _TrainerEditSideHeader(
-      {required this.title, required this.subtitle, required this.onClose});
+  const _TrainerEditSideHeader({required this.title, required this.subtitle, required this.onClose});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 14, 12, 12),
-      decoration: const BoxDecoration(
-          color: _CmrColors.panel,
-          border: Border(bottom: BorderSide(color: _CmrColors.line))),
+      decoration: const BoxDecoration(color: _CmrColors.panel, border: Border(bottom: BorderSide(color: _CmrColors.line))),
       child: Row(
         children: [
-          _CmrRoundIcon(
-              icon: Icons.tune_rounded, color: _CmrColors.green, size: 34),
+          _CmrRoundIcon(icon: Icons.tune_rounded, color: _CmrColors.green, size: 34),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: _CmrText.title(15.5)),
+                Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrText.title(15.5)),
                 const SizedBox(height: 2),
-                Text(subtitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: _CmrText.muted(12)),
+                Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrText.muted(12)),
               ],
             ),
           ),
@@ -7556,8 +7486,7 @@ class _TrainerEditSideHeader extends StatelessWidget {
               child: const SizedBox(
                 width: 34,
                 height: 34,
-                child: Icon(Icons.close_rounded,
-                    size: 15, color: _CmrColors.muted),
+                child: Icon(Icons.close_rounded, size: 15, color: _CmrColors.muted),
               ),
             ),
           ),
@@ -7572,8 +7501,7 @@ class _TrainerEditSideFooter extends StatelessWidget {
   final VoidCallback onClose;
   final VoidCallback onSave;
 
-  const _TrainerEditSideFooter(
-      {required this.saving, required this.onClose, required this.onSave});
+  const _TrainerEditSideFooter({required this.saving, required this.onClose, required this.onSave});
 
   @override
   Widget build(BuildContext context) {
@@ -7581,9 +7509,7 @@ class _TrainerEditSideFooter extends StatelessWidget {
       top: false,
       child: Container(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
-        decoration: const BoxDecoration(
-            color: _CmrColors.panel,
-            border: Border(top: BorderSide(color: _CmrColors.line))),
+        decoration: const BoxDecoration(color: _CmrColors.panel, border: Border(top: BorderSide(color: _CmrColors.line))),
         child: Row(
           children: [
             Expanded(
@@ -7613,8 +7539,7 @@ class _TrainerPanelSoftButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback? onTap;
 
-  const _TrainerPanelSoftButton(
-      {required this.title, required this.icon, required this.onTap});
+  const _TrainerPanelSoftButton({required this.title, required this.icon, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -7649,8 +7574,7 @@ class _TrainerPanelGraphiteButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback? onTap;
 
-  const _TrainerPanelGraphiteButton(
-      {required this.title, required this.icon, required this.onTap});
+  const _TrainerPanelGraphiteButton({required this.title, required this.icon, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -7665,21 +7589,13 @@ class _TrainerPanelGraphiteButton extends StatelessWidget {
           child: Container(
             height: 38,
             alignment: Alignment.center,
-            decoration: _CmrDecor.fluentSurface(
-                radius: 10,
-                accent: _CmrColors.green,
-                active: true,
-                compact: true),
+            decoration: _CmrDecor.fluentSurface(radius: 10, accent: _CmrColors.green, active: true, compact: true),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Icon(icon, size: 15, color: _CmrColors.green),
                 const SizedBox(width: 6),
-                Text(title,
-                    style: const TextStyle(
-                        color: _CmrColors.green,
-                        fontSize: 11.55,
-                        fontWeight: FontWeight.w600)),
+                Text(title, style: const TextStyle(color: _CmrColors.green, fontSize: 11.55, fontWeight: FontWeight.w600)),
               ],
             ),
           ),
@@ -7703,11 +7619,9 @@ class _TrainerEmptyDetail extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _CmrRoundIcon(
-                icon: Icons.badge_rounded, color: _CmrColors.green, size: 56),
+            _CmrRoundIcon(icon: Icons.badge_rounded, color: _CmrColors.green, size: 56),
             const SizedBox(height: 14),
-            Text('Выберите тренера',
-                textAlign: TextAlign.center, style: _CmrText.title(18)),
+            Text('Выберите тренера', textAlign: TextAlign.center, style: _CmrText.title(18)),
             const SizedBox(height: 7),
             Text(
               'Слева откройте карточку тренера — здесь появятся профиль, команды, контакты и действия.',
@@ -7715,12 +7629,7 @@ class _TrainerEmptyDetail extends StatelessWidget {
               style: _CmrText.muted(13),
             ),
             const SizedBox(height: 16),
-            SizedBox(
-                width: 210,
-                child: _CmrPrimaryButton(
-                    icon: Icons.person_add_alt_1_rounded,
-                    title: 'Добавить тренера',
-                    onTap: onAddTrainer)),
+            SizedBox(width: 210, child: _CmrPrimaryButton(icon: Icons.person_add_alt_1_rounded, title: 'Добавить тренера', onTap: onAddTrainer)),
           ],
         ),
       ),
@@ -7751,8 +7660,7 @@ class _TrainerModalSheet extends StatefulWidget {
   State<_TrainerModalSheet> createState() => _TrainerModalSheetState();
 }
 
-class _TrainerModalSheetState extends State<_TrainerModalSheet>
-    with SingleTickerProviderStateMixin {
+class _TrainerModalSheetState extends State<_TrainerModalSheet> with SingleTickerProviderStateMixin {
   late final TabController _tabController;
   int _selectedTab = 0;
 
@@ -7793,8 +7701,7 @@ class _TrainerModalSheetState extends State<_TrainerModalSheet>
     final sheetHeight = math.min(screen.height * .92, 760.0);
 
     return Padding(
-      padding:
-          EdgeInsets.fromLTRB(10, 0, 10, bottomInset > 0 ? bottomInset : 10),
+      padding: EdgeInsets.fromLTRB(10, 0, 10, bottomInset > 0 ? bottomInset : 10),
       child: Align(
         alignment: Alignment.bottomCenter,
         child: Container(
@@ -7803,8 +7710,7 @@ class _TrainerModalSheetState extends State<_TrainerModalSheet>
           decoration: BoxDecoration(
             color: _CmrColors.panel,
             borderRadius: BorderRadius.circular(_CmrDecor.sheetRadius),
-            border:
-                Border.all(color: _CmrColors.line.withOpacity(.55), width: .7),
+            border: Border.all(color: _CmrColors.line.withOpacity(.55), width: .7),
             boxShadow: _CmrDecor.windowShadow,
           ),
           clipBehavior: Clip.antiAlias,
@@ -7877,26 +7783,20 @@ class _ModalTopBar extends StatelessWidget {
                   children: [
                     Text('Профиль тренера', style: _CmrText.title(16)),
                     const SizedBox(height: 2),
-                    Text(name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: _CmrText.muted(12)),
+                    Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrText.muted(12)),
                   ],
                 ),
               ),
               Material(
                 color: _CmrColors.soft,
-                borderRadius:
-                    BorderRadius.circular(_CmrDecor.mobileInnerRadius),
+                borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
                 child: InkWell(
-                  borderRadius:
-                      BorderRadius.circular(_CmrDecor.mobileInnerRadius),
+                  borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
                   onTap: () => Navigator.of(context).pop(),
                   child: const SizedBox(
                     width: 38,
                     height: 38,
-                    child: Icon(Icons.close_rounded,
-                        color: _CmrColors.text, size: 18),
+                    child: Icon(Icons.close_rounded, color: _CmrColors.text, size: 18),
                   ),
                 ),
               ),
@@ -8125,6 +8025,7 @@ class _ModalTabBar extends StatelessWidget {
   }
 }
 
+
 class _ModalPill extends StatelessWidget {
   final String text;
   final IconData icon;
@@ -8205,10 +8106,7 @@ class _ModalActionButton extends StatelessWidget {
                   label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                      color: color,
-                      fontSize: 10.35,
-                      fontWeight: FontWeight.w500),
+                  style: TextStyle(color: color, fontSize: 10.35, fontWeight: FontWeight.w500),
                 ),
               ],
             ),
@@ -8339,10 +8237,7 @@ class _ModalDangerButton extends StatelessWidget {
                   label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                      color: color,
-                      fontSize: 11.85,
-                      fontWeight: FontWeight.w500),
+                  style: TextStyle(color: color, fontSize: 11.85, fontWeight: FontWeight.w500),
                 ),
               ),
             ],
@@ -8376,15 +8271,10 @@ class _ModalOverviewTab extends StatelessWidget {
   Widget build(BuildContext context) {
     final info = <_ModalInfoData>[
       _ModalInfoData(Icons.badge_rounded, 'Должность', role),
-      _ModalInfoData(Icons.workspace_premium_rounded, 'Опыт',
-          experience.isEmpty ? 'Не указан' : experience),
-      _ModalInfoData(Icons.cake_rounded, 'Дата рождения',
-          birthday.isEmpty ? 'Не указана' : birthday),
-      _ModalInfoData(Icons.location_city_rounded, 'Город',
-          city.isEmpty ? 'Не указан' : city),
-      if (specialization.isNotEmpty)
-        _ModalInfoData(
-            Icons.sports_soccer_rounded, 'Специализация', specialization),
+      _ModalInfoData(Icons.workspace_premium_rounded, 'Опыт', experience.isEmpty ? 'Не указан' : experience),
+      _ModalInfoData(Icons.cake_rounded, 'Дата рождения', birthday.isEmpty ? 'Не указана' : birthday),
+      _ModalInfoData(Icons.location_city_rounded, 'Город', city.isEmpty ? 'Не указан' : city),
+      if (specialization.isNotEmpty) _ModalInfoData(Icons.sports_soccer_rounded, 'Специализация', specialization),
     ];
 
     return SingleChildScrollView(
@@ -8401,13 +8291,8 @@ class _ModalOverviewTab extends StatelessWidget {
                 children: info
                     .map(
                       (item) => SizedBox(
-                        width: twoColumns
-                            ? (constraints.maxWidth - 10) / 2
-                            : constraints.maxWidth,
-                        child: _ModalInfoRow(
-                            icon: item.icon,
-                            label: item.label,
-                            value: item.value),
+                        width: twoColumns ? (constraints.maxWidth - 10) / 2 : constraints.maxWidth,
+                        child: _ModalInfoRow(icon: item.icon, label: item.label, value: item.value),
                       ),
                     )
                     .toList(),
@@ -8427,9 +8312,7 @@ class _ModalOverviewTab extends StatelessWidget {
                 Text('О тренере', style: _CmrText.title(15)),
                 const SizedBox(height: 10),
                 Text(
-                  bio.isEmpty
-                      ? 'Описание пока не заполнено. Можно добавить опыт, задачи тренера и направление работы с командой.'
-                      : bio,
+                  bio.isEmpty ? 'Описание пока не заполнено. Можно добавить опыт, задачи тренера и направление работы с командой.' : bio,
                   style: _CmrText.muted(13.2),
                 ),
               ],
@@ -8460,8 +8343,7 @@ class _ModalAssignmentsTab extends StatelessWidget {
       return _ModalEmptyBlock(
         icon: Icons.groups_2_rounded,
         title: 'Нет назначений',
-        text:
-            'Назначьте тренера в команду, чтобы он появился в тренерском штабе.',
+        text: 'Назначьте тренера в команду, чтобы он появился в тренерском штабе.',
       );
     }
 
@@ -8471,30 +8353,22 @@ class _ModalAssignmentsTab extends StatelessWidget {
       separatorBuilder: (_, __) => const SizedBox(height: 10),
       itemBuilder: (context, index) {
         final team = teams[index];
-        final profile =
-            _profileTitle(_s(team['link_profile'] ?? team['profile']));
+        final profile = _profileTitle(_s(team['link_profile'] ?? team['profile']));
         final isHead = profile == 'Главный тренер';
         return Container(
           padding: const EdgeInsets.all(14),
           decoration: _CmrDecor.softCard(radius: 22),
           child: Row(
             children: [
-              _CmrAvatar(
-                  photo: _teamLogo(team), name: _teamName(team), size: 50),
+              _CmrAvatar(photo: _teamLogo(team), name: _teamName(team), size: 50),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(_teamName(team),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: _CmrText.title(15)),
+                    Text(_teamName(team), maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrText.title(15)),
                     const SizedBox(height: 4),
-                    Text(profile,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: _CmrText.muted(12.5)),
+                    Text(profile, maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrText.muted(12.5)),
                   ],
                 ),
               ),
@@ -8647,8 +8521,7 @@ class _ModalEmptyBlock extends StatelessWidget {
   final String title;
   final String text;
 
-  const _ModalEmptyBlock(
-      {required this.icon, required this.title, required this.text});
+  const _ModalEmptyBlock({required this.icon, required this.title, required this.text});
 
   @override
   Widget build(BuildContext context) {
@@ -8663,11 +8536,9 @@ class _ModalEmptyBlock extends StatelessWidget {
             children: [
               _CmrRoundIcon(icon: icon, color: _CmrColors.green, size: 52),
               const SizedBox(height: 12),
-              Text(title,
-                  textAlign: TextAlign.center, style: _CmrText.title(18)),
+              Text(title, textAlign: TextAlign.center, style: _CmrText.title(18)),
               const SizedBox(height: 7),
-              Text(text,
-                  textAlign: TextAlign.center, style: _CmrText.muted(13)),
+              Text(text, textAlign: TextAlign.center, style: _CmrText.muted(13)),
             ],
           ),
         ),
@@ -8709,26 +8580,20 @@ class _CompactTrainersHeader extends StatelessWidget {
         children: [
           Row(
             children: [
-              _CmrRoundIcon(
-                  icon: Icons.badge_rounded, color: _CmrColors.green, size: 32),
+              _CmrRoundIcon(icon: Icons.badge_rounded, color: _CmrColors.green, size: 32),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text('Тренеры', style: _CmrText.title(16)),
-                    Text(clubName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: _CmrText.muted(11)),
+                    Text(clubName, maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrText.muted(11)),
                   ],
                 ),
               ),
-              _CompactActionButton(
-                  icon: Icons.person_add_alt_1_rounded, onTap: onAddTrainer),
+              _CompactActionButton(icon: Icons.person_add_alt_1_rounded, onTap: onAddTrainer),
               const SizedBox(width: 8),
-              _CompactActionButton(
-                  icon: Icons.add_link_rounded, onTap: onAssignTrainer),
+              _CompactActionButton(icon: Icons.add_link_rounded, onTap: onAssignTrainer),
             ],
           ),
           const SizedBox(height: 10),
@@ -8736,25 +8601,13 @@ class _CompactTrainersHeader extends StatelessWidget {
             scrollDirection: Axis.horizontal,
             child: Row(
               children: [
-                _CompactStatChip(
-                    value: '$trainersCount',
-                    label: 'в клубе',
-                    icon: Icons.groups_2_rounded),
+                _CompactStatChip(value: '$trainersCount', label: 'в клубе', icon: Icons.groups_2_rounded),
                 const SizedBox(width: 6),
-                _CompactStatChip(
-                    value: '$assigned',
-                    label: 'назначены',
-                    icon: Icons.link_rounded),
+                _CompactStatChip(value: '$assigned', label: 'назначены', icon: Icons.link_rounded),
                 const SizedBox(width: 6),
-                _CompactStatChip(
-                    value: '$mainCount',
-                    label: 'главные',
-                    icon: Icons.workspace_premium_rounded),
+                _CompactStatChip(value: '$mainCount', label: 'главные', icon: Icons.workspace_premium_rounded),
                 const SizedBox(width: 6),
-                _CompactStatChip(
-                    value: '$doctorsCount',
-                    label: 'медики',
-                    icon: Icons.health_and_safety_rounded),
+                _CompactStatChip(value: '$doctorsCount', label: 'медики', icon: Icons.health_and_safety_rounded),
               ],
             ),
           ),
@@ -8778,13 +8631,12 @@ class _CompactActionButton extends StatelessWidget {
       child: InkWell(
         borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
         onTap: onTap,
-        child: Container(
-            padding: const EdgeInsets.all(10),
-            child: Icon(icon, size: 18, color: _CmrColors.green)),
+        child: Container(padding: const EdgeInsets.all(10), child: Icon(icon, size: 18, color: _CmrColors.green)),
       ),
     );
   }
 }
+
 
 class _CompactStatChip extends StatelessWidget {
   final String value;
@@ -8846,21 +8698,13 @@ class _CompactSearchBar extends StatelessWidget {
       decoration: InputDecoration(
         hintText: 'Поиск тренера...',
         hintStyle: AppTypography.formHint(color: _CmrColors.muted2),
-        prefixIcon:
-            Icon(Icons.search_rounded, color: _CmrColors.muted, size: 16),
+        prefixIcon: Icon(Icons.search_rounded, color: _CmrColors.muted, size: 16),
         filled: true,
         fillColor: _CmrColors.soft,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
-            borderSide: BorderSide.none),
-        enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
-            borderSide: BorderSide.none),
-        focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
-            borderSide: BorderSide.none),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius), borderSide: BorderSide.none),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius), borderSide: BorderSide.none),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius), borderSide: BorderSide.none),
       ),
     );
   }
@@ -8870,8 +8714,7 @@ class _CompactFilters extends StatelessWidget {
   final _CmrStaffFilter currentFilter;
   final ValueChanged<_CmrStaffFilter> onFilterChanged;
 
-  const _CompactFilters(
-      {required this.currentFilter, required this.onFilterChanged});
+  const _CompactFilters({required this.currentFilter, required this.onFilterChanged});
 
   @override
   Widget build(BuildContext context) {
@@ -8881,7 +8724,6 @@ class _CompactFilters extends StatelessWidget {
       (_CmrStaffFilter.coaches, 'Тренеры'),
       (_CmrStaffFilter.assistants, 'Ассистенты'),
       (_CmrStaffFilter.doctors, 'Медики'),
-      (_CmrStaffFilter.press, 'Пресс-служба'),
       (_CmrStaffFilter.noTeam, 'Без команды'),
     ];
 
@@ -8896,26 +8738,18 @@ class _CompactFilters extends StatelessWidget {
               color: Colors.transparent,
               borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
               child: InkWell(
-                borderRadius:
-                    BorderRadius.circular(_CmrDecor.mobileInnerRadius),
+                borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
                 onTap: () => onFilterChanged(item.$1),
                 child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
                     color: active ? _CmrColors.panel : _CmrColors.soft,
-                    borderRadius:
-                        BorderRadius.circular(_CmrDecor.mobileInnerRadius),
-                    border: Border.all(
-                        color: active
-                            ? _CmrColors.green.withOpacity(.16)
-                            : _CmrColors.line),
+                    borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
+                    border: Border.all(color: active ? _CmrColors.green.withOpacity(.16) : _CmrColors.line),
                   ),
                   child: Text(
                     item.$2,
-                    style: active
-                        ? _CmrText.tabSelected().copyWith(fontSize: 11.55)
-                        : _CmrText.tab().copyWith(fontSize: 11.55),
+                    style: active ? _CmrText.tabSelected().copyWith(fontSize: 11.55) : _CmrText.tab().copyWith(fontSize: 11.55),
                   ),
                 ),
               ),
@@ -8969,14 +8803,9 @@ class _CmrTrainerTile extends StatelessWidget {
                     Row(
                       children: [
                         Expanded(
-                          child: Text(name,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: _CmrText.title(14.5)),
+                          child: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrText.title(14.5)),
                         ),
-                        if (main)
-                          Icon(Icons.workspace_premium_rounded,
-                              color: _CmrColors.green, size: 15),
+                        if (main) Icon(Icons.workspace_premium_rounded, color: _CmrColors.green, size: 15),
                       ],
                     ),
                     const SizedBox(height: 6),
@@ -8992,8 +8821,7 @@ class _CmrTrainerTile extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              Icon(Icons.chevron_right_rounded,
-                  color: _CmrColors.muted, size: 18),
+              Icon(Icons.chevron_right_rounded, color: _CmrColors.muted, size: 18),
             ],
           ),
         ),
@@ -9001,6 +8829,7 @@ class _CmrTrainerTile extends StatelessWidget {
     );
   }
 }
+
 
 class _CmrPill extends StatelessWidget {
   final String text;
@@ -9058,8 +8887,7 @@ class _CmrAvatar extends StatefulWidget {
   final String name;
   final double size;
 
-  const _CmrAvatar(
-      {required this.photo, required this.name, required this.size});
+  const _CmrAvatar({required this.photo, required this.name, required this.size});
 
   @override
   State<_CmrAvatar> createState() => _CmrAvatarState();
@@ -9091,23 +8919,17 @@ class _CmrAvatarState extends State<_CmrAvatar> {
   }
 
   void _onImageError() {
-    if (mounted)
-      setState(() {
-        _hasError = true;
-        _isLoading = false;
-      });
+    if (mounted) setState(() {
+      _hasError = true;
+      _isLoading = false;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     final initials = widget.name.trim().isEmpty
         ? 'Т'
-        : widget.name
-            .trim()
-            .split(RegExp(r'\s+'))
-            .take(2)
-            .map((e) => e.isEmpty ? '' : e[0].toUpperCase())
-            .join();
+        : widget.name.trim().split(RegExp(r'\s+')).take(2).map((e) => e.isEmpty ? '' : e[0].toUpperCase()).join();
 
     return Container(
       width: widget.size,
@@ -9118,8 +8940,7 @@ class _CmrAvatarState extends State<_CmrAvatar> {
       ),
       clipBehavior: Clip.antiAlias,
       child: _hasError || widget.photo.isEmpty
-          ? Center(
-              child: Text(initials, style: _CmrText.title(widget.size * .32)))
+          ? Center(child: Text(initials, style: _CmrText.title(widget.size * .32)))
           : Stack(
               fit: StackFit.expand,
               children: [
@@ -9128,8 +8949,7 @@ class _CmrAvatarState extends State<_CmrAvatar> {
                   fit: BoxFit.cover,
                   loadingBuilder: (context, child, loadingProgress) {
                     if (loadingProgress == null) {
-                      WidgetsBinding.instance
-                          .addPostFrameCallback((_) => _onImageLoaded());
+                      WidgetsBinding.instance.addPostFrameCallback((_) => _onImageLoaded());
                       return child;
                     }
                     return Center(
@@ -9140,8 +8960,7 @@ class _CmrAvatarState extends State<_CmrAvatar> {
                           strokeWidth: 2,
                           color: _CmrColors.green,
                           value: loadingProgress.expectedTotalBytes != null
-                              ? loadingProgress.cumulativeBytesLoaded /
-                                  loadingProgress.expectedTotalBytes!
+                              ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
                               : null,
                         ),
                       ),
@@ -9149,9 +8968,7 @@ class _CmrAvatarState extends State<_CmrAvatar> {
                   },
                   errorBuilder: (_, __, ___) {
                     _onImageError();
-                    return Center(
-                        child: Text(initials,
-                            style: _CmrText.title(widget.size * .32)));
+                    return Center(child: Text(initials, style: _CmrText.title(widget.size * .32)));
                   },
                 ),
                 if (_isLoading) Container(color: Colors.white.withOpacity(0.5)),
@@ -9160,6 +8977,7 @@ class _CmrAvatarState extends State<_CmrAvatar> {
     );
   }
 }
+
 
 class _CmrRoundIcon extends StatelessWidget {
   final IconData icon;
@@ -9202,11 +9020,7 @@ class _CmrPrimaryButton extends StatelessWidget {
   final VoidCallback? onTap;
   final Color color;
 
-  const _CmrPrimaryButton(
-      {required this.icon,
-      required this.title,
-      required this.onTap,
-      this.color = _CmrColors.green});
+  const _CmrPrimaryButton({required this.icon, required this.title, required this.onTap, this.color = _CmrColors.green});
 
   @override
   Widget build(BuildContext context) {
@@ -9220,15 +9034,10 @@ class _CmrPrimaryButton extends StatelessWidget {
           opacity: onTap == null ? .55 : 1,
           child: Container(
             decoration: color == _CmrColors.green
-                ? _CmrDecor.fluentSurface(
-                    radius: 10,
-                    accent: _CmrColors.green,
-                    active: true,
-                    compact: true)
+                ? _CmrDecor.fluentSurface(radius: 10, accent: _CmrColors.green, active: true, compact: true)
                 : BoxDecoration(
                     color: color,
-                    borderRadius:
-                        BorderRadius.circular(_CmrDecor.mobileInnerRadius),
+                    borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
                     border: Border.all(color: color.withOpacity(.25)),
                   ),
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -9236,22 +9045,9 @@ class _CmrPrimaryButton extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(icon,
-                    size: 15,
-                    color: color == _CmrColors.green
-                        ? _CmrColors.green
-                        : Colors.white),
+                Icon(icon, size: 15, color: color == _CmrColors.green ? _CmrColors.green : Colors.white),
                 const SizedBox(width: 8),
-                Flexible(
-                    child: Text(title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                            color: color == _CmrColors.green
-                                ? _CmrColors.green
-                                : Colors.white,
-                            fontSize: 11.85,
-                            fontWeight: FontWeight.w600))),
+                Flexible(child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: color == _CmrColors.green ? _CmrColors.green : Colors.white, fontSize: 11.85, fontWeight: FontWeight.w600))),
               ],
             ),
           ),
@@ -9278,10 +9074,7 @@ class _CmrSecondaryButton extends StatelessWidget {
         child: Opacity(
           opacity: onTap == null ? .55 : 1,
           child: Container(
-            decoration: BoxDecoration(
-                color: _CmrColors.soft,
-                borderRadius:
-                    BorderRadius.circular(_CmrDecor.mobileInnerRadius)),
+            decoration: BoxDecoration(color: _CmrColors.soft, borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius)),
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             child: Center(child: Text(title, style: _CmrText.tab())),
           ),
@@ -9325,17 +9118,10 @@ class _CmrInput extends StatelessWidget {
         suffixIcon: suffix,
         filled: true,
         fillColor: _CmrColors.soft,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-        border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
-            borderSide: BorderSide.none),
-        enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
-            borderSide: BorderSide.none),
-        focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
-            borderSide: BorderSide.none),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius), borderSide: BorderSide.none),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius), borderSide: BorderSide.none),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius), borderSide: BorderSide.none),
       ),
     );
   }
@@ -9347,11 +9133,7 @@ class _CmrEmptyState extends StatelessWidget {
   final String buttonText;
   final VoidCallback onTap;
 
-  const _CmrEmptyState(
-      {required this.title,
-      required this.text,
-      required this.buttonText,
-      required this.onTap});
+  const _CmrEmptyState({required this.title, required this.text, required this.buttonText, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -9362,20 +9144,13 @@ class _CmrEmptyState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _CmrRoundIcon(
-                icon: Icons.badge_rounded, color: _CmrColors.muted, size: 52),
+            _CmrRoundIcon(icon: Icons.badge_rounded, color: _CmrColors.muted, size: 52),
             const SizedBox(height: 12),
             Text(title, textAlign: TextAlign.center, style: _CmrText.title(16)),
             const SizedBox(height: 6),
-            Text(text,
-                textAlign: TextAlign.center, style: _CmrText.muted(12.5)),
+            Text(text, textAlign: TextAlign.center, style: _CmrText.muted(12.5)),
             const SizedBox(height: 14),
-            SizedBox(
-                width: 190,
-                child: _CmrPrimaryButton(
-                    icon: Icons.person_add_alt_1_rounded,
-                    title: buttonText,
-                    onTap: onTap)),
+            SizedBox(width: 190, child: _CmrPrimaryButton(icon: Icons.person_add_alt_1_rounded, title: buttonText, onTap: onTap)),
           ],
         ),
       ),
@@ -9398,17 +9173,11 @@ class _CmrErrorState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.error_outline_rounded,
-                color: _CmrColors.red, size: 38),
+            const Icon(Icons.error_outline_rounded, color: _CmrColors.red, size: 38),
             const SizedBox(height: 10),
             Text(text, textAlign: TextAlign.center, style: _CmrText.muted(13)),
             const SizedBox(height: 14),
-            SizedBox(
-                width: 160,
-                child: _CmrPrimaryButton(
-                    icon: Icons.refresh_rounded,
-                    title: 'Повторить',
-                    onTap: onRetry)),
+            SizedBox(width: 160, child: _CmrPrimaryButton(icon: Icons.refresh_rounded, title: 'Повторить', onTap: onRetry)),
           ],
         ),
       ),
@@ -9421,8 +9190,7 @@ class _CmrNotice extends StatelessWidget {
   final String title;
   final String text;
 
-  const _CmrNotice(
-      {required this.icon, required this.title, required this.text});
+  const _CmrNotice({required this.icon, required this.title, required this.text});
 
   @override
   Widget build(BuildContext context) {
@@ -9482,9 +9250,7 @@ class _CmrSheetHandle extends StatelessWidget {
         width: 42,
         height: 5,
         margin: const EdgeInsets.only(bottom: 14),
-        decoration: BoxDecoration(
-            color: const Color(0xFFD0D5DD),
-            borderRadius: BorderRadius.circular(99)),
+        decoration: BoxDecoration(color: const Color(0xFFD0D5DD), borderRadius: BorderRadius.circular(99)),
       ),
     );
   }
@@ -9495,8 +9261,7 @@ class _CmrSheetTitle extends StatelessWidget {
   final String title;
   final String subtitle;
 
-  const _CmrSheetTitle(
-      {required this.icon, required this.title, required this.subtitle});
+  const _CmrSheetTitle({required this.icon, required this.title, required this.subtitle});
 
   @override
   Widget build(BuildContext context) {
@@ -9550,14 +9315,8 @@ class _CmrSearchTrainerTile extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: _CmrText.title(14)),
-                    Text(email.isEmpty ? 'Email не указан' : email,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: _CmrText.muted(11.5)),
+                    Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrText.title(14)),
+                    Text(email.isEmpty ? 'Email не указан' : email, maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrText.muted(11.5)),
                   ],
                 ),
               ),
@@ -9566,15 +9325,9 @@ class _CmrSearchTrainerTile extends StatelessWidget {
           const SizedBox(height: 10),
           Row(
             children: [
-              Expanded(
-                  child:
-                      _CmrSecondaryButton(title: 'В клуб', onTap: onAddClub)),
+              Expanded(child: _CmrSecondaryButton(title: 'В клуб', onTap: onAddClub)),
               const SizedBox(width: 8),
-              Expanded(
-                  child: _CmrPrimaryButton(
-                      icon: Icons.add_link_rounded,
-                      title: 'В команду',
-                      onTap: onAssignTeam)),
+              Expanded(child: _CmrPrimaryButton(icon: Icons.add_link_rounded, title: 'В команду', onTap: onAssignTeam)),
             ],
           ),
         ],
@@ -9588,8 +9341,7 @@ class _CmrTeamPickTile extends StatelessWidget {
   final String logo;
   final VoidCallback onTap;
 
-  const _CmrTeamPickTile(
-      {required this.name, required this.logo, required this.onTap});
+  const _CmrTeamPickTile({required this.name, required this.logo, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -9606,11 +9358,7 @@ class _CmrTeamPickTile extends StatelessWidget {
             children: [
               _CmrAvatar(photo: logo, name: name, size: 42),
               const SizedBox(width: 10),
-              Expanded(
-                  child: Text(name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: _CmrText.title(14))),
+              Expanded(child: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: _CmrText.title(14))),
               const Icon(Icons.chevron_right_rounded, color: _CmrColors.muted),
             ],
           ),
@@ -9658,7 +9406,7 @@ class _CmrRolePickTile extends StatelessWidget {
   }
 }
 
-// ==================== ПОЛНОЭКРАННЫЙ ПРОФИЛЬ ТРЕНЕРА ====================
+  // ==================== ПОЛНОЭКРАННЫЙ ПРОФИЛЬ ТРЕНЕРА ====================
 
 class TrainerProfileScreen extends StatefulWidget {
   final Map<String, dynamic> trainer;
@@ -9819,14 +9567,12 @@ class _ProfileAppBar extends StatelessWidget implements PreferredSizeWidget {
               onTap: onBack,
               child: const Padding(
                 padding: EdgeInsets.all(10),
-                child: Icon(Icons.arrow_back_rounded,
-                    size: 19, color: _CmrColors.text),
+                child: Icon(Icons.arrow_back_rounded, size: 19, color: _CmrColors.text),
               ),
             ),
           ),
           const SizedBox(width: 12),
-          _CmrRoundIcon(
-              icon: Icons.badge_rounded, color: _CmrColors.green, size: 32),
+          _CmrRoundIcon(icon: Icons.badge_rounded, color: _CmrColors.green, size: 32),
           const SizedBox(width: 8),
           Expanded(
             child: Column(
@@ -9880,8 +9626,7 @@ class _ProfileHeader extends StatelessWidget {
               if (photo.isNotEmpty) {
                 showDialog(
                   context: context,
-                  builder: (_) =>
-                      _FullscreenPhotoDialog(photoUrl: photo, name: name),
+                  builder: (_) => _FullscreenPhotoDialog(photoUrl: photo, name: name),
                 );
               }
             },
@@ -9907,9 +9652,7 @@ class _ProfileHeader extends StatelessWidget {
                   color: _CmrColors.green,
                 ),
               _ProfilePill(
-                text: teamsCount == 0
-                    ? 'Без команды'
-                    : '$teamsCount ${_teamWord(teamsCount)}',
+                text: teamsCount == 0 ? 'Без команды' : '$teamsCount ${_teamWord(teamsCount)}',
                 icon: Icons.groups_2_rounded,
               ),
             ],
@@ -9921,12 +9664,11 @@ class _ProfileHeader extends StatelessWidget {
 
   String _teamWord(int count) {
     if (count % 10 == 1 && count % 100 != 11) return 'команда';
-    if (count % 10 >= 2 &&
-        count % 10 <= 4 &&
-        (count % 100 < 10 || count % 100 >= 20)) return 'команды';
+    if (count % 10 >= 2 && count % 10 <= 4 && (count % 100 < 10 || count % 100 >= 20)) return 'команды';
     return 'команд';
   }
 }
+
 
 class _ProfilePill extends StatelessWidget {
   final String text;
@@ -10024,6 +9766,7 @@ class _ProfileActions extends StatelessWidget {
   }
 }
 
+
 class _ProfileActionButton extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -10109,10 +9852,8 @@ class _ProfileTabBar extends StatelessWidget {
         indicatorSize: TabBarIndicatorSize.tab,
         labelColor: _CmrColors.green,
         unselectedLabelColor: _CmrColors.muted,
-        labelStyle:
-            const TextStyle(fontSize: 13.05, fontWeight: FontWeight.w500),
-        unselectedLabelStyle:
-            const TextStyle(fontSize: 13.05, fontWeight: FontWeight.w500),
+        labelStyle: const TextStyle(fontSize: 13.05, fontWeight: FontWeight.w500),
+        unselectedLabelStyle: const TextStyle(fontSize: 13.05, fontWeight: FontWeight.w500),
         tabs: const [
           Tab(text: 'Обзор'),
           Tab(text: 'Назначения'),
@@ -10210,6 +9951,7 @@ class _ProfileOverviewTab extends StatelessWidget {
   }
 }
 
+
 class _ProfileInfoCard extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -10276,8 +10018,7 @@ class _ProfileAssignmentsTab extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.groups_2_rounded,
-                size: 64, color: _CmrColors.muted.withOpacity(0.4)),
+            Icon(Icons.groups_2_rounded, size: 64, color: _CmrColors.muted.withOpacity(0.4)),
             const SizedBox(height: 20),
             Text('Нет назначений', style: _CmrText.title(20)),
             const SizedBox(height: 8),
@@ -10297,8 +10038,7 @@ class _ProfileAssignmentsTab extends StatelessWidget {
       separatorBuilder: (_, __) => const SizedBox(height: 12),
       itemBuilder: (context, index) {
         final team = teams[index];
-        final profile =
-            _profileTitle(_s(team['link_profile'] ?? team['profile']));
+        final profile = _profileTitle(_s(team['link_profile'] ?? team['profile']));
         final isMainCoach = _i(team['main_coach_id']) > 0;
 
         return Container(
@@ -10306,8 +10046,7 @@ class _ProfileAssignmentsTab extends StatelessWidget {
           decoration: _CmrDecor.softCard(radius: 20),
           child: Row(
             children: [
-              _CmrAvatar(
-                  photo: _teamLogo(team), name: _teamName(team), size: 56),
+              _CmrAvatar(photo: _teamLogo(team), name: _teamName(team), size: 56),
               const SizedBox(width: 16),
               Expanded(
                 child: Column(
@@ -10322,8 +10061,7 @@ class _ProfileAssignmentsTab extends StatelessWidget {
                     const SizedBox(height: 6),
                     Row(
                       children: [
-                        Icon(Icons.badge_rounded,
-                            size: 12, color: _CmrColors.muted),
+                        Icon(Icons.badge_rounded, size: 12, color: _CmrColors.muted),
                         const SizedBox(width: 4),
                         Text(profile, style: _CmrText.muted(12)),
                       ],
@@ -10333,27 +10071,20 @@ class _ProfileAssignmentsTab extends StatelessWidget {
               ),
               if (isMainCoach || profile == 'Главный тренер')
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   decoration: BoxDecoration(
                     color: _CmrColors.panel,
-                    borderRadius:
-                        BorderRadius.circular(_CmrDecor.mobileInnerRadius),
-                    border:
-                        Border.all(color: _CmrColors.green.withOpacity(.14)),
+                    borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
+                    border: Border.all(color: _CmrColors.green.withOpacity(.14)),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.workspace_premium_rounded,
-                          size: 12, color: _CmrColors.green),
+                      Icon(Icons.workspace_premium_rounded, size: 12, color: _CmrColors.green),
                       const SizedBox(width: 4),
                       Text(
                         'Главный',
-                        style: TextStyle(
-                            color: _CmrColors.green,
-                            fontSize: 10.55,
-                            fontWeight: FontWeight.w500),
+                        style: TextStyle(color: _CmrColors.green, fontSize: 10.55, fontWeight: FontWeight.w500),
                       ),
                     ],
                   ),
@@ -10409,6 +10140,7 @@ class _ProfileContactsTab extends StatelessWidget {
     );
   }
 }
+
 
 class _ProfileContactCard extends StatelessWidget {
   final IconData icon;
@@ -10556,8 +10288,7 @@ class _ProfileDangerButton extends StatelessWidget {
               const SizedBox(width: 8),
               Text(
                 label,
-                style: TextStyle(
-                    color: color, fontSize: 12.35, fontWeight: FontWeight.w500),
+                style: TextStyle(color: color, fontSize: 12.35, fontWeight: FontWeight.w500),
               ),
             ],
           ),

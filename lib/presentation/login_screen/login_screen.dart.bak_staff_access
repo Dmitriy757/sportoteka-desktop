@@ -11,7 +11,6 @@ import 'package:sportoteka/core/utils/pref_utils.dart';
 import 'package:sportoteka/core/utils/validation_functions.dart';
 import 'package:sportoteka/core/theme/app_typography.dart';
 import 'package:sportoteka/presentation/my_profile_screen/my_profile_screen.dart';
-import 'package:sportoteka/presentation/workspace_hub/workspace_hub_screen.dart';
 
 import 'controller/login_controller.dart';
 
@@ -418,8 +417,9 @@ class _LoginScreenState extends State<LoginScreen> {
         },
         suffixIcon: IconButton(
           splashRadius: 18,
-          tooltip:
-              isPasswordVisible.value ? 'Показать пароль' : 'Скрыть пароль',
+          tooltip: isPasswordVisible.value
+              ? 'Показать пароль'
+              : 'Скрыть пароль',
           color: _secondary,
           icon: Icon(
             isPasswordVisible.value
@@ -464,7 +464,8 @@ class _LoginScreenState extends State<LoginScreen> {
                       value: agreedToTerms.value,
                       onChanged: _loading
                           ? null
-                          : (value) => agreedToTerms.value = value ?? false,
+                          : (value) =>
+                              agreedToTerms.value = value ?? false,
                       activeColor: _green,
                       checkColor: Colors.white,
                       side: const BorderSide(
@@ -488,7 +489,8 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       _LinkText(
                         text: 'Условиями использования',
-                        onTap: () => _openUrl('https://sportoteka.by/terms'),
+                        onTap: () =>
+                            _openUrl('https://sportoteka.by/terms'),
                       ),
                       Text(
                         ' и ',
@@ -496,7 +498,8 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       _LinkText(
                         text: 'Политикой конфиденциальности',
-                        onTap: () => _openUrl('https://sportoteka.by/privacy'),
+                        onTap: () =>
+                            _openUrl('https://sportoteka.by/privacy'),
                       ),
                       Text(
                         '.',
@@ -539,7 +542,8 @@ class _LoginScreenState extends State<LoginScreen> {
                   height: 20,
                   child: CircularProgressIndicator(
                     strokeWidth: 2.2,
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    valueColor:
+                        AlwaysStoppedAnimation<Color>(Colors.white),
                   ),
                 )
               : Row(
@@ -573,7 +577,9 @@ class _LoginScreenState extends State<LoginScreen> {
         const SizedBox(width: 5),
         InkWell(
           borderRadius: BorderRadius.circular(8),
-          onTap: _loading ? null : () => Get.toNamed(AppRoutes.signUpScreen),
+          onTap: _loading
+              ? null
+              : () => Get.toNamed(AppRoutes.signUpScreen),
           child: Padding(
             padding: const EdgeInsets.symmetric(
               horizontal: 3,
@@ -630,6 +636,7 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
     );
   }
+
 
   Future<void> onTapLogIn() async {
     final email = controller.emailController.text.trim();
@@ -719,11 +726,15 @@ class _LoginScreenState extends State<LoginScreen> {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted) return;
 
-          // Login подтверждает только email + пароль.
-          // Все рабочие ключи вводятся уже в Workspace Hub:
-          // Staff Key / Club Key / Parent Key.
+          // После входа для ВСЕХ ролей открываем главный профиль.
+          // MyProfileScreen уже определяет роль пользователя:
+          // player / coach / club / parent.
+          //
+          // Для parent/родитель основной рабочий блок ведёт в
+          // «Мои дети», где активируется Parent Key и открывается
+          // дневник привязанного игрока.
           Get.offAll<void>(
-            () => const WorkspaceHubScreen(),
+            () => const MyProfileScreen(),
             transition: Transition.noTransition,
             duration: Duration.zero,
           );

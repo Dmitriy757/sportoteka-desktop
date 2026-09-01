@@ -11,6 +11,7 @@ import 'package:sportoteka/presentation/community_screen/create_post_editor_scre
 import 'package:sportoteka/presentation/community_screen/post_blocks.dart';
 import 'package:sportoteka/routes/app_routes.dart';
 
+
 // ==================== CMR Пресс-служба: единый стиль состава ====================
 
 class _CmrPressColors {
@@ -80,8 +81,11 @@ class _CmrPressText {
   static TextStyle action() =>
       AppTypography.action(color: _CmrPressColors.text);
 
-  static TextStyle navLabel({required bool active}) => AppTypography.menuTitle(
-        color: active ? _CmrPressColors.greenDark : _CmrPressColors.text,
+  static TextStyle navLabel({required bool active}) =>
+      AppTypography.menuTitle(
+        color: active
+            ? _CmrPressColors.greenDark
+            : _CmrPressColors.text,
         weight: active ? FontWeight.w600 : FontWeight.w500,
       );
 
@@ -112,7 +116,9 @@ class _CmrPressDecor {
     bool active = false,
   }) =>
       BoxDecoration(
-        color: active ? _CmrPressColors.greenSoft : _CmrPressColors.panel,
+        color: active
+            ? _CmrPressColors.greenSoft
+            : _CmrPressColors.panel,
         borderRadius: BorderRadius.circular(radius),
         border: Border.all(
           color: active
@@ -309,48 +315,6 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
     super.dispose();
   }
 
-  Future<void> _assertStaffAccess() async {
-    var userId = widget.userId;
-    if (userId <= 0) userId = await PrefUtils.getUserId() ?? 0;
-    if (userId <= 0) throw Exception('Не найден пользователь');
-
-    // If club is known, guard gives an immediate answer. If club is not known,
-    // press_access.php remains the authoritative server-side filter below.
-    if (widget.clubId <= 0) return;
-
-    final response = await http
-        .post(
-          Uri.parse('$_apiBase/staff_access/guard.php'),
-          headers: const <String, String>{
-            'Content-Type': 'application/json; charset=utf-8',
-          },
-          body: jsonEncode(<String, dynamic>{
-            'user_id': userId,
-            'club_id': widget.clubId,
-          }),
-        )
-        .timeout(const Duration(seconds: 12));
-
-    dynamic decoded;
-    try {
-      decoded = jsonDecode(utf8.decode(response.bodyBytes));
-    } catch (_) {
-      decoded = null;
-    }
-    if (decoded is! Map) return;
-
-    final managed = decoded['managed'] == true;
-    final active = decoded['active'] == true;
-    if (managed && !active) {
-      final message = _s(decoded['message']);
-      throw Exception(
-        message.isEmpty
-            ? 'Доступ к пресс-службе не активирован или отозван'
-            : message,
-      );
-    }
-  }
-
   Future<void> _load() async {
     if (!mounted) return;
     setState(() {
@@ -359,7 +323,6 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
     });
 
     try {
-      await _assertStaffAccess();
       await _loadUser();
       await _loadAssignments();
       await _loadPosts();
@@ -407,17 +370,15 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
     if (userId <= 0) userId = await PrefUtils.getUserId() ?? 0;
     if (userId <= 0) return;
 
-    final response = await http
-        .post(
-          Uri.parse('$_apiBase/get_trainer_profile.php'),
-          headers: const <String, String>{
-            'Content-Type': 'application/json; charset=utf-8',
-          },
-          body: jsonEncode(<String, dynamic>{
-            'trainer_id': userId,
-          }),
-        )
-        .timeout(const Duration(seconds: 12));
+    final response = await http.post(
+      Uri.parse('$_apiBase/get_trainer_profile.php'),
+      headers: const <String, String>{
+        'Content-Type': 'application/json; charset=utf-8',
+      },
+      body: jsonEncode(<String, dynamic>{
+        'trainer_id': userId,
+      }),
+    ).timeout(const Duration(seconds: 12));
 
     if (response.statusCode != 200) return;
 
@@ -449,7 +410,16 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
       rows.add(row);
     }
 
-    // No client-side fallback: server access is authoritative.
+    if (rows.isEmpty && widget.teamId > 0) {
+      rows.add(<String, dynamic>{
+        'team_id': widget.teamId,
+        'team_name': widget.teamName,
+        'club_id': widget.clubId,
+        'club_name': widget.clubName,
+        'sport': widget.sportName,
+        'profile': 'press_assistant',
+      });
+    }
 
     if (rows.isEmpty) return;
 
@@ -537,7 +507,9 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
       },
     );
 
-    final response = await http.get(uri).timeout(const Duration(seconds: 15));
+    final response = await http
+        .get(uri)
+        .timeout(const Duration(seconds: 15));
 
     if (response.statusCode != 200) {
       Map<String, dynamic>? errorData;
@@ -549,7 +521,8 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
       } catch (_) {}
 
       final message = _s(
-        errorData?['message'] ?? errorData?['error'],
+        errorData?['message'] ??
+            errorData?['error'],
       );
 
       throw Exception(
@@ -577,7 +550,8 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
 
     result.sort((a, b) {
       DateTime parse(dynamic value) =>
-          DateTime.tryParse(_s(value).replaceAll(' ', 'T')) ?? DateTime(1970);
+          DateTime.tryParse(_s(value).replaceAll(' ', 'T')) ??
+          DateTime(1970);
       return parse(b['created_at']).compareTo(parse(a['created_at']));
     });
 
@@ -766,7 +740,9 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
   String _apiMessage(Map<String, dynamic>? data, String fallback) {
     if (data == null) return fallback;
     final message = _s(
-      data['message'] ?? data['error'] ?? data['detail'],
+      data['message'] ??
+          data['error'] ??
+          data['detail'],
     );
     return message.isEmpty ? fallback : message;
   }
@@ -954,13 +930,14 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
     });
   }
 
+
   void _snack(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Widget _brandDots() => const _PressDotCluster();
+
 
   Widget _buildHeader({required bool mobile}) {
     return Container(
@@ -1057,6 +1034,7 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
       ),
     );
   }
+
 
   String get _workspaceContextLabel {
     final parts = <String>[
@@ -1260,6 +1238,7 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
     );
   }
 
+
   Widget _buildSideRail(double width) {
     Widget item({
       required String title,
@@ -1279,7 +1258,9 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
             constraints: const BoxConstraints(minHeight: 48),
             padding: const EdgeInsets.fromLTRB(10, 7, 8, 7),
             decoration: BoxDecoration(
-              color: active ? _CmrPressColors.greenSoft : Colors.transparent,
+              color: active
+                  ? _CmrPressColors.greenSoft
+                  : Colors.transparent,
               borderRadius: BorderRadius.circular(9),
             ),
             child: Row(
@@ -1288,8 +1269,9 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
                 Padding(
                   padding: const EdgeInsets.only(top: 5),
                   child: _PressGlowDot(
-                    color:
-                        active ? _CmrPressColors.green : _CmrPressColors.muted2,
+                    color: active
+                        ? _CmrPressColors.green
+                        : _CmrPressColors.muted2,
                     size: active ? 6.4 : 4.8,
                     opacity: active ? 1 : .48,
                     halo: active,
@@ -1357,7 +1339,8 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
                         _selectClubScope();
                       },
                     ),
-                  if (_canPublishWholeClub) const SizedBox(height: 4),
+                  if (_canPublishWholeClub)
+                    const SizedBox(height: 4),
                   for (final row in _pressAssignments) ...[
                     item(
                       title: _s(row['team_name']).trim().isEmpty
@@ -1482,6 +1465,7 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
     );
   }
 
+
   Widget _buildWorkingArea({
     required bool mobile,
   }) {
@@ -1490,7 +1474,8 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
       child: Column(
         children: [
           if (mobile) _buildHeader(mobile: true),
-          if (mobile && !_editorOpen && !_profileOpen) _buildProfileStrip(),
+          if (mobile && !_editorOpen && !_profileOpen)
+            _buildProfileStrip(),
           Expanded(
             child: _editorOpen
                 ? _editor()
@@ -1502,6 +1487,7 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
       ),
     );
   }
+
 
   InputDecoration _profileInputDecoration({
     required String label,
@@ -1547,6 +1533,7 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
       ),
     );
   }
+
 
   Widget _passwordEye({
     required bool hidden,
@@ -1611,7 +1598,9 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
           return Align(
             alignment: Alignment.centerLeft,
             child: Material(
-              color: busy ? _CmrPressColors.soft2 : _CmrPressColors.greenSoft,
+              color: busy
+                  ? _CmrPressColors.soft2
+                  : _CmrPressColors.greenSoft,
               borderRadius: BorderRadius.circular(9),
               child: InkWell(
                 onTap: busy ? null : onTap,
@@ -1744,6 +1733,7 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
               ],
             ),
             const SizedBox(height: 14),
+
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(12),
@@ -1780,7 +1770,9 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
                 ],
               ),
             ),
+
             const SizedBox(height: 10),
+
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(12),
@@ -1807,7 +1799,8 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
                       suffixIcon: _passwordEye(
                         hidden: _hideCurrentPassword,
                         onPressed: () => setState(
-                          () => _hideCurrentPassword = !_hideCurrentPassword,
+                          () => _hideCurrentPassword =
+                              !_hideCurrentPassword,
                         ),
                       ),
                     ),
@@ -1825,7 +1818,8 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
                       suffixIcon: _passwordEye(
                         hidden: _hideNewPassword,
                         onPressed: () => setState(
-                          () => _hideNewPassword = !_hideNewPassword,
+                          () => _hideNewPassword =
+                              !_hideNewPassword,
                         ),
                       ),
                     ),
@@ -1844,14 +1838,17 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
                       suffixIcon: _passwordEye(
                         hidden: _hideRepeatPassword,
                         onPressed: () => setState(
-                          () => _hideRepeatPassword = !_hideRepeatPassword,
+                          () => _hideRepeatPassword =
+                              !_hideRepeatPassword,
                         ),
                       ),
                     ),
                   ),
                   const SizedBox(height: 11),
                   actionButton(
-                    label: _savingPassword ? 'Изменение...' : 'Изменить пароль',
+                    label: _savingPassword
+                        ? 'Изменение...'
+                        : 'Изменить пароль',
                     busy: _savingPassword,
                     onTap: _changePassword,
                   ),
@@ -1863,6 +1860,7 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
       },
     );
   }
+
 
   Widget _buildPostTile(Map<String, dynamic> post) {
     final title =
@@ -1877,7 +1875,8 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
     final normalizedTeamId = _asInt(
       post['_press_team_id'] ?? post['team_id'],
     );
-    final normalizedScope = _s(post['_press_scope']).trim().toLowerCase();
+    final normalizedScope =
+        _s(post['_press_scope']).trim().toLowerCase();
 
     final scopeLabel = normalizedScope == 'club' || normalizedTeamId <= 0
         ? 'Весь клуб'
@@ -1887,7 +1886,8 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
                 ? _teamNameById(normalizedTeamId)
                 : 'Команда';
 
-    final clubPost = normalizedScope == 'club' || normalizedTeamId <= 0;
+    final clubPost =
+        normalizedScope == 'club' || normalizedTeamId <= 0;
 
     return Material(
       color: Colors.transparent,
@@ -1906,8 +1906,9 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               _PressGlowDot(
-                color:
-                    clubPost ? _CmrPressColors.green : _CmrPressColors.muted2,
+                color: clubPost
+                    ? _CmrPressColors.green
+                    : _CmrPressColors.muted2,
                 size: clubPost ? 6.4 : 4.8,
                 opacity: clubPost ? 1 : .48,
                 halo: clubPost,
@@ -1973,6 +1974,7 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
       ),
     );
   }
+
 
   Widget _buildNewsList() {
     if (_loading) {
@@ -2075,6 +2077,7 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
     );
   }
 
+
   Widget _editor() {
     final post = _editingPost;
 
@@ -2084,12 +2087,15 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
 
     if (post != null) {
       final normalizedTeamId = _asInt(
-        post['_press_team_id'] ?? post['team_id'],
+        post['_press_team_id'] ??
+            post['team_id'],
       );
       final normalizedClubId = _asInt(
-        post['_press_club_id'] ?? post['club_id'],
+        post['_press_club_id'] ??
+            post['club_id'],
       );
-      final normalizedScope = _s(post['_press_scope']).trim().toLowerCase();
+      final normalizedScope =
+          _s(post['_press_scope']).trim().toLowerCase();
 
       editorTeamId = normalizedScope == 'club' ? 0 : normalizedTeamId;
       if (normalizedClubId > 0) editorClubId = normalizedClubId;
@@ -2097,7 +2103,8 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
       if (editorTeamId <= 0) {
         editorTeamName = 'Весь клуб';
       } else {
-        final normalizedTeamName = _s(post['_press_team_name']).trim();
+        final normalizedTeamName =
+            _s(post['_press_team_name']).trim();
         editorTeamName = normalizedTeamName.isNotEmpty
             ? normalizedTeamName
             : _teamNameById(editorTeamId);
@@ -2105,7 +2112,8 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
     }
 
     return CreatePostEditorScreen(
-      sportName: _activeSportName.isEmpty ? widget.sportName : _activeSportName,
+      sportName:
+          _activeSportName.isEmpty ? widget.sportName : _activeSportName,
       isEdit: post != null,
       postId: post == null ? null : _asInt(post['id']),
       initialTitle: post == null ? '' : _s(post['title']),
@@ -2113,10 +2121,13 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
           ? ''
           : _normalizePostMediaUrl(
               _s(
-                post['image'] ?? post['image_url'] ?? post['cover_url'],
+                post['image'] ??
+                    post['image_url'] ??
+                    post['cover_url'],
               ),
             ),
-      initialBlocks: post == null ? const <PostBlock>[] : _blocksFromPost(post),
+      initialBlocks:
+          post == null ? const <PostBlock>[] : _blocksFromPost(post),
       embedded: true,
       teamId: editorTeamId,
       teamName: editorTeamName,

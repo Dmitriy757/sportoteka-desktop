@@ -10,7 +10,6 @@ import 'package:sportoteka/presentation/club_workspace/club_workspace_screen.dar
 import 'package:sportoteka/presentation/club_workspace/cmr_press_assistant_screen.dart';
 import 'package:sportoteka/presentation/my_profile_screen/my_profile_screen.dart';
 import 'package:sportoteka/presentation/player_screen/player_dashboard_screen.dart';
-import 'package:sportoteka/presentation/workspace_hub/workspace_parent_access_card.dart';
 import 'package:sportoteka/routes/app_routes.dart';
 
 /// Стартовый экран после авторизации.
@@ -33,7 +32,8 @@ class WorkspaceHubScreen extends StatefulWidget {
 
 class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
   static const String _apiBase = 'https://sportotekaapp.ru/api';
-  static const String _getTrainerTeamsUrl = '$_apiBase/get_team_by_coach.php';
+  static const String _getTrainerTeamsUrl =
+      '$_apiBase/get_team_by_coach.php';
 
   static const Color _bg = Color(0xFFF6F7F6);
   static const Color _panel = Colors.white;
@@ -63,19 +63,10 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
 
   bool _coachHasAssignedTeam = false;
 
-  // Новый Staff Access — единственный источник истины для сотрудников,
-  // у которых уже существует staff_access. Legacy-профили используются
-  // только когда сервер явно сообщает has_access_rows=false.
-  final List<Map<String, dynamic>> _staffAccesses = <Map<String, dynamic>>[];
-  bool _staffStatusLoaded = false;
-  bool _staffHasRows = false;
-  String? _staffStatusError;
-
-  // Legacy press остаётся только для ещё не мигрированных аккаунтов.
-  final List<Map<String, dynamic>> _pressAssignments = <Map<String, dynamic>>[];
-
-  Map<String, dynamic> _clubAccessState = <String, dynamic>{};
-  String _email = '';
+  // Пресс-служба — дополнительный доступ, а не users.role.
+  // Поэтому читаем назначения отдельно и показываем отдельный Workspace.
+  final List<Map<String, dynamic>> _pressAssignments =
+      <Map<String, dynamic>>[];
 
   bool get _hasPressAccess => _pressAssignments.isNotEmpty;
 
@@ -101,12 +92,6 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
       _normalizedRole.contains('player') ||
       _normalizedRole.contains('игрок');
 
-  bool get _isParent =>
-      _normalizedRole == 'parent' ||
-      _normalizedRole == 'родитель' ||
-      _normalizedRole.contains('parent') ||
-      _normalizedRole.contains('родител');
-
   String get _fullName {
     final value = '$_firstName $_lastName'.trim();
     return value.isEmpty ? 'Пользователь' : value;
@@ -125,22 +110,16 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
       _firstName = await PrefUtils.getUserFirstName();
       _lastName = await PrefUtils.getUserLastName();
       _role = await PrefUtils.getRole();
+
       if (userId > 0) {
         await _loadUserFromServer(userId);
-        await _loadStaffAccesses(userId);
 
-        // Критично: если staff_access существует (даже revoked),
-        // старые press/team-trainer назначения НЕ могут вернуть доступ.
-        if (_staffStatusLoaded && !_staffHasRows) {
-          await _loadPressAssignments(userId);
+        // Нужен всем ролям: тренер/медик/ассистент может дополнительно
+        // иметь пресс-доступ, не теряя основной должности.
+        await _loadPressAssignments(userId);
 
-          if (_isCoach) {
-            await _loadAssignedTeamForCoach(userId);
-          }
-        }
-
-        if (_isClub) {
-          await _loadClubAccess(userId);
+        if (_isCoach) {
+          await _loadAssignedTeamForCoach(userId);
         }
       }
     } catch (e) {
@@ -149,6 +128,7 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
 
     if (!mounted) return;
 
+    // Единственный rebuild после полной загрузки Hub.
     setState(() {
       _loading = false;
     });
@@ -184,7 +164,6 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
       _lastName =
           '${user['last_name'] ?? user['lastName'] ?? _lastName}'.trim();
       _role = '${user['role'] ?? _role}'.trim();
-      _email = _cleanString(user['email'] ?? _email);
       _player = player;
 
       final club = root['club'] is Map
@@ -264,7 +243,8 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
 
       if (team != null) {
         final loadedTeamId = _asInt(team['id'] ?? team['team_id']);
-        final loadedTeamName = _cleanString(team['name'] ?? team['team_name']);
+        final loadedTeamName =
+            _cleanString(team['name'] ?? team['team_name']);
         final loadedClubName =
             _cleanString(team['club_name'] ?? team['clubName']);
         final loadedTeamLogo = _normalizeMediaUrl(
@@ -298,199 +278,6 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
     }
   }
 
-  Future<Map<String, dynamic>?> _postJson(
-    String url,
-    Map<String, dynamic> body,
-  ) async {
-    try {
-      final response = await http
-          .post(
-            Uri.parse(url),
-            headers: const <String, String>{
-              'Content-Type': 'application/json; charset=utf-8',
-              'Accept': 'application/json',
-            },
-            body: jsonEncode(body),
-          )
-          .timeout(const Duration(seconds: 15));
-
-      final decoded = jsonDecode(utf8.decode(response.bodyBytes));
-      if (decoded is Map) {
-        final result = Map<String, dynamic>.from(decoded);
-        result['_http_status'] = response.statusCode;
-        return result;
-      }
-    } catch (e) {
-      debugPrint('WorkspaceHub POST $url error: $e');
-    }
-    return null;
-  }
-
-  bool _asBool(dynamic value) {
-    if (value is bool) return value;
-    final v = '${value ?? ''}'.trim().toLowerCase();
-    return v == '1' || v == 'true' || v == 'yes';
-  }
-
-  List<Map<String, dynamic>> _extractStaffAccesses(dynamic data) {
-    dynamic raw = data;
-    if (data is Map) {
-      raw = data['accesses'] ??
-          data['staff_accesses'] ??
-          data['items'] ??
-          data['data'] ??
-          data['access'];
-
-      if (raw is Map) {
-        // data/access may itself wrap a list.
-        final nested = Map<String, dynamic>.from(raw);
-        final nestedList = nested['accesses'] ?? nested['items'];
-        if (nestedList is List) raw = nestedList;
-      }
-    }
-
-    if (raw is Map) {
-      return <Map<String, dynamic>>[Map<String, dynamic>.from(raw)];
-    }
-
-    if (raw is! List) return const <Map<String, dynamic>>[];
-
-    return raw
-        .whereType<Map>()
-        .map((e) => Map<String, dynamic>.from(e))
-        .toList(growable: false);
-  }
-
-  Future<void> _loadStaffAccesses(int userId) async {
-    _staffAccesses.clear();
-    _staffStatusLoaded = false;
-    _staffHasRows = false;
-    _staffStatusError = null;
-
-    final data = await _postJson(
-      '$_apiBase/staff_access/my_status.php',
-      <String, dynamic>{'user_id': userId},
-    );
-
-    if (data == null) {
-      _staffStatusError = 'Не удалось проверить Staff Access';
-      return;
-    }
-
-    if (data['success'] != true) {
-      _staffStatusError = _cleanString(data['message']).isNotEmpty
-          ? _cleanString(data['message'])
-          : 'Не удалось проверить Staff Access';
-      return;
-    }
-
-    _staffStatusLoaded = true;
-    final extracted = _extractStaffAccesses(data);
-    final declaredHasRows = _asBool(data['has_access_rows']);
-    _staffHasRows = declaredHasRows || extracted.isNotEmpty;
-
-    _staffAccesses
-      ..clear()
-      ..addAll(extracted);
-
-    // На случай старого my_status.php, который сообщает counts, но не список,
-    // пытаемся найти club_id в единственном access-объекте.
-    if (_staffHasRows && _staffAccesses.isEmpty && data['access'] is Map) {
-      _staffAccesses.add(
-        Map<String, dynamic>.from(data['access'] as Map),
-      );
-    }
-  }
-
-  Future<void> _loadClubAccess(int userId) async {
-    final data = await _postJson(
-      '$_apiBase/club_access/status.php',
-      <String, dynamic>{
-        'user_id': userId,
-        if (_email.isNotEmpty) 'email': _email,
-      },
-    );
-
-    if (data != null) {
-      _clubAccessState = data;
-    } else {
-      // Существующий/legacy клуб не блокируем из-за сетевой ошибки.
-      _clubAccessState = <String, dynamic>{};
-    }
-  }
-
-  bool get _clubRequiresKey {
-    if (!_isClub) return false;
-    if (_clubAccessState.isEmpty) return false;
-    if (_asBool(_clubAccessState['legacy']) ||
-        _asBool(_clubAccessState['is_legacy'])) {
-      return false;
-    }
-    return _asBool(_clubAccessState['requires_activation']);
-  }
-
-  bool get _clubBlocked {
-    final status = _cleanString(
-      _clubAccessState['application_status'] ??
-          _clubAccessState['status_code'] ??
-          _clubAccessState['state'],
-    ).toLowerCase();
-    return status == 'revoked' || status == 'rejected' || status == 'blocked';
-  }
-
-  Future<String?> _activateStaffKey(String key) async {
-    final userId = await PrefUtils.getUserId() ?? 0;
-    if (userId <= 0) return 'Не найден пользователь';
-
-    final data = await _postJson(
-      '$_apiBase/staff_access/activate.php',
-      <String, dynamic>{
-        'user_id': userId,
-        'staff_key': key.trim(),
-      },
-    );
-
-    if (data == null) return 'Сервер не ответил';
-    if (data['success'] != true) {
-      final message = _cleanString(data['message'] ?? data['error']);
-      return message.isEmpty ? 'Staff Key не принят' : message;
-    }
-
-    await _reloadAccesses();
-    return null;
-  }
-
-  Future<String?> _activateClubKey(String key) async {
-    final userId = await PrefUtils.getUserId() ?? 0;
-    if (userId <= 0) return 'Не найден пользователь';
-
-    final data = await _postJson(
-      '$_apiBase/club_access/activate.php',
-      <String, dynamic>{
-        'user_id': userId,
-        if (_email.isNotEmpty) 'email': _email,
-        'key': key.trim(),
-      },
-    );
-
-    if (data == null) return 'Сервер не ответил';
-    final ok = data['success'] == true ||
-        _cleanString(data['status']).toLowerCase() == 'success';
-    if (!ok) {
-      final message = _cleanString(data['message'] ?? data['error']);
-      return message.isEmpty ? 'Club Key не принят' : message;
-    }
-
-    await _reloadAccesses();
-    return null;
-  }
-
-  Future<void> _reloadAccesses() async {
-    if (!mounted) return;
-    setState(() => _loading = true);
-    await _load();
-  }
-
   Future<void> _loadPressAssignments(int userId) async {
     _pressAssignments.clear();
     if (userId <= 0) return;
@@ -508,7 +295,8 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
       if (node is Map) {
         final map = Map<String, dynamic>.from(node);
 
-        final looksLikePressAssignment = isPressValue(map['profile']) ||
+        final looksLikePressAssignment =
+            isPressValue(map['profile']) ||
             isPressValue(map['link_profile']) ||
             isPressValue(map['staff_role']) ||
             isPressValue(map['position_code']);
@@ -590,17 +378,19 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
     _coachHasAssignedTeam = false;
 
     try {
-      final response = await http.post(
-        Uri.parse(
-          '$_getTrainerTeamsUrl'
-          '?coach_id=$userId'
-          '&trainer_id=$userId',
-        ),
-        body: {
-          'coach_id': userId.toString(),
-          'trainer_id': userId.toString(),
-        },
-      ).timeout(const Duration(seconds: 12));
+      final response = await http
+          .post(
+            Uri.parse(
+              '$_getTrainerTeamsUrl'
+              '?coach_id=$userId'
+              '&trainer_id=$userId',
+            ),
+            body: {
+              'coach_id': userId.toString(),
+              'trainer_id': userId.toString(),
+            },
+          )
+          .timeout(const Duration(seconds: 12));
 
       final decoded = _tryDecode(response.body);
 
@@ -630,7 +420,9 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
         );
 
         final club = _cleanString(
-          item['club_name'] ?? item['clubName'] ?? item['club_title'],
+          item['club_name'] ??
+              item['clubName'] ??
+              item['club_title'],
         );
 
         _coachHasAssignedTeam = true;
@@ -761,173 +553,6 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
 
     final clean = raw.replaceFirst(RegExp(r'^/+'), '');
     return 'https://sportotekaapp.ru/$clean';
-  }
-
-  String _staffRoleCode(Map<String, dynamic> access) {
-    return _cleanString(
-      access['role_code'] ?? access['profile'] ?? access['role'],
-    ).toLowerCase();
-  }
-
-  String _staffRoleTitle(Map<String, dynamic> access) {
-    final serverTitle = _cleanString(access['role_title']);
-    if (serverTitle.isNotEmpty) return serverTitle;
-
-    switch (_staffRoleCode(access)) {
-      case 'main':
-        return 'Главный тренер';
-      case 'assistant':
-        return 'Ассистент';
-      case 'doctor':
-        return 'Медик';
-      case 'manager':
-        return 'Администратор';
-      case 'press_assistant':
-        return 'Пресс-служба';
-      default:
-        return 'Тренер';
-    }
-  }
-
-  String _staffCardTitle(Map<String, dynamic> access) {
-    switch (_staffRoleCode(access)) {
-      case 'main':
-        return 'Кабинет главного тренера';
-      case 'assistant':
-        return 'Кабинет ассистента';
-      case 'doctor':
-        return 'Кабинет медика';
-      case 'manager':
-        return 'Кабинет администратора';
-      case 'press_assistant':
-        return 'Пресс-служба';
-      default:
-        return 'Кабинет тренера';
-    }
-  }
-
-  String _staffStatus(Map<String, dynamic> access) =>
-      _cleanString(access['status']).toLowerCase();
-
-  bool _staffAccessActive(Map<String, dynamic> access) {
-    return _staffStatus(access) == 'active' &&
-        !_asBool(access['requires_activation']);
-  }
-
-  bool _staffAccessExpired(Map<String, dynamic> access) {
-    if (_asBool(access['expired'])) return true;
-    final raw = _cleanString(access['expires_at']).replaceAll(' ', 'T');
-    final expires = DateTime.tryParse(raw);
-    return expires != null && expires.isBefore(DateTime.now());
-  }
-
-  bool _staffAccessPending(Map<String, dynamic> access) {
-    if (_staffAccessRevoked(access) || _staffAccessExpired(access)) return false;
-    return _staffStatus(access) == 'pending' ||
-        _asBool(access['requires_activation']);
-  }
-
-  bool _staffAccessRevoked(Map<String, dynamic> access) =>
-      _staffStatus(access) == 'revoked';
-
-  List<Map<String, dynamic>> _staffTeams(Map<String, dynamic> access) {
-    final raw = access['teams'] ?? access['scopes'];
-    if (raw is! List) return const <Map<String, dynamic>>[];
-    return raw
-        .whereType<Map>()
-        .map((e) => Map<String, dynamic>.from(e))
-        .toList(growable: false);
-  }
-
-  String _staffSubtitle(Map<String, dynamic> access) {
-    final clubName = _cleanString(
-      access['club_name'] ?? access['clubName'],
-    );
-    final clubId = _asInt(access['club_id'] ?? access['clubId']);
-    final teams = _staffTeams(access);
-    final teamNames = teams
-        .map((e) => _cleanString(e['team_name'] ?? e['name']))
-        .where((e) => e.isNotEmpty)
-        .toList(growable: false);
-
-    final scope = teamNames.isEmpty
-        ? 'команды не назначены'
-        : teamNames.length <= 2
-            ? teamNames.join(', ')
-            : '${teamNames.take(2).join(', ')} +${teamNames.length - 2}';
-
-    final club = clubName.isNotEmpty
-        ? clubName
-        : clubId > 0
-            ? 'Клуб #$clubId'
-            : 'Клуб';
-
-    return '$club · $scope';
-  }
-
-  String? _staffImage(Map<String, dynamic> access) {
-    final teams = _staffTeams(access);
-    if (teams.isEmpty) return _clubLogoUrl ?? _teamLogoUrl ?? _userAvatarUrl;
-    return _normalizeMediaUrl(
-          teams.first['team_logo'] ??
-              teams.first['logo'] ??
-              teams.first['logo_url'],
-        ) ??
-        _clubLogoUrl ??
-        _teamLogoUrl ??
-        _userAvatarUrl;
-  }
-
-  Future<void> _openStaffWorkspace(Map<String, dynamic> access) async {
-    if (!_staffAccessActive(access)) return;
-
-    final userId = await PrefUtils.getUserId() ?? 0;
-    if (!mounted || userId <= 0) return;
-
-    final clubId = _asInt(access['club_id'] ?? access['clubId']);
-    final accessId = _asInt(access['id'] ?? access['staff_access_id']);
-    final roleCode = _staffRoleCode(access);
-    final teams = _staffTeams(access);
-    final first = teams.isNotEmpty ? teams.first : <String, dynamic>{};
-    final teamId = _asInt(first['team_id'] ?? first['id']);
-    final teamName = _cleanString(first['team_name'] ?? first['name']);
-    final clubName = _cleanString(access['club_name'] ?? _clubName);
-
-    if (roleCode == 'press_assistant') {
-      Get.to<void>(
-        () => CmrPressAssistantScreen(
-          userId: userId,
-          clubId: clubId,
-          teamId: teamId,
-          clubName: clubName,
-          teamName: teamName,
-          sportName: 'Футбол',
-          embedded: false,
-        ),
-      );
-      return;
-    }
-
-    if (teamId <= 0 && roleCode != 'manager') {
-      Get.snackbar(
-        _staffCardTitle(access),
-        'Клуб ещё не назначил вам команду.',
-        snackPosition: SnackPosition.BOTTOM,
-      );
-      return;
-    }
-
-    Get.to<void>(
-      () => const ClubWorkspaceScreen(),
-      arguments: <String, dynamic>{
-        'mode': 'trainer_workspace',
-        'trainer_id': userId,
-        if (clubId > 0) 'club_id': clubId,
-        if (teamId > 0) 'initial_team_id': teamId,
-        if (accessId > 0) 'staff_access_id': accessId,
-        'staff_role_code': roleCode,
-      },
-    );
   }
 
   Future<void> _openWorkspace() async {
@@ -1094,8 +719,6 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
   }
 
   _HubCardData? get _workspaceCard {
-    if (_staffHasRows) return null;
-
     if (_isPlayer) {
       return _HubCardData(
         title: 'Центр игрока',
@@ -1112,8 +735,10 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
       }
 
       final context = <String>[
-        if ((_clubName ?? '').trim().isNotEmpty) _clubName!.trim(),
-        if ((_teamName ?? '').trim().isNotEmpty) _teamName!.trim(),
+        if ((_clubName ?? '').trim().isNotEmpty)
+          _clubName!.trim(),
+        if ((_teamName ?? '').trim().isNotEmpty)
+          _teamName!.trim(),
       ].join(' · ');
 
       return _HubCardData(
@@ -1127,14 +752,23 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
     }
 
     if (_isClub) {
-      return null;
+      final club = (_clubName ?? '').trim();
+
+      return _HubCardData(
+        title: 'Клубный кабинет',
+        subtitle: club.isNotEmpty
+            ? '$club · команды, тренеры, состав и аналитика'
+            : 'Команды, тренеры, состав, календарь и аналитика',
+        imageUrl: _clubLogoUrl,
+        onTap: _openWorkspace,
+      );
     }
 
     return null;
   }
 
   _HubCardData? get _pressCard {
-    if (_staffHasRows || !_hasPressAccess) return null;
+    if (!_hasPressAccess) return null;
 
     final first = _pressAssignments.first;
 
@@ -1180,8 +814,10 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
 
   _HubCardData get _playerTeamCard {
     final context = <String>[
-      if ((_clubName ?? '').trim().isNotEmpty) _clubName!.trim(),
-      if ((_teamName ?? '').trim().isNotEmpty) _teamName!.trim(),
+      if ((_clubName ?? '').trim().isNotEmpty)
+        _clubName!.trim(),
+      if ((_teamName ?? '').trim().isNotEmpty)
+        _teamName!.trim(),
     ].join(' · ');
 
     return _HubCardData(
@@ -1199,129 +835,98 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
   }
 
   String get _choiceSubtitle {
-    if (_staffHasRows) {
-      return 'Рабочий доступ подтверждается здесь. Личный профиль доступен всегда.';
+    if (_hasPressAccess && _isCoach && _coachHasAssignedTeam) {
+      return 'Выберите кабинет тренера, пресс-службу или личный профиль.';
     }
-    if (_isParent) {
-      return 'Откройте родительский кабинет или добавьте доступ по Parent Key.';
+
+    if (_hasPressAccess && _isClub) {
+      return 'Выберите клубный кабинет, пресс-службу или личный профиль.';
     }
-    if (_isClub) {
-      return _clubRequiresKey
-          ? 'Введите Club Key прямо в карточке клубного кабинета.'
-          : 'Выберите клубный кабинет или личный профиль.';
+
+    if (_hasPressAccess && _isPlayer) {
+      return 'Выберите свой профиль, команду или пресс-службу.';
     }
+
     if (_hasPressAccess) {
-      return 'Выберите пресс-службу или личный профиль.';
+      return 'Выберите CMR пресс-службы или личный профиль.';
     }
+
     if (_isCoach && _coachHasAssignedTeam) {
       return 'Выберите «Мой кабинет тренера» или личный профиль.';
     }
+
     if (_isCoach) {
-      return 'Личный профиль доступен. Кабинет тренера появится после назначения команды.';
+      return 'Личный профиль доступен. Кабинет тренера появится '
+          'после назначения команды.';
     }
+
+    if (_isClub) {
+      return 'Выберите клубный кабинет или личный профиль.';
+    }
+
     if (_isPlayer) {
       return 'Выберите свой профиль или команду.';
     }
+
     return 'Продолжите работу в личном профиле.';
   }
 
   String get _accessHint {
-    if (_staffHasRows) {
-      return 'Staff Key не требуется для входа в аккаунт. Он подтверждает только рабочий доступ к конкретному клубному кабинету.';
-    }
-    if (_isParent) {
-      return 'Parent Key добавляет связь с ребёнком. Уже подключённые дети не мешают добавить второй или следующий ключ.';
-    }
-    if (_isClub && _clubRequiresKey) {
-      return 'Club Key активирует клубный кабинет. После активации поле ключа исчезнет и останется обычный рабочий баннер.';
-    }
     if (_hasPressAccess) {
-      return 'Legacy пресс-доступ используется только для аккаунтов, ещё не переведённых на Staff Access.';
+      return 'CMR пресс-службы ограничен назначенными командами: '
+          'сотрудник видит свою пресс-ленту и работает только со своими новостями.';
     }
+
+    if (_isClub) {
+      return 'Аккаунт клуба открывает клубное пространство '
+          'и личный профиль.';
+    }
+
     if (_isCoach && _coachHasAssignedTeam) {
-      return 'Тренеру доступна назначенная рабочая зона и личный профиль.';
+      return 'Тренеру доступна назначенная рабочая зона '
+          'и личный профиль.';
     }
+
+    if (_isCoach) {
+      return 'Кабинет тренера станет доступен '
+          'после назначения команды.';
+    }
+
     if (_isPlayer) {
-      return 'Центр игрока открывает личную социальную зону, а «Моя команда» — привязанную команду.';
+      return 'Центр игрока открывает личную социальную зону, '
+          'а «Моя команда» — только привязанную команду.';
     }
-    return 'Доступные разделы определяются ролью и разрешениями аккаунта.';
+
+    return 'Доступные разделы определяются ролью '
+        'и разрешениями аккаунта.';
   }
 
   String get _accountRoleLine {
-    if (_staffHasRows) {
-      final active = _staffAccesses.where(_staffAccessActive).length;
-      final pending = _staffAccesses.where(_staffAccessPending).length;
-      final revoked = _staffAccesses.where(_staffAccessRevoked).length;
-      final parts = <String>[
-        if (active > 0) '$active активн.',
-        if (pending > 0) '$pending ожидают ключ',
-        if (revoked > 0) '$revoked отозван',
-      ];
-      return parts.isEmpty ? 'Рабочий доступ' : parts.join(' · ');
-    }
-    if (_isParent) return 'Родитель';
     if (_isCoach && _coachHasAssignedTeam) {
       final team = (_teamName ?? '').trim();
-      return team.isNotEmpty ? 'Тренер · $team' : 'Тренер';
+      final base = team.isNotEmpty ? 'Тренер · $team' : 'Тренер';
+      return _hasPressAccess ? '$base · Пресс-служба' : base;
     }
-    if (_isCoach) return 'Тренер';
-    if (_isClub) return 'Клуб';
+
+    if (_isCoach) {
+      return _hasPressAccess ? 'Тренер · Пресс-служба' : 'Тренер';
+    }
+
+    if (_isClub) {
+      return _hasPressAccess ? 'Клуб · Пресс-служба' : 'Клуб';
+    }
+
     if (_isPlayer) {
       final team = (_teamName ?? '').trim();
-      return team.isNotEmpty ? 'Игрок · $team' : 'Игрок';
+      final base = team.isNotEmpty ? 'Игрок · $team' : 'Игрок';
+      return _hasPressAccess ? '$base · Пресс-служба' : base;
     }
+
     if (_hasPressAccess) return 'Пресс-служба';
-    return _role.trim().isEmpty ? 'Sportoteka' : _role.trim();
-  }
 
-  _AccessGateState _staffGateState(Map<String, dynamic> access) {
-    if (_staffAccessActive(access)) return _AccessGateState.active;
-    if (_staffAccessRevoked(access)) return _AccessGateState.revoked;
-    if (_staffAccessExpired(access)) return _AccessGateState.expired;
-    if (_staffAccessPending(access)) return _AccessGateState.pending;
-    return _AccessGateState.unavailable;
-  }
-
-  Widget _staffAccessCard(
-    Map<String, dynamic> access, {
-    required bool compact,
-  }) {
-    return _WorkspaceAccessGateCard(
-      title: _staffCardTitle(access),
-      subtitle: _staffSubtitle(access),
-      imageUrl: _staffImage(access),
-      compact: compact,
-      state: _staffGateState(access),
-      keyHint: 'Введите Staff Key',
-      onOpen: _staffAccessActive(access)
-          ? () => _openStaffWorkspace(access)
-          : null,
-      onActivate: _staffAccessPending(access) &&
-              !_staffAccessRevoked(access)
-          ? _activateStaffKey
-          : null,
-    );
-  }
-
-  Widget _clubAccessCard({required bool compact}) {
-    final club = (_clubName ?? '').trim();
-    final blocked = _clubBlocked;
-    return _WorkspaceAccessGateCard(
-      title: 'Клубный кабинет',
-      subtitle: club.isNotEmpty
-          ? '$club · команды, тренеры, состав и аналитика'
-          : 'Команды, тренеры, состав, календарь и аналитика',
-      imageUrl: _clubLogoUrl,
-      compact: compact,
-      state: blocked
-          ? _AccessGateState.revoked
-          : _clubRequiresKey
-              ? _AccessGateState.pending
-              : _AccessGateState.active,
-      keyHint: 'Введите Club Key',
-      onOpen: !blocked && !_clubRequiresKey ? _openWorkspace : null,
-      onActivate: !blocked && _clubRequiresKey ? _activateClubKey : null,
-    );
+    return _role.trim().isEmpty
+        ? 'Sportoteka'
+        : _role.trim();
   }
 
   @override
@@ -1364,9 +969,11 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
     final horizontal = desktop ? 28.0 : 18.0;
     final vertical = desktop ? 24.0 : 16.0;
 
-    final availableWidth = (size.width - horizontal * 2).clamp(320.0, 1180.0);
+    final availableWidth =
+        (size.width - horizontal * 2).clamp(320.0, 1180.0);
 
-    final availableHeight = (size.height - vertical * 2).clamp(320.0, 1000.0);
+    final availableHeight =
+        (size.height - vertical * 2).clamp(320.0, 1000.0);
 
     final leftWidth = desktop ? 360.0 : 300.0;
 
@@ -1492,55 +1099,45 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
       ),
       child: Center(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 540),
+          constraints: const BoxConstraints(
+            maxWidth: 540,
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
                 'Куда вы хотите войти?',
-                style: _title(desktop ? 27 : 25),
+                style: _title(
+                  desktop ? 27 : 25,
+                ),
               ),
               const SizedBox(height: 8),
-              Text(_choiceSubtitle, style: _body(13)),
-              SizedBox(height: desktop ? 32 : 26),
-
-              if (_staffStatusError != null) ...[
-                _WorkspaceAccessNotice(text: _staffStatusError!),
+              Text(
+                _choiceSubtitle,
+                style: _body(13),
+              ),
+              SizedBox(
+                height: desktop ? 32 : 26,
+              ),
+              if (workspace != null) ...[
+                _WorkspaceChoiceCard(
+                  data: workspace,
+                  compact: false,
+                ),
                 const SizedBox(height: 12),
               ],
-
-              if (_staffHasRows) ...[
-                for (final access in _staffAccesses) ...[
-                  _staffAccessCard(access, compact: false),
-                  const SizedBox(height: 12),
-                ],
-              ] else ...[
-                if (_isClub) ...[
-                  _clubAccessCard(compact: false),
-                  const SizedBox(height: 12),
-                ],
-                if (workspace != null) ...[
-                  _WorkspaceChoiceCard(data: workspace, compact: false),
-                  const SizedBox(height: 12),
-                ],
-                if (press != null) ...[
-                  _WorkspaceChoiceCard(data: press, compact: false),
-                  const SizedBox(height: 12),
-                ],
-              ],
-
-              if (_isParent) ...[
-                const WorkspaceParentAccessCard(compact: false),
+              if (press != null) ...[
+                _WorkspaceChoiceCard(
+                  data: press,
+                  compact: false,
+                ),
                 const SizedBox(height: 12),
               ],
-
               _WorkspaceChoiceCard(
                 data: _secondaryCard,
                 compact: false,
               ),
-
               if (_isCoach &&
-                  !_staffHasRows &&
                   !_coachHasAssignedTeam) ...[
                 const SizedBox(height: 14),
                 const _TrainerNoTeamNotice(),
@@ -1571,65 +1168,63 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
       color: _panel,
       child: Center(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 560),
+          constraints: const BoxConstraints(
+            maxWidth: 560,
+          ),
           child: CustomScrollView(
             physics: const BouncingScrollPhysics(),
             slivers: [
               SliverPadding(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+                padding: const EdgeInsets.fromLTRB(
+                  20,
+                  16,
+                  20,
+                  0,
+                ),
                 sliver: SliverToBoxAdapter(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      _buildBrand(compact: true),
+                      _buildBrand(
+                        compact: true,
+                      ),
                       const SizedBox(height: 34),
                       _buildAccountMini(),
                       const SizedBox(height: 32),
-                      Text('Куда вы хотите войти?', style: _title(25)),
+                      Text(
+                        'Куда вы хотите войти?',
+                        style: _title(25),
+                      ),
                       const SizedBox(height: 8),
-                      Text(_choiceSubtitle, style: _body(12.5)),
+                      Text(
+                        _choiceSubtitle,
+                        style: _body(12.5),
+                      ),
                       const SizedBox(height: 24),
-
-                      if (_staffStatusError != null) ...[
-                        _WorkspaceAccessNotice(text: _staffStatusError!),
+                      if (workspace != null) ...[
+                        _WorkspaceChoiceCard(
+                          data: workspace,
+                          compact: true,
+                        ),
                         const SizedBox(height: 10),
                       ],
-
-                      if (_staffHasRows) ...[
-                        for (final access in _staffAccesses) ...[
-                          _staffAccessCard(access, compact: true),
-                          const SizedBox(height: 10),
-                        ],
-                      ] else ...[
-                        if (_isClub) ...[
-                          _clubAccessCard(compact: true),
-                          const SizedBox(height: 10),
-                        ],
-                        if (workspace != null) ...[
-                          _WorkspaceChoiceCard(data: workspace, compact: true),
-                          const SizedBox(height: 10),
-                        ],
-                        if (press != null) ...[
-                          _WorkspaceChoiceCard(data: press, compact: true),
-                          const SizedBox(height: 10),
-                        ],
-                      ],
-
-                      if (_isParent) ...[
-                        const WorkspaceParentAccessCard(compact: true),
+                      if (press != null) ...[
+                        _WorkspaceChoiceCard(
+                          data: press,
+                          compact: true,
+                        ),
                         const SizedBox(height: 10),
                       ],
-
                       _WorkspaceChoiceCard(
                         data: _secondaryCard,
                         compact: true,
                       ),
-
                       if (_isCoach &&
-                          !_staffHasRows &&
                           !_coachHasAssignedTeam) ...[
                         const SizedBox(height: 12),
-                        const _TrainerNoTeamNotice(compact: true),
+                        const _TrainerNoTeamNotice(
+                          compact: true,
+                        ),
                       ],
                       const SizedBox(height: 22),
                       Text(
@@ -1652,14 +1247,21 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
                 child: Align(
                   alignment: Alignment.bottomCenter,
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 4),
+                    padding: const EdgeInsets.fromLTRB(
+                      20,
+                      0,
+                      20,
+                      4,
+                    ),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         _buildMobileLogoutButton(),
                         const SizedBox(height: 12),
-                        _buildFooter(mobile: true),
+                        _buildFooter(
+                          mobile: true,
+                        ),
                       ],
                     ),
                   ),
@@ -1832,7 +1434,9 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
           : EdgeInsets.zero,
       child: Text(
         '© Sportoteka · Все права защищены',
-        textAlign: mobile ? TextAlign.center : TextAlign.left,
+        textAlign: mobile
+            ? TextAlign.center
+            : TextAlign.left,
         style: AppTypography.custom(
           size: 10.3,
           weight: FontWeight.w400,
@@ -1861,368 +1465,6 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
       color: _secondary,
       height: 1.48,
       letterSpacing: 0,
-    );
-  }
-}
-
-enum _AccessGateState { active, pending, revoked, expired, unavailable }
-
-class _WorkspaceAccessGateCard extends StatefulWidget {
-  const _WorkspaceAccessGateCard({
-    required this.title,
-    required this.subtitle,
-    required this.compact,
-    required this.state,
-    this.imageUrl,
-    this.onOpen,
-    this.onActivate,
-    this.keyHint = 'Введите ключ доступа',
-  });
-
-  final String title;
-  final String subtitle;
-  final bool compact;
-  final _AccessGateState state;
-  final String? imageUrl;
-  final VoidCallback? onOpen;
-  final Future<String?> Function(String key)? onActivate;
-  final String keyHint;
-
-  @override
-  State<_WorkspaceAccessGateCard> createState() =>
-      _WorkspaceAccessGateCardState();
-}
-
-class _WorkspaceAccessGateCardState extends State<_WorkspaceAccessGateCard> {
-  final TextEditingController _keyC = TextEditingController();
-  bool _sending = false;
-  String? _error;
-
-  @override
-  void dispose() {
-    _keyC.dispose();
-    super.dispose();
-  }
-
-  Color get _statusColor {
-    switch (widget.state) {
-      case _AccessGateState.active:
-        return _WorkspaceHubScreenState._green;
-      case _AccessGateState.pending:
-        return const Color(0xFFF59E0B);
-      case _AccessGateState.revoked:
-        return const Color(0xFFD92D20);
-      case _AccessGateState.expired:
-        return const Color(0xFFF59E0B);
-      case _AccessGateState.unavailable:
-        return _WorkspaceHubScreenState._subtle;
-    }
-  }
-
-  String get _statusText {
-    switch (widget.state) {
-      case _AccessGateState.active:
-        return 'Доступ активен';
-      case _AccessGateState.pending:
-        return 'Ожидает ключ';
-      case _AccessGateState.revoked:
-        return 'Доступ отозван';
-      case _AccessGateState.expired:
-        return 'Срок ключа истёк';
-      case _AccessGateState.unavailable:
-        return 'Недоступно';
-    }
-  }
-
-  Future<void> _activate() async {
-    if (_sending || widget.onActivate == null) return;
-    final key = _keyC.text.trim();
-    if (key.isEmpty) {
-      setState(() => _error = widget.keyHint);
-      return;
-    }
-
-    setState(() {
-      _sending = true;
-      _error = null;
-    });
-
-    final error = await widget.onActivate!(key);
-    if (!mounted) return;
-
-    setState(() {
-      _sending = false;
-      _error = error;
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final compact = widget.compact;
-    final canOpen =
-        widget.state == _AccessGateState.active && widget.onOpen != null;
-    final canActivate =
-        widget.state == _AccessGateState.pending && widget.onActivate != null;
-
-    return Material(
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(compact ? 14 : 12),
-      child: InkWell(
-        onTap: canOpen ? widget.onOpen : null,
-        borderRadius: BorderRadius.circular(compact ? 14 : 12),
-        child: Container(
-          decoration: BoxDecoration(
-            color: compact
-                ? _WorkspaceHubScreenState._soft
-                : _WorkspaceHubScreenState._panel,
-            borderRadius: BorderRadius.circular(compact ? 14 : 12),
-            border: compact
-                ? null
-                : Border.all(
-                    color: _WorkspaceHubScreenState._divider,
-                    width: .8,
-                  ),
-          ),
-          padding: EdgeInsets.fromLTRB(
-            compact ? 13 : 16,
-            compact ? 13 : 15,
-            compact ? 12 : 15,
-            compact ? 13 : 15,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  if (!compact) ...[
-                    Container(
-                      width: 3,
-                      height: 64,
-                      decoration: BoxDecoration(
-                        color: _statusColor,
-                        borderRadius: BorderRadius.circular(99),
-                      ),
-                    ),
-                    const SizedBox(width: 15),
-                  ],
-                  _HubIdentityImage(
-                    imageUrl: widget.imageUrl,
-                    size: compact ? 50 : 56,
-                  ),
-                  SizedBox(width: compact ? 12 : 15),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                widget.title,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: AppTypography.custom(
-                                  size: compact ? 13.8 : 14.8,
-                                  weight: FontWeight.w600,
-                                  color: _WorkspaceHubScreenState._text,
-                                  height: 1.18,
-                                  letterSpacing: 0,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 7,
-                                vertical: 5,
-                              ),
-                              decoration: BoxDecoration(
-                                color: _statusColor.withOpacity(.10),
-                                borderRadius: BorderRadius.circular(999),
-                              ),
-                              child: Text(
-                                _statusText,
-                                style: AppTypography.custom(
-                                  size: 9.2,
-                                  weight: FontWeight.w600,
-                                  color: _statusColor,
-                                  height: 1,
-                                  letterSpacing: 0,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          widget.subtitle,
-                          maxLines: compact ? 3 : 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: AppTypography.custom(
-                            size: compact ? 11 : 11.6,
-                            weight: FontWeight.w400,
-                            color: _WorkspaceHubScreenState._secondary,
-                            height: 1.38,
-                            letterSpacing: 0,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (canOpen) ...[
-                    const SizedBox(width: 8),
-                    const Icon(
-                      Icons.chevron_right_rounded,
-                      color: _WorkspaceHubScreenState._greenDark,
-                      size: 20,
-                    ),
-                  ],
-                ],
-              ),
-              if (canActivate) ...[
-                const SizedBox(height: 13),
-                Container(
-                  height: 1,
-                  color: _WorkspaceHubScreenState._divider,
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _keyC,
-                        enabled: !_sending,
-                        textCapitalization: TextCapitalization.characters,
-                        autocorrect: false,
-                        enableSuggestions: false,
-                        onSubmitted: (_) => _activate(),
-                        decoration: InputDecoration(
-                          hintText: widget.keyHint,
-                          isDense: true,
-                          filled: true,
-                          fillColor: _WorkspaceHubScreenState._panel,
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 12,
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(9),
-                            borderSide: const BorderSide(
-                              color: _WorkspaceHubScreenState._divider,
-                            ),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(9),
-                            borderSide: const BorderSide(
-                              color: _WorkspaceHubScreenState._divider,
-                            ),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(9),
-                            borderSide: const BorderSide(
-                              color: _WorkspaceHubScreenState._green,
-                            ),
-                          ),
-                        ),
-                        style: AppTypography.custom(
-                          size: 11.4,
-                          weight: FontWeight.w600,
-                          color: _WorkspaceHubScreenState._text,
-                          height: 1.1,
-                          letterSpacing: .2,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    SizedBox(
-                      height: 42,
-                      child: FilledButton(
-                        onPressed: _sending ? null : _activate,
-                        style: FilledButton.styleFrom(
-                          elevation: 0,
-                          backgroundColor: _WorkspaceHubScreenState._green,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(9),
-                          ),
-                        ),
-                        child: _sending
-                            ? const SizedBox(
-                                width: 15,
-                                height: 15,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : const Text('Активировать'),
-                      ),
-                    ),
-                  ],
-                ),
-                if (_error != null && _error!.isNotEmpty) ...[
-                  const SizedBox(height: 7),
-                  Text(
-                    _error!,
-                    style: AppTypography.custom(
-                      size: 10.2,
-                      weight: FontWeight.w400,
-                      color: const Color(0xFFD92D20),
-                      height: 1.3,
-                      letterSpacing: 0,
-                    ),
-                  ),
-                ],
-              ],
-              if (widget.state == _AccessGateState.revoked ||
-                  widget.state == _AccessGateState.expired) ...[
-                const SizedBox(height: 11),
-                Container(height: 1, color: _WorkspaceHubScreenState._divider),
-                const SizedBox(height: 9),
-                Text(
-                  widget.state == _AccessGateState.revoked
-                      ? 'Кабинет закрыт. После перевыпуска нового ключа здесь автоматически появится поле ввода.'
-                      : 'Срок ключа истёк. Попросите клуб перевыпустить Staff Key — поле нового ключа появится здесь.',
-                  style: AppTypography.custom(
-                    size: 10.3,
-                    weight: FontWeight.w400,
-                    color: _WorkspaceHubScreenState._secondary,
-                    height: 1.35,
-                    letterSpacing: 0,
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _WorkspaceAccessNotice extends StatelessWidget {
-  const _WorkspaceAccessNotice({required this.text});
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFFBEB),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Text(
-        text,
-        style: AppTypography.custom(
-          size: 10.5,
-          weight: FontWeight.w500,
-          color: const Color(0xFF92400E),
-          height: 1.35,
-          letterSpacing: 0,
-        ),
-      ),
     );
   }
 }
@@ -2306,7 +1548,8 @@ class _WorkspaceChoiceCard extends StatelessWidget {
               Expanded(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment:
+                      CrossAxisAlignment.start,
                   children: [
                     Text(
                       data.title,
@@ -2315,7 +1558,8 @@ class _WorkspaceChoiceCard extends StatelessWidget {
                       style: AppTypography.custom(
                         size: compact ? 13.8 : 14.8,
                         weight: FontWeight.w600,
-                        color: _WorkspaceHubScreenState._text,
+                        color:
+                            _WorkspaceHubScreenState._text,
                         height: 1.18,
                         letterSpacing: 0,
                       ),
@@ -2328,7 +1572,8 @@ class _WorkspaceChoiceCard extends StatelessWidget {
                       style: AppTypography.custom(
                         size: compact ? 11 : 11.6,
                         weight: FontWeight.w400,
-                        color: _WorkspaceHubScreenState._secondary,
+                        color: _WorkspaceHubScreenState
+                            ._secondary,
                         height: 1.38,
                         letterSpacing: 0,
                       ),
@@ -2338,7 +1583,8 @@ class _WorkspaceChoiceCard extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               const _SportotekaDots(
-                color: _WorkspaceHubScreenState._greenDark,
+                color:
+                    _WorkspaceHubScreenState._greenDark,
                 compact: true,
               ),
             ],
@@ -2427,7 +1673,8 @@ class _TrainerNoTeamNotice extends StatelessWidget {
           const Padding(
             padding: EdgeInsets.only(top: 3),
             child: _SportotekaDots(
-              color: _WorkspaceHubScreenState._subtle,
+              color:
+                  _WorkspaceHubScreenState._subtle,
               compact: true,
             ),
           ),
@@ -2439,7 +1686,8 @@ class _TrainerNoTeamNotice extends StatelessWidget {
               style: AppTypography.custom(
                 size: 10.7,
                 weight: FontWeight.w400,
-                color: _WorkspaceHubScreenState._secondary,
+                color:
+                    _WorkspaceHubScreenState._secondary,
                 height: 1.4,
                 letterSpacing: 0,
               ),
@@ -2465,7 +1713,8 @@ class _SportotekaMark extends StatelessWidget {
       height: size,
       child: const Center(
         child: _SportotekaDots(
-          color: _WorkspaceHubScreenState._green,
+          color:
+              _WorkspaceHubScreenState._green,
           brand: true,
         ),
       ),
@@ -2494,7 +1743,8 @@ class _SportotekaDots extends StatelessWidget {
 
     return Row(
       mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.center,
+      crossAxisAlignment:
+          CrossAxisAlignment.center,
       children: <Widget>[
         _SportotekaDot(
           size: 3.4 * scale,

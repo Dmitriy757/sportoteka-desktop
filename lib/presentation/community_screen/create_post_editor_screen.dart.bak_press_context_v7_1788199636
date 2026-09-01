@@ -12,6 +12,7 @@ import 'package:sportoteka/core/utils/pref_utils.dart';
 import 'package:sportoteka/core/theme/app_typography.dart';
 import 'post_blocks.dart';
 
+
 class PostComposerController extends ChangeNotifier {
   Future<void> Function()? _submitHandler;
   bool _saving = false;
@@ -1010,7 +1011,7 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
         decoration: BoxDecoration(
           color: const Color(0xFFF7F9F8),
           borderRadius: BorderRadius.circular(9),
-        ),
+                  ),
         child: Row(
           children: [
             Container(
@@ -1094,22 +1095,12 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
     }
   }
 
-  void _applyPressContext(http.MultipartRequest req) {
-    if (!widget.pressMode) return;
-    req.fields['press_mode'] = '1';
-    req.fields['workspace'] = 'press';
-    req.fields['club_id'] = widget.clubId.toString();
-    req.fields['team_id'] = widget.teamId.toString();
-    req.fields['team'] = widget.teamName;
-    req.fields['author'] = widget.authorLabel;
-  }
-
   Future<void> _save() async {
     if (_saving) return;
-    final isSimpleMobile = (widget.forceSimpleComposer ||
-            MediaQuery.sizeOf(context).width < 600) &&
-        !_showAdvancedMobileEditor &&
-        !widget.pressMode;
+    final isSimpleMobile =
+        (widget.forceSimpleComposer || MediaQuery.sizeOf(context).width < 600) &&
+            !_showAdvancedMobileEditor &&
+            !widget.pressMode;
     if (isSimpleMobile) {
       _syncCaptionToBlocks();
     }
@@ -1147,11 +1138,9 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
         req.fields["user_id"] = _userId.toString();
         req.fields["title"] = title;
         req.fields["body"] = htmlBody;
-        _applyPressContext(req);
         if (widget.teamId > 0) req.fields["team_id"] = widget.teamId.toString();
         if (widget.clubId > 0) req.fields["club_id"] = widget.clubId.toString();
-        if (widget.teamName.trim().isNotEmpty)
-          req.fields["team"] = widget.teamName.trim();
+        if (widget.teamName.trim().isNotEmpty) req.fields["team"] = widget.teamName.trim();
         if (widget.pressMode) req.fields["press_mode"] = "1";
 
         if (_newCoverFile != null) {
@@ -1193,9 +1182,9 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
       if (widget.clubId > 0) req.fields["club_id"] = widget.clubId.toString();
       if (widget.pressMode) req.fields["press_mode"] = "1";
       req.fields["user_id"] = _userId.toString();
-      _applyPressContext(req);
-      req.fields["visibility"] =
-          widget.visibility.trim().isEmpty ? "feed" : widget.visibility.trim();
+      req.fields["visibility"] = widget.visibility.trim().isEmpty
+          ? "feed"
+          : widget.visibility.trim();
       req.fields["post_type"] = "post";
 
       if (_newCoverFile != null) {
@@ -1564,7 +1553,8 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
     if (color == const Color(0xFFD92D20)) {
       return const Color(0xFFFFF1F1);
     }
-    if (color == const Color(0xFF067A46) || color == const Color(0xFF00A750)) {
+    if (color == const Color(0xFF067A46) ||
+        color == const Color(0xFF00A750)) {
       return const Color(0xFFF3FAF6);
     }
     return const Color(0xFFF7F9F8);
@@ -1731,8 +1721,9 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
     return ListView(
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       padding: EdgeInsets.only(
-        bottom:
-            widget.hideChrome ? MediaQuery.paddingOf(context).bottom + 96 : 40,
+        bottom: widget.hideChrome
+            ? MediaQuery.paddingOf(context).bottom + 96
+            : 40,
       ),
       children: [
         mediaPreview(),
@@ -1979,12 +1970,11 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
                   children: [
                     IconButton(
                       tooltip: 'Закрыть',
-                      onPressed:
-                          _saving ? null : () => _finishEditor(saved: false),
+                      onPressed: _saving
+                          ? null
+                          : () => _finishEditor(saved: false),
                       icon: Icon(
-                        isPhone
-                            ? Icons.arrow_back_ios_new_rounded
-                            : Icons.close_rounded,
+                        isPhone ? Icons.arrow_back_ios_new_rounded : Icons.close_rounded,
                         size: isPhone ? 19 : 17,
                         color: const Color(0xFF0B0F14),
                       ),
@@ -1995,7 +1985,9 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
                     ],
                     Expanded(
                       child: Text(
-                        widget.isEdit ? 'Редактирование' : 'Новая публикация',
+                        widget.isEdit
+                            ? 'Редактирование'
+                            : 'Новая публикация',
                         textAlign: isPhone ? TextAlign.center : TextAlign.start,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -2074,6 +2066,7 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
         ),
       );
     }
+
 
     return Theme(
       data: baseTheme.copyWith(
@@ -2189,7 +2182,9 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
         dotColor: _title.text.trim().isNotEmpty
             ? const Color(0xFF00A750)
             : const Color(0xFF8A9099),
-        statusText: _title.text.trim().isNotEmpty ? 'Готово' : 'Не заполнено',
+        statusText: _title.text.trim().isNotEmpty
+            ? 'Готово'
+            : 'Не заполнено',
         child: TextField(
           controller: _title,
           onChanged: (_) => setState(() {}),
@@ -2243,7 +2238,8 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
                       const SizedBox(width: 9),
                       Expanded(
                         child: Text(
-                          _newCoverFile != null || _coverUrl.trim().isNotEmpty
+                          _newCoverFile != null ||
+                                  _coverUrl.trim().isNotEmpty
                               ? 'Заменить обложку'
                               : 'Выбрать обложку',
                           style: _editorText(
@@ -2256,7 +2252,8 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
                       if (_newCoverFile != null)
                         IconButton(
                           tooltip: 'Убрать',
-                          onPressed: () => setState(() => _newCoverFile = null),
+                          onPressed: () =>
+                              setState(() => _newCoverFile = null),
                           icon: const Icon(
                             Icons.close_rounded,
                             size: 16,
@@ -2326,7 +2323,9 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
-                    _showBlockLibrary ? Icons.close_rounded : Icons.add_rounded,
+                    _showBlockLibrary
+                        ? Icons.close_rounded
+                        : Icons.add_rounded,
                     size: 15,
                     color: const Color(0xFF067A46),
                   ),
@@ -2444,7 +2443,8 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
                           ],
                         ),
                         const SizedBox(height: 7),
-                        if (b is TextBlock) _buildTextBlockPreview(b, i),
+                        if (b is TextBlock)
+                          _buildTextBlockPreview(b, i),
                         if (b is ImageBlock)
                           ClipRRect(
                             borderRadius: BorderRadius.circular(9),
@@ -2453,7 +2453,8 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
                               child: Image.network(
                                 b.url,
                                 fit: BoxFit.contain,
-                                errorBuilder: (_, __, ___) => Container(
+                                errorBuilder: (_, __, ___) =>
+                                    Container(
                                   color: const Color(0xFFEFF2F0),
                                   child: const Center(
                                     child: Icon(
@@ -2477,7 +2478,8 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
                                 borderRadius: BorderRadius.circular(9),
                               ),
                               child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                                crossAxisAlignment:
+                                    CrossAxisAlignment.start,
                                 children: [
                                   Row(
                                     children: [
@@ -2492,7 +2494,8 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
                                         style: _editorText(
                                           10.2,
                                           weight: FontWeight.w600,
-                                          color: const Color(0xFF0B0F14),
+                                          color:
+                                              const Color(0xFF0B0F14),
                                         ),
                                       ),
                                     ],
@@ -2504,7 +2507,8 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
                                       style: _editorText(
                                         10.8,
                                         weight: FontWeight.w600,
-                                        color: const Color(0xFF0B0F14),
+                                        color:
+                                            const Color(0xFF0B0F14),
                                       ),
                                     ),
                                   ],
@@ -2518,9 +2522,11 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
                                       style: _editorText(
                                         9.6,
                                         weight: FontWeight.w500,
-                                        color: const Color(0xFF067A46),
+                                        color:
+                                            const Color(0xFF067A46),
                                       ).copyWith(
-                                        decoration: TextDecoration.underline,
+                                        decoration:
+                                            TextDecoration.underline,
                                       ),
                                     ),
                                   ),
@@ -2528,7 +2534,8 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
                               ),
                             ),
                           ),
-                        if (b is VideoBlock) _buildVideoPreview(b, i),
+                        if (b is VideoBlock)
+                          _buildVideoPreview(b, i),
                       ],
                     ),
                   );
@@ -2629,6 +2636,7 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
       ),
     );
   }
+
 
   Widget _blockAction(
     IconData icon,
