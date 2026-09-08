@@ -4,12 +4,16 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui';
+import 'dart:typed_data';
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'package:sportoteka/core/theme/app_typography.dart';
 import 'package:sportoteka/core/subscription/club_subscription_policy.dart';
@@ -90,7 +94,134 @@ enum ClubSection {
 
 enum _WorkspaceDockSize { compact, normal, large }
 
-enum _WorkspaceWallpaperStyle { sportoteka, clean, club, pitch, graphite }
+enum _WorkspaceWallpaperStyle { sportoteka, clean, club, pitch, graphite, custom }
+
+enum _WorkspaceDesktopUserItemKind { folder, document, plan }
+
+enum _WorkspaceDesktopClipboardMode { copy, cut }
+
+enum _WorkspaceDesktopBackgroundAction {
+  createFolder,
+  addDocument,
+  addPlan,
+  paste,
+  refresh,
+  settings,
+}
+
+enum _WorkspaceDesktopItemAction {
+  open,
+  rename,
+  addDocument,
+  addPlan,
+  pasteInside,
+  copy,
+  cut,
+  delete,
+}
+
+class _WorkspaceDesktopUserItem {
+  final String id;
+  final _WorkspaceDesktopUserItemKind kind;
+  String name;
+  Offset position;
+  String? parentFolderId;
+  String? filePath;
+  String? sourceId;
+  Map<String, dynamic>? payload;
+
+  _WorkspaceDesktopUserItem({
+    required this.id,
+    required this.kind,
+    required this.name,
+    required this.position,
+    this.parentFolderId,
+    this.filePath,
+    this.sourceId,
+    this.payload,
+  });
+
+  _WorkspaceDesktopUserItem duplicate({
+    required String id,
+    String? name,
+    Offset? position,
+    String? parentFolderId,
+  }) {
+    return _WorkspaceDesktopUserItem(
+      id: id,
+      kind: kind,
+      name: name ?? this.name,
+      position: position ?? this.position,
+      parentFolderId: parentFolderId,
+      filePath: filePath,
+      sourceId: sourceId,
+      payload: payload == null ? null : Map<String, dynamic>.from(payload!),
+    );
+  }
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'id': id,
+        'kind': kind.name,
+        'name': name,
+        'x': position.dx,
+        'y': position.dy,
+        if (parentFolderId != null) 'parent_folder_id': parentFolderId,
+        if (filePath != null) 'file_path': filePath,
+        if (sourceId != null) 'source_id': sourceId,
+        if (payload != null) 'payload': payload,
+      };
+
+  static _WorkspaceDesktopUserItem? fromJson(Map<String, dynamic> json) {
+    final id = '${json['id'] ?? ''}'.trim();
+    final name = '${json['name'] ?? ''}'.trim();
+    final rawKind = '${json['kind'] ?? ''}'.trim();
+    if (id.isEmpty || name.isEmpty || rawKind.isEmpty) return null;
+
+    _WorkspaceDesktopUserItemKind? kind;
+    for (final value in _WorkspaceDesktopUserItemKind.values) {
+      if (value.name == rawKind) {
+        kind = value;
+        break;
+      }
+    }
+    if (kind == null) return null;
+
+    double number(dynamic value) {
+      if (value is num) return value.toDouble();
+      return double.tryParse('${value ?? ''}') ?? 0;
+    }
+
+    final rawPayload = json['payload'];
+    return _WorkspaceDesktopUserItem(
+      id: id,
+      kind: kind,
+      name: name,
+      position: Offset(number(json['x']), number(json['y'])),
+      parentFolderId: '${json['parent_folder_id'] ?? ''}'.trim().isEmpty
+          ? null
+          : '${json['parent_folder_id']}'.trim(),
+      filePath: '${json['file_path'] ?? ''}'.trim().isEmpty
+          ? null
+          : '${json['file_path']}'.trim(),
+      sourceId: '${json['source_id'] ?? ''}'.trim().isEmpty
+          ? null
+          : '${json['source_id']}'.trim(),
+      payload: rawPayload is Map
+          ? Map<String, dynamic>.from(rawPayload)
+          : null,
+    );
+  }
+}
+
+class _WorkspaceDesktopClipboardEntry {
+  final String itemId;
+  final _WorkspaceDesktopClipboardMode mode;
+
+  const _WorkspaceDesktopClipboardEntry({
+    required this.itemId,
+    required this.mode,
+  });
+}
 
 class _WorkspaceWindowState {
   final String id;
@@ -260,6 +391,7 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
   _WorkspaceDockSize _workspaceDockSize = _WorkspaceDockSize.normal;
   _WorkspaceWallpaperStyle _workspaceWallpaperStyle =
       _WorkspaceWallpaperStyle.sportoteka;
+  Uint8List? _workspaceCustomWallpaperBytes;
   final List<_WorkspaceWindowState> _openWorkspaceWindows =
       <_WorkspaceWindowState>[];
   int _workspaceWindowZCounter = 0;
@@ -300,6 +432,12 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
 
   final Map<ClubSection, Offset> _desktopIconPositions =
       <ClubSection, Offset>{};
+
+  final List<_WorkspaceDesktopUserItem> _workspaceDesktopUserItems =
+      <_WorkspaceDesktopUserItem>[];
+  _WorkspaceDesktopClipboardEntry? _workspaceDesktopClipboard;
+  int _workspaceDesktopUserItemCounter = 0;
+  int _workspaceDesktopLoadedClubId = 0;
 
   late final AnimationController _introController;
   bool _introStarted = true;
@@ -480,6 +618,7 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
     if (!trainerAssignedMode && clubId <= 0) clubId = currentUserId;
 
     await _loadAll(initial: true);
+    await _loadWorkspaceDesktopUserItems();
 
     // Для клуба стартовый экран — выбор команд, а не Спортотека OS.
     // Тренерский кабинет сохраняет персональный Overview.
@@ -1151,14 +1290,7 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
       subscriptionPlanCode = '';
       await _safeLoad(_loadClubProfile);
       await _safeLoad(_loadSubscriptionPlan);
-    }
-
-    if (trainerClubChanged) {
-      // Новый клуб = новый владелец подписки.
-      hasActiveSubscription = false;
-      subscriptionPlanCode = '';
-      await _safeLoad(_loadClubProfile);
-      await _safeLoad(_loadSubscriptionPlan);
+      await _loadWorkspaceDesktopUserItems(force: true);
     }
 
     if (id > 0) {
@@ -2186,7 +2318,14 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
 
   void _openFullChat() {
     final userId = currentUserId > 0 ? currentUserId : clubId;
-    Get.to(() => ChatScreen(userId: userId));
+    Get.to(() => ChatScreen(
+          userId: userId,
+          clubMode: true,
+          clubId: clubId,
+          teamId: selectedTeamId,
+          clubName: clubName,
+          teamName: selectedTeamName,
+        ));
   }
 
   void _openFullVideoLessons() {
@@ -2666,13 +2805,1147 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
     setState(() {
       _desktopIconPositions[section] = Offset(
         position.dx
-            .clamp(12.0, math.max(12.0, desktopSize.width - 112))
+            .clamp(12.0, math.max(12.0, desktopSize.width - 96))
             .toDouble(),
         position.dy
-            .clamp(12.0, math.max(12.0, desktopSize.height - 190))
+            .clamp(12.0, math.max(12.0, desktopSize.height - 178))
             .toDouble(),
       );
     });
+  }
+
+  String _nextWorkspaceDesktopItemId() {
+    _workspaceDesktopUserItemCounter++;
+    return 'desktop_${DateTime.now().microsecondsSinceEpoch}_$_workspaceDesktopUserItemCounter';
+  }
+
+  Offset _clampWorkspaceDesktopUserItemPosition(
+    Offset position,
+    Size desktopSize,
+  ) {
+    return Offset(
+      position.dx
+          .clamp(10.0, math.max(10.0, desktopSize.width - 96))
+          .toDouble(),
+      position.dy
+          .clamp(10.0, math.max(10.0, desktopSize.height - 174))
+          .toDouble(),
+    );
+  }
+
+  void _setWorkspaceDesktopUserItemPosition(
+    _WorkspaceDesktopUserItem item,
+    Offset position,
+    Size desktopSize,
+  ) {
+    setState(() {
+      item.position = _clampWorkspaceDesktopUserItemPosition(
+        position,
+        desktopSize,
+      );
+    });
+    unawaited(_saveWorkspaceDesktopUserItems());
+  }
+
+  Future<File?> _workspaceDesktopStateFile() async {
+    if (kIsWeb) return null;
+    try {
+      final support = await getApplicationSupportDirectory();
+      final dir = Directory(
+        '${support.path}${Platform.pathSeparator}sportoteka_workspace',
+      );
+      if (!await dir.exists()) await dir.create(recursive: true);
+      final owner = clubId > 0 ? clubId : currentUserId;
+      if (owner <= 0) return null;
+      return File(
+        '${dir.path}${Platform.pathSeparator}desktop_$owner.json',
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<Directory?> _workspaceDesktopDocumentsDirectory() async {
+    if (kIsWeb) return null;
+    try {
+      final support = await getApplicationSupportDirectory();
+      final owner = clubId > 0 ? clubId : currentUserId;
+      if (owner <= 0) return null;
+      final dir = Directory(
+        '${support.path}${Platform.pathSeparator}sportoteka_workspace'
+        '${Platform.pathSeparator}desktop_files_$owner',
+      );
+      if (!await dir.exists()) await dir.create(recursive: true);
+      return dir;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _loadWorkspaceDesktopUserItems({bool force = false}) async {
+    final owner = clubId > 0 ? clubId : currentUserId;
+    if (owner <= 0) return;
+    if (!force && _workspaceDesktopLoadedClubId == owner) return;
+
+    final file = await _workspaceDesktopStateFile();
+    final loaded = <_WorkspaceDesktopUserItem>[];
+    if (file != null && await file.exists()) {
+      try {
+        final decoded = jsonDecode(await file.readAsString());
+        final rawItems = decoded is Map ? decoded['items'] : null;
+        if (rawItems is List) {
+          for (final raw in rawItems.whereType<Map>()) {
+            final item = _WorkspaceDesktopUserItem.fromJson(
+              Map<String, dynamic>.from(raw),
+            );
+            if (item != null) loaded.add(item);
+          }
+        }
+      } catch (error) {
+        debugPrint('Workspace desktop state load error: $error');
+      }
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _workspaceDesktopLoadedClubId = owner;
+      _workspaceDesktopUserItems
+        ..clear()
+        ..addAll(loaded);
+      _workspaceDesktopClipboard = null;
+    });
+  }
+
+  Future<void> _saveWorkspaceDesktopUserItems() async {
+    if (kIsWeb) return;
+    final file = await _workspaceDesktopStateFile();
+    if (file == null) return;
+    try {
+      await file.writeAsString(
+        jsonEncode(<String, dynamic>{
+          'version': 1,
+          'club_id': clubId,
+          'items': _workspaceDesktopUserItems
+              .map((item) => item.toJson())
+              .toList(growable: false),
+        }),
+        flush: true,
+      );
+    } catch (error) {
+      debugPrint('Workspace desktop state save error: $error');
+    }
+  }
+
+  RelativeRect _workspaceDesktopMenuPosition(Offset globalPosition) {
+    final overlay = Overlay.of(context).context.findRenderObject();
+    if (overlay is! RenderBox) {
+      return RelativeRect.fromLTRB(
+        globalPosition.dx,
+        globalPosition.dy,
+        0,
+        0,
+      );
+    }
+    final local = overlay.globalToLocal(globalPosition);
+    return RelativeRect.fromLTRB(
+      local.dx,
+      local.dy,
+      math.max(0.0, overlay.size.width - local.dx),
+      math.max(0.0, overlay.size.height - local.dy),
+    );
+  }
+
+  PopupMenuItem<T> _workspaceDesktopMenuItem<T>(
+    T value,
+    IconData icon,
+    String title, {
+    bool enabled = true,
+    Color? color,
+  }) {
+    return PopupMenuItem<T>(
+      value: value,
+      enabled: enabled,
+      height: 42,
+      child: Row(
+        children: [
+          Icon(icon, size: 19, color: color ?? _C.railText),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              title,
+              style: TextStyle(
+                color: enabled ? (color ?? _C.text) : _C.lightMuted,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showWorkspaceDesktopBackgroundMenu(
+    TapDownDetails details,
+    Size desktopSize,
+  ) async {
+    final action = await showMenu<_WorkspaceDesktopBackgroundAction>(
+      context: context,
+      position: _workspaceDesktopMenuPosition(details.globalPosition),
+      color: Colors.white.withOpacity(.99),
+      elevation: 14,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      items: <PopupMenuEntry<_WorkspaceDesktopBackgroundAction>>[
+        _workspaceDesktopMenuItem(
+          _WorkspaceDesktopBackgroundAction.createFolder,
+          Icons.create_new_folder_rounded,
+          'Создать папку',
+        ),
+        _workspaceDesktopMenuItem(
+          _WorkspaceDesktopBackgroundAction.addDocument,
+          Icons.note_add_rounded,
+          'Добавить документ с компьютера',
+        ),
+        _workspaceDesktopMenuItem(
+          _WorkspaceDesktopBackgroundAction.addPlan,
+          Icons.folder_copy_rounded,
+          'Добавить план-конспект',
+        ),
+        const PopupMenuDivider(height: 8),
+        _workspaceDesktopMenuItem(
+          _WorkspaceDesktopBackgroundAction.paste,
+          Icons.content_paste_rounded,
+          'Вставить',
+          enabled: _workspaceDesktopClipboard != null,
+        ),
+        const PopupMenuDivider(height: 8),
+        _workspaceDesktopMenuItem(
+          _WorkspaceDesktopBackgroundAction.refresh,
+          Icons.refresh_rounded,
+          'Обновить',
+        ),
+        _workspaceDesktopMenuItem(
+          _WorkspaceDesktopBackgroundAction.settings,
+          Icons.tune_rounded,
+          'Настройки рабочего стола',
+        ),
+      ],
+    );
+    if (action == null || !mounted) return;
+
+    final position = _clampWorkspaceDesktopUserItemPosition(
+      details.localPosition,
+      desktopSize,
+    );
+
+    switch (action) {
+      case _WorkspaceDesktopBackgroundAction.createFolder:
+        await _createWorkspaceDesktopFolder(
+          position: position,
+          desktopSize: desktopSize,
+        );
+        return;
+      case _WorkspaceDesktopBackgroundAction.addDocument:
+        await _addWorkspaceDesktopDocuments(
+          desktopPosition: position,
+          desktopSize: desktopSize,
+        );
+        return;
+      case _WorkspaceDesktopBackgroundAction.addPlan:
+        await _addWorkspaceDesktopPlan(
+          desktopPosition: position,
+          desktopSize: desktopSize,
+        );
+        return;
+      case _WorkspaceDesktopBackgroundAction.paste:
+        await _pasteWorkspaceDesktopClipboard(
+          desktopPosition: position,
+          desktopSize: desktopSize,
+        );
+        return;
+      case _WorkspaceDesktopBackgroundAction.refresh:
+        await _loadAll();
+        await _loadWorkspaceDesktopUserItems(force: true);
+        return;
+      case _WorkspaceDesktopBackgroundAction.settings:
+        _openWorkspaceSettings();
+        return;
+    }
+  }
+
+  Future<void> _showWorkspaceFolderBackgroundMenu(
+    Offset globalPosition,
+    _WorkspaceDesktopUserItem folder,
+  ) async {
+    final action = await showMenu<_WorkspaceDesktopBackgroundAction>(
+      context: context,
+      position: _workspaceDesktopMenuPosition(globalPosition),
+      color: Colors.white.withOpacity(.99),
+      elevation: 14,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      items: <PopupMenuEntry<_WorkspaceDesktopBackgroundAction>>[
+        _workspaceDesktopMenuItem(
+          _WorkspaceDesktopBackgroundAction.createFolder,
+          Icons.create_new_folder_rounded,
+          'Создать папку внутри',
+        ),
+        _workspaceDesktopMenuItem(
+          _WorkspaceDesktopBackgroundAction.addDocument,
+          Icons.note_add_rounded,
+          'Добавить документ',
+        ),
+        _workspaceDesktopMenuItem(
+          _WorkspaceDesktopBackgroundAction.addPlan,
+          Icons.folder_copy_rounded,
+          'Добавить план-конспект',
+        ),
+        const PopupMenuDivider(height: 8),
+        _workspaceDesktopMenuItem(
+          _WorkspaceDesktopBackgroundAction.paste,
+          Icons.content_paste_rounded,
+          'Вставить в папку',
+          enabled: _workspaceDesktopClipboard != null,
+        ),
+      ],
+    );
+    if (action == null || !mounted) return;
+
+    switch (action) {
+      case _WorkspaceDesktopBackgroundAction.createFolder:
+        await _createWorkspaceDesktopFolder(
+          position: Offset.zero,
+          parentFolderId: folder.id,
+        );
+        return;
+      case _WorkspaceDesktopBackgroundAction.addDocument:
+        await _addWorkspaceDesktopDocuments(parentFolderId: folder.id);
+        return;
+      case _WorkspaceDesktopBackgroundAction.addPlan:
+        await _addWorkspaceDesktopPlan(parentFolderId: folder.id);
+        return;
+      case _WorkspaceDesktopBackgroundAction.paste:
+        await _pasteWorkspaceDesktopClipboard(parentFolderId: folder.id);
+        return;
+      case _WorkspaceDesktopBackgroundAction.refresh:
+      case _WorkspaceDesktopBackgroundAction.settings:
+        return;
+    }
+  }
+
+  Future<void> _showWorkspaceDesktopItemMenu(
+    _WorkspaceDesktopUserItem item,
+    Offset globalPosition,
+    Size desktopSize,
+  ) async {
+    final isFolder = item.kind == _WorkspaceDesktopUserItemKind.folder;
+    final entries = <PopupMenuEntry<_WorkspaceDesktopItemAction>>[
+      _workspaceDesktopMenuItem(
+        _WorkspaceDesktopItemAction.open,
+        isFolder ? Icons.folder_open_rounded : Icons.open_in_new_rounded,
+        'Открыть',
+      ),
+      _workspaceDesktopMenuItem(
+        _WorkspaceDesktopItemAction.rename,
+        Icons.drive_file_rename_outline_rounded,
+        'Переименовать',
+      ),
+    ];
+    if (isFolder) {
+      entries.addAll([
+        const PopupMenuDivider(height: 8),
+        _workspaceDesktopMenuItem(
+          _WorkspaceDesktopItemAction.addDocument,
+          Icons.note_add_rounded,
+          'Добавить документ в папку',
+        ),
+        _workspaceDesktopMenuItem(
+          _WorkspaceDesktopItemAction.addPlan,
+          Icons.folder_copy_rounded,
+          'Добавить план-конспект',
+        ),
+        _workspaceDesktopMenuItem(
+          _WorkspaceDesktopItemAction.pasteInside,
+          Icons.content_paste_rounded,
+          'Вставить в папку',
+          enabled: _workspaceDesktopClipboard != null,
+        ),
+      ]);
+    }
+    entries.addAll([
+      const PopupMenuDivider(height: 8),
+      _workspaceDesktopMenuItem(
+        _WorkspaceDesktopItemAction.copy,
+        Icons.content_copy_rounded,
+        'Копировать',
+      ),
+      _workspaceDesktopMenuItem(
+        _WorkspaceDesktopItemAction.cut,
+        Icons.content_cut_rounded,
+        'Вырезать',
+      ),
+      const PopupMenuDivider(height: 8),
+      _workspaceDesktopMenuItem(
+        _WorkspaceDesktopItemAction.delete,
+        Icons.delete_outline_rounded,
+        'Удалить',
+        color: _C.red,
+      ),
+    ]);
+
+    final action = await showMenu<_WorkspaceDesktopItemAction>(
+      context: context,
+      position: _workspaceDesktopMenuPosition(globalPosition),
+      color: Colors.white.withOpacity(.99),
+      elevation: 14,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      items: entries,
+    );
+    if (action == null || !mounted) return;
+
+    switch (action) {
+      case _WorkspaceDesktopItemAction.open:
+        await _openWorkspaceDesktopUserItem(item, desktopSize);
+        return;
+      case _WorkspaceDesktopItemAction.rename:
+        await _renameWorkspaceDesktopUserItem(item);
+        return;
+      case _WorkspaceDesktopItemAction.addDocument:
+        await _addWorkspaceDesktopDocuments(parentFolderId: item.id);
+        return;
+      case _WorkspaceDesktopItemAction.addPlan:
+        await _addWorkspaceDesktopPlan(parentFolderId: item.id);
+        return;
+      case _WorkspaceDesktopItemAction.pasteInside:
+        await _pasteWorkspaceDesktopClipboard(parentFolderId: item.id);
+        return;
+      case _WorkspaceDesktopItemAction.copy:
+        setState(() {
+          _workspaceDesktopClipboard = _WorkspaceDesktopClipboardEntry(
+            itemId: item.id,
+            mode: _WorkspaceDesktopClipboardMode.copy,
+          );
+        });
+        return;
+      case _WorkspaceDesktopItemAction.cut:
+        setState(() {
+          _workspaceDesktopClipboard = _WorkspaceDesktopClipboardEntry(
+            itemId: item.id,
+            mode: _WorkspaceDesktopClipboardMode.cut,
+          );
+        });
+        return;
+      case _WorkspaceDesktopItemAction.delete:
+        await _deleteWorkspaceDesktopUserItem(item);
+        return;
+    }
+  }
+
+  Future<String?> _promptWorkspaceDesktopName({
+    required String title,
+    required String initialValue,
+  }) async {
+    final controller = TextEditingController(text: initialValue);
+    final result = await showDialog<String>(
+      context: context,
+      barrierColor: Colors.black.withOpacity(.20),
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: Text(title),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLength: 80,
+          onSubmitted: (value) => Navigator.of(dialogContext).pop(value.trim()),
+          decoration: InputDecoration(
+            hintText: 'Название',
+            filled: true,
+            fillColor: _C.railPanel,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(
+              controller.text.trim(),
+            ),
+            style: FilledButton.styleFrom(backgroundColor: _C.primaryGreen),
+            child: const Text('Сохранить'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    final clean = result?.trim() ?? '';
+    return clean.isEmpty ? null : clean;
+  }
+
+  String _uniqueWorkspaceDesktopName(String base, String? parentFolderId) {
+    final cleanBase = base.trim().isEmpty ? 'Без названия' : base.trim();
+    final existing = _workspaceDesktopUserItems
+        .where((item) => item.parentFolderId == parentFolderId)
+        .map((item) => item.name.toLowerCase())
+        .toSet();
+    if (!existing.contains(cleanBase.toLowerCase())) return cleanBase;
+
+    var index = 2;
+    while (existing.contains('$cleanBase $index'.toLowerCase())) {
+      index++;
+    }
+    return '$cleanBase $index';
+  }
+
+  Future<void> _createWorkspaceDesktopFolder({
+    required Offset position,
+    String? parentFolderId,
+    Size? desktopSize,
+  }) async {
+    final name = await _promptWorkspaceDesktopName(
+      title: 'Новая папка',
+      initialValue: 'Новая папка',
+    );
+    if (name == null || !mounted) return;
+
+    setState(() {
+      _workspaceDesktopUserItems.add(
+        _WorkspaceDesktopUserItem(
+          id: _nextWorkspaceDesktopItemId(),
+          kind: _WorkspaceDesktopUserItemKind.folder,
+          name: _uniqueWorkspaceDesktopName(name, parentFolderId),
+          position: desktopSize == null
+              ? position
+              : _clampWorkspaceDesktopUserItemPosition(position, desktopSize),
+          parentFolderId: parentFolderId,
+        ),
+      );
+    });
+    await _saveWorkspaceDesktopUserItems();
+  }
+
+  String _safeWorkspaceDesktopFileName(String raw) {
+    var value = raw.trim().replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
+    if (value.isEmpty) value = 'document';
+    return value;
+  }
+
+  Future<String?> _copyWorkspaceDesktopFileIntoStorage(
+    PlatformFile source,
+  ) async {
+    final dir = await _workspaceDesktopDocumentsDirectory();
+    if (dir == null) return source.path;
+
+    final safeName = _safeWorkspaceDesktopFileName(source.name);
+    final targetPath = '${dir.path}${Platform.pathSeparator}'
+        '${DateTime.now().microsecondsSinceEpoch}_$safeName';
+
+    try {
+      if (source.path != null && source.path!.trim().isNotEmpty) {
+        final input = File(source.path!);
+        if (await input.exists()) {
+          await input.copy(targetPath);
+          return targetPath;
+        }
+      }
+      if (source.bytes != null && source.bytes!.isNotEmpty) {
+        await File(targetPath).writeAsBytes(source.bytes!, flush: true);
+        return targetPath;
+      }
+    } catch (error) {
+      debugPrint('Workspace desktop file copy error: $error');
+    }
+    return source.path;
+  }
+
+  Future<void> _addWorkspaceDesktopDocuments({
+    String? parentFolderId,
+    Offset? desktopPosition,
+    Size? desktopSize,
+  }) async {
+    try {
+      final result = await FilePicker.pickFiles(
+        allowMultiple: true,
+        withData: kIsWeb,
+        type: FileType.custom,
+        allowedExtensions: const [
+          'pdf', 'doc', 'docx', 'rtf', 'txt',
+          'xls', 'xlsx', 'csv',
+          'ppt', 'pptx',
+          'jpg', 'jpeg', 'png', 'webp',
+        ],
+      );
+      if (result == null || result.files.isEmpty || !mounted) return;
+
+      final added = <_WorkspaceDesktopUserItem>[];
+      var index = 0;
+      for (final source in result.files) {
+        final storedPath = await _copyWorkspaceDesktopFileIntoStorage(source);
+        if (storedPath == null || storedPath.trim().isEmpty) continue;
+        final rawPosition = (desktopPosition ?? const Offset(22, 22)) +
+            Offset(index * 18.0, index * 18.0);
+        final position = desktopSize == null
+            ? rawPosition
+            : _clampWorkspaceDesktopUserItemPosition(rawPosition, desktopSize);
+        added.add(
+          _WorkspaceDesktopUserItem(
+            id: _nextWorkspaceDesktopItemId(),
+            kind: _WorkspaceDesktopUserItemKind.document,
+            name: _uniqueWorkspaceDesktopName(source.name, parentFolderId),
+            position: position,
+            parentFolderId: parentFolderId,
+            filePath: storedPath,
+          ),
+        );
+        index++;
+      }
+
+      if (!mounted || added.isEmpty) return;
+      setState(() => _workspaceDesktopUserItems.addAll(added));
+      await _saveWorkspaceDesktopUserItems();
+    } catch (error) {
+      if (!mounted) return;
+      Get.snackbar('Документы', 'Не удалось добавить файл: $error');
+    }
+  }
+
+  String _workspaceDesktopPlanTitle(Map<String, dynamic> plan) {
+    return _asString(
+          plan['title'] ??
+              plan['name'] ??
+              plan['plan_name'] ??
+              plan['planName'] ??
+              plan['training_title'] ??
+              plan['trainingTitle'],
+        ) ??
+        'План-конспект';
+  }
+
+  Future<Map<String, dynamic>?> _chooseWorkspaceDesktopPlan() async {
+    if (latestPlans.isEmpty) return <String, dynamic>{};
+
+    return showDialog<Map<String, dynamic>>(
+      context: context,
+      barrierColor: Colors.black.withOpacity(.20),
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: const Text('Добавить план-конспект'),
+        content: SizedBox(
+          width: 480,
+          child: ListView.separated(
+            shrinkWrap: true,
+            itemCount: latestPlans.length,
+            separatorBuilder: (_, __) => const Divider(height: 1),
+            itemBuilder: (_, index) {
+              final plan = latestPlans[index];
+              return ListTile(
+                leading: const Icon(
+                  Icons.folder_copy_rounded,
+                  color: _C.primaryGreen,
+                ),
+                title: Text(
+                  _workspaceDesktopPlanTitle(plan),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                subtitle: const Text('План-конспект из Спортотеки'),
+                onTap: () => Navigator.of(dialogContext).pop(
+                  Map<String, dynamic>.from(plan),
+                ),
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Отмена'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _addWorkspaceDesktopPlan({
+    String? parentFolderId,
+    Offset? desktopPosition,
+    Size? desktopSize,
+  }) async {
+    final plan = await _chooseWorkspaceDesktopPlan();
+    if (plan == null || !mounted) return;
+
+    final generic = plan.isEmpty;
+    final rawTitle = generic ? 'Планы-конспекты' : _workspaceDesktopPlanTitle(plan);
+    final rawId = generic
+        ? null
+        : _asString(
+            plan['id'] ?? plan['plan_id'] ?? plan['planId'] ?? plan['uuid'],
+          );
+    final position = desktopSize == null
+        ? (desktopPosition ?? const Offset(22, 22))
+        : _clampWorkspaceDesktopUserItemPosition(
+            desktopPosition ?? const Offset(22, 22),
+            desktopSize,
+          );
+
+    setState(() {
+      _workspaceDesktopUserItems.add(
+        _WorkspaceDesktopUserItem(
+          id: _nextWorkspaceDesktopItemId(),
+          kind: _WorkspaceDesktopUserItemKind.plan,
+          name: _uniqueWorkspaceDesktopName(rawTitle, parentFolderId),
+          position: position,
+          parentFolderId: parentFolderId,
+          sourceId: rawId,
+          payload: generic ? null : Map<String, dynamic>.from(plan),
+        ),
+      );
+    });
+    await _saveWorkspaceDesktopUserItems();
+  }
+
+  _WorkspaceDesktopUserItem? _workspaceDesktopItemById(String id) {
+    for (final item in _workspaceDesktopUserItems) {
+      if (item.id == id) return item;
+    }
+    return null;
+  }
+
+  bool _workspaceDesktopFolderContains(String folderId, String candidateId) {
+    var current = _workspaceDesktopItemById(candidateId);
+    final seen = <String>{};
+    while (current != null && current.parentFolderId != null) {
+      final parentId = current.parentFolderId!;
+      if (!seen.add(parentId)) break;
+      if (parentId == folderId) return true;
+      current = _workspaceDesktopItemById(parentId);
+    }
+    return false;
+  }
+
+  List<_WorkspaceDesktopUserItem> _workspaceDesktopSubtree(String rootId) {
+    final ids = <String>{rootId};
+    var changed = true;
+    while (changed) {
+      changed = false;
+      for (final item in _workspaceDesktopUserItems) {
+        if (item.parentFolderId != null &&
+            ids.contains(item.parentFolderId) &&
+            ids.add(item.id)) {
+          changed = true;
+        }
+      }
+    }
+    return _workspaceDesktopUserItems
+        .where((item) => ids.contains(item.id))
+        .toList(growable: false);
+  }
+
+  Future<void> _pasteWorkspaceDesktopClipboard({
+    String? parentFolderId,
+    Offset? desktopPosition,
+    Size? desktopSize,
+  }) async {
+    final clipboard = _workspaceDesktopClipboard;
+    if (clipboard == null) return;
+    final source = _workspaceDesktopItemById(clipboard.itemId);
+    if (source == null) {
+      setState(() => _workspaceDesktopClipboard = null);
+      return;
+    }
+
+    if (source.kind == _WorkspaceDesktopUserItemKind.folder &&
+        parentFolderId != null &&
+        (parentFolderId == source.id ||
+            _workspaceDesktopFolderContains(source.id, parentFolderId))) {
+      Get.snackbar('Папка', 'Нельзя вставить папку внутрь самой себя.');
+      return;
+    }
+
+    final targetPosition = desktopSize == null
+        ? (desktopPosition ?? const Offset(22, 22))
+        : _clampWorkspaceDesktopUserItemPosition(
+            desktopPosition ?? const Offset(22, 22),
+            desktopSize,
+          );
+
+    if (clipboard.mode == _WorkspaceDesktopClipboardMode.cut) {
+      setState(() {
+        source.parentFolderId = parentFolderId;
+        source.position = targetPosition;
+        _workspaceDesktopClipboard = null;
+      });
+      await _saveWorkspaceDesktopUserItems();
+      return;
+    }
+
+    final subtree = _workspaceDesktopSubtree(source.id);
+    final idMap = <String, String>{};
+    for (final item in subtree) {
+      idMap[item.id] = _nextWorkspaceDesktopItemId();
+    }
+
+    final copies = <_WorkspaceDesktopUserItem>[];
+    for (final item in subtree) {
+      final isRoot = item.id == source.id;
+      final newParent = isRoot
+          ? parentFolderId
+          : (item.parentFolderId == null ? null : idMap[item.parentFolderId!]);
+      copies.add(
+        item.duplicate(
+          id: idMap[item.id]!,
+          name: isRoot
+              ? _uniqueWorkspaceDesktopName(item.name, parentFolderId)
+              : item.name,
+          position: isRoot ? targetPosition : item.position,
+          parentFolderId: newParent,
+        ),
+      );
+    }
+
+    setState(() => _workspaceDesktopUserItems.addAll(copies));
+    await _saveWorkspaceDesktopUserItems();
+  }
+
+  Future<void> _renameWorkspaceDesktopUserItem(
+    _WorkspaceDesktopUserItem item,
+  ) async {
+    final name = await _promptWorkspaceDesktopName(
+      title: 'Переименовать',
+      initialValue: item.name,
+    );
+    if (name == null || !mounted) return;
+    if (name.trim().toLowerCase() == item.name.trim().toLowerCase()) return;
+    setState(() {
+      item.name = _uniqueWorkspaceDesktopName(name, item.parentFolderId);
+    });
+    await _saveWorkspaceDesktopUserItems();
+  }
+
+  Future<void> _deleteWorkspaceDesktopUserItem(
+    _WorkspaceDesktopUserItem item,
+  ) async {
+    final isFolder = item.kind == _WorkspaceDesktopUserItemKind.folder;
+    final approved = await showDialog<bool>(
+          context: context,
+          barrierColor: Colors.black.withOpacity(.20),
+          builder: (dialogContext) => AlertDialog(
+            backgroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(18),
+            ),
+            title: Text(isFolder ? 'Удалить папку?' : 'Удалить объект?'),
+            content: Text(
+              isFolder
+                  ? 'Папка «${item.name}» и всё её содержимое будут удалены с рабочего стола.'
+                  : '«${item.name}» будет удалён с рабочего стола.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('Отмена'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                style: FilledButton.styleFrom(backgroundColor: _C.red),
+                child: const Text('Удалить'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (!approved || !mounted) return;
+
+    final subtree = _workspaceDesktopSubtree(item.id);
+    final ids = subtree.map((entry) => entry.id).toSet();
+    final paths = subtree
+        .map((entry) => entry.filePath)
+        .whereType<String>()
+        .where((value) => value.trim().isNotEmpty)
+        .toSet();
+
+    setState(() {
+      _workspaceDesktopUserItems.removeWhere((entry) => ids.contains(entry.id));
+      if (_workspaceDesktopClipboard != null &&
+          ids.contains(_workspaceDesktopClipboard!.itemId)) {
+        _workspaceDesktopClipboard = null;
+      }
+    });
+    await _saveWorkspaceDesktopUserItems();
+
+    for (final path in paths) {
+      if (_workspaceDesktopUserItems.any((entry) => entry.filePath == path)) {
+        continue;
+      }
+      try {
+        final file = File(path);
+        if (await file.exists()) await file.delete();
+      } catch (_) {}
+    }
+  }
+
+  Future<void> _openWorkspaceDesktopUserItem(
+    _WorkspaceDesktopUserItem item,
+    Size desktopSize,
+  ) async {
+    switch (item.kind) {
+      case _WorkspaceDesktopUserItemKind.folder:
+        await _openWorkspaceDesktopFolder(item, desktopSize);
+        return;
+      case _WorkspaceDesktopUserItemKind.plan:
+        _openModuleWindow(ClubSection.plans);
+        return;
+      case _WorkspaceDesktopUserItemKind.document:
+        final path = item.filePath?.trim() ?? '';
+        if (path.isEmpty) {
+          Get.snackbar('Документ', 'Файл не найден.');
+          return;
+        }
+        if (!kIsWeb) {
+          final file = File(path);
+          if (!await file.exists()) {
+            Get.snackbar('Документ', 'Файл больше не существует: ${item.name}');
+            return;
+          }
+        }
+        try {
+          final launched = await launchUrl(
+            Uri.file(path),
+            mode: LaunchMode.externalApplication,
+          );
+          if (launched) return;
+        } catch (_) {}
+
+        if (!kIsWeb) {
+          try {
+            ProcessResult result;
+            if (Platform.isMacOS) {
+              result = await Process.run('open', [path]);
+            } else if (Platform.isWindows) {
+              result = await Process.run(
+                'cmd',
+                ['/c', 'start', '', path],
+                runInShell: true,
+              );
+            } else {
+              result = await Process.run('xdg-open', [path]);
+            }
+            if (result.exitCode == 0) return;
+          } catch (_) {}
+        }
+        Get.snackbar('Документ', 'Не удалось открыть ${item.name}.');
+        return;
+    }
+  }
+
+  Future<void> _openWorkspaceDesktopFolder(
+    _WorkspaceDesktopUserItem folder,
+    Size desktopSize,
+  ) async {
+    await showDialog<void>(
+      context: context,
+      barrierColor: Colors.black.withOpacity(.18),
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (dialogContext, setFolderState) {
+            final children = _workspaceDesktopUserItems
+                .where((item) => item.parentFolderId == folder.id)
+                .toList(growable: false);
+
+            Future<void> refresh(Future<void> Function() action) async {
+              await action();
+              if (dialogContext.mounted) setFolderState(() {});
+            }
+
+            return Dialog(
+              elevation: 0,
+              insetPadding: const EdgeInsets.all(24),
+              backgroundColor: Colors.transparent,
+              child: Container(
+                width: math.min(820.0, MediaQuery.of(context).size.width - 64),
+                height: math.min(580.0, MediaQuery.of(context).size.height - 90),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(.16),
+                      blurRadius: 44,
+                      offset: const Offset(0, 22),
+                    ),
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(24),
+                  child: Column(
+                    children: [
+                      Container(
+                        height: 66,
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        color: const Color(0xFFF8F9FA),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.folder_rounded,
+                              color: _C.railText,
+                              size: 26,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    folder.name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      color: _C.text,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 3),
+                                  Text(
+                                    '${children.length} объектов',
+                                    style: const TextStyle(
+                                      color: _C.muted,
+                                      fontSize: 11.5,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            _WorkspaceFolderHeaderButton(
+                              icon: Icons.note_add_rounded,
+                              tooltip: 'Добавить документ',
+                              onTap: () => refresh(
+                                () => _addWorkspaceDesktopDocuments(
+                                  parentFolderId: folder.id,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            _WorkspaceFolderHeaderButton(
+                              icon: Icons.folder_copy_rounded,
+                              tooltip: 'Добавить план-конспект',
+                              onTap: () => refresh(
+                                () => _addWorkspaceDesktopPlan(
+                                  parentFolderId: folder.id,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            _WorkspaceFolderHeaderButton(
+                              icon: Icons.create_new_folder_rounded,
+                              tooltip: 'Создать папку',
+                              onTap: () => refresh(
+                                () => _createWorkspaceDesktopFolder(
+                                  position: Offset.zero,
+                                  parentFolderId: folder.id,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            IconButton(
+                              onPressed: () => Navigator.of(dialogContext).pop(),
+                              icon: const Icon(
+                                Icons.close_rounded,
+                                color: _C.railText,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Expanded(
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.translucent,
+                          onSecondaryTapDown: (details) => refresh(
+                            () => _showWorkspaceFolderBackgroundMenu(
+                              details.globalPosition,
+                              folder,
+                            ),
+                          ),
+                          child: children.isEmpty
+                              ? const Center(
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.folder_open_rounded,
+                                        size: 52,
+                                        color: _C.lightMuted,
+                                      ),
+                                      SizedBox(height: 10),
+                                      Text(
+                                        'Папка пока пустая',
+                                        style: TextStyle(
+                                          color: _C.text,
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                      SizedBox(height: 5),
+                                      Text(
+                                        'Правой кнопкой можно добавить документ, план или новую папку.',
+                                        style: TextStyle(
+                                          color: _C.muted,
+                                          fontSize: 11.5,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                )
+                              : GridView.builder(
+                                  padding: const EdgeInsets.all(18),
+                                  gridDelegate:
+                                      const SliverGridDelegateWithMaxCrossAxisExtent(
+                                    maxCrossAxisExtent: 150,
+                                    mainAxisExtent: 112,
+                                    mainAxisSpacing: 10,
+                                    crossAxisSpacing: 10,
+                                  ),
+                                  itemCount: children.length,
+                                  itemBuilder: (_, index) {
+                                    final child = children[index];
+                                    return _WorkspaceFolderContentTile(
+                                      item: child,
+                                      onOpen: () => refresh(
+                                        () => _openWorkspaceDesktopUserItem(
+                                          child,
+                                          desktopSize,
+                                        ),
+                                      ),
+                                      onSecondaryTapDown: (details) => refresh(
+                                        () => _showWorkspaceDesktopItemMenu(
+                                          child,
+                                          details.globalPosition,
+                                          desktopSize,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   void _openWorkspaceSettings() {
@@ -2687,6 +3960,7 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
           showDesktopIcons: _showDesktopIcons,
           dockSize: _workspaceDockSize,
           wallpaperStyle: _workspaceWallpaperStyle,
+          customWallpaperBytes: _workspaceCustomWallpaperBytes,
           onShowDesktopIconsChanged: (value) {
             if (!mounted) return;
             setState(() => _showDesktopIcons = value);
@@ -2698,6 +3972,15 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
           onWallpaperChanged: (value) {
             if (!mounted) return;
             setState(() => _workspaceWallpaperStyle = value);
+          },
+          onCustomWallpaperChanged: (bytes) {
+            if (!mounted) return;
+            setState(() {
+              _workspaceCustomWallpaperBytes = bytes;
+              if (bytes != null && bytes.isNotEmpty) {
+                _workspaceWallpaperStyle = _WorkspaceWallpaperStyle.custom;
+              }
+            });
           },
           onDockSectionsChanged: (value) {
             if (!mounted) return;
@@ -4638,6 +5921,14 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
               style: _workspaceWallpaperStyle,
               clubName: clubName,
               clubLogo: clubLogo,
+              customWallpaperBytes: _workspaceCustomWallpaperBytes,
+            ),
+          ),
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onSecondaryTapDown: (details) =>
+                  _showWorkspaceDesktopBackgroundMenu(details, desktopSize),
             ),
           ),
           if (_showDesktopIcons)
@@ -4650,6 +5941,36 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
                 onMoved: _setDesktopIconPosition,
               ),
             ),
+          Positioned.fill(
+            child: _WorkspaceDesktopUserItemsLayer(
+              desktopSize: desktopSize,
+              items: _workspaceDesktopUserItems
+                  .where((item) => item.parentFolderId == null)
+                  .toList(growable: false),
+              clipboardItemId: _workspaceDesktopClipboard?.itemId,
+              onOpen: (item) => _openWorkspaceDesktopUserItem(item, desktopSize),
+              onMoved: (item, position) => _setWorkspaceDesktopUserItemPosition(
+                item,
+                position,
+                desktopSize,
+              ),
+              onSecondaryTapDown: (item, details) =>
+                  _showWorkspaceDesktopItemMenu(
+                item,
+                details.globalPosition,
+                desktopSize,
+              ),
+            ),
+          ),
+          Positioned(
+            top: 20,
+            right: 22,
+            child: _WorkspaceActiveTeamShortcut(
+              teamName: selectedTeamName,
+              hasTeam: _hasTeam,
+              onChange: () => _openModuleWindow(ClubSection.teams),
+            ),
+          ),
           for (final window in visibleWindows)
             _buildPositionedWorkspaceWindow(window, desktopSize),
           if (panelLoading || refreshing)
@@ -5202,6 +6523,7 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
         return SportotekaWorkspaceFinderPanel(
           clubId: clubId,
           clubName: clubName,
+          currentUserId: currentUserId,
           teams: teams,
           players: players,
           trainers: trainers,
@@ -17898,20 +19220,84 @@ class _WorkspaceWallpaper extends StatelessWidget {
   final _WorkspaceWallpaperStyle style;
   final String clubName;
   final String? clubLogo;
+  final Uint8List? customWallpaperBytes;
 
   const _WorkspaceWallpaper({
     required this.style,
     required this.clubName,
     required this.clubLogo,
+    this.customWallpaperBytes,
   });
 
   @override
   Widget build(BuildContext context) {
-    // Sportoteka Pro 2.0: нейтральный однотонный холст без градиентов,
-    // сетки, свечения и декоративных логотипов за рабочими окнами.
+    if (style == _WorkspaceWallpaperStyle.custom &&
+        customWallpaperBytes != null &&
+        customWallpaperBytes!.isNotEmpty) {
+      return Stack(
+        fit: StackFit.expand,
+        children: [
+          Image.memory(
+            customWallpaperBytes!,
+            fit: BoxFit.cover,
+            gaplessPlayback: true,
+          ),
+          // Небольшая вуаль сохраняет читаемость ярлыков и окон на ярких фото.
+          ColoredBox(color: Colors.black.withOpacity(.06)),
+        ],
+      );
+    }
+
     final dark = style == _WorkspaceWallpaperStyle.graphite;
-    return ColoredBox(
-      color: dark ? const Color(0xFF15181C) : const Color(0xFFF6F7F6),
+    final pitch = style == _WorkspaceWallpaperStyle.pitch;
+    final club = style == _WorkspaceWallpaperStyle.club;
+    final patterned = style == _WorkspaceWallpaperStyle.sportoteka ||
+        style == _WorkspaceWallpaperStyle.pitch ||
+        style == _WorkspaceWallpaperStyle.graphite;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(gradient: _gradientForStyle(style)),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (patterned)
+            CustomPaint(
+              painter: _WorkspaceWallpaperPatternPainter(
+                dark: dark,
+                pitch: pitch,
+              ),
+            ),
+          if (club && clubLogo != null && clubLogo!.trim().isNotEmpty)
+            Align(
+              alignment: const Alignment(.74, -.48),
+              child: Opacity(
+                opacity: .075,
+                child: _LogoBox(
+                  url: clubLogo,
+                  size: 220,
+                  bgColor: Colors.transparent,
+                ),
+              ),
+            ),
+          if (club)
+            Align(
+              alignment: const Alignment(.72, .58),
+              child: Padding(
+                padding: const EdgeInsets.all(28),
+                child: Text(
+                  clubName.trim().isEmpty ? 'SPORTOTEKA' : clubName.trim(),
+                  textAlign: TextAlign.right,
+                  style: TextStyle(
+                    color: _C.primaryGreen.withOpacity(.08),
+                    fontSize: 34,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -.8,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 
@@ -17921,7 +19307,7 @@ class _WorkspaceWallpaper extends StatelessWidget {
         return const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Color(0xFFF8FAFC), Color(0xFFEFF3F6), Color(0xFFFFFFFF)],
+          colors: [Color(0xFFF9FAFB), Color(0xFFF1F4F6), Color(0xFFFFFFFF)],
         );
       case _WorkspaceWallpaperStyle.club:
         return const LinearGradient(
@@ -17933,13 +19319,21 @@ class _WorkspaceWallpaper extends StatelessWidget {
         return const LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [Color(0xFFEAF8F0), Color(0xFFDDF2E6), Color(0xFFF8FAFC)],
+          colors: [Color(0xFFE6F5EC), Color(0xFFD7EEE0), Color(0xFFF4F8F5)],
         );
       case _WorkspaceWallpaperStyle.graphite:
         return const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [Color(0xFF111315), Color(0xFF20242A), Color(0xFF0F1512)],
+        );
+      case _WorkspaceWallpaperStyle.custom:
+        // Этот вариант используется только как fallback, если изображение
+        // ещё не выбрано или было очищено.
+        return const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFFF7FBF8), Color(0xFFEAF8F0)],
         );
       case _WorkspaceWallpaperStyle.sportoteka:
         return const LinearGradient(
@@ -18034,8 +19428,8 @@ class _WorkspaceDesktopIconsLayer extends StatelessWidget {
 
   Widget _buildIcon(_FullMenuItem item, int index) {
     final defaultPosition = Offset(
-      28 + (index ~/ 6) * 112.0,
-      26 + (index % 6) * 106.0,
+      24 + (index ~/ 6) * 104.0,
+      22 + (index % 6) * 100.0,
     );
     final position = iconPositions[item.section] ?? defaultPosition;
 
@@ -18080,15 +19474,17 @@ class _WorkspaceDesktopIconState extends State<_WorkspaceDesktopIcon> {
         onPanUpdate: (details) => widget.onDragUpdate(details.delta),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),
-          width: 92,
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+          width: 84,
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
           decoration: BoxDecoration(
             color: _hovered
-                ? Colors.white.withOpacity(.74)
-                : Colors.white.withOpacity(.42),
-            borderRadius: BorderRadius.circular(18),
+                ? Colors.white.withOpacity(.62)
+                : Colors.white.withOpacity(.30),
+            borderRadius: BorderRadius.circular(15),
             border: Border.all(
-                color: Colors.white.withOpacity(_hovered ? .80 : .42)),
+              color: Colors.white.withOpacity(_hovered ? .72 : .34),
+              width: .7,
+            ),
             boxShadow: _hovered
                 ? [
                     BoxShadow(
@@ -18103,11 +19499,11 @@ class _WorkspaceDesktopIconState extends State<_WorkspaceDesktopIcon> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                width: 54,
-                height: 54,
+                width: 52,
+                height: 52,
                 decoration: BoxDecoration(
                   color: Colors.white.withOpacity(.96),
-                  borderRadius: BorderRadius.circular(18),
+                  borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
                       color: Colors.black.withOpacity(.08),
@@ -18121,20 +19517,456 @@ class _WorkspaceDesktopIconState extends State<_WorkspaceDesktopIcon> {
               const SizedBox(height: 7),
               Text(
                 widget.item.title,
-                maxLines: 2,
+                maxLines:
+                    widget.item.section == ClubSection.testing ? 1 : 2,
                 textAlign: TextAlign.center,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
+                style: TextStyle(
                   color: _C.text,
-                  fontSize: 11.5,
-                  height: 1.05,
+                  fontSize:
+                      widget.item.section == ClubSection.testing ? 10.4 : 11.5,
+                  height: widget.item.section == ClubSection.testing ? 1 : 1.05,
                   fontWeight: FontWeight.w600,
-                  shadows: [
+                  shadows: const [
                     Shadow(color: Colors.white, blurRadius: 8),
                   ],
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _WorkspaceDesktopUserItemsLayer extends StatelessWidget {
+  final Size desktopSize;
+  final List<_WorkspaceDesktopUserItem> items;
+  final String? clipboardItemId;
+  final ValueChanged<_WorkspaceDesktopUserItem> onOpen;
+  final void Function(_WorkspaceDesktopUserItem item, Offset position) onMoved;
+  final void Function(_WorkspaceDesktopUserItem item, TapDownDetails details)
+      onSecondaryTapDown;
+
+  const _WorkspaceDesktopUserItemsLayer({
+    required this.desktopSize,
+    required this.items,
+    required this.clipboardItemId,
+    required this.onOpen,
+    required this.onMoved,
+    required this.onSecondaryTapDown,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        for (final item in items)
+          Positioned(
+            left: item.position.dx,
+            top: item.position.dy,
+            child: _WorkspaceDesktopUserItemTile(
+              item: item,
+              clipboardMarked: clipboardItemId == item.id,
+              onOpen: () => onOpen(item),
+              onMoved: (delta) => onMoved(item, item.position + delta),
+              onSecondaryTapDown: (details) =>
+                  onSecondaryTapDown(item, details),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _WorkspaceDesktopUserItemTile extends StatefulWidget {
+  final _WorkspaceDesktopUserItem item;
+  final bool clipboardMarked;
+  final VoidCallback onOpen;
+  final ValueChanged<Offset> onMoved;
+  final ValueChanged<TapDownDetails> onSecondaryTapDown;
+
+  const _WorkspaceDesktopUserItemTile({
+    required this.item,
+    required this.clipboardMarked,
+    required this.onOpen,
+    required this.onMoved,
+    required this.onSecondaryTapDown,
+  });
+
+  @override
+  State<_WorkspaceDesktopUserItemTile> createState() =>
+      _WorkspaceDesktopUserItemTileState();
+}
+
+class _WorkspaceDesktopUserItemTileState
+    extends State<_WorkspaceDesktopUserItemTile> {
+  bool _hovered = false;
+
+  IconData _iconForItem() {
+    switch (widget.item.kind) {
+      case _WorkspaceDesktopUserItemKind.folder:
+        return Icons.folder_rounded;
+      case _WorkspaceDesktopUserItemKind.plan:
+        return Icons.folder_copy_rounded;
+      case _WorkspaceDesktopUserItemKind.document:
+        final name = widget.item.name.toLowerCase();
+        if (name.endsWith('.pdf')) return Icons.picture_as_pdf_rounded;
+        if (name.endsWith('.xls') ||
+            name.endsWith('.xlsx') ||
+            name.endsWith('.csv')) {
+          return Icons.table_chart_rounded;
+        }
+        if (name.endsWith('.ppt') || name.endsWith('.pptx')) {
+          return Icons.slideshow_rounded;
+        }
+        if (name.endsWith('.jpg') ||
+            name.endsWith('.jpeg') ||
+            name.endsWith('.png') ||
+            name.endsWith('.webp')) {
+          return Icons.image_rounded;
+        }
+        return Icons.description_rounded;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final folder = widget.item.kind == _WorkspaceDesktopUserItemKind.folder;
+    final plan = widget.item.kind == _WorkspaceDesktopUserItemKind.plan;
+    final accent = folder
+        ? const Color(0xFF5B677A)
+        : plan
+            ? _C.primaryGreen
+            : _C.railText;
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        onTap: widget.onOpen,
+        onDoubleTap: widget.onOpen,
+        onPanUpdate: (details) => widget.onMoved(details.delta),
+        onSecondaryTapDown: widget.onSecondaryTapDown,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 140),
+          width: 86,
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+          decoration: BoxDecoration(
+            color: _hovered
+                ? Colors.white.withOpacity(.70)
+                : widget.clipboardMarked
+                    ? Colors.white.withOpacity(.54)
+                    : Colors.white.withOpacity(.24),
+            borderRadius: BorderRadius.circular(15),
+            border: Border.all(
+              color: widget.clipboardMarked
+                  ? _C.primaryGreen.withOpacity(.38)
+                  : Colors.white.withOpacity(_hovered ? .66 : .26),
+              width: .7,
+            ),
+            boxShadow: _hovered
+                ? [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(.07),
+                      blurRadius: 16,
+                      offset: const Offset(0, 8),
+                    ),
+                  ]
+                : const [],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(.96),
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(.07),
+                      blurRadius: 14,
+                      offset: const Offset(0, 7),
+                    ),
+                  ],
+                ),
+                child: Icon(_iconForItem(), color: accent, size: 27),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                widget.item.name,
+                maxLines: 2,
+                textAlign: TextAlign.center,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: _C.text,
+                  fontSize: 10.8,
+                  height: 1.05,
+                  fontWeight: FontWeight.w600,
+                  shadows: [Shadow(color: Colors.white, blurRadius: 8)],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _WorkspaceFolderHeaderButton extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  const _WorkspaceFolderHeaderButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: _C.railPanel,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: SizedBox(
+            width: 38,
+            height: 38,
+            child: Icon(icon, color: _C.railText, size: 19),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _WorkspaceFolderContentTile extends StatefulWidget {
+  final _WorkspaceDesktopUserItem item;
+  final VoidCallback onOpen;
+  final ValueChanged<TapDownDetails> onSecondaryTapDown;
+
+  const _WorkspaceFolderContentTile({
+    required this.item,
+    required this.onOpen,
+    required this.onSecondaryTapDown,
+  });
+
+  @override
+  State<_WorkspaceFolderContentTile> createState() =>
+      _WorkspaceFolderContentTileState();
+}
+
+class _WorkspaceFolderContentTileState
+    extends State<_WorkspaceFolderContentTile> {
+  bool _hovered = false;
+
+  IconData get _icon {
+    switch (widget.item.kind) {
+      case _WorkspaceDesktopUserItemKind.folder:
+        return Icons.folder_rounded;
+      case _WorkspaceDesktopUserItemKind.plan:
+        return Icons.folder_copy_rounded;
+      case _WorkspaceDesktopUserItemKind.document:
+        final value = widget.item.name.toLowerCase();
+        if (value.endsWith('.pdf')) return Icons.picture_as_pdf_rounded;
+        if (value.endsWith('.xls') || value.endsWith('.xlsx') || value.endsWith('.csv')) {
+          return Icons.table_chart_rounded;
+        }
+        if (value.endsWith('.ppt') || value.endsWith('.pptx')) {
+          return Icons.slideshow_rounded;
+        }
+        if (value.endsWith('.jpg') || value.endsWith('.jpeg') || value.endsWith('.png') || value.endsWith('.webp')) {
+          return Icons.image_rounded;
+        }
+        return Icons.description_rounded;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        onTap: widget.onOpen,
+        onDoubleTap: widget.onOpen,
+        onSecondaryTapDown: widget.onSecondaryTapDown,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 140),
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: _hovered ? _C.railHover : Colors.transparent,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                _icon,
+                size: 36,
+                color: widget.item.kind == _WorkspaceDesktopUserItemKind.plan
+                    ? _C.primaryGreen
+                    : _C.railText,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                widget.item.name,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: _C.text,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w600,
+                  height: 1.1,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _WorkspaceActiveTeamShortcut extends StatefulWidget {
+  final String teamName;
+  final bool hasTeam;
+  final VoidCallback onChange;
+
+  const _WorkspaceActiveTeamShortcut({
+    required this.teamName,
+    required this.hasTeam,
+    required this.onChange,
+  });
+
+  @override
+  State<_WorkspaceActiveTeamShortcut> createState() =>
+      _WorkspaceActiveTeamShortcutState();
+}
+
+class _WorkspaceActiveTeamShortcutState
+    extends State<_WorkspaceActiveTeamShortcut> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final name = widget.hasTeam && widget.teamName.trim().isNotEmpty
+        ? widget.teamName.trim()
+        : 'Команда не выбрана';
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(18),
+        child: InkWell(
+          onTap: widget.onChange,
+          borderRadius: BorderRadius.circular(18),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            width: math.min(
+              380.0,
+              math.max(320.0, MediaQuery.of(context).size.width * .30),
+            ),
+            padding: const EdgeInsets.fromLTRB(13, 11, 11, 11),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(_hovered ? .95 : .88),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: widget.hasTeam
+                    ? _C.primaryGreen.withOpacity(.25)
+                    : _C.borderSoft,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(_hovered ? .10 : .07),
+                  blurRadius: _hovered ? 22 : 16,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: widget.hasTeam
+                        ? _C.primaryGreen.withOpacity(.11)
+                        : _C.railPanel,
+                    borderRadius: BorderRadius.circular(13),
+                  ),
+                  child: Icon(
+                    widget.hasTeam
+                        ? Icons.shield_rounded
+                        : Icons.add_circle_outline_rounded,
+                    size: 20,
+                    color: widget.hasTeam ? _C.primaryGreen : _C.railMuted,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'АКТИВНАЯ КОМАНДА',
+                        maxLines: 1,
+                        style: TextStyle(
+                          color: _C.railMuted,
+                          fontSize: 9.5,
+                          height: 1,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: .25,
+                        ),
+                      ),
+                      const SizedBox(height: 5),
+                      Text(
+                        name,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: _C.text,
+                          fontSize: 14.0,
+                          height: 1.08,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 7),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: _C.railPanel,
+                    borderRadius: BorderRadius.circular(11),
+                    border: Border.all(color: _C.borderSoft),
+                  ),
+                  child: const Text(
+                    'Сменить',
+                    style: TextStyle(
+                      color: _C.railText,
+                      fontSize: 11.2,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -18387,21 +20219,21 @@ class _MacWindowDot extends StatelessWidget {
         onTap: onTap,
         customBorder: const CircleBorder(),
         child: Container(
-          width: 17,
-          height: 17,
+          width: 18,
+          height: 18,
+          alignment: Alignment.center,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: color,
-            border: Border.all(color: _C.borderSoft),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(.035),
-                blurRadius: 6,
-                offset: const Offset(0, 2),
-              ),
-            ],
+            color: const Color(0xFFF1F3F5),
+            border: Border.all(
+              color: const Color(0xFFE4E8EC),
+            ),
           ),
-          child: Icon(icon, color: iconColor, size: 10),
+          child: Icon(
+            icon,
+            size: 10,
+            color: const Color(0xFF667085),
+          ),
         ),
       ),
     );
@@ -18688,9 +20520,11 @@ class _MacWorkspaceSettingsDialog extends StatefulWidget {
   final bool showDesktopIcons;
   final _WorkspaceDockSize dockSize;
   final _WorkspaceWallpaperStyle wallpaperStyle;
+  final Uint8List? customWallpaperBytes;
   final ValueChanged<bool> onShowDesktopIconsChanged;
   final ValueChanged<_WorkspaceDockSize> onDockSizeChanged;
   final ValueChanged<_WorkspaceWallpaperStyle> onWallpaperChanged;
+  final ValueChanged<Uint8List?> onCustomWallpaperChanged;
   final ValueChanged<Set<ClubSection>> onDockSectionsChanged;
   final ValueChanged<Set<ClubSection>> onDesktopSectionsChanged;
 
@@ -18701,9 +20535,11 @@ class _MacWorkspaceSettingsDialog extends StatefulWidget {
     required this.showDesktopIcons,
     required this.dockSize,
     required this.wallpaperStyle,
+    required this.customWallpaperBytes,
     required this.onShowDesktopIconsChanged,
     required this.onDockSizeChanged,
     required this.onWallpaperChanged,
+    required this.onCustomWallpaperChanged,
     required this.onDockSectionsChanged,
     required this.onDesktopSectionsChanged,
   });
@@ -18719,6 +20555,8 @@ class _MacWorkspaceSettingsDialogState
   late bool _showIcons;
   late _WorkspaceDockSize _dockSize;
   late _WorkspaceWallpaperStyle _wallpaper;
+  Uint8List? _customWallpaperBytes;
+  bool _pickingWallpaper = false;
   late Set<ClubSection> _dockSections;
   late Set<ClubSection> _desktopSections;
 
@@ -18728,6 +20566,7 @@ class _MacWorkspaceSettingsDialogState
     _showIcons = widget.showDesktopIcons;
     _dockSize = widget.dockSize;
     _wallpaper = widget.wallpaperStyle;
+    _customWallpaperBytes = widget.customWallpaperBytes;
     _dockSections = Set<ClubSection>.of(widget.dockSections);
     _desktopSections = Set<ClubSection>.of(widget.desktopSections);
   }
@@ -18962,13 +20801,13 @@ class _MacWorkspaceSettingsDialogState
   Widget _buildWallpaperTab() {
     final wallpapers = const [
       _WallpaperOption(_WorkspaceWallpaperStyle.sportoteka, 'Sportoteka',
-          'Светлый зелёный градиент'),
+          'Светлый фирменный фон'),
       _WallpaperOption(
           _WorkspaceWallpaperStyle.clean, 'Чистый', 'Белый и серый'),
       _WallpaperOption(
-          _WorkspaceWallpaperStyle.club, 'Клубный', 'Лёгкий фон с логотипом'),
+          _WorkspaceWallpaperStyle.club, 'Клубный', 'Фон с клубным акцентом'),
       _WallpaperOption(
-          _WorkspaceWallpaperStyle.pitch, 'Поле', 'Едва заметная разметка'),
+          _WorkspaceWallpaperStyle.pitch, 'Поле', 'Мягкая разметка поля'),
       _WallpaperOption(
           _WorkspaceWallpaperStyle.graphite, 'Графит', 'Тёмный строгий фон'),
     ];
@@ -18988,8 +20827,55 @@ class _MacWorkspaceSettingsDialogState
               widget.onWallpaperChanged(option.style);
             },
           ),
+        _CustomWallpaperPickerTile(
+          bytes: _customWallpaperBytes,
+          selected: _wallpaper == _WorkspaceWallpaperStyle.custom,
+          loading: _pickingWallpaper,
+          onTap: _pickCustomWallpaper,
+          onClear: _customWallpaperBytes == null
+              ? null
+              : () {
+                  setState(() {
+                    _customWallpaperBytes = null;
+                    _wallpaper = _WorkspaceWallpaperStyle.sportoteka;
+                  });
+                  widget.onCustomWallpaperChanged(null);
+                  widget.onWallpaperChanged(_WorkspaceWallpaperStyle.sportoteka);
+                },
+        ),
       ],
     );
+  }
+
+  Future<void> _pickCustomWallpaper() async {
+    if (_pickingWallpaper) return;
+    setState(() => _pickingWallpaper = true);
+
+    try {
+      final image = await ImagePicker().pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 92,
+        maxWidth: 3840,
+      );
+      if (image == null) return;
+
+      final bytes = await image.readAsBytes();
+      if (!mounted || bytes.isEmpty) return;
+
+      setState(() {
+        _customWallpaperBytes = bytes;
+        _wallpaper = _WorkspaceWallpaperStyle.custom;
+      });
+      widget.onCustomWallpaperChanged(bytes);
+      widget.onWallpaperChanged(_WorkspaceWallpaperStyle.custom);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Не удалось выбрать обои: $error')),
+      );
+    } finally {
+      if (mounted) setState(() => _pickingWallpaper = false);
+    }
   }
 
   Widget _buildDockTab() {
@@ -19230,6 +21116,124 @@ class _AccentPreviewDot extends StatelessWidget {
   }
 }
 
+class _CustomWallpaperPickerTile extends StatelessWidget {
+  final Uint8List? bytes;
+  final bool selected;
+  final bool loading;
+  final VoidCallback onTap;
+  final VoidCallback? onClear;
+
+  const _CustomWallpaperPickerTile({
+    required this.bytes,
+    required this.selected,
+    required this.loading,
+    required this.onTap,
+    required this.onClear,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final hasImage = bytes != null && bytes!.isNotEmpty;
+
+    return InkWell(
+      onTap: loading ? null : onTap,
+      borderRadius: BorderRadius.circular(18),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: selected
+                ? _C.primaryGreen.withOpacity(.55)
+                : _C.borderSoft,
+            width: selected ? 1.5 : 1,
+          ),
+          boxShadow: const [_C.shadow],
+        ),
+        child: Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: Container(
+                width: 74,
+                height: 52,
+                decoration: BoxDecoration(
+                  color: _C.railPanel,
+                  border: Border.all(color: _C.borderSoft),
+                ),
+                child: loading
+                    ? const Center(
+                        child: SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.2,
+                            color: _C.primaryGreen,
+                          ),
+                        ),
+                      )
+                    : hasImage
+                        ? Image.memory(bytes!, fit: BoxFit.cover)
+                        : const Icon(
+                            Icons.add_photo_alternate_outlined,
+                            color: _C.primaryGreen,
+                            size: 25,
+                          ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Свои обои',
+                    style: TextStyle(
+                      color: _C.text,
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  SizedBox(height: 5),
+                  Text(
+                    'Выбрать изображение с устройства',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: _C.muted,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (onClear != null)
+              IconButton(
+                tooltip: 'Удалить свои обои',
+                onPressed: onClear,
+                icon: const Icon(
+                  Icons.delete_outline_rounded,
+                  color: _C.railMuted,
+                  size: 20,
+                ),
+              )
+            else if (selected)
+              const Icon(
+                Icons.check_circle_rounded,
+                color: _C.primaryGreen,
+                size: 21,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _WallpaperOption {
   final _WorkspaceWallpaperStyle style;
   final String title;
@@ -19318,6 +21322,9 @@ class _WallpaperPickerTile extends StatelessWidget {
       case _WorkspaceWallpaperStyle.graphite:
         return const LinearGradient(
             colors: [Color(0xFF111315), Color(0xFF252A31)]);
+      case _WorkspaceWallpaperStyle.custom:
+        return const LinearGradient(
+            colors: [Color(0xFFF7FBF8), Color(0xFFEAF8F0)]);
       case _WorkspaceWallpaperStyle.sportoteka:
         return const LinearGradient(
             colors: [Color(0xFFF7FBF8), Color(0xFFEAF8F0)]);

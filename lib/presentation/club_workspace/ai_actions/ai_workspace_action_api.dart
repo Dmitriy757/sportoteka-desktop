@@ -44,6 +44,21 @@ class AiWorkspaceAction {
           : const <String, dynamic>{},
     );
   }
+
+  Map<String, dynamic> toHistoryMap() {
+    final safePayload = Map<String, dynamic>.from(payload)
+      ..remove('action_token');
+    return <String, dynamic>{
+      'id': id,
+      'type': type,
+      'title': title,
+      'description': description,
+      'status': status,
+      'requires_confirmation': false,
+      'payload': safePayload,
+      'result': result,
+    };
+  }
 }
 
 /// Безопасный клиент Action Bridge v15.9.1.
@@ -59,6 +74,7 @@ class AiWorkspaceActionApi {
     required int clubId,
     required int userId,
     required int teamId,
+    required String conversationId,
     required String actionToken,
   }) async {
     final token = actionToken.trim();
@@ -80,6 +96,7 @@ class AiWorkspaceActionApi {
             'club_id': clubId,
             'user_id': userId,
             'team_id': teamId,
+            'conversation_id': conversationId,
             'action_token': token,
             'confirmed': true,
           }),

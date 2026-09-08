@@ -31,6 +31,7 @@ class CmrContextAiLayer extends StatelessWidget {
     this.playerName,
     this.onNavigate,
     this.onOpenPdf,
+    this.showCollapsedLauncher = true,
   });
 
   final Widget child;
@@ -52,6 +53,7 @@ class CmrContextAiLayer extends StatelessWidget {
   final String? playerName;
   final void Function(String target, Map<String, dynamic> payload)? onNavigate;
   final ValueChanged<String>? onOpenPdf;
+  final bool showCollapsedLauncher;
 
   @override
   Widget build(BuildContext context) {
@@ -90,7 +92,7 @@ class CmrContextAiLayer extends StatelessWidget {
                 ),
               ),
             ),
-            if (!expanded)
+            if (!expanded && showCollapsedLauncher)
               Positioned(
                 right: mobile ? 12 : 14,
                 bottom: safeBottom,

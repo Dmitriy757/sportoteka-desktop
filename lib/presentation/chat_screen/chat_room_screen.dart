@@ -288,7 +288,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
       // throttle чтобы не дергать UI на каждый пиксель
       if (_scrollThrottle?.isActive ?? false) return;
       _scrollThrottle = Timer(const Duration(milliseconds: 70), () {
-        if (!_scrollController.hasClients) return;
+        if (!mounted || !_scrollController.hasClients) return;
         final pos = _scrollController.position;
         final next = pos.pixels < pos.maxScrollExtent - 100;
         if (next != _lastShowScroll) {
@@ -317,8 +317,10 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
 
   void _startPolling() {
     _refreshTimer?.cancel();
-    _refreshTimer =
-        Timer.periodic(pollInterval, (_) => _loadMessages(fromPoll: true));
+    _refreshTimer = Timer.periodic(pollInterval, (_) {
+      if (!mounted) return;
+      unawaited(_loadMessages(fromPoll: true));
+    });
   }
 
   @override
@@ -659,12 +661,15 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
 
             if (initial && !_didInitialAutoScroll) {
               WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (!mounted) return;
                 _scrollToBottom(jump: true);
                 _didInitialAutoScroll = true;
               });
             } else if (_isNearBottom()) {
-              WidgetsBinding.instance
-                  .addPostFrameCallback((_) => _scrollToBottom());
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (!mounted) return;
+                _scrollToBottom();
+              });
             }
 
             _initialDataLoaded = true;
@@ -1301,6 +1306,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
       _clearSearch();
     } else {
       WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
         FocusScope.of(context).unfocus();
       });
     }
@@ -1319,6 +1325,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
   void _onSearchChanged(String v) {
     _searchDebounce?.cancel();
     _searchDebounce = Timer(const Duration(milliseconds: 150), () {
+      if (!mounted) return;
       setState(() {
         searchQuery = v.trim();
       });
@@ -1520,6 +1527,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
 
   void _showMessageMenu(BuildContext context, Map<String, dynamic> msg) {
     final isMine = msg['sender_id'] == widget.userId;
+    final messenger = ScaffoldMessenger.of(context);
 
     showModalBottomSheet(
       context: context,
@@ -1566,7 +1574,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
                 Clipboard.setData(
                     ClipboardData(text: (msg['content'] ?? '').toString()));
                 Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
+                messenger.showSnackBar(
                   const SnackBar(content: Text('Текст скопирован')),
                 );
               },
@@ -2071,7 +2079,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
 
     final peerPhoto = _peerPhoto;
 
-    return Scaffold(
+    final scaffold = Scaffold(
       extendBody: true,
       resizeToAvoidBottomInset: true,
       backgroundColor: Colors.white,
@@ -2498,6 +2506,13 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
           ),
         ],
       ),
+    );
+
+    if (widget.embedded) return scaffold;
+    return SafeArea(
+      top: true,
+      bottom: false,
+      child: scaffold,
     );
   }
 

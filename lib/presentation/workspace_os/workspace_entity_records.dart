@@ -11,7 +11,7 @@ import 'package:sportoteka/presentation/workspace_os/sportoteka_workspace_icons.
 import 'package:sportoteka/presentation/workspace_os/workspace_document_editor.dart';
 import 'package:sportoteka/presentation/workspace_os/workspace_finder_models.dart';
 import 'package:sportoteka/presentation/workspace_os/workspace_server_storage.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:sportoteka/presentation/workspace_os/workspace_attachment_preview.dart';
 
 class WorkspaceEntityProperty {
   const WorkspaceEntityProperty(this.label, this.value);
@@ -52,8 +52,10 @@ class WorkspaceEntityRecordBrowser extends StatefulWidget {
   final String Function(Map<String, dynamic>) titleFor;
   final String Function(Map<String, dynamic>) subtitleFor;
   final String Function(Map<String, dynamic>) dateFor;
-  final List<WorkspaceEntityProperty> Function(Map<String, dynamic>) propertiesFor;
-  final Future<void> Function(BuildContext context, Map<String, dynamic> record) openRecord;
+  final List<WorkspaceEntityProperty> Function(Map<String, dynamic>)
+      propertiesFor;
+  final Future<void> Function(BuildContext context, Map<String, dynamic> record)
+      openRecord;
   final String emptyText;
   final String localStorageKey;
   final String contextLabel;
@@ -68,10 +70,12 @@ class WorkspaceEntityRecordBrowser extends StatefulWidget {
   final int currentUserId;
 
   @override
-  State<WorkspaceEntityRecordBrowser> createState() => _WorkspaceEntityRecordBrowserState();
+  State<WorkspaceEntityRecordBrowser> createState() =>
+      _WorkspaceEntityRecordBrowserState();
 }
 
-class _WorkspaceEntityRecordBrowserState extends State<WorkspaceEntityRecordBrowser> {
+class _WorkspaceEntityRecordBrowserState
+    extends State<WorkspaceEntityRecordBrowser> {
   static const _green = Color(0xFF0B8F55);
   static const _text = Color(0xFF101814);
   static const _muted = Color(0xFF758079);
@@ -139,38 +143,51 @@ class _WorkspaceEntityRecordBrowserState extends State<WorkspaceEntityRecordBrow
   DateTime _date(Map<String, dynamic> row) {
     final raw = _dateFor(row).trim();
     if (raw.isEmpty) return DateTime.fromMillisecondsSinceEpoch(0);
-    return DateTime.tryParse(raw.replaceFirst(' ', 'T')) ?? DateTime.fromMillisecondsSinceEpoch(0);
+    return DateTime.tryParse(raw.replaceFirst(' ', 'T')) ??
+        DateTime.fromMillisecondsSinceEpoch(0);
   }
 
   bool _isLocal(Map<String, dynamic> row) => row['_workspace_local'] == true;
-  bool _isAttachment(Map<String, dynamic> row) => row['_workspace_attachment'] == true;
+  bool _isAttachment(Map<String, dynamic> row) =>
+      row['_workspace_attachment'] == true;
 
   String _titleFor(Map<String, dynamic> row) {
     if (_isLocal(row)) return '${row['title'] ?? 'Новый документ'}'.trim();
-    if (_isAttachment(row)) return '${row['title'] ?? row['original_name'] ?? 'Файл'}'.trim();
+    if (_isAttachment(row))
+      return '${row['title'] ?? row['original_name'] ?? 'Файл'}'.trim();
     return widget.titleFor(row);
   }
 
   String _subtitleFor(Map<String, dynamic> row) {
-    if (_isLocal(row)) return '${row['subtitle'] ?? 'Документ Sportoteka OS'}'.trim();
+    if (_isLocal(row))
+      return '${row['subtitle'] ?? 'Документ Sportoteka OS'}'.trim();
     if (_isAttachment(row)) {
       final mime = '${row['mime_type'] ?? ''}'.trim();
       final size = int.tryParse('${row['file_size'] ?? '0'}') ?? 0;
-      final sizeLabel = size <= 0 ? '' : (size < 1024 * 1024 ? '${(size / 1024).toStringAsFixed(0)} КБ' : '${(size / 1024 / 1024).toStringAsFixed(1)} МБ');
+      final sizeLabel = size <= 0
+          ? ''
+          : (size < 1024 * 1024
+              ? '${(size / 1024).toStringAsFixed(0)} КБ'
+              : '${(size / 1024 / 1024).toStringAsFixed(1)} МБ');
       return <String>[mime, sizeLabel].where((e) => e.isNotEmpty).join(' · ');
     }
     return widget.subtitleFor(row);
   }
 
   String _dateFor(Map<String, dynamic> row) {
-    if (_isLocal(row) || _isAttachment(row)) return '${row['updated_at'] ?? row['created_at'] ?? ''}'.trim();
+    if (_isLocal(row) || _isAttachment(row))
+      return '${row['updated_at'] ?? row['created_at'] ?? ''}'.trim();
     return widget.dateFor(row);
   }
 
   List<WorkspaceEntityProperty> _propertiesFor(Map<String, dynamic> row) {
     if (_isAttachment(row)) {
       final size = int.tryParse('${row['file_size'] ?? '0'}') ?? 0;
-      final sizeLabel = size <= 0 ? '—' : (size < 1024 * 1024 ? '${(size / 1024).toStringAsFixed(0)} КБ' : '${(size / 1024 / 1024).toStringAsFixed(1)} МБ');
+      final sizeLabel = size <= 0
+          ? '—'
+          : (size < 1024 * 1024
+              ? '${(size / 1024).toStringAsFixed(0)} КБ'
+              : '${(size / 1024 / 1024).toStringAsFixed(1)} МБ');
       return <WorkspaceEntityProperty>[
         const WorkspaceEntityProperty('Тип', 'Файл'),
         WorkspaceEntityProperty('Раздел', widget.sectionTitle),
@@ -191,12 +208,20 @@ class _WorkspaceEntityRecordBrowserState extends State<WorkspaceEntityRecordBrow
 
   List<Map<String, dynamic>> get _visible {
     final q = _search.text.trim().toLowerCase();
-    final rows = _records.where((r) {
-      if (q.isEmpty) return true;
-      final props = _propertiesFor(r).map((p) => '${p.label} ${p.value}').join(' ');
-      return '${_titleFor(r)} ${_subtitleFor(r)} ${_dateFor(r)} $props'.toLowerCase().contains(q);
-    }).map((e) => Map<String, dynamic>.from(e)).toList();
-    rows.sort((a, b) => _newestFirst ? _date(b).compareTo(_date(a)) : _date(a).compareTo(_date(b)));
+    final rows = _records
+        .where((r) {
+          if (q.isEmpty) return true;
+          final props =
+              _propertiesFor(r).map((p) => '${p.label} ${p.value}').join(' ');
+          return '${_titleFor(r)} ${_subtitleFor(r)} ${_dateFor(r)} $props'
+              .toLowerCase()
+              .contains(q);
+        })
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
+    rows.sort((a, b) => _newestFirst
+        ? _date(b).compareTo(_date(a))
+        : _date(a).compareTo(_date(b)));
     return rows;
   }
 
@@ -215,7 +240,10 @@ class _WorkspaceEntityRecordBrowserState extends State<WorkspaceEntityRecordBrow
             entityType: widget.attachmentEntityType,
             entityId: widget.attachmentEntityId,
             sectionKey: widget.attachmentSectionKey,
-          )).map((row) => <String, dynamic>{...row, '_workspace_attachment': true}).toList();
+          ))
+              .map((row) =>
+                  <String, dynamic>{...row, '_workspace_attachment': true})
+              .toList();
         } catch (_) {}
       }
       final merged = <Map<String, dynamic>>[
@@ -255,7 +283,11 @@ class _WorkspaceEntityRecordBrowserState extends State<WorkspaceEntityRecordBrow
         try {
           final decoded = jsonDecode(raw);
           if (decoded is List) {
-            local = decoded.whereType<Map>().map((row) => Map<String, dynamic>.from(row)).where(_isLocal).toList();
+            local = decoded
+                .whereType<Map>()
+                .map((row) => Map<String, dynamic>.from(row))
+                .where(_isLocal)
+                .toList();
           }
         } catch (_) {}
       }
@@ -265,13 +297,20 @@ class _WorkspaceEntityRecordBrowserState extends State<WorkspaceEntityRecordBrow
     if (server == null) return local;
     try {
       var snapshot = await server.load();
-      final serverNodes = snapshot.nodes.where((n) => n.parentId == widget.serverParentKey && n.kind == WorkspaceFinderNodeKind.note).toList();
-      final serverById = <String, WorkspaceFinderNode>{for (final node in serverNodes) node.id: node};
+      final serverNodes = snapshot.nodes
+          .where((n) =>
+              n.parentId == widget.serverParentKey &&
+              n.kind == WorkspaceFinderNodeKind.note)
+          .toList();
+      final serverById = <String, WorkspaceFinderNode>{
+        for (final node in serverNodes) node.id: node
+      };
       var serverChanged = false;
       for (final row in local) {
         final id = '${row['id'] ?? ''}';
         if (id.isEmpty) continue;
-        final needsSync = row['_workspace_pending_sync'] == true || row['_workspace_server'] != true;
+        final needsSync = row['_workspace_pending_sync'] == true ||
+            row['_workspace_server'] != true;
         if (!needsSync) continue;
         final localTitle = '${row['title'] ?? 'Новый документ'}';
         final localSubtitle = '${row['subtitle'] ?? 'Документ Sportoteka OS'}';
@@ -284,12 +323,15 @@ class _WorkspaceEntityRecordBrowserState extends State<WorkspaceEntityRecordBrow
             title: localTitle,
             subtitle: localSubtitle,
             kind: WorkspaceFinderNodeKind.note,
-            payload: <String, dynamic>{'workspace_document': row['_workspace_document'] == true},
+            payload: <String, dynamic>{
+              'workspace_document': row['_workspace_document'] == true
+            },
             parentId: widget.serverParentKey,
             createdAt: DateTime.tryParse('${row['created_at'] ?? ''}'),
             updatedAt: localUpdated,
           );
-          await server.syncNodeDocument(node: node, body: localBody, createHint: true);
+          await server.syncNodeDocument(
+              node: node, body: localBody, createHint: true);
           serverChanged = true;
           continue;
         }
@@ -298,18 +340,22 @@ class _WorkspaceEntityRecordBrowserState extends State<WorkspaceEntityRecordBrow
         final serverBody = snapshot.noteBodies[id] ?? '';
         final localIsNotOlder = localUpdated == null ||
             serverUpdated == null ||
-            !localUpdated.isBefore(serverUpdated.subtract(const Duration(seconds: 5)));
+            !localUpdated
+                .isBefore(serverUpdated.subtract(const Duration(seconds: 5)));
         final differs = existing.title != localTitle ||
             existing.subtitle != localSubtitle ||
             serverBody != localBody ||
-            existing.payload?['workspace_document'] != (row['_workspace_document'] == true);
+            existing.payload?['workspace_document'] !=
+                (row['_workspace_document'] == true);
         if (differs && localIsNotOlder) {
           final node = WorkspaceFinderNode(
             id: id,
             title: localTitle,
             subtitle: localSubtitle,
             kind: WorkspaceFinderNodeKind.note,
-            payload: <String, dynamic>{'workspace_document': row['_workspace_document'] == true},
+            payload: <String, dynamic>{
+              'workspace_document': row['_workspace_document'] == true
+            },
             parentId: widget.serverParentKey,
             createdAt: existing.createdAt,
             updatedAt: localUpdated ?? DateTime.now(),
@@ -321,13 +367,16 @@ class _WorkspaceEntityRecordBrowserState extends State<WorkspaceEntityRecordBrow
       if (serverChanged) snapshot = await server.load();
       _serverAvailable = true;
       final serverRows = snapshot.nodes
-          .where((n) => n.parentId == widget.serverParentKey && n.kind == WorkspaceFinderNodeKind.note)
+          .where((n) =>
+              n.parentId == widget.serverParentKey &&
+              n.kind == WorkspaceFinderNodeKind.note)
           .map((node) => <String, dynamic>{
                 'id': node.id,
                 '_workspace_local': true,
                 '_workspace_server': true,
                 '_workspace_pending_sync': false,
-                '_workspace_document': node.payload?['workspace_document'] == true,
+                '_workspace_document':
+                    node.payload?['workspace_document'] == true,
                 'title': node.title,
                 'subtitle': node.subtitle,
                 'workspace_note': snapshot.noteBodies[node.id] ?? '',
@@ -381,12 +430,12 @@ class _WorkspaceEntityRecordBrowserState extends State<WorkspaceEntityRecordBrow
       return;
     }
     if (_isAttachment(row)) {
-      final raw = '${row['file_url'] ?? ''}'.trim();
-      if (raw.isEmpty) return;
-      final url = raw.startsWith('http://') || raw.startsWith('https://')
-          ? raw
-          : 'https://sportotekaapp.ru/${raw.replaceFirst(RegExp(r'^/+'), '')}';
-      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+      await openWorkspaceAttachmentPreview(
+        context,
+        title: _titleFor(row),
+        fileUrl: '${row['file_url'] ?? ''}',
+        mimeType: '${row['mime_type'] ?? ''}',
+      );
       return;
     }
     await widget.openRecord(context, row);
@@ -406,17 +455,28 @@ class _WorkspaceEntityRecordBrowserState extends State<WorkspaceEntityRecordBrow
               initialBody: '${row['workspace_note'] ?? ''}',
               contextLabel: '${widget.contextLabel} · ${widget.sectionTitle}',
               contextName: widget.ownerTitle,
-              documentType: row['_workspace_document'] == true ? 'Документ Sportoteka OS' : 'Рабочая заметка',
+              documentType: row['_workspace_document'] == true
+                  ? 'Документ Sportoteka OS'
+                  : 'Рабочая заметка',
               liveBlocksKey: 'entity_local_$id',
               onSave: (title, body) => _updateLocalRecord(id, title, body),
               onClose: () => Navigator.of(routeContext).maybePop(),
+              aiClubId: widget.clubId > 0 ? widget.clubId : null,
+              aiUserId: widget.currentUserId > 0 ? widget.currentUserId : null,
+              aiTeamId: int.tryParse('${row['team_id'] ?? row['teamId'] ?? 0}'),
+              aiClubName: '${row['club_name'] ?? row['clubName'] ?? ''}',
+              aiTeamName: '${row['team_name'] ?? row['teamName'] ?? ''}',
+              aiDocumentKey: id,
             ),
           ),
         ),
         transitionsBuilder: (_, animation, __, child) => FadeTransition(
-          opacity: CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+          opacity:
+              CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
           child: SlideTransition(
-            position: Tween<Offset>(begin: const Offset(.018, 0), end: Offset.zero).animate(
+            position:
+                Tween<Offset>(begin: const Offset(.018, 0), end: Offset.zero)
+                    .animate(
               CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
             ),
             child: child,
@@ -439,6 +499,7 @@ class _WorkspaceEntityRecordBrowserState extends State<WorkspaceEntityRecordBrow
         '_workspace_pending_sync': true,
       };
     }
+
     setState(() {
       _localRecords = _localRecords.map(update).toList();
       _records = _records.map(update).toList();
@@ -460,6 +521,7 @@ class _WorkspaceEntityRecordBrowserState extends State<WorkspaceEntityRecordBrow
         '_workspace_pending_sync': false,
       };
     }
+
     if (mounted) {
       setState(() {
         _localRecords = _localRecords.map(clean).toList();
@@ -482,7 +544,9 @@ class _WorkspaceEntityRecordBrowserState extends State<WorkspaceEntityRecordBrow
       title: '${row['title'] ?? 'Новый документ'}',
       subtitle: '${row['subtitle'] ?? 'Документ Sportoteka OS'}',
       kind: WorkspaceFinderNodeKind.note,
-      payload: <String, dynamic>{'workspace_document': row['_workspace_document'] == true},
+      payload: <String, dynamic>{
+        'workspace_document': row['_workspace_document'] == true
+      },
       parentId: widget.serverParentKey,
       createdAt: DateTime.tryParse('${row['created_at'] ?? ''}'),
       updatedAt: DateTime.tryParse('${row['updated_at'] ?? ''}'),
@@ -510,7 +574,9 @@ class _WorkspaceEntityRecordBrowserState extends State<WorkspaceEntityRecordBrow
       title: '${row['title'] ?? 'Новый документ'}',
       subtitle: '${row['subtitle'] ?? ''}',
       kind: WorkspaceFinderNodeKind.note,
-      payload: <String, dynamic>{'workspace_document': row['_workspace_document'] == true},
+      payload: <String, dynamic>{
+        'workspace_document': row['_workspace_document'] == true
+      },
       parentId: widget.serverParentKey,
       updatedAt: DateTime.now(),
     );
@@ -523,7 +589,8 @@ class _WorkspaceEntityRecordBrowserState extends State<WorkspaceEntityRecordBrow
       await _markLocalRecordSynced(id);
     } catch (e) {
       _serverAvailable = false;
-      throw Exception('Документ сохранён локально, но серверная синхронизация не выполнена: $e');
+      throw Exception(
+          'Документ сохранён локально, но серверная синхронизация не выполнена: $e');
     }
   }
 
@@ -565,11 +632,18 @@ class _WorkspaceEntityRecordBrowserState extends State<WorkspaceEntityRecordBrow
       builder: (ctx) => AlertDialog(
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.white,
-        title: Text(_isAttachment(row) ? 'Удалить файл?' : 'Удалить документ?', style: AppTypography.sectionTitle(color: _text)),
-        content: Text('«${_titleFor(row)}» будет удалён из раздела.', style: AppTypography.secondary(color: _muted)),
+        title: Text(_isAttachment(row) ? 'Удалить файл?' : 'Удалить документ?',
+            style: AppTypography.sectionTitle(color: _text)),
+        content: Text('«${_titleFor(row)}» будет удалён из раздела.',
+            style: AppTypography.secondary(color: _muted)),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text('Удалить', style: AppTypography.action(color: const Color(0xFFB42318)))),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Отмена')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text('Удалить',
+                  style: AppTypography.action(color: const Color(0xFFB42318)))),
         ],
       ),
     );
@@ -583,7 +657,8 @@ class _WorkspaceEntityRecordBrowserState extends State<WorkspaceEntityRecordBrow
           await server.deleteAttachment(attachmentId);
         } catch (e) {
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Не удалось удалить файл: $e')));
+            ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Не удалось удалить файл: $e')));
           }
           return;
         }
@@ -611,7 +686,11 @@ class _WorkspaceEntityRecordBrowserState extends State<WorkspaceEntityRecordBrow
     if (!_canUploadAttachments || _uploadingAttachment) return;
     final result = await FilePicker.pickFiles(allowMultiple: true);
     if (result == null) return;
-    final paths = result.files.map((f) => f.path).whereType<String>().where((p) => p.isNotEmpty).toList();
+    final paths = result.files
+        .map((f) => f.path)
+        .whereType<String>()
+        .where((p) => p.isNotEmpty)
+        .toList();
     if (paths.isEmpty) return;
     await _uploadAttachmentPaths(paths);
   }
@@ -641,7 +720,8 @@ class _WorkspaceEntityRecordBrowserState extends State<WorkspaceEntityRecordBrow
       await _load();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка загрузки файла: $e')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Ошибка загрузки файла: $e')));
       }
     } finally {
       if (mounted) setState(() => _uploadingAttachment = false);
@@ -658,7 +738,8 @@ class _WorkspaceEntityRecordBrowserState extends State<WorkspaceEntityRecordBrow
       context: context,
       backgroundColor: Colors.white,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(18))),
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(18))),
       builder: (sheetContext) => SafeArea(
         top: false,
         child: Padding(
@@ -682,13 +763,29 @@ class _WorkspaceEntityRecordBrowserState extends State<WorkspaceEntityRecordBrow
       context: context,
       color: Colors.white,
       surfaceTintColor: Colors.white,
-      position: RelativeRect.fromLTRB(position.dx, position.dy, position.dx, position.dy),
+      position: RelativeRect.fromLTRB(
+          position.dx, position.dy, position.dx, position.dy),
       items: <PopupMenuEntry<String>>[
-        PopupMenuItem<String>(value: 'open', child: Text(_isLocal(row) ? 'Редактировать' : 'Открыть', style: AppTypography.menuTitle(color: _text))),
-        if (_isLocal(row)) PopupMenuItem<String>(value: 'copy', child: Text('Создать копию', style: AppTypography.menuTitle(color: _text))),
-        PopupMenuItem<String>(value: 'properties', child: Text('Свойства', style: AppTypography.menuTitle(color: _text))),
+        PopupMenuItem<String>(
+            value: 'open',
+            child: Text(_isLocal(row) ? 'Редактировать' : 'Открыть',
+                style: AppTypography.menuTitle(color: _text))),
+        if (_isLocal(row))
+          PopupMenuItem<String>(
+              value: 'copy',
+              child: Text('Создать копию',
+                  style: AppTypography.menuTitle(color: _text))),
+        PopupMenuItem<String>(
+            value: 'properties',
+            child:
+                Text('Свойства', style: AppTypography.menuTitle(color: _text))),
         if (_isLocal(row) || _isAttachment(row)) const PopupMenuDivider(),
-        if (_isLocal(row) || _isAttachment(row)) PopupMenuItem<String>(value: 'delete', child: Text('Удалить', style: AppTypography.menuTitle(color: const Color(0xFFB42318)))),
+        if (_isLocal(row) || _isAttachment(row))
+          PopupMenuItem<String>(
+              value: 'delete',
+              child: Text('Удалить',
+                  style:
+                      AppTypography.menuTitle(color: const Color(0xFFB42318)))),
       ],
     );
     if (!mounted) return;
@@ -717,19 +814,27 @@ class _WorkspaceEntityRecordBrowserState extends State<WorkspaceEntityRecordBrow
                       IconButton(
                         tooltip: 'Назад',
                         onPressed: () => Navigator.of(context).maybePop(),
-                        icon: const SportotekaWorkspaceIcon(kind: SportotekaWorkspaceIconKind.back, size: 20),
+                        icon: const SportotekaWorkspaceIcon(
+                            kind: SportotekaWorkspaceIconKind.back, size: 20),
                       ),
                       const SizedBox(width: 3),
                     ],
-                    SportotekaWorkspaceIcon(kind: widget.iconKind, size: mobile ? 31 : 34),
+                    SportotekaWorkspaceIcon(
+                        kind: widget.iconKind, size: mobile ? 31 : 34),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(widget.sectionTitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTypography.screenTitle(color: _text)),
-                          Text(widget.ownerTitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTypography.secondary(color: _muted)),
+                          Text(widget.sectionTitle,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTypography.screenTitle(color: _text)),
+                          Text(widget.ownerTitle,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTypography.secondary(color: _muted)),
                         ],
                       ),
                     ),
@@ -738,40 +843,62 @@ class _WorkspaceEntityRecordBrowserState extends State<WorkspaceEntityRecordBrow
                           ? IconButton(
                               tooltip: 'Создать документ',
                               onPressed: _createLocalRecord,
-                              icon: const Icon(Icons.add_rounded, color: _green, size: 21),
+                              icon: const Icon(Icons.add_rounded,
+                                  color: _green, size: 21),
                             )
                           : FilledButton.icon(
                               onPressed: _createLocalRecord,
-                              style: FilledButton.styleFrom(backgroundColor: _green, elevation: 0),
+                              style: FilledButton.styleFrom(
+                                  backgroundColor: _green, elevation: 0),
                               icon: const Icon(Icons.add_rounded, size: 17),
-                              label: Text('Создать документ', style: AppTypography.actionStrong(color: Colors.white)),
+                              label: Text('Создать документ',
+                                  style: AppTypography.actionStrong(
+                                      color: Colors.white)),
                             ),
                     if (_canUploadAttachments) ...[
                       const SizedBox(width: 6),
                       mobile
                           ? IconButton(
                               tooltip: 'Добавить файл',
-                              onPressed: _uploadingAttachment ? null : _pickAttachment,
-                              icon: const Icon(Icons.upload_file_rounded, color: _green, size: 20),
+                              onPressed:
+                                  _uploadingAttachment ? null : _pickAttachment,
+                              icon: const Icon(Icons.upload_file_rounded,
+                                  color: _green, size: 20),
                             )
-                          : OutlinedButton.icon(
-                              onPressed: _uploadingAttachment ? null : _pickAttachment,
-                              icon: const Icon(Icons.upload_file_rounded, size: 17),
-                              label: Text(_uploadingAttachment ? 'Загрузка…' : 'Добавить файл', style: AppTypography.actionStrong(color: _green)),
+                          : TextButton.icon(
+                              onPressed:
+                                  _uploadingAttachment ? null : _pickAttachment,
+                              style: TextButton.styleFrom(
+                                foregroundColor: _green,
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 8),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8)),
+                              ),
+                              icon: const Icon(Icons.upload_file_rounded,
+                                  size: 17),
+                              label: Text(
+                                  _uploadingAttachment
+                                      ? 'Загрузка…'
+                                      : 'Добавить файл',
+                                  style: AppTypography.actionStrong(
+                                      color: _green)),
                             ),
                     ],
                     const SizedBox(width: 4),
                     IconButton(
                       tooltip: 'Обновить',
                       onPressed: _load,
-                      icon: const SportotekaWorkspaceIcon(kind: SportotekaWorkspaceIconKind.refresh, size: 19),
+                      icon: const SportotekaWorkspaceIcon(
+                          kind: SportotekaWorkspaceIconKind.refresh, size: 19),
                     ),
                   ],
                 ),
               ),
               const Divider(height: 1, color: _line),
               Container(
-                padding: EdgeInsets.fromLTRB(mobile ? 10 : 14, 9, mobile ? 10 : 14, 9),
+                padding: EdgeInsets.fromLTRB(
+                    mobile ? 10 : 14, 9, mobile ? 10 : 14, 9),
                 color: Colors.white,
                 child: Row(
                   children: [
@@ -786,20 +913,28 @@ class _WorkspaceEntityRecordBrowserState extends State<WorkspaceEntityRecordBrow
                             hintStyle: AppTypography.formHint(color: _muted),
                             prefixIcon: const Padding(
                               padding: EdgeInsets.all(9),
-                              child: SportotekaWorkspaceIcon(kind: SportotekaWorkspaceIconKind.search, size: 17),
+                              child: SportotekaWorkspaceIcon(
+                                  kind: SportotekaWorkspaceIconKind.search,
+                                  size: 17),
                             ),
                             filled: true,
                             fillColor: _soft,
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 10),
+                            border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                borderSide: BorderSide.none),
+                            contentPadding:
+                                const EdgeInsets.symmetric(horizontal: 10),
                           ),
                         ),
                       ),
                     ),
                     const SizedBox(width: 8),
                     TextButton(
-                      onPressed: () => setState(() => _newestFirst = !_newestFirst),
-                      child: Text(_newestFirst ? 'Сначала новые' : 'Сначала старые', style: AppTypography.action(color: _muted)),
+                      onPressed: () =>
+                          setState(() => _newestFirst = !_newestFirst),
+                      child: Text(
+                          _newestFirst ? 'Сначала новые' : 'Сначала старые',
+                          style: AppTypography.action(color: _muted)),
                     ),
                   ],
                 ),
@@ -809,13 +944,17 @@ class _WorkspaceEntityRecordBrowserState extends State<WorkspaceEntityRecordBrow
                 Container(
                   width: double.infinity,
                   color: const Color(0xFFFFF3F1),
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                  child: Text(_error!, style: AppTypography.caption(color: const Color(0xFFB42318))),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  child: Text(_error!,
+                      style: AppTypography.caption(
+                          color: const Color(0xFFB42318))),
                 ),
               Expanded(
                 child: DropTarget(
                   onDragEntered: (_) {
-                    if (_canUploadAttachments && mounted) setState(() => _draggingAttachment = true);
+                    if (_canUploadAttachments && mounted)
+                      setState(() => _draggingAttachment = true);
                   },
                   onDragExited: (_) {
                     if (mounted) setState(() => _draggingAttachment = false);
@@ -823,7 +962,10 @@ class _WorkspaceEntityRecordBrowserState extends State<WorkspaceEntityRecordBrow
                   onDragDone: (details) async {
                     if (mounted) setState(() => _draggingAttachment = false);
                     if (!_canUploadAttachments) return;
-                    final paths = details.files.map((XFile f) => f.path).where((p) => p.isNotEmpty).toList();
+                    final paths = details.files
+                        .map((XFile f) => f.path)
+                        .where((p) => p.isNotEmpty)
+                        .toList();
                     if (paths.isNotEmpty) await _uploadAttachmentPaths(paths);
                   },
                   child: Stack(
@@ -831,140 +973,298 @@ class _WorkspaceEntityRecordBrowserState extends State<WorkspaceEntityRecordBrow
                       Positioned.fill(
                         child: Row(
                           children: [
-                    Expanded(
-                      child: _loading
-                          ? const Center(child: CircularProgressIndicator(color: _green))
-                          : _visible.isEmpty
-                              ? Center(
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(24),
-                                    child: Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        SportotekaWorkspaceIcon(kind: widget.iconKind, size: 48, color: const Color(0xFF6E7A73)),
-                                        const SizedBox(height: 12),
-                                        Text(widget.emptyText, textAlign: TextAlign.center, style: AppTypography.secondary(color: _muted)),
-                                        if (_canCreateDocuments) ...[
-                                          const SizedBox(height: 12),
-                                          FilledButton(
-                                            onPressed: _createLocalRecord,
-                                            style: FilledButton.styleFrom(backgroundColor: _green, elevation: 0),
-                                            child: Text('Создать документ', style: AppTypography.actionStrong(color: Colors.white)),
+                            Expanded(
+                              child: _loading
+                                  ? const Center(
+                                      child: CircularProgressIndicator(
+                                          color: _green))
+                                  : _visible.isEmpty
+                                      ? Center(
+                                          child: Padding(
+                                            padding: const EdgeInsets.all(24),
+                                            child: Column(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                SportotekaWorkspaceIcon(
+                                                    kind: widget.iconKind,
+                                                    size: 48,
+                                                    color: const Color(
+                                                        0xFF6E7A73)),
+                                                const SizedBox(height: 12),
+                                                Text(widget.emptyText,
+                                                    textAlign: TextAlign.center,
+                                                    style:
+                                                        AppTypography.secondary(
+                                                            color: _muted)),
+                                                if (_canCreateDocuments) ...[
+                                                  const SizedBox(height: 12),
+                                                  FilledButton(
+                                                    onPressed:
+                                                        _createLocalRecord,
+                                                    style:
+                                                        FilledButton.styleFrom(
+                                                            backgroundColor:
+                                                                _green,
+                                                            elevation: 0),
+                                                    child: Text(
+                                                        'Создать документ',
+                                                        style: AppTypography
+                                                            .actionStrong(
+                                                                color: Colors
+                                                                    .white)),
+                                                  ),
+                                                ],
+                                                if (_canUploadAttachments) ...[
+                                                  const SizedBox(height: 8),
+                                                  TextButton.icon(
+                                                    onPressed:
+                                                        _uploadingAttachment
+                                                            ? null
+                                                            : _pickAttachment,
+                                                    style: TextButton.styleFrom(
+                                                      foregroundColor: _green,
+                                                      padding: const EdgeInsets
+                                                          .symmetric(
+                                                              horizontal: 10,
+                                                              vertical: 8),
+                                                    ),
+                                                    icon: const Icon(
+                                                        Icons.upload_file_rounded,
+                                                        size: 17),
+                                                    label: Text(
+                                                        _uploadingAttachment
+                                                            ? 'Загрузка…'
+                                                            : 'Добавить файл',
+                                                        style: AppTypography
+                                                            .actionStrong(
+                                                                color: _green)),
+                                                  ),
+                                                  const SizedBox(height: 7),
+                                                  Text(
+                                                      'Можно перетащить файл из Finder/Проводника прямо сюда.',
+                                                      textAlign:
+                                                          TextAlign.center,
+                                                      style:
+                                                          AppTypography.caption(
+                                                              color: _muted)),
+                                                ],
+                                              ],
+                                            ),
                                           ),
-                                        ],
-                                        if (_canUploadAttachments) ...[
-                                          const SizedBox(height: 8),
-                                          OutlinedButton(
-                                            onPressed: _uploadingAttachment ? null : _pickAttachment,
-                                            child: Text(_uploadingAttachment ? 'Загрузка…' : 'Добавить файл', style: AppTypography.actionStrong(color: _green)),
-                                          ),
-                                          const SizedBox(height: 7),
-                                          Text('Можно перетащить файл из Finder/Проводника прямо сюда.', textAlign: TextAlign.center, style: AppTypography.caption(color: _muted)),
-                                        ],
-                                      ],
-                                    ),
-                                  ),
-                                )
-                              : ListView.separated(
-                                  padding: const EdgeInsets.fromLTRB(10, 4, 10, 20),
-                                  itemCount: _visible.length,
-                                  separatorBuilder: (_, __) => const Divider(height: 1, indent: 58, color: _line),
-                                  itemBuilder: (_, index) {
-                                    final row = _visible[index];
-                                    final selected = identical(_selected, row) || (_selected != null && _sameRecord(_selected!, row));
-                                    final title = _titleFor(row);
-                                    final subtitle = _subtitleFor(row);
-                                    final date = _friendlyDate(_dateFor(row));
-                                    final tile = Material(
-                                      color: selected ? const Color(0xFFF1F7F4) : Colors.white,
-                                      borderRadius: BorderRadius.circular(10),
-                                      child: InkWell(
-                                        borderRadius: BorderRadius.circular(10),
-                                        onTap: () {
-                                          if (mobile) {
-                                            _open(row);
-                                          } else {
-                                            setState(() => _selected = row);
-                                          }
-                                        },
-                                        onDoubleTap: mobile ? null : () => _open(row),
-                                        onLongPress: () => _properties(row),
-                                        child: Padding(
-                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 9),
-                                          child: Row(
-                                            children: [
-                                              Container(
-                                                width: 40,
-                                                height: 40,
-                                                decoration: BoxDecoration(color: const Color(0xFFF1F7F4), borderRadius: BorderRadius.circular(11)),
-                                                alignment: Alignment.center,
-                                                child: SportotekaWorkspaceIcon(kind: widget.iconKind, size: 25),
-                                              ),
-                                              const SizedBox(width: 10),
-                                              Expanded(
-                                                child: Column(
-                                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                                  children: [
-                                                    Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTypography.itemTitle(color: _text)),
-                                                    if (subtitle.isNotEmpty) ...[
-                                                      const SizedBox(height: 2),
-                                                      Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTypography.secondary(color: _muted)),
+                                        )
+                                      : ListView.separated(
+                                          padding: const EdgeInsets.fromLTRB(
+                                              10, 4, 10, 20),
+                                          itemCount: _visible.length,
+                                          separatorBuilder: (_, __) =>
+                                              const Divider(
+                                                  height: 1,
+                                                  indent: 58,
+                                                  color: _line),
+                                          itemBuilder: (_, index) {
+                                            final row = _visible[index];
+                                            final selected =
+                                                identical(_selected, row) ||
+                                                    (_selected != null &&
+                                                        _sameRecord(
+                                                            _selected!, row));
+                                            final title = _titleFor(row);
+                                            final subtitle = _subtitleFor(row);
+                                            final date =
+                                                _friendlyDate(_dateFor(row));
+                                            final tile = Material(
+                                              color: selected
+                                                  ? const Color(0xFFF1F7F4)
+                                                  : Colors.white,
+                                              borderRadius:
+                                                  BorderRadius.circular(10),
+                                              child: InkWell(
+                                                borderRadius:
+                                                    BorderRadius.circular(10),
+                                                onTap: () {
+                                                  if (mobile) {
+                                                    _open(row);
+                                                  } else {
+                                                    setState(
+                                                        () => _selected = row);
+                                                  }
+                                                },
+                                                onDoubleTap: mobile
+                                                    ? null
+                                                    : () => _open(row),
+                                                onLongPress: () =>
+                                                    _properties(row),
+                                                child: Padding(
+                                                  padding: const EdgeInsets
+                                                      .symmetric(
+                                                      horizontal: 8,
+                                                      vertical: 9),
+                                                  child: Row(
+                                                    children: [
+                                                      Container(
+                                                        width: 40,
+                                                        height: 40,
+                                                        decoration: BoxDecoration(
+                                                            color: const Color(
+                                                                0xFFF1F7F4),
+                                                            borderRadius:
+                                                                BorderRadius
+                                                                    .circular(
+                                                                        11)),
+                                                        alignment:
+                                                            Alignment.center,
+                                                        child:
+                                                            SportotekaWorkspaceIcon(
+                                                                kind: widget
+                                                                    .iconKind,
+                                                                size: 25),
+                                                      ),
+                                                      const SizedBox(width: 10),
+                                                      Expanded(
+                                                        child: Column(
+                                                          crossAxisAlignment:
+                                                              CrossAxisAlignment
+                                                                  .start,
+                                                          children: [
+                                                            Text(title,
+                                                                maxLines: 1,
+                                                                overflow:
+                                                                    TextOverflow
+                                                                        .ellipsis,
+                                                                style: AppTypography
+                                                                    .itemTitle(
+                                                                        color:
+                                                                            _text)),
+                                                            if (subtitle
+                                                                .isNotEmpty) ...[
+                                                              const SizedBox(
+                                                                  height: 2),
+                                                              Text(subtitle,
+                                                                  maxLines: 1,
+                                                                  overflow:
+                                                                      TextOverflow
+                                                                          .ellipsis,
+                                                                  style: AppTypography
+                                                                      .secondary(
+                                                                          color:
+                                                                              _muted)),
+                                                            ],
+                                                          ],
+                                                        ),
+                                                      ),
+                                                      if (date.isNotEmpty)
+                                                        SizedBox(
+                                                            width: mobile
+                                                                ? 76
+                                                                : 104,
+                                                            child: Text(date,
+                                                                textAlign:
+                                                                    TextAlign
+                                                                        .right,
+                                                                style: AppTypography
+                                                                    .captionMedium(
+                                                                        color:
+                                                                            _text))),
+                                                      const SizedBox(width: 4),
+                                                      PopupMenuButton<String>(
+                                                        tooltip: 'Действия',
+                                                        color: Colors.white,
+                                                        surfaceTintColor:
+                                                            Colors.white,
+                                                        onSelected:
+                                                            (action) async {
+                                                          if (action == 'open')
+                                                            await _open(row);
+                                                          if (action == 'copy')
+                                                            await _duplicate(
+                                                                row);
+                                                          if (action ==
+                                                              'properties')
+                                                            await _properties(
+                                                                row);
+                                                          if (action ==
+                                                              'delete')
+                                                            await _delete(row);
+                                                        },
+                                                        itemBuilder: (_) => [
+                                                          PopupMenuItem(
+                                                              value: 'open',
+                                                              child: Text(
+                                                                  _isLocal(row)
+                                                                      ? 'Редактировать'
+                                                                      : 'Открыть',
+                                                                  style: AppTypography
+                                                                      .menuTitle())),
+                                                          if (_isLocal(row))
+                                                            PopupMenuItem(
+                                                                value: 'copy',
+                                                                child: Text(
+                                                                    'Создать копию',
+                                                                    style: AppTypography
+                                                                        .menuTitle())),
+                                                          PopupMenuItem(
+                                                              value:
+                                                                  'properties',
+                                                              child: Text(
+                                                                  'Свойства',
+                                                                  style: AppTypography
+                                                                      .menuTitle())),
+                                                          if (_isLocal(row) ||
+                                                              _isAttachment(
+                                                                  row))
+                                                            const PopupMenuDivider(),
+                                                          if (_isLocal(row) ||
+                                                              _isAttachment(
+                                                                  row))
+                                                            PopupMenuItem(
+                                                                value: 'delete',
+                                                                child: Text(
+                                                                    'Удалить',
+                                                                    style: AppTypography
+                                                                        .menuTitle(
+                                                                            color:
+                                                                                const Color(0xFFB42318)))),
+                                                        ],
+                                                        icon: const Icon(
+                                                            Icons
+                                                                .more_horiz_rounded,
+                                                            size: 19),
+                                                      ),
                                                     ],
-                                                  ],
+                                                  ),
                                                 ),
                                               ),
-                                              if (date.isNotEmpty)
-                                                SizedBox(width: mobile ? 76 : 104, child: Text(date, textAlign: TextAlign.right, style: AppTypography.captionMedium(color: _text))),
-                                              const SizedBox(width: 4),
-                                              PopupMenuButton<String>(
-                                                tooltip: 'Действия',
-                                                color: Colors.white,
-                                                surfaceTintColor: Colors.white,
-                                                onSelected: (action) async {
-                                                  if (action == 'open') await _open(row);
-                                                  if (action == 'copy') await _duplicate(row);
-                                                  if (action == 'properties') await _properties(row);
-                                                  if (action == 'delete') await _delete(row);
-                                                },
-                                                itemBuilder: (_) => [
-                                                  PopupMenuItem(value: 'open', child: Text(_isLocal(row) ? 'Редактировать' : 'Открыть', style: AppTypography.menuTitle())),
-                                                  if (_isLocal(row)) PopupMenuItem(value: 'copy', child: Text('Создать копию', style: AppTypography.menuTitle())),
-                                                  PopupMenuItem(value: 'properties', child: Text('Свойства', style: AppTypography.menuTitle())),
-                                                  if (_isLocal(row) || _isAttachment(row)) const PopupMenuDivider(),
-                                                  if (_isLocal(row) || _isAttachment(row)) PopupMenuItem(value: 'delete', child: Text('Удалить', style: AppTypography.menuTitle(color: const Color(0xFFB42318)))),
-                                                ],
-                                                icon: const Icon(Icons.more_horiz_rounded, size: 19),
-                                              ),
-                                            ],
-                                          ),
+                                            );
+                                            return GestureDetector(
+                                              behavior: HitTestBehavior.opaque,
+                                              onSecondaryTapDown: (d) =>
+                                                  _menu(row, d.globalPosition),
+                                              child: tile,
+                                            );
+                                          },
                                         ),
-                                      ),
-                                    );
-                                    return GestureDetector(
-                                      behavior: HitTestBehavior.opaque,
-                                      onSecondaryTapDown: (d) => _menu(row, d.globalPosition),
-                                      child: tile,
-                                    );
-                                  },
+                            ),
+                            if (inspector) ...[
+                              const VerticalDivider(width: 1, color: _line),
+                              SizedBox(
+                                width: 280,
+                                child: Padding(
+                                  padding: const EdgeInsets.all(16),
+                                  child: _selected == null
+                                      ? Center(
+                                          child: Text('Выберите запись',
+                                              style: AppTypography.secondary(
+                                                  color: _muted)))
+                                      : _EntityProperties(
+                                          title: _titleFor(_selected!),
+                                          iconKind: widget.iconKind,
+                                          properties:
+                                              _propertiesFor(_selected!),
+                                          onOpen: () => _open(_selected!),
+                                        ),
                                 ),
-                    ),
-                    if (inspector) ...[
-                      const VerticalDivider(width: 1, color: _line),
-                      SizedBox(
-                        width: 280,
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: _selected == null
-                              ? Center(child: Text('Выберите запись', style: AppTypography.secondary(color: _muted)))
-                              : _EntityProperties(
-                                  title: _titleFor(_selected!),
-                                  iconKind: widget.iconKind,
-                                  properties: _propertiesFor(_selected!),
-                                  onOpen: () => _open(_selected!),
-                                ),
-                        ),
-                      ),
-                    ],
+                              ),
+                            ],
                           ],
                         ),
                       ),
@@ -975,13 +1275,17 @@ class _WorkspaceEntityRecordBrowserState extends State<WorkspaceEntityRecordBrow
                               color: _green.withOpacity(.07),
                               alignment: Alignment.center,
                               child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 20, vertical: 13),
                                 decoration: BoxDecoration(
                                   color: Colors.white,
                                   borderRadius: BorderRadius.circular(12),
                                   border: Border.all(color: _green),
                                 ),
-                                child: Text('Отпустите файл — он будет добавлен в этот раздел', style: AppTypography.itemTitle(color: _green)),
+                                child: Text(
+                                    'Отпустите файл — он будет добавлен в этот раздел',
+                                    style:
+                                        AppTypography.itemTitle(color: _green)),
                               ),
                             ),
                           ),
@@ -998,7 +1302,16 @@ class _WorkspaceEntityRecordBrowserState extends State<WorkspaceEntityRecordBrow
   }
 
   bool _sameRecord(Map<String, dynamic> a, Map<String, dynamic> b) {
-    for (final key in const <String>['id', 'match_id', 'event_id', 'session_id', 'plan_id', 'record_id', 'date', 'created_at']) {
+    for (final key in const <String>[
+      'id',
+      'match_id',
+      'event_id',
+      'session_id',
+      'plan_id',
+      'record_id',
+      'date',
+      'created_at'
+    ]) {
       final av = '${a[key] ?? ''}';
       final bv = '${b[key] ?? ''}';
       if (av.isNotEmpty && bv.isNotEmpty && av == bv) return true;
@@ -1015,7 +1328,11 @@ class _WorkspaceEntityRecordBrowserState extends State<WorkspaceEntityRecordBrow
 }
 
 class _EntityProperties extends StatelessWidget {
-  const _EntityProperties({required this.title, required this.iconKind, required this.properties, required this.onOpen});
+  const _EntityProperties(
+      {required this.title,
+      required this.iconKind,
+      required this.properties,
+      required this.onOpen});
   final String title;
   final SportotekaWorkspaceIconKind iconKind;
   final List<WorkspaceEntityProperty> properties;
@@ -1026,7 +1343,9 @@ class _EntityProperties extends StatelessWidget {
     const text = Color(0xFF101814);
     const muted = Color(0xFF758079);
     const green = Color(0xFF0B8F55);
-    final visible = properties.where((p) => p.value.trim().isNotEmpty && p.value.trim() != '—').toList();
+    final visible = properties
+        .where((p) => p.value.trim().isNotEmpty && p.value.trim() != '—')
+        .toList();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
@@ -1035,7 +1354,9 @@ class _EntityProperties extends StatelessWidget {
           children: [
             SportotekaWorkspaceIcon(kind: iconKind, size: 34),
             const SizedBox(width: 10),
-            Expanded(child: Text('Свойства', style: AppTypography.sectionTitle(color: text))),
+            Expanded(
+                child: Text('Свойства',
+                    style: AppTypography.sectionTitle(color: text))),
           ],
         ),
         const SizedBox(height: 14),
@@ -1049,7 +1370,10 @@ class _EntityProperties extends StatelessWidget {
               children: [
                 Text(prop.label, style: AppTypography.caption(color: muted)),
                 const SizedBox(height: 2),
-                Text(prop.value, maxLines: 4, overflow: TextOverflow.ellipsis, style: AppTypography.secondaryMedium(color: text)),
+                Text(prop.value,
+                    maxLines: 4,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.secondaryMedium(color: text)),
               ],
             ),
           ),
@@ -1057,7 +1381,8 @@ class _EntityProperties extends StatelessWidget {
         FilledButton(
           onPressed: onOpen,
           style: FilledButton.styleFrom(backgroundColor: green, elevation: 0),
-          child: Text('Открыть', style: AppTypography.actionStrong(color: Colors.white)),
+          child: Text('Открыть',
+              style: AppTypography.actionStrong(color: Colors.white)),
         ),
       ],
     );
@@ -1105,10 +1430,12 @@ class WorkspaceEntityRecordDocument extends StatefulWidget {
   final int currentUserId;
 
   @override
-  State<WorkspaceEntityRecordDocument> createState() => _WorkspaceEntityRecordDocumentState();
+  State<WorkspaceEntityRecordDocument> createState() =>
+      _WorkspaceEntityRecordDocumentState();
 }
 
-class _WorkspaceEntityRecordDocumentState extends State<WorkspaceEntityRecordDocument> {
+class _WorkspaceEntityRecordDocumentState
+    extends State<WorkspaceEntityRecordDocument> {
   static const _green = Color(0xFF0B8F55);
   static const _text = Color(0xFF101814);
   static const _muted = Color(0xFF758079);
@@ -1116,8 +1443,11 @@ class _WorkspaceEntityRecordDocumentState extends State<WorkspaceEntityRecordDoc
   String _note = '';
   bool _busy = false;
   bool _detailsOpen = false;
+  bool _materialsOpen = false;
   WorkspaceServerStorage? _serverStorage;
   bool _serverAvailable = false;
+  bool _relatedLoading = false;
+  List<Map<String, dynamic>> _relatedFiles = <Map<String, dynamic>>[];
 
   String get _notePendingKey => '${widget.noteKey}_workspace_sync_pending_v1';
 
@@ -1131,6 +1461,222 @@ class _WorkspaceEntityRecordDocumentState extends State<WorkspaceEntityRecordDoc
       );
     }
     _loadNote();
+    _loadRelatedFiles();
+  }
+
+  bool get _canLoadRelatedFiles =>
+      widget.clubId > 0 &&
+      widget.entityType.trim().isNotEmpty &&
+      (int.tryParse(widget.entityId) ?? 0) > 0;
+
+  Future<void> _loadRelatedFiles() async {
+    if (!_canLoadRelatedFiles) return;
+    final server = _serverStorage;
+    if (server == null) return;
+    if (mounted) setState(() => _relatedLoading = true);
+    try {
+      final entityId = int.tryParse(widget.entityId) ?? 0;
+      final results = await Future.wait<List<Map<String, dynamic>>>([
+        server.listAttachments(
+          entityType: widget.entityType,
+          entityId: entityId,
+          sectionKey: 'documents',
+        ),
+        server.listEntityDocuments(
+          entityType: widget.entityType,
+          entityId: widget.entityId,
+        ),
+      ]);
+      final merged = <Map<String, dynamic>>[
+        ...results[0].map((e) => <String, dynamic>{...e, '_workspace_attachment': true}),
+        ...results[1].map((e) => <String, dynamic>{...e, '_workspace_linked_document': true}),
+      ];
+      if (!mounted) return;
+      setState(() => _relatedFiles = merged);
+    } catch (_) {
+      // Карточка сущности должна открываться даже при временной ошибке файлов.
+    } finally {
+      if (mounted) setState(() => _relatedLoading = false);
+    }
+  }
+
+  String _relatedTitle(Map<String, dynamic> row) {
+    for (final key in const <String>['title', 'original_name', 'file_name', 'name']) {
+      final value = '${row[key] ?? ''}'.trim();
+      if (value.isNotEmpty && value.toLowerCase() != 'null') return value;
+    }
+    return 'Документ';
+  }
+
+  String _relatedUrl(Map<String, dynamic> row) {
+    for (final key in const <String>['url', 'file_url', 'download_url', 'path']) {
+      final value = '${row[key] ?? ''}'.trim();
+      if (value.startsWith('http://') || value.startsWith('https://')) return value;
+      if (value.startsWith('/')) return 'https://sportotekaapp.ru$value';
+    }
+    return '';
+  }
+
+  Future<void> _openRelated(Map<String, dynamic> row) async {
+    final raw = _relatedUrl(row);
+    if (raw.isEmpty) return;
+    await openWorkspaceAttachmentPreview(
+      context,
+      title: _relatedTitle(row),
+      fileUrl: raw,
+      mimeType: '${row['mime_type'] ?? ''}',
+    );
+  }
+
+  Widget _materialsHeaderButton() {
+    if (!_canLoadRelatedFiles) return const SizedBox.shrink();
+    final count = _relatedFiles.length;
+    final label = _relatedLoading ? 'Материалы' : 'Материалы · $count';
+
+    return Tooltip(
+      message: count == 0
+          ? 'Материалы пока не добавлены'
+          : 'Показать материалы записи',
+      child: InkWell(
+        onTap: _relatedLoading
+            ? null
+            : () => setState(() => _materialsOpen = !_materialsOpen),
+        borderRadius: BorderRadius.circular(10),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          height: 34,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          decoration: BoxDecoration(
+            color: _materialsOpen
+                ? const Color(0xFFE6F3EC)
+                : const Color(0xFFF5F8F6),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: _materialsOpen
+                  ? const Color(0xFFCBE6D7)
+                  : const Color(0xFFE4EAE6),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (_relatedLoading)
+                const SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 1.6,
+                    color: _green,
+                  ),
+                )
+              else
+                const Icon(
+                  Icons.folder_copy_outlined,
+                  size: 16,
+                  color: _green,
+                ),
+              const SizedBox(width: 7),
+              Text(
+                label,
+                style: AppTypography.actionStrong(color: _green),
+              ),
+              const SizedBox(width: 3),
+              Icon(
+                _materialsOpen
+                    ? Icons.keyboard_arrow_up_rounded
+                    : Icons.keyboard_arrow_down_rounded,
+                size: 17,
+                color: _green,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _relatedFilesTray() {
+    if (!_canLoadRelatedFiles || !_materialsOpen) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(12, 7, 12, 8),
+      decoration: const BoxDecoration(
+        color: Color(0xFFFAFBFA),
+        border: Border(bottom: BorderSide(color: _line)),
+      ),
+      child: Row(
+        children: [
+          if (_relatedLoading)
+            const Expanded(
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 1.6,
+                    color: _green,
+                  ),
+                ),
+              ),
+            )
+          else if (_relatedFiles.isEmpty)
+            Expanded(
+              child: Text(
+                'Материалы пока не добавлены',
+                style: AppTypography.caption(color: _muted),
+              ),
+            )
+          else
+            Expanded(
+              child: SizedBox(
+                height: 32,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: _relatedFiles.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 6),
+                  itemBuilder: (_, index) {
+                    final row = _relatedFiles[index];
+                    final url = _relatedUrl(row);
+                    return ActionChip(
+                      visualDensity: VisualDensity.compact,
+                      avatar: Icon(
+                        row['_workspace_attachment'] == true
+                            ? Icons.attach_file_rounded
+                            : Icons.description_outlined,
+                        size: 14,
+                        color: _green,
+                      ),
+                      label: Text(
+                        _relatedTitle(row),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      onPressed: url.isEmpty ? null : () => _openRelated(row),
+                    );
+                  },
+                ),
+              ),
+            ),
+          if (!_relatedLoading) ...[
+            const SizedBox(width: 6),
+            IconButton(
+              visualDensity: VisualDensity.compact,
+              tooltip: 'Обновить материалы',
+              onPressed: _loadRelatedFiles,
+              icon: const Icon(
+                Icons.refresh_rounded,
+                size: 17,
+                color: _muted,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
   }
 
   Future<void> _loadNote() async {
@@ -1198,7 +1744,8 @@ class _WorkspaceEntityRecordDocumentState extends State<WorkspaceEntityRecordDoc
             parentId: widget.serverParentKey,
             createdAt: DateTime.now(),
           );
-          await server.syncNodeDocument(node: node, body: note, createHint: true);
+          await server.syncNodeDocument(
+              node: node, body: note, createHint: true);
           snapshot = await server.load();
         }
         if (widget.entityType.isNotEmpty && widget.entityId.isNotEmpty) {
@@ -1267,11 +1814,14 @@ class _WorkspaceEntityRecordDocumentState extends State<WorkspaceEntityRecordDoc
       } catch (e) {
         _serverAvailable = false;
         if (mounted) setState(() => _note = body);
-        throw Exception('Документ сохранён локально, но серверная синхронизация не выполнена: $e');
+        throw Exception(
+            'Документ сохранён локально, но серверная синхронизация не выполнена: $e');
       }
     }
     if (mounted) setState(() => _note = body);
-    await widget.onRefresh?.call();
+    // Do not refresh/rebuild the whole entity screen after every autosave.
+    // The editor already owns the current text and sync state; a full refresh
+    // caused the page-wide loading overlay while the user was typing.
   }
 
   Future<void> _edit() async {
@@ -1286,46 +1836,145 @@ class _WorkspaceEntityRecordDocumentState extends State<WorkspaceEntityRecordDoc
   }
 
   Future<void> _openAttachment() async {
-    final uri = Uri.tryParse(widget.fileUrl);
-    if (uri == null) return;
-    await launchUrl(uri, mode: LaunchMode.externalApplication);
+    await openWorkspaceAttachmentPreview(
+      context,
+      title: widget.title,
+      fileUrl: widget.fileUrl,
+    );
+  }
+
+  bool get _insideWorkspaceWindow => widget.onClose != null;
+
+  Widget _compactHeaderAction({
+    required IconData icon,
+    required String label,
+    required VoidCallback? onTap,
+  }) {
+    return TextButton.icon(
+      onPressed: onTap,
+      style: TextButton.styleFrom(
+        foregroundColor: _green,
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
+        minimumSize: const Size(0, 34),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+        ),
+      ),
+      icon: Icon(icon, size: 16),
+      label: Text(
+        label,
+        style: AppTypography.actionStrong(color: _green),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final visible = widget.properties.where((p) => p.value.trim().isNotEmpty && p.value.trim() != '—').toList();
-    final headline = visible.take(4).toList();
-    final rest = visible.skip(4).toList();
+    final visible = widget.properties
+        .where((p) => p.value.trim().isNotEmpty && p.value.trim() != '—')
+        .toList();
+    final headline = visible.take(_insideWorkspaceWindow ? 5 : 4).toList();
+    final rest = visible.skip(_insideWorkspaceWindow ? 5 : 4).toList();
+
     return ColoredBox(
       color: Colors.white,
       child: Column(
         children: [
           Container(
-            height: 62,
-            padding: const EdgeInsets.symmetric(horizontal: 10),
+            height: _insideWorkspaceWindow ? 50 : 62,
+            padding: EdgeInsets.symmetric(
+              horizontal: _insideWorkspaceWindow ? 12 : 10,
+            ),
             child: Row(
               children: [
-                IconButton(
-                  onPressed: widget.onClose ?? () => Navigator.of(context).maybePop(),
-                  icon: const SportotekaWorkspaceIcon(kind: SportotekaWorkspaceIconKind.back, size: 20),
+                if (!_insideWorkspaceWindow) ...[
+                  IconButton(
+                    onPressed: widget.onClose ??
+                        () => Navigator.of(context).maybePop(),
+                    icon: const SportotekaWorkspaceIcon(
+                      kind: SportotekaWorkspaceIconKind.back,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 3),
+                ],
+                SportotekaWorkspaceIcon(
+                  kind: widget.iconKind,
+                  size: _insideWorkspaceWindow ? 27 : 31,
                 ),
-                const SizedBox(width: 3),
-                SportotekaWorkspaceIcon(kind: widget.iconKind, size: 31),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('${widget.ownerTitle} — ${widget.title}', maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTypography.screenTitle(color: _text)),
-                      Text(widget.sectionTitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTypography.caption(color: _muted)),
+                      Text(
+                        '${widget.ownerTitle} — ${widget.title}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: _insideWorkspaceWindow
+                            ? AppTypography.itemTitle(color: _text).copyWith(
+                                fontSize: 15.2,
+                                fontWeight: FontWeight.w700,
+                              )
+                            : AppTypography.screenTitle(color: _text),
+                      ),
+                      if (!_insideWorkspaceWindow) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          widget.sectionTitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTypography.caption(color: _muted),
+                        ),
+                      ],
                     ],
                   ),
                 ),
-                if (widget.onEdit != null)
-                  TextButton(onPressed: _busy ? null : _edit, child: Text(_busy ? 'Сохранение…' : 'Редактировать', style: AppTypography.actionStrong(color: _green))),
-                if (widget.fileUrl.isNotEmpty)
-                  TextButton(onPressed: _openAttachment, child: Text('Вложение', style: AppTypography.actionStrong(color: _green))),
+                if (_canLoadRelatedFiles) ...[
+                  const SizedBox(width: 8),
+                  _materialsHeaderButton(),
+                ],
+                if (widget.onEdit != null) ...[
+                  const SizedBox(width: 4),
+                  if (_insideWorkspaceWindow)
+                    _compactHeaderAction(
+                      icon: Icons.edit_outlined,
+                      label: _busy ? 'Сохранение…' : 'Редактировать',
+                      onTap: _busy ? null : _edit,
+                    )
+                  else
+                    TextButton(
+                      onPressed: _busy ? null : _edit,
+                      child: Text(
+                        _busy ? 'Сохранение…' : 'Редактировать',
+                        style: AppTypography.actionStrong(color: _green),
+                      ),
+                    ),
+                ],
+                if (widget.fileUrl.isNotEmpty) ...[
+                  const SizedBox(width: 2),
+                  if (_insideWorkspaceWindow)
+                    IconButton(
+                      tooltip: 'Открыть вложение',
+                      visualDensity: VisualDensity.compact,
+                      onPressed: _openAttachment,
+                      icon: const Icon(
+                        Icons.attach_file_rounded,
+                        size: 18,
+                        color: _green,
+                      ),
+                    )
+                  else
+                    TextButton(
+                      onPressed: _openAttachment,
+                      child: Text(
+                        'Вложение',
+                        style: AppTypography.actionStrong(color: _green),
+                      ),
+                    ),
+                ],
               ],
             ),
           ),
@@ -1333,20 +1982,29 @@ class _WorkspaceEntityRecordDocumentState extends State<WorkspaceEntityRecordDoc
           if (headline.isNotEmpty)
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 9),
+              padding: EdgeInsets.fromLTRB(
+                16,
+                _insideWorkspaceWindow ? 7 : 10,
+                16,
+                _insideWorkspaceWindow ? 7 : 9,
+              ),
               color: const Color(0xFFFAFBFA),
               child: Wrap(
-                spacing: 18,
-                runSpacing: 6,
+                spacing: _insideWorkspaceWindow ? 14 : 18,
+                runSpacing: 5,
                 children: [
                   for (final p in headline)
                     _RibbonProperty(label: p.label, value: p.value),
                   if (rest.isNotEmpty)
                     InkWell(
-                      onTap: () => setState(() => _detailsOpen = !_detailsOpen),
+                      onTap: () =>
+                          setState(() => _detailsOpen = !_detailsOpen),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(vertical: 2),
-                        child: Text(_detailsOpen ? 'Скрыть данные' : 'Все данные', style: AppTypography.action(color: _green)),
+                        child: Text(
+                          _detailsOpen ? 'Скрыть данные' : 'Все данные',
+                          style: AppTypography.action(color: _green),
+                        ),
                       ),
                     ),
                 ],
@@ -1356,18 +2014,28 @@ class _WorkspaceEntityRecordDocumentState extends State<WorkspaceEntityRecordDoc
             Container(
               width: double.infinity,
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
-              decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: _line))),
+              decoration: const BoxDecoration(
+                border: Border(bottom: BorderSide(color: _line)),
+              ),
               child: Wrap(
                 spacing: 22,
                 runSpacing: 10,
                 children: [
                   for (final p in rest)
-                    SizedBox(width: 230, child: _RibbonProperty(label: p.label, value: p.value, multiline: true)),
+                    SizedBox(
+                      width: 230,
+                      child: _RibbonProperty(
+                        label: p.label,
+                        value: p.value,
+                        multiline: true,
+                      ),
+                    ),
                 ],
               ),
             )
           else
             const Divider(height: 1, color: _line),
+          _relatedFilesTray(),
           Expanded(
             child: WorkspaceDocumentEditor(
               key: ValueKey(widget.noteKey),
@@ -1378,7 +2046,18 @@ class _WorkspaceEntityRecordDocumentState extends State<WorkspaceEntityRecordDoc
               contextName: widget.ownerTitle,
               documentType: 'Рабочая заметка',
               liveBlocksKey: widget.noteKey,
+              compactWorkspaceChrome: _insideWorkspaceWindow,
               onSave: _saveNote,
+              aiClubId: widget.clubId > 0 ? widget.clubId : null,
+              aiUserId: widget.currentUserId > 0 ? widget.currentUserId : null,
+              aiTeamId: int.tryParse(
+                '${widget.record['team_id'] ?? widget.record['teamId'] ?? 0}',
+              ),
+              aiClubName:
+                  '${widget.record['club_name'] ?? widget.record['clubName'] ?? ''}',
+              aiTeamName:
+                  '${widget.record['team_name'] ?? widget.record['teamName'] ?? (widget.entityType == 'team' ? widget.ownerTitle : '')}',
+              aiDocumentKey: widget.noteKey,
             ),
           ),
         ],
@@ -1388,7 +2067,8 @@ class _WorkspaceEntityRecordDocumentState extends State<WorkspaceEntityRecordDoc
 }
 
 class _RibbonProperty extends StatelessWidget {
-  const _RibbonProperty({required this.label, required this.value, this.multiline = false});
+  const _RibbonProperty(
+      {required this.label, required this.value, this.multiline = false});
   final String label;
   final String value;
   final bool multiline;
@@ -1402,8 +2082,13 @@ class _RibbonProperty extends StatelessWidget {
         text: TextSpan(
           style: AppTypography.secondary(color: const Color(0xFF101814)),
           children: [
-            TextSpan(text: '$label  ', style: AppTypography.caption(color: const Color(0xFF758079))),
-            TextSpan(text: value, style: AppTypography.secondaryMedium(color: const Color(0xFF101814))),
+            TextSpan(
+                text: '$label  ',
+                style: AppTypography.caption(color: const Color(0xFF758079))),
+            TextSpan(
+                text: value,
+                style: AppTypography.secondaryMedium(
+                    color: const Color(0xFF101814))),
           ],
         ),
       ),

@@ -9367,16 +9367,11 @@ class _AiAnalysisTab extends StatelessWidget {
       initialPayload: _payload(),
       autoSendInitialPrompt: true,
     );
-    final notes = personalSessionMode
-        ? null
-        : _AiCoachNotesPanel(
-            report: report,
-            clubId: effectiveClubId,
-            teamId: effectiveTeamId,
-            coachId: userId,
-          );
+    // SPORTOTEKA AI uses the full Tracker AI workspace.
+    // Trainer decision journal is intentionally hidden here.
+    final Widget? notes = null;
 
-    return ColoredBox(
+return ColoredBox(
       color: _R.bg,
       child: Padding(
         padding: const EdgeInsets.all(8),

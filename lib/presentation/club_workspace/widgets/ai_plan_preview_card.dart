@@ -12,9 +12,19 @@ class AiPlanPreviewCard extends StatelessWidget {
     required this.onOpen,
   });
 
+  int _minutes(dynamic value) {
+    if (value is num) return value.toInt();
+    return int.tryParse('$value') ?? 0;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final raw = templateJson['exercises'];
+    final totalMinutes = _minutes(
+      templateJson['duration_minutes'] ?? templateJson['duration'],
+    );
+    final raw = templateJson['exercises'] ??
+        templateJson['blocks'] ??
+        templateJson['sections'];
     final exercises = raw is List
         ? raw.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList()
         : <Map<String, dynamic>>[];
@@ -42,13 +52,14 @@ class AiPlanPreviewCard extends StatelessWidget {
                   ),
                 ),
               ),
-              Text(
-                '${templateJson['duration_minutes'] ?? 0} мин',
-                style: const TextStyle(
-                  color: Color(0xFF667085),
-                  fontWeight: FontWeight.w700,
+              if (totalMinutes > 0)
+                Text(
+                  '$totalMinutes мин',
+                  style: const TextStyle(
+                    color: Color(0xFF667085),
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
-              ),
             ],
           ),
           const SizedBox(height: 10),
@@ -81,13 +92,16 @@ class AiPlanPreviewCard extends StatelessWidget {
                       style: const TextStyle(fontWeight: FontWeight.w600),
                     ),
                   ),
-                  Text(
-                    '${exercises[i]['duration_minutes'] ?? 0} мин',
-                    style: const TextStyle(
-                      color: Color(0xFF667085),
-                      fontSize: 11,
+                  if (_minutes(exercises[i]['duration_minutes'] ??
+                          exercises[i]['minutes']) >
+                      0)
+                    Text(
+                      '${_minutes(exercises[i]['duration_minutes'] ?? exercises[i]['minutes'])} мин',
+                      style: const TextStyle(
+                        color: Color(0xFF667085),
+                        fontSize: 11,
+                      ),
                     ),
-                  ),
                 ],
               ),
             ),

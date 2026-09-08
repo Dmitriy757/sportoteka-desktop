@@ -3,7 +3,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:math';
 import 'dart:ui';
 import 'dart:math' as math;
 
@@ -29,6 +28,7 @@ import 'package:sportoteka/presentation/chat_screen/chat_room_screen.dart';
 import 'package:sportoteka/presentation/chat_screen/chat_screen.dart';
 import 'package:sportoteka/presentation/chat_screen/cmr_notifications_panel.dart';
 import 'package:sportoteka/presentation/club_workspace/club_workspace_screen.dart';
+import 'package:sportoteka/presentation/club_workspace/cmr_club_ai_assistant_panel.dart';
 import 'package:sportoteka/presentation/club_workspace/cmr_press_assistant_screen.dart';
 import 'package:sportoteka/presentation/booking_screen/booking_screen.dart';
 import 'package:sportoteka/presentation/catalog/events_list_screen.dart';
@@ -898,10 +898,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
   final Map<int, bool> _socialFollowingState = <int, bool>{};
   final Set<int> _socialFollowingLoaded = <int>{};
   final Set<int> _socialFollowingBusy = <int>{};
-  static const bool _enableSportotekaAi = false;
-  final Random _rnd = Random();
-  int _aiCardSeed = 1;
-  bool _aiExpanded = false;
+  static const bool _enableSportotekaAi = true;
   bool _skillsExpanded = false;
 
   // ========== ВАЖНО: ГЕТТЕР ISPLAYER ==========
@@ -2255,7 +2252,6 @@ class _MyProfileScreenState extends State<MyProfileScreen>
       if (!mounted) return;
       _startClubAccessGuard();
     });
-    _aiCardSeed = _rnd.nextInt(999999);
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1500),
@@ -4947,17 +4943,17 @@ class _MyProfileScreenState extends State<MyProfileScreen>
           final desktopSize = Size(constraints.maxWidth, constraints.maxHeight);
           _profileMainWindowPosition ??= const Offset(76, 34);
           _profileMainWindowSize ??= Size(
-            max(720.0, desktopSize.width - 152),
-            max(520.0, desktopSize.height - 134),
+            math.max(720.0, desktopSize.width - 152),
+            math.max(520.0, desktopSize.height - 134),
           );
           _profileModuleWindowPosition ??= Offset(
             desktopSize.width > 1380 ? 210 : 130,
             64,
           );
           _profileModuleWindowSize ??= Size(
-            min(1120.0,
+            math.min(1120.0,
                 desktopSize.width - (desktopSize.width > 1380 ? 330 : 200)),
-            min(760.0, desktopSize.height - 182),
+            math.min(760.0, desktopSize.height - 182),
           );
 
           final windows = <({int z, Widget child})>[];
@@ -5095,22 +5091,22 @@ class _MyProfileScreenState extends State<MyProfileScreen>
     required double minWidth,
     required double minHeight,
   }) {
-    final availableWidth = max(360.0, desktopSize.width - 24);
-    final availableHeight = max(300.0, desktopSize.height - 106);
+    final availableWidth = math.max(360.0, desktopSize.width - 24);
+    final availableHeight = math.max(300.0, desktopSize.height - 106);
     return Size(
       requested.width
-          .clamp(min(minWidth, availableWidth), availableWidth)
+          .clamp(math.min(minWidth, availableWidth), availableWidth)
           .toDouble(),
       requested.height
-          .clamp(min(minHeight, availableHeight), availableHeight)
+          .clamp(math.min(minHeight, availableHeight), availableHeight)
           .toDouble(),
     );
   }
 
   Offset _safeProfileWindowPosition(
       Offset requested, Size size, Size desktopSize) {
-    final maxX = max(8.0, desktopSize.width - size.width - 8);
-    final maxY = max(8.0, desktopSize.height - size.height - 96);
+    final maxX = math.max(8.0, desktopSize.width - size.width - 8);
+    final maxY = math.max(8.0, desktopSize.height - size.height - 96);
     return Offset(
       requested.dx.clamp(8.0, maxX).toDouble(),
       requested.dy.clamp(8.0, maxY).toDouble(),
@@ -5138,10 +5134,10 @@ class _MyProfileScreenState extends State<MyProfileScreen>
       final current = _profileMainWindowSize ?? const Size(1040, 680);
       _profileMainWindowSize = Size(
         (current.width + delta.dx)
-            .clamp(620.0, max(620.0, desktopSize.width - position.dx - 12))
+            .clamp(620.0, math.max(620.0, desktopSize.width - position.dx - 12))
             .toDouble(),
         (current.height + delta.dy)
-            .clamp(480.0, max(480.0, desktopSize.height - position.dy - 102))
+            .clamp(480.0, math.max(480.0, desktopSize.height - position.dy - 102))
             .toDouble(),
       );
     });
@@ -5168,10 +5164,10 @@ class _MyProfileScreenState extends State<MyProfileScreen>
       final current = _profileModuleWindowSize ?? const Size(1040, 680);
       _profileModuleWindowSize = Size(
         (current.width + delta.dx)
-            .clamp(560.0, max(560.0, desktopSize.width - position.dx - 12))
+            .clamp(560.0, math.max(560.0, desktopSize.width - position.dx - 12))
             .toDouble(),
         (current.height + delta.dy)
-            .clamp(420.0, max(420.0, desktopSize.height - position.dy - 102))
+            .clamp(420.0, math.max(420.0, desktopSize.height - position.dy - 102))
             .toDouble(),
       );
     });
@@ -9911,7 +9907,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
       case 'team':
         return _buildTeamCard();
       case 'ai':
-        if (!isPlayer || !_enableSportotekaAi) return const SizedBox();
+        if (!isOwnProfile || !_enableSportotekaAi) return const SizedBox();
         return _buildAiSection();
       case 'skills':
         if (!isPlayer) return const SizedBox();
@@ -9995,43 +9991,99 @@ class _MyProfileScreenState extends State<MyProfileScreen>
     );
   }
 
-  Widget _buildAiSection() {
-    // ===== НОВЫЙ КОД =====
-    if (!_enableSportotekaAi) return const SizedBox();
+  Future<void> _openPersonalAi() async {
+    if (!isOwnProfile || !_enableSportotekaAi) return;
 
-    return _buildExpandableCard(
-      title: "Спортотека AI",
+    final myId = await PrefUtils.getUserId() ?? widget.userId ?? 0;
+    if (!mounted || myId <= 0) {
+      Get.snackbar(
+        'Спортотека AI',
+        'Не удалось определить пользователя',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      return;
+    }
+
+    _openCmrWindow(
+      title: 'Спортотека AI',
       icon: Icons.auto_awesome_rounded,
-      expanded: _aiExpanded,
-      onToggle: () => setState(() => _aiExpanded = !_aiExpanded),
-      badge: const Text("BETA"),
-      child: Column(
-        children: [
-          Row(
+      maxWidth: 1280,
+      maxHeight: 860,
+      child: CmrClubAiAssistantPanel(
+        clubId: 0,
+        userId: myId,
+        clubName: 'Личный помощник',
+        personalProfileMode: true,
+      ),
+    );
+  }
+
+  Widget _buildAiSection() {
+    if (!isOwnProfile || !_enableSportotekaAi) {
+      return const SizedBox();
+    }
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => unawaited(_openPersonalAi()),
+        borderRadius: BorderRadius.circular(design.cardRadius),
+        child: Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 14,
+          ),
+          decoration: BoxDecoration(
+            color: design.cardColor,
+            borderRadius: BorderRadius.circular(design.cardRadius),
+            border: Border.all(
+              color: design.primaryColor.withOpacity(0.14),
+            ),
+          ),
+          child: Row(
             children: [
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: design.primaryColor.withOpacity(0.09),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(
+                  Icons.auto_awesome_rounded,
+                  color: design.primaryColor,
+                  size: 23,
+                ),
+              ),
+              const SizedBox(width: 13),
               Expanded(
-                  child: Text("Персонально для: $fullName",
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Спортотека AI',
+                      style: _headingStyle.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Чат • изображения • видео • личный помощник',
                       style: _smallStyle.copyWith(
-                          color: design.textSecondaryColor,
-                          fontWeight: FontWeight.w700))),
-              IconButton(
-                  onPressed: () =>
-                      setState(() => _aiCardSeed = _rnd.nextInt(999999)),
-                  icon: Icon(Icons.refresh_rounded,
-                      color: design.textSecondaryColor)),
+                        color: design.textSecondaryColor,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.chevron_right_rounded,
+                color: design.textSecondaryColor,
+                size: 23,
+              ),
             ],
           ),
-          const SizedBox(height: 10),
-          _AiMatchIqCard(
-              seed: _aiCardSeed,
-              playerName: fullName,
-              position: "ST",
-              design: design),
-          const SizedBox(height: 10),
-          _AiTrainingScanCard(seed: _aiCardSeed, design: design),
-          const SizedBox(height: 10),
-          _AiWeeklyChallengeCard(seed: _aiCardSeed, design: design),
-        ],
+        ),
       ),
     );
   }
@@ -10843,8 +10895,8 @@ class _ProfileFullModulesMenuOverlay extends StatelessWidget {
     final height = media.size.height;
     final compact = width < 720;
     final columns = compact ? 4 : 6;
-    final menuWidth = min(compact ? width - 22 : 760.0, width - 32);
-    final maxHeight = max(320.0, min(height - 118, compact ? 560.0 : 600.0));
+    final menuWidth = math.min(compact ? width - 22 : 760.0, width - 32);
+    final maxHeight = math.max(320.0, math.min(height - 118, compact ? 560.0 : 600.0));
 
     return Material(
       color: Colors.transparent,

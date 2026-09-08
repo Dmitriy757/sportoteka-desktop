@@ -45,6 +45,39 @@ class ClubAiVisualization {
     );
   }
 
+  Map<String, dynamic> toMap() {
+    var rawType = 'unknown';
+    switch (type) {
+      case ClubAiVisualizationType.tacticalBoard:
+        rawType = 'tactical_board';
+        break;
+      case ClubAiVisualizationType.heartRate:
+        rawType = 'heart_rate';
+        break;
+      case ClubAiVisualizationType.speed:
+        rawType = 'speed';
+        break;
+      case ClubAiVisualizationType.load:
+        rawType = 'load';
+        break;
+      case ClubAiVisualizationType.trajectory:
+        rawType = 'trajectory';
+        break;
+      case ClubAiVisualizationType.metrics:
+        rawType = 'metrics';
+        break;
+      case ClubAiVisualizationType.unknown:
+        break;
+    }
+    return <String, dynamic>{
+      'id': id,
+      'type': rawType,
+      'title': title,
+      'subtitle': subtitle,
+      'data': data,
+    };
+  }
+
   static ClubAiVisualizationType _parseType(
     String raw,
     Map<String, dynamic> data,

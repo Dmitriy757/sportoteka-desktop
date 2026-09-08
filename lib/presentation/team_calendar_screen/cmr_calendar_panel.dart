@@ -1,10 +1,12 @@
 // lib/presentation/team_calendar_screen/cmr_calendar_panel.dart
 // Windows 11 / Fluent unified window refresh for CMR Calendar.
+import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:ui' show FontFeature;
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:http/http.dart' as http;
 
 import 'package:sportoteka/core/theme/app_typography.dart';
 import 'package:sportoteka/core/utils/pref_utils.dart';
@@ -14,6 +16,9 @@ import 'package:sportoteka/presentation/team_calendar_screen/team_calendar_api.d
 import 'package:sportoteka/presentation/team_calendar_screen/team_calendar_models.dart';
 import 'package:sportoteka/presentation/team_calendar_screen/training_rating_sheet.dart';
 import 'package:sportoteka/presentation/team_calendar_screen/training_attendance_panel.dart';
+import 'package:sportoteka/presentation/team_calendar_screen/training_materials_panel.dart';
+import 'package:sportoteka/presentation/team_calendar_screen/training_activity_panel.dart';
+import 'package:sportoteka/presentation/team_calendar_screen/training_lifecycle_api.dart';
 
 enum CmrCalendarMode { month, week }
 
@@ -1417,8 +1422,9 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
         key: ValueKey<String>('calendar-event-${event.id}-${_workPanel.name}'),
         event: event,
         teamName: widget.teamName,
+        clubId: widget.clubId,
         canEdit: canEdit,
-        initialTab: _workPanel == _CalendarWorkPanel.ratings ? 2 : 0,
+        initialTab: _workPanel == _CalendarWorkPanel.ratings ? 3 : 0,
         onClose: _closeWorkPanel,
         onBackToCalendar: _closeWorkPanel,
         onEdit: () => _openEdit(event),
@@ -1609,14 +1615,14 @@ class _C {
   static const Color muted = Color(0xFF5F6670);
   static const Color muted2 = Color(0xFF8A9099);
 
-  static const Color green = Color(0xFF00A750);
-  static const Color greenDark = Color(0xFF067A46);
-  static const Color darkGreen = Color(0xFF067A46);
-  static const Color accentSoft = Color(0xFFF3FAF6);
-  static const Color greenSoft = Color(0xFFF3FAF6);
-  static const Color greenSoft2 = Color(0xFFF8FEFA);
-  static const Color accentBorder = Color(0xFFD7F0E2);
-  static const Color greenBorder = Color(0xFFD7F0E2);
+  static const Color green = Color(0xFF14915D);
+  static const Color greenDark = Color(0xFF0F7B50);
+  static const Color darkGreen = Color(0xFF0F7B50);
+  static const Color accentSoft = Color(0xFFF7FBF8);
+  static const Color greenSoft = Color(0xFFF7FBF8);
+  static const Color greenSoft2 = Color(0xFFF9FCFA);
+  static const Color accentBorder = Color(0xFFE0EEE7);
+  static const Color greenBorder = Color(0xFFE0EEE7);
 
   static const Color blue = Color(0xFF2563EB);
   static const Color blueSoft = Color(0xFFF5F8FF);
@@ -1626,7 +1632,7 @@ class _C {
   static const Color slateSoft = Color(0xFFF3F5F7);
   static const Color amber = Color(0xFFD97706);
   static const Color amberSoft = Color(0xFFFFFBEB);
-  static const Color red = Color(0xFFD92D20);
+  static const Color red = Color(0xFFB96D6D);
   static const Color redSoft = Color(0xFFFEF2F2);
   static const Color winBlue = Color(0xFF2563EB);
   static const Color winCyan = Color(0xFF0891B2);
@@ -2496,7 +2502,7 @@ class _ModeButton extends StatelessWidget {
         height: 32,
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: active ? _C.greenSoft : Colors.transparent,
+          color: active ? const Color(0xFFF4F6F5) : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
         ),
         child: Text(
@@ -2799,6 +2805,7 @@ class _CalendarDetailsPlaceholder extends StatelessWidget {
 class _InlineEventDetailsPanel extends StatefulWidget {
   final TeamEvent event;
   final String teamName;
+  final int clubId;
   final bool canEdit;
   final VoidCallback onClose;
   final VoidCallback onBackToCalendar;
@@ -2812,6 +2819,7 @@ class _InlineEventDetailsPanel extends StatefulWidget {
     super.key,
     required this.event,
     required this.teamName,
+    required this.clubId,
     required this.canEdit,
     required this.onClose,
     required this.onBackToCalendar,
@@ -2827,13 +2835,333 @@ class _InlineEventDetailsPanel extends StatefulWidget {
 class _InlineEventDetailsPanelState extends State<_InlineEventDetailsPanel> {
   late int tab;
   int coachId = 0;
-  @override void initState(){super.initState(); tab = widget.initialTab.clamp(0, 2); _loadCoach();}
-  Future<void> _loadCoach() async {final id=await PrefUtils.getUserId()??0; if(mounted)setState(()=>coachId=id);}
+  TrainingLifecycleState lifecycle = const TrainingLifecycleState();
+  bool lifecycleLoading = false;
+  bool lifecycleSaving = false;
+  bool attendanceReadinessLoading = false;
+  int attendancePlayersTotal = 0;
+  int attendancePresent = 0;
+  int attendanceUnset = 0;
+  bool _trainingChromeExpanded = true;
+
+  @override
+  void initState() {
+    super.initState();
+    tab = widget.initialTab.clamp(0, 3);
+    _loadCoach();
+    _refreshLifecycle();
+    _refreshAttendanceReadiness();
+  }
+
+  @override
+  void didUpdateWidget(covariant _InlineEventDetailsPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.event.id != widget.event.id || oldWidget.initialTab != widget.initialTab) {
+      tab = widget.initialTab.clamp(0, 3);
+      lifecycle = const TrainingLifecycleState();
+      attendancePlayersTotal = 0;
+      attendancePresent = 0;
+      attendanceUnset = 0;
+      _trainingChromeExpanded = true;
+      _refreshLifecycle();
+      _refreshAttendanceReadiness();
+    }
+  }
+
+  Future<void> _loadCoach() async {
+    final id = await PrefUtils.getUserId() ?? 0;
+    if (mounted) setState(() => coachId = id);
+  }
+
+  Future<void> _refreshLifecycle() async {
+    final event = widget.event;
+    final isTrainingLike = event.type == TeamEventType.training || event.type == TeamEventType.gym;
+    if (!isTrainingLike || event.id <= 0) return;
+    if (mounted) setState(() => lifecycleLoading = true);
+    try {
+      final effectiveClubId = event.clubId > 0 ? event.clubId : widget.clubId;
+      final next = await TrainingLifecycleApi(
+        apiBase: _CmrCalendarPanelState.apiBase,
+        clubId: effectiveClubId,
+        teamId: event.teamId,
+        eventId: event.id,
+      ).load();
+      if (mounted) setState(() => lifecycle = next);
+    } catch (_) {
+      // Статус не должен ломать основную карточку тренировки.
+    } finally {
+      if (mounted) setState(() => lifecycleLoading = false);
+    }
+  }
+
+  int _attendanceId(dynamic value) =>
+      value is num ? value.toInt() : int.tryParse('${value ?? 0}') ?? 0;
+
+  Map<String, Map<String, dynamic>> _attendanceItems(dynamic decoded) {
+    dynamic raw = decoded;
+    if (decoded is Map) {
+      raw = decoded['items'] ??
+          decoded['attendance'] ??
+          decoded['rows'] ??
+          decoded['records'] ??
+          decoded['data'] ??
+          const <dynamic>[];
+    }
+
+    final out = <String, Map<String, dynamic>>{};
+    if (raw is Map) {
+      raw.forEach((key, value) {
+        if (value is Map) {
+          final row = Map<String, dynamic>.from(value);
+          final id = _attendanceId(
+            row['player_id'] ?? row['playerId'] ?? row['id'] ?? key,
+          );
+          if (id > 0) out['$id'] = row;
+        } else {
+          final id = _attendanceId(key);
+          if (id > 0) out['$id'] = <String, dynamic>{'status': value};
+        }
+      });
+      return out;
+    }
+
+    if (raw is List) {
+      for (final value in raw) {
+        if (value is! Map) continue;
+        final row = Map<String, dynamic>.from(value);
+        final id = _attendanceId(
+          row['player_id'] ??
+              row['playerId'] ??
+              row['athlete_id'] ??
+              row['user_id'] ??
+              row['id'],
+        );
+        if (id > 0) out['$id'] = row;
+      }
+    }
+    return out;
+  }
+
+  Future<void> _refreshAttendanceReadiness() async {
+    final event = widget.event;
+    final isTrainingLike =
+        event.type == TeamEventType.training || event.type == TeamEventType.gym;
+    if (!isTrainingLike || event.id <= 0 || event.teamId <= 0) return;
+
+    if (mounted) setState(() => attendanceReadinessLoading = true);
+    try {
+      final playersResponse = await http.get(
+        Uri.parse(
+          '${_CmrCalendarPanelState.apiBase}/get_players_by_team.php?team_id=${event.teamId}',
+        ),
+      ).timeout(const Duration(seconds: 10));
+      final playersDecoded = jsonDecode(playersResponse.body);
+      final dynamic rawPlayers = playersDecoded is Map
+          ? (playersDecoded['players'] ??
+              playersDecoded['data'] ??
+              playersDecoded['items'] ??
+              const [])
+          : playersDecoded;
+      final playerList = rawPlayers is List ? rawPlayers : const <dynamic>[];
+      final ids = playerList
+          .whereType<Map>()
+          .map((player) => _attendanceId(
+                player['id'] ?? player['player_id'] ?? player['playerId'],
+              ))
+          .where((id) => id > 0)
+          .toList();
+
+      final attendanceResponse = await http.get(
+        Uri.parse(
+          '${_CmrCalendarPanelState.apiBase}/get_team_attendance.php?event_id=${event.id}',
+        ),
+      ).timeout(const Duration(seconds: 10));
+      final attendanceDecoded = jsonDecode(attendanceResponse.body);
+      final items = _attendanceItems(attendanceDecoded);
+
+      var present = 0;
+      var unset = 0;
+      for (final id in ids) {
+        final rawStatus = '${items['$id']?['status'] ?? ''}'.trim();
+        final status = rawStatus.isEmpty || rawStatus == 'null'
+            ? 'unset'
+            : rawStatus;
+        if (status == 'unset') unset++;
+        if (status == 'present') present++;
+      }
+
+      if (!mounted) return;
+      setState(() {
+        attendancePlayersTotal = ids.length;
+        attendancePresent = present;
+        attendanceUnset = unset;
+      });
+    } catch (_) {
+      // Ошибка проверки готовности не должна ломать карточку тренировки.
+    } finally {
+      if (mounted) setState(() => attendanceReadinessLoading = false);
+    }
+  }
+
+  Future<void> _startTrainingFromOverview() async {
+    if (lifecycleSaving || lifecycle.started || lifecycle.finished) return;
+
+    await _refreshAttendanceReadiness();
+    if (!mounted) return;
+
+    if (attendancePlayersTotal <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('В команде нет игроков для отметки посещаемости')),
+      );
+      return;
+    }
+    if (attendanceUnset > 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Сначала отметьте посещаемость всех игроков. Не отмечено: $attendanceUnset',
+          ),
+        ),
+      );
+      return;
+    }
+
+    var userId = coachId;
+    if (userId <= 0) {
+      userId = await PrefUtils.getUserId() ?? 0;
+      if (mounted && userId > 0) setState(() => coachId = userId);
+    }
+    if (userId <= 0) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Не удалось определить тренера')),
+        );
+      }
+      return;
+    }
+
+    if (mounted) setState(() => lifecycleSaving = true);
+    try {
+      final event = widget.event;
+      final effectiveClubId = event.clubId > 0 ? event.clubId : widget.clubId;
+      final next = await TrainingLifecycleApi(
+        apiBase: _CmrCalendarPanelState.apiBase,
+        clubId: effectiveClubId,
+        teamId: event.teamId,
+        eventId: event.id,
+      ).start(
+        userId: userId,
+        attendancePresent: attendancePresent,
+        attendanceTotal: attendancePlayersTotal,
+      );
+      if (!mounted) return;
+      setState(() => lifecycle = next);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Тренировка началась.')),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Не удалось начать тренировку: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => lifecycleSaving = false);
+    }
+  }
+
+  void _applyLifecycle(TrainingLifecycleState next) {
+    if (!mounted) return;
+    setState(() => lifecycle = next);
+  }
+
+  void _setTrainingChromeExpanded(bool expanded) {
+    if (!mounted || _trainingChromeExpanded == expanded) return;
+    setState(() => _trainingChromeExpanded = expanded);
+  }
+
+  void _setTrainingTab(int nextTab) {
+    if (!mounted) return;
+    final resolved = nextTab.clamp(0, 3);
+    setState(() {
+      tab = resolved;
+      _trainingChromeExpanded = true;
+    });
+    if (resolved == 0) {
+      _refreshLifecycle();
+      _refreshAttendanceReadiness();
+    }
+  }
+
+  Widget _collapsedTrainingChrome() {
+    const labels = ['Обзор', 'План и файлы', 'Журнал', 'Оценки'];
+    const icons = [
+      Icons.info_outline_rounded,
+      Icons.folder_copy_outlined,
+      Icons.fact_check_rounded,
+      Icons.star_rate_rounded,
+    ];
+    final current = tab.clamp(0, 3);
+    final started = lifecycle.started && !lifecycle.finished;
+    final stateText = lifecycle.finished
+        ? 'Окончена'
+        : started
+            ? 'Идёт'
+            : 'Запланирована';
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: () => _setTrainingChromeExpanded(true),
+        child: Container(
+          height: 38,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF8FAF9),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Row(
+            children: [
+              Icon(icons[current], size: 16, color: _C.greenDark),
+              const SizedBox(width: 7),
+              Expanded(
+                child: Text(
+                  labels[current],
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.action(color: _C.text),
+                ),
+              ),
+              Text(
+                stateText,
+                style: AppTypography.captionMedium(
+                  color: started ? _C.greenDark : _C.muted,
+                ),
+              ),
+              const SizedBox(width: 5),
+              const Icon(
+                Icons.keyboard_arrow_down_rounded,
+                size: 17,
+                color: _C.muted2,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _lifecycleTime(DateTime? value) {
+    if (value == null) return '—';
+    return '${value.hour.toString().padLeft(2, '0')}:${value.minute.toString().padLeft(2, '0')}';
+  }
   String get _dateText => '${widget.event.startAt.day.toString().padLeft(2, '0')}.${widget.event.startAt.month.toString().padLeft(2, '0')}.${widget.event.startAt.year}';
   String get _timeText {final e=widget.event.endAt; return e==null?hhmm(widget.event.startAt):'${hhmm(widget.event.startAt)}–${hhmm(e)}';}
 
   @override Widget build(BuildContext context) {
     final event=widget.event;
+    final effectiveClubId = event.clubId > 0 ? event.clubId : widget.clubId;
     final c=eventTypeColor(event.type);
     final isTrainingLike=event.type==TeamEventType.training||event.type==TeamEventType.gym;
     return _StrictWorkspaceCard(
@@ -2842,28 +3170,419 @@ class _InlineEventDetailsPanelState extends State<_InlineEventDetailsPanel> {
       subtitle: '${eventTypeLabel(event.type)} · $_dateText · $_timeText',
       trailing: _ProfileRoundButton(icon:Icons.close_rounded,onTap:widget.onClose),
       child: Column(children:[
-        if(isTrainingLike) Container(height:42,padding:const EdgeInsets.all(4),decoration:BoxDecoration(color:_C.surface,borderRadius:BorderRadius.circular(12)),child:Row(children:[
-          Expanded(child:_InlineTabButton(text:'Описание',icon:Icons.info_outline_rounded,active:tab==0,onTap:()=>setState(()=>tab=0))),
-          const SizedBox(width:4),
-          Expanded(child:_InlineTabButton(text:'Посещаемость',icon:Icons.fact_check_rounded,active:tab==1,onTap:()=>setState(()=>tab=1))),
-          const SizedBox(width:4),
-          Expanded(child:_InlineTabButton(text:'Оценки',icon:Icons.star_rate_rounded,active:tab==2,onTap:()=>setState(()=>tab=2))),
-        ])),
-        if(isTrainingLike) const SizedBox(height:8),
+        if(isTrainingLike)
+          AnimatedSize(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOutCubic,
+            alignment: Alignment.topCenter,
+            child: _trainingChromeExpanded
+                ? Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _trainingStatusStrip(),
+                      const SizedBox(height:8),
+                      Container(
+                        height: 42,
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8FAF9),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(children:[
+                          Expanded(child:_InlineTabButton(text:'Обзор',icon:Icons.info_outline_rounded,active:tab==0,onTap:()=>_setTrainingTab(0))),
+                          const SizedBox(width:4),
+                          Expanded(child:_InlineTabButton(text:'План и файлы',icon:Icons.folder_copy_outlined,active:tab==1,onTap:()=>_setTrainingTab(1))),
+                          const SizedBox(width:4),
+                          Expanded(child:_InlineTabButton(text:'Журнал',icon:Icons.fact_check_rounded,active:tab==2,onTap:()=>_setTrainingTab(2))),
+                          const SizedBox(width:4),
+                          Expanded(child:_InlineTabButton(text:'Оценки',icon:Icons.star_rate_rounded,active:tab==3,onTap:()=>_setTrainingTab(3))),
+                        ]),
+                      ),
+                      const SizedBox(height:8),
+                    ],
+                  )
+                : Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: _collapsedTrainingChrome(),
+                  ),
+          ),
         Expanded(child: !isTrainingLike||tab==0
             ? _eventInfo(c)
             : tab==1
-                ? TrainingAttendancePanel(key:ValueKey('attendance-${event.id}'),apiBase:_CmrCalendarPanelState.apiBase,teamId:event.teamId,eventId:event.id)
-                : (coachId<=0
-                    ? const Center(child:CircularProgressIndicator(strokeWidth:2))
-                    : TrainingRatingSheet(key:ValueKey('rating-${event.id}'),apiBase:_CmrCalendarPanelState.apiBase,teamId:event.teamId,eventId:event.id,coachId:coachId,title:event.title,embedded:true,onSaved:widget.onRatingsSaved))),
+                ? TrainingMaterialsPanel(
+                    key: ValueKey('materials-${event.id}'),
+                    apiBase: _CmrCalendarPanelState.apiBase,
+                    clubId: effectiveClubId,
+                    teamId: event.teamId,
+                    eventId: event.id,
+                    currentUserId: coachId,
+                  )
+                : tab==2
+                    ? TrainingAttendancePanel(
+                        key:ValueKey('attendance-${event.id}'),
+                        apiBase:_CmrCalendarPanelState.apiBase,
+                        teamId:event.teamId,
+                        eventId:event.id,
+                        clubId:effectiveClubId,
+                        eventTitle:event.title,
+                        onOpenRatings: () => _setTrainingTab(3),
+                        onLifecycleChanged: _applyLifecycle,
+                        onChromeExpandedChanged: _setTrainingChromeExpanded,
+                      )
+                    : (coachId<=0
+                        ? const Center(child:CircularProgressIndicator(strokeWidth:2))
+                        : TrainingRatingSheet(
+                            key:ValueKey('rating-${event.id}'),
+                            apiBase:_CmrCalendarPanelState.apiBase,
+                            teamId:event.teamId,
+                            eventId:event.id,
+                            coachId:coachId,
+                            clubId:effectiveClubId,
+                            title:event.title,
+                            embedded:true,
+                            onChromeExpandedChanged: _setTrainingChromeExpanded,
+                            onSaved: () {
+                              widget.onRatingsSaved();
+                              _refreshLifecycle();
+                            },
+                          ))),
       ]),
     );
   }
 
+  Widget _trainingStatusStrip() {
+    final finished = lifecycle.finished;
+    final started = lifecycle.started && !finished;
+    final title = lifecycleLoading
+        ? 'Проверяем статус тренировки'
+        : finished
+            ? 'Тренировка окончена'
+            : started
+                ? 'Тренировка идёт'
+                : 'Тренировка запланирована';
+    final subtitle = lifecycleLoading
+        ? 'Загружаю журнал тренировки…'
+        : finished
+            ? '${lifecycle.finishedByLabel} · ${_lifecycleTime(lifecycle.finishedAt)} · оценки: ${lifecycle.ratingsCount}'
+            : started
+                ? '${lifecycle.startedByLabel} начал в ${_lifecycleTime(lifecycle.startedAt)} · присутствуют ${lifecycle.attendancePresent}/${lifecycle.attendanceTotal}'
+                : 'Заполните журнал посещаемости, затем запустите тренировку в «Обзоре».';
+    final accent = finished ? _C.greenDark : (started ? _C.green : _C.muted2);
+    final icon = finished
+        ? Icons.check_circle_rounded
+        : started
+            ? Icons.play_circle_fill_rounded
+            : Icons.schedule_rounded;
+
+    VoidCallback? action;
+    String? actionText;
+    if (!lifecycleLoading && !finished) {
+      if (started && tab != 3) {
+        action = () => _setTrainingTab(3);
+        actionText = 'К оценкам';
+      } else if (!started && tab != 0) {
+        action = () => _setTrainingTab(0);
+        actionText = 'К обзору';
+      }
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8F9F8),
+        borderRadius: BorderRadius.circular(11),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(9),
+            ),
+            child: lifecycleLoading
+                ? const Padding(
+                    padding: EdgeInsets.all(9),
+                    child: CircularProgressIndicator(strokeWidth: 2, color: _C.green),
+                  )
+                : Icon(icon, color: accent, size: 18),
+          ),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.itemTitle(color: _C.text),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.captionMedium(color: _C.muted),
+                ),
+              ],
+            ),
+          ),
+          if (action != null && actionText != null) ...[
+            const SizedBox(width: 8),
+            SizedBox(
+              height: 34,
+              child: FilledButton.icon(
+                onPressed: action,
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFFE3F1E9),
+                  foregroundColor: _C.greenDark,
+                  disabledBackgroundColor: const Color(0xFFE8ECEA),
+                  disabledForegroundColor: const Color(0xFF8A9099),
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  textStyle: AppTypography.action(color: _C.greenDark)
+                      .copyWith(fontSize: 12.6, fontWeight: FontWeight.w700),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(11)),
+                ),
+                icon: Icon(
+                  started ? Icons.star_rate_rounded : Icons.info_outline_rounded,
+                  size: 15,
+                ),
+                label: Text(actionText),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _overviewTrainingStartCard() {
+    final finished = lifecycle.finished;
+    final started = lifecycle.started && !finished;
+    final ready = !attendanceReadinessLoading &&
+        attendancePlayersTotal > 0 &&
+        attendanceUnset == 0;
+    final canStart = !lifecycleLoading &&
+        !lifecycleSaving &&
+        !started &&
+        !finished &&
+        ready;
+
+    final title = lifecycleLoading || attendanceReadinessLoading
+        ? 'Проверяем готовность тренировки'
+        : finished
+            ? 'Тренировка завершена'
+            : started
+                ? 'Тренировка идёт'
+                : ready
+                    ? 'Готово к началу тренировки'
+                    : 'Подготовьте журнал посещаемости';
+    final subtitle = lifecycleLoading || attendanceReadinessLoading
+        ? 'Проверяем посещаемость и состояние тренировки…'
+        : finished
+            ? '${lifecycle.finishedByLabel} · ${_lifecycleTime(lifecycle.finishedAt)} · оценки: ${lifecycle.ratingsCount}'
+            : started
+                ? '${lifecycle.startedByLabel} начал в ${_lifecycleTime(lifecycle.startedAt)} · присутствуют ${lifecycle.attendancePresent}/${lifecycle.attendanceTotal}'
+                : attendancePlayersTotal <= 0
+                    ? 'В составе пока нет игроков для отметки.'
+                    : attendanceUnset > 0
+                        ? 'Отметьте всех игроков в журнале. Не отмечено: $attendanceUnset.'
+                        : 'Посещаемость заполнена: $attendancePresent/$attendancePlayersTotal присутствуют.';
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAF9),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 560;
+          final info = Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: lifecycleLoading || attendanceReadinessLoading
+                    ? const Padding(
+                        padding: EdgeInsets.all(10),
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: _C.green,
+                        ),
+                      )
+                    : Icon(
+                        finished
+                            ? Icons.check_circle_rounded
+                            : started
+                                ? Icons.play_circle_fill_rounded
+                                : Icons.fact_check_outlined,
+                        size: 20,
+                        color: finished || started || ready
+                            ? _C.greenDark
+                            : _C.muted2,
+                      ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: AppTypography.itemTitle(color: _C.text),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      subtitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.captionMedium(color: _C.muted),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          );
+
+          Widget action;
+          if (finished) {
+            action = const SizedBox.shrink();
+          } else if (started) {
+            action = SizedBox(
+              height: 40,
+              child: FilledButton.icon(
+                onPressed: () => _setTrainingTab(3),
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFFE3F1E9),
+                  foregroundColor: _C.greenDark,
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  textStyle: AppTypography.action(color: _C.greenDark)
+                      .copyWith(fontSize: 12.8, fontWeight: FontWeight.w700),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(11),
+                  ),
+                ),
+                icon: const Icon(Icons.star_rate_rounded, size: 16),
+                label: const Text('К оценкам'),
+              ),
+            );
+          } else if (!ready) {
+            action = SizedBox(
+              height: 40,
+              child: FilledButton.icon(
+                onPressed: attendancePlayersTotal > 0
+                    ? () => _setTrainingTab(2)
+                    : null,
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFFE3F1E9),
+                  foregroundColor: _C.greenDark,
+                  disabledBackgroundColor: const Color(0xFFE8ECEA),
+                  disabledForegroundColor: const Color(0xFF8A9099),
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  textStyle: AppTypography.action(color: _C.greenDark)
+                      .copyWith(fontSize: 13.0, fontWeight: FontWeight.w700),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                icon: const Icon(Icons.fact_check_rounded, size: 16),
+                label: Text(
+                  attendanceUnset > 0 ? 'Заполнить журнал' : 'Журнал',
+                ),
+              ),
+            );
+          } else {
+            action = SizedBox(
+              height: 40,
+              child: FilledButton.icon(
+                onPressed: canStart ? _startTrainingFromOverview : null,
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFFE3F1E9),
+                  foregroundColor: _C.greenDark,
+                  disabledBackgroundColor: const Color(0xFFE8ECEA),
+                  disabledForegroundColor: const Color(0xFF8A9099),
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  textStyle: AppTypography.action(color: _C.greenDark)
+                      .copyWith(fontSize: 13.0, fontWeight: FontWeight.w700),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                icon: lifecycleSaving
+                    ? const SizedBox(
+                        width: 15,
+                        height: 15,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 1.8,
+                          color: _C.greenDark,
+                        ),
+                      )
+                    : const Icon(Icons.play_arrow_rounded, size: 17),
+                label: const Text('Начать тренировку'),
+              ),
+            );
+          }
+
+          if (compact) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                info,
+                if (!finished) ...[
+                  const SizedBox(height: 9),
+                  action,
+                ],
+              ],
+            );
+          }
+          return Row(
+            children: [
+              Expanded(child: info),
+              if (!finished) ...[
+                const SizedBox(width: 12),
+                action,
+              ],
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   Widget _eventInfo(Color c){
-    final event=widget.event; final notes=event.notes.trim(); final location=event.location.trim(); final coachRating=_eventCoachRatingText(event);
+    final event=widget.event;
+    final notes=event.notes.trim();
+    final location=event.location.trim();
+    final coachRating=_eventCoachRatingText(event);
+    final isTrainingLike=event.type==TeamEventType.training||event.type==TeamEventType.gym;
+    final effectiveClubId=event.clubId>0?event.clubId:widget.clubId;
     return SingleChildScrollView(child:Column(children:[
+      if(isTrainingLike)...[
+        _overviewTrainingStartCard(),
+        const SizedBox(height:8),
+        TrainingActivityPanel(
+          key:ValueKey('training-activity-${event.id}'),
+          apiBase:_CmrCalendarPanelState.apiBase,
+          clubId:effectiveClubId,
+          teamId:event.teamId,
+          eventId:event.id,
+        ),
+        const SizedBox(height:8),
+      ],
       Row(children:[Expanded(child:_DetailMetric(icon:Icons.schedule_rounded,title:'Время',value:_timeText,accent:c)),const SizedBox(width:6),Expanded(child:_DetailMetric(icon:Icons.category_rounded,title:'Тип',value:eventTypeLabel(event.type),accent:c))]),
       const SizedBox(height:8),
       Row(children:[Expanded(child:_DetailMetric(icon:Icons.calendar_month_rounded,title:'Дата',value:_dateText,accent:c)),const SizedBox(width:6),Expanded(child:_DetailMetric(icon:Icons.location_on_outlined,title:'Место',value:location.isEmpty?'Не указано':location,accent:c))]),
@@ -2897,9 +3616,9 @@ class _InlineTabButton extends StatelessWidget {
         child: Container(
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: active ? _C.greenSoft : Colors.transparent,
+            color: active ? const Color(0xFFF4F6F5) : Colors.transparent,
             borderRadius: BorderRadius.circular(8),
-          ),
+                      ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [

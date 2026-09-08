@@ -32,6 +32,14 @@ class ClubAiTacticalDiagram {
           .toList(growable: false),
     );
   }
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'title': title,
+        'subtitle': subtitle,
+        'note': note,
+        'players': players.map((item) => item.toJson()).toList(growable: false),
+        'arrows': arrows.map((item) => item.toJson()).toList(growable: false),
+      };
 }
 
 class ClubAiDiagramPlayer {
@@ -55,6 +63,13 @@ class ClubAiDiagramPlayer {
       team: '${json['team'] ?? 'home'}',
     );
   }
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'label': label,
+        'x': x,
+        'y': y,
+        'team': team,
+      };
 }
 
 class ClubAiDiagramArrow {
@@ -81,6 +96,14 @@ class ClubAiDiagramArrow {
       kind: '${json['kind'] ?? 'run'}',
     );
   }
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'from_x': fromX,
+        'from_y': fromY,
+        'to_x': toX,
+        'to_y': toY,
+        'kind': kind,
+      };
 }
 
 double _asDouble(dynamic v, double fallback) {

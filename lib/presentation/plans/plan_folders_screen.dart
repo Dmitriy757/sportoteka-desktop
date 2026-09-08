@@ -851,7 +851,10 @@ class _PlanFoldersScreenState extends State<PlanFoldersScreen> {
 
   void _attachSelectedAndClose() {
     if (_selectedGraphics.isEmpty) return;
-    Get.back(result: _selectedGraphics.toList());
+    // Selection mode is often opened inside a movable SPORTOTEKA OS window.
+    // Pop the nearest Navigator so we return to the same editor window instead
+    // of closing the enclosing GetX/Workspace route.
+    Navigator.of(context).pop(_selectedGraphics.toList());
   }
 
   Future<void> _deletePlan(Map<String, dynamic> plan) async {

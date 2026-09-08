@@ -46,7 +46,6 @@ class _CmrAttendancePanelState extends State<CmrAttendancePanel> {
   static const String getAttendanceUrl = '$apiBase/get_team_attendance.php';
   static const String setAttendanceUrl = '$apiBase/set_team_attendance.php';
   static const String getTeamProfileUrl = '$apiBase/get_team_profile.php';
-  static const String notifyTrainingStartedUrl = '$apiBase/notify_training_started.php';
 
   static const String kStatusUnset = 'unset';
 
@@ -70,6 +69,11 @@ class _CmrAttendancePanelState extends State<CmrAttendancePanel> {
 
   final TextEditingController searchC = TextEditingController();
   String filter = 'all';
+
+  // Mobile only: while the coach moves down the roster we collapse the
+  // secondary controls. Scrolling back up expands them again automatically.
+  bool _mobileChromeExpanded = true;
+  double _mobileLastScrollPixels = 0;
 
   int? editingEventId;
   int? editingPlayerId;
@@ -233,6 +237,8 @@ class _CmrAttendancePanelState extends State<CmrAttendancePanel> {
     setState(() {
       loading = true;
       error = null;
+      _mobileChromeExpanded = true;
+      _mobileLastScrollPixels = 0;
       events = [];
       players = [];
       attendanceByEvent.clear();
@@ -384,7 +390,7 @@ class _CmrAttendancePanelState extends State<CmrAttendancePanel> {
 
   Color _statusColor(String status) {
     switch (status) {
-      case 'present': return const Color(0xFF22C55E);
+      case 'present': return _C.green;
       case 'absent': return const Color(0xFFEF4444);
       case 'late': return const Color(0xFFF59E0B);
       case 'injured': return const Color(0xFF8B5CF6);
@@ -454,15 +460,9 @@ class _CmrAttendancePanelState extends State<CmrAttendancePanel> {
         Get.snackbar('Ошибка', '${data['message'] ?? 'Не удалось сохранить отметку'}');
       }
 
-      if (savedOk && status != kStatusUnset) {
-        // Отдельный endpoint идемпотентен: первая отметка мероприятия создаёт
-        // событие «Тренировка началась», повторные отметки push не дублируют.
-        await _notifyTrainingStarted(
-          eventId: eventId,
-          markedBy: markedBy,
-          status: status,
-        );
-      }
+      // ВАЖНО: отметка посещаемости больше НЕ запускает тренировку и не
+      // отправляет push. Push «Тренировка началась» отправляется только по
+      // явной кнопке «Начать тренировку» внутри карточки тренировки календаря.
 
       await _reloadAttendanceForEvent(eventId);
       _calculateStats();
@@ -472,30 +472,6 @@ class _CmrAttendancePanelState extends State<CmrAttendancePanel> {
       if (mounted) setState(() => saving = false);
     }
   }
-
-  Future<void> _notifyTrainingStarted({
-    required int eventId,
-    required int markedBy,
-    required String status,
-  }) async {
-    if (widget.clubId <= 0 || widget.teamId <= 0 || eventId <= 0) return;
-    try {
-      await http.post(
-        Uri.parse(notifyTrainingStartedUrl),
-        body: {
-          'club_id': widget.clubId.toString(),
-          'team_id': widget.teamId.toString(),
-          'event_id': eventId.toString(),
-          'started_by': markedBy.toString(),
-          'attendance_status': status,
-        },
-      ).timeout(const Duration(seconds: 8));
-    } catch (_) {
-      // Посещаемость уже сохранена. Ошибка push не должна откатывать отметку:
-      // следующая отметка повторит вызов, а UNIQUE(event_id) защитит от дубля.
-    }
-  }
-
 
   String _exportStatusText(String status) {
     if (status == kStatusUnset || status.trim().isEmpty) return 'Не отмечено';
@@ -736,33 +712,28 @@ class _CmrAttendancePanelState extends State<CmrAttendancePanel> {
       builder: (_, constraints) {
         final media = MediaQuery.of(context);
         final isTablet = media.size.shortestSide >= 600;
-        final stackEditorBelow = !isTablet && constraints.maxWidth < 720;
+        final isPhone = !isTablet && constraints.maxWidth < 720;
 
-        if (stackEditorBelow) {
-          return Column(
-            children: [
-              Expanded(child: _journalTable()),
-              AnimatedSwitcher(
-                duration: const Duration(milliseconds: 180),
-                switchInCurve: Curves.easeOutCubic,
-                switchOutCurve: Curves.easeOutCubic,
-                child: hasEditor
-                    ? Column(
-                        key: const ValueKey('attendance-side-editor-mobile'),
-                        children: [
-                          const Divider(height: 1, color: _C.line),
-                          SizedBox(
-                            height: 248,
-                            child: _attendanceEditorPanel(compact: true),
-                          ),
-                        ],
-                      )
-                    : const SizedBox.shrink(
-                        key: ValueKey('attendance-side-editor-empty'),
-                      ),
-              ),
-            ],
-          );
+        // На телефоне таблица с горизонтальным скроллом неудобна для быстрого
+        // проставления посещаемости. Поэтому используем отдельный touch-first
+        // режим: одно выбранное мероприятие + крупные статусы у каждого игрока.
+        if (isPhone) {
+          if (selectedEventId == null && events.isNotEmpty) {
+            final initialEvent = _defaultMobileEvent();
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (!mounted || selectedEventId != null || initialEvent == null) {
+                return;
+              }
+              final eventId = _asInt(initialEvent['id']);
+              if (eventId <= 0) return;
+              setState(() {
+                selectedEventId = eventId;
+                selectedEventTitle = _eventTitle(initialEvent);
+              });
+              _calculateStats();
+            });
+          }
+          return _mobileAttendanceJournal();
         }
 
         return Row(
@@ -802,6 +773,466 @@ class _CmrAttendancePanelState extends State<CmrAttendancePanel> {
     );
   }
 
+  Map<String, dynamic>? _defaultMobileEvent() {
+    if (events.isEmpty) return null;
+
+    final now = DateTime.now();
+    Map<String, dynamic>? best;
+    Duration? bestDistance;
+
+    for (final event in events) {
+      final raw = '${event['start_at'] ?? event['event_date'] ?? ''}'.trim();
+      final parsed = DateTime.tryParse(raw.replaceFirst(' ', 'T'));
+      if (parsed == null) continue;
+      final distance = parsed.difference(now).abs();
+      if (bestDistance == null || distance < bestDistance) {
+        best = event;
+        bestDistance = distance;
+      }
+    }
+
+    return best ?? events.first;
+  }
+
+  void _selectMobileEvent(Map<String, dynamic> event) {
+    final eventId = _asInt(event['id']);
+    if (eventId <= 0) return;
+    setState(() {
+      selectedEventId = eventId;
+      selectedEventTitle = _eventTitle(event);
+      editingEventId = null;
+      editingPlayerId = null;
+      editingEvent = null;
+      editingPlayer = null;
+      editingStatus = kStatusUnset;
+    });
+    _calculateStats();
+  }
+
+  bool _handleMobileScrollNotification(ScrollNotification notification) {
+    if (notification.metrics.axis != Axis.vertical) return false;
+
+    final pixels = notification.metrics.pixels;
+
+    if (notification is ScrollStartNotification) {
+      _mobileLastScrollPixels = pixels;
+      return false;
+    }
+
+    if (notification is ScrollUpdateNotification) {
+      final delta = notification.scrollDelta ??
+          (pixels - _mobileLastScrollPixels);
+      _mobileLastScrollPixels = pixels;
+
+      // Вниз шапка прячется быстро, чтобы отдать экран игрокам.
+      if (delta > 3.5 && pixels > 64) {
+        if (_mobileChromeExpanded && mounted) {
+          setState(() => _mobileChromeExpanded = false);
+        }
+      }
+
+      // При движении вверх НЕ раскрываем шапку сразу. Она остаётся компактной,
+      // пока пользователь не вернётся примерно к первому-второму игроку.
+      // Это убирает неприятный скачок интерфейса от любого движения пальца вверх.
+      if (delta < -3.5 && pixels <= 170) {
+        if (!_mobileChromeExpanded && mounted) {
+          setState(() => _mobileChromeExpanded = true);
+        }
+      }
+    }
+
+    // На самом верху всегда восстанавливаем полный интерфейс, даже если список
+    // дошёл туда инерцией без заметного ScrollUpdate в обратную сторону.
+    if (pixels <= 4 && !_mobileChromeExpanded && mounted) {
+      setState(() => _mobileChromeExpanded = true);
+    }
+
+    return false;
+  }
+
+  Widget _mobileAttendanceJournal() {
+    if (players.isEmpty) {
+      return const _EmptyPanel(text: 'В команде пока нет игроков');
+    }
+    if (events.isEmpty) {
+      return const _EmptyPanel(
+        text: 'В выбранном месяце нет тренировок или мероприятий',
+      );
+    }
+
+    final selected = selectedEventId == null
+        ? _defaultMobileEvent()
+        : _eventById(selectedEventId!);
+    final eventId = selected == null ? 0 : _asInt(selected['id']);
+    final filtered = _filteredPlayers;
+    final media = MediaQuery.of(context);
+
+    // Нижнее меню Спортотеки находится поверх рабочей области. Запас сделан
+    // намеренно больше высоты меню: последний игрок можно поднять выше панели
+    // и спокойно нажать любую отметку.
+    final mobileBottomReserve =
+        media.viewPadding.bottom + (widget.fullScreen ? 44.0 : 142.0);
+
+    return ColoredBox(
+      color: Colors.white,
+      child: Column(
+        children: [
+          // При прокрутке вниз выбор мероприятия полностью уходит вверх.
+          // В свернутом состоянии остаётся только одна общая компактная шапка
+          // в build(), поэтому первый игрок действительно поднимается почти
+          // к верхней границе рабочего окна.
+          AnimatedSize(
+            duration: const Duration(milliseconds: 210),
+            curve: Curves.easeOutCubic,
+            alignment: Alignment.topCenter,
+            child: _mobileChromeExpanded
+                ? Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _mobileEventPicker(selected),
+                      const Divider(height: 1, color: _C.line),
+                    ],
+                  )
+                : const SizedBox.shrink(),
+          ),
+          if (filtered.isEmpty)
+            const Expanded(
+              child: _EmptyPanel(text: 'По фильтру игроки не найдены'),
+            )
+          else
+            Expanded(
+              child: NotificationListener<ScrollNotification>(
+                onNotification: _handleMobileScrollNotification,
+                child: ListView.separated(
+                  padding: EdgeInsets.fromLTRB(
+                    10,
+                    _mobileChromeExpanded ? 10 : 6,
+                    10,
+                    mobileBottomReserve,
+                  ),
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
+                  itemCount: filtered.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 8),
+                  itemBuilder: (_, index) {
+                    final player = filtered[index];
+                    return _mobilePlayerAttendanceCard(
+                      player: player,
+                      eventId: eventId,
+                    );
+                  },
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+
+  Widget _mobileCollapsedEventBar(Map<String, dynamic>? selected) {
+    final label = selected == null
+        ? 'Выберите мероприятие'
+        : '${_eventDateLabel(selected).replaceAll('\n', ' · ')} · ${_eventTitle(selected)}';
+
+    return Material(
+      color: Colors.white,
+      child: InkWell(
+        onTap: () => setState(() => _mobileChromeExpanded = true),
+        child: SizedBox(
+          height: 44,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            child: Row(
+              children: [
+                const _CmrGlowDot(color: _C.green, size: 5.5),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: _AttText.value(10.8),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  '${stats['present'] ?? 0}/${stats['total'] ?? 0}',
+                  style: _AttText.value(10.5).copyWith(color: _C.greenDark),
+                ),
+                const SizedBox(width: 7),
+                const Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  size: 18,
+                  color: _C.muted2,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _mobileEventPicker(Map<String, dynamic>? selected) {
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.fromLTRB(10, 9, 10, 9),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const _CmrGlowDot(color: _C.green, size: 5.8),
+              const SizedBox(width: 7),
+              Expanded(
+                child: Text(
+                  selected == null
+                      ? 'Выберите мероприятие'
+                      : '${_eventDateLabel(selected).replaceAll('\n', ' · ')} · ${_eventTitle(selected)}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: _AttText.section(),
+                ),
+              ),
+              Text(
+                '${stats['present'] ?? 0}/${stats['total'] ?? 0}',
+                style: _AttText.value(10.8).copyWith(color: _C.greenDark),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 54,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: events.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 6),
+              itemBuilder: (_, index) {
+                final event = events[index];
+                final eventId = _asInt(event['id']);
+                final active = eventId == selectedEventId ||
+                    (selectedEventId == null &&
+                        selected != null &&
+                        eventId == _asInt(selected['id']));
+                return Material(
+                  color: active ? _C.greenSoft : _C.soft,
+                  borderRadius: BorderRadius.circular(10),
+                  child: InkWell(
+                    onTap: () => _selectMobileEvent(event),
+                    borderRadius: BorderRadius.circular(10),
+                    child: Container(
+                      constraints: const BoxConstraints(
+                        minWidth: 74,
+                        maxWidth: 132,
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 7,
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _eventDateLabel(event).replaceAll('\n', ' · '),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: _AttText.value(10.5).copyWith(
+                              color: active ? _C.greenDark : _C.text,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            _eventTitle(event),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: _AttText.caption().copyWith(
+                              color: active ? _C.greenDark : _C.muted2,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _mobilePlayerAttendanceCard({
+    required Map<String, dynamic> player,
+    required int eventId,
+  }) {
+    final playerId = _asInt(player['id']);
+    final photo = _photo(player);
+    final status = eventId <= 0
+        ? kStatusUnset
+        : _getStatusForEvent(playerId, eventId);
+    final statusColor = _statusColor(status);
+
+    const codes = <String>[
+      kStatusUnset,
+      'present',
+      'absent',
+      'late',
+      'injured',
+      'individual',
+      'dayoff',
+    ];
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(10, 10, 10, 9),
+      decoration: BoxDecoration(
+        color: status == kStatusUnset
+            ? Colors.white
+            : Color.alphaBlend(statusColor.withOpacity(.028), Colors.white),
+        borderRadius: BorderRadius.circular(13),
+        border: Border.all(
+          color: status == kStatusUnset
+              ? _C.line.withOpacity(.75)
+              : statusColor.withOpacity(.14),
+          width: .7,
+        ),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: _C.soft2,
+                  borderRadius: BorderRadius.circular(11),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: photo != null
+                    ? Image.network(photo, fit: BoxFit.cover)
+                    : Center(
+                        child: Text(
+                          _playerName(player)
+                              .trim()
+                              .split(RegExp(r'\s+'))
+                              .where((e) => e.isNotEmpty)
+                              .take(2)
+                              .map((e) => e.substring(0, 1).toUpperCase())
+                              .join(),
+                          style: _AttText.value(10.8),
+                        ),
+                      ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _playerName(player),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: _AttText.value(11.8),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      _playerSub(player),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: _AttText.muted(9.8),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                constraints: const BoxConstraints(minWidth: 72),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: status == kStatusUnset
+                      ? _C.soft
+                      : statusColor.withOpacity(.09),
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                child: Text(
+                  _statusText(status),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: _AttText.caption().copyWith(
+                    color: status == kStatusUnset ? _C.muted2 : statusColor,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 9),
+          Row(
+            children: [
+              for (var i = 0; i < codes.length; i++) ...[
+                if (i > 0) const SizedBox(width: 4),
+                Expanded(
+                  child: _mobileQuickStatusButton(
+                    code: codes[i],
+                    active: status == codes[i],
+                    onTap: eventId <= 0
+                        ? null
+                        : () => _setStatusForEvent(
+                              eventId,
+                              playerId,
+                              codes[i],
+                            ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _mobileQuickStatusButton({
+    required String code,
+    required bool active,
+    required VoidCallback? onTap,
+  }) {
+    final color = code == kStatusUnset ? _C.subtle : _statusColor(code);
+    final symbol = code == kStatusUnset ? '—' : _symbol(code);
+
+    return Tooltip(
+      message: _statusText(code),
+      child: Material(
+        color: active ? color.withOpacity(.12) : _C.soft,
+        borderRadius: BorderRadius.circular(9),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(9),
+          child: SizedBox(
+            height: 38,
+            child: Center(
+              child: Text(
+                symbol,
+                style: AppTypography.custom(
+                  size: 12,
+                  weight: FontWeight.w700,
+                  color: active ? color : _C.muted2,
+                  height: 1,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _attendanceEditorPanel({bool compact = false}) {
     final event = editingEvent;
     final player = editingPlayer;
@@ -810,7 +1241,7 @@ class _CmrAttendancePanelState extends State<CmrAttendancePanel> {
     final statusColor = _statusColor(status);
     final items = [
       [kStatusUnset, 'Очистить', '—', _C.subtle],
-      ['present', 'Присутствует', 'П', const Color(0xFF22C55E)],
+      ['present', 'Присутствует', 'П', _C.green],
       ['absent', 'Отсутствует', 'Н', const Color(0xFFEF4444)],
       ['late', 'Болен', 'Б', const Color(0xFFF59E0B)],
       ['injured', 'Травма', 'Т', const Color(0xFF8B5CF6)],
@@ -1122,13 +1553,28 @@ class _CmrAttendancePanelState extends State<CmrAttendancePanel> {
       return _ErrorPanel(text: error!, onRetry: _loadAll);
     }
 
+    final media = MediaQuery.of(context);
+    final isPhone = media.size.shortestSide < 600 && media.size.width < 720;
+
     final workspace = DefaultTextStyle.merge(
       style: _AttText.body(11.5),
       child: Column(
         children: [
-          _toolbar(),
-          const Divider(height: 1, color: _C.line),
-          _compactControlStrip(),
+          AnimatedSize(
+            duration: const Duration(milliseconds: 210),
+            curve: Curves.easeOutCubic,
+            alignment: Alignment.topCenter,
+            child: isPhone && !_mobileChromeExpanded
+                ? _mobileCollapsedToolbar()
+                : Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _toolbar(),
+                      const Divider(height: 1, color: _C.line),
+                      _compactControlStrip(),
+                    ],
+                  ),
+          ),
           const Divider(height: 1, color: _C.line),
           Expanded(child: _attendanceWorkspace()),
         ],
@@ -1163,6 +1609,87 @@ class _CmrAttendancePanelState extends State<CmrAttendancePanel> {
     );
   }
 
+
+  Widget _mobileCollapsedToolbar() {
+    final selected = selectedEventId == null
+        ? _defaultMobileEvent()
+        : _eventById(selectedEventId!);
+    final eventLabel = selected == null
+        ? _monthTitle()
+        : '${_eventDateLabel(selected).replaceAll('\n', ' · ')} · ${_eventTitle(selected)}';
+    final present = stats['present'] ?? 0;
+    final total = stats['total'] ?? players.length;
+
+    return Material(
+      color: Colors.white,
+      child: InkWell(
+        onTap: () => setState(() => _mobileChromeExpanded = true),
+        child: SizedBox(
+          height: 42,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            child: Row(
+              children: [
+                if (widget.fullScreen) ...[
+                  InkWell(
+                    onTap: () => Navigator.of(context).maybePop(),
+                    borderRadius: BorderRadius.circular(8),
+                    child: const SizedBox(
+                      width: 28,
+                      height: 28,
+                      child: Icon(
+                        Icons.arrow_back_rounded,
+                        size: 15,
+                        color: _C.text,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 3),
+                ],
+                const _CmrGlowDot(
+                  color: _C.green,
+                  size: 5.2,
+                  halo: false,
+                ),
+                const SizedBox(width: 7),
+                Expanded(
+                  child: Text(
+                    eventLabel,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: _AttText.value(10.7),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 7,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: _C.greenSoft,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    '$present/$total',
+                    style: _AttText.caption().copyWith(
+                      color: _C.greenDark,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                const Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  size: 17,
+                  color: _C.muted2,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
   Widget _toolbar() {
     return Container(
@@ -1334,7 +1861,7 @@ class _CmrAttendancePanelState extends State<CmrAttendancePanel> {
                 _TinyStat(
                   title: 'П',
                   value: '${stats['present'] ?? 0}',
-                  color: const Color(0xFF22C55E),
+                  color: _C.green,
                 ),
                 const SizedBox(width: 6),
                 _TinyStat(
@@ -1801,11 +2328,11 @@ class _C {
   static const Color header = Color(0xFFF7F8F7);
   static const Color soft = Color(0xFFF7F8F7);
   static const Color soft2 = Color(0xFFF2F4F2);
-  static const Color green = Color(0xFF00A750);
-  static const Color greenDark = Color(0xFF067A46);
-  static const Color greenSoft = Color(0xFFF3FAF6);
-  static const Color greenSoft2 = Color(0xFFF8FEFA);
-  static const Color greenBorder = Color(0xFFD7F0E2);
+  static const Color green = Color(0xFF14915D);
+  static const Color greenDark = Color(0xFF315447);
+  static const Color greenSoft = Color(0xFFF0F6F3);
+  static const Color greenSoft2 = Color(0xFFF7FAF8);
+  static const Color greenBorder = Color(0xFFDDEAE3);
   static const Color text = Color(0xFF0B0F14);
   static const Color muted = Color(0xFF5F6670);
   static const Color muted2 = Color(0xFF5F6670);
@@ -2181,7 +2708,7 @@ class _StatusCircle extends StatelessWidget {
   Color get color {
     switch (status) {
       case 'present':
-        return const Color(0xFF22C55E);
+        return _C.green;
       case 'absent':
         return const Color(0xFFEF4444);
       case 'late':

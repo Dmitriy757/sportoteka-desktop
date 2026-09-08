@@ -1,0 +1,2083 @@
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
+import 'package:url_launcher/url_launcher.dart';
+import 'package:sportoteka/core/theme/app_typography.dart';
+import 'package:sportoteka/presentation/workspace_os/sportoteka_workspace_icons.dart';
+import 'package:sportoteka/presentation/workspace_os/workspace_document_editor.dart';
+
+class WorkspaceAiDocumentLibrary extends StatefulWidget {
+  const WorkspaceAiDocumentLibrary({
+    super.key,
+    required this.clubId,
+    required this.userId,
+    this.teamId,
+    this.clubName = '',
+    this.onClose,
+    this.onOpenDocumentEditor,
+  });
+
+  final int clubId;
+  final int userId;
+  final int? teamId;
+  final String clubName;
+  final VoidCallback? onClose;
+  final Future<void> Function(
+    String documentId,
+    String title,
+    Widget Function(VoidCallback closeWindow) builder,
+  )? onOpenDocumentEditor;
+
+  @override
+  State<WorkspaceAiDocumentLibrary> createState() =>
+      _WorkspaceAiDocumentLibraryState();
+}
+
+class _WorkspaceAiDocumentLibraryState
+    extends State<WorkspaceAiDocumentLibrary> {
+  static const String _base = 'https://sportotekaapp.ru/api/ai/v1/documents';
+
+  static const Color _green = Color(0xFF079455);
+  static const Color _greenDark = Color(0xFF087443);
+  static const Color _greenSoft = Color(0xFFECFDF3);
+  static const Color _bg = Color(0xFFF7F9F8);
+  static const Color _line = Color(0xFFE4E9E6);
+  static const Color _text = Color(0xFF17201B);
+  static const Color _muted = Color(0xFF66736B);
+
+  final TextEditingController _search = TextEditingController();
+  final TextEditingController _question = TextEditingController();
+  final ScrollController _detailScroll = ScrollController();
+
+  List<Map<String, dynamic>> _documents = <Map<String, dynamic>>[];
+  Map<String, dynamic>? _selected;
+  String _textPreview = '';
+  String _answer = '';
+  List<Map<String, dynamic>> _sources = <Map<String, dynamic>>[];
+  List<Map<String, dynamic>> _history = <Map<String, dynamic>>[];
+
+  bool _loading = true;
+  bool _historyLoading = false;
+  bool _aiOpen = true;
+  bool _uploading = false;
+  bool _asking = false;
+  bool _analyzing = false;
+  bool _editorOpen = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _search.addListener(_refresh);
+    unawaited(_load());
+  }
+
+  @override
+  void dispose() {
+    _search
+      ..removeListener(_refresh)
+      ..dispose();
+    _question.dispose();
+    _detailScroll.dispose();
+    super.dispose();
+  }
+
+  void _refresh() {
+    if (mounted) setState(() {});
+  }
+
+  dynamic _decode(http.Response response) {
+    final raw = utf8.decode(response.bodyBytes);
+    return jsonDecode(raw);
+  }
+
+  String _absoluteUrl(String raw) {
+    final value = raw.trim();
+    if (value.isEmpty) return '';
+    if (value.startsWith('https://') || value.startsWith('http://')) {
+      return value;
+    }
+    if (value.startsWith('/')) {
+      return 'https://sportotekaapp.ru$value';
+    }
+    return 'https://sportotekaapp.ru/$value';
+  }
+
+  List<Map<String, dynamic>> get _visible {
+    final query = _search.text.trim().toLowerCase();
+    if (query.isEmpty) return _documents;
+
+    return _documents.where((row) {
+      final title = '${row['title'] ?? ''}'.toLowerCase();
+      final filename = '${row['filename'] ?? ''}'.toLowerCase();
+      final topics = row['topics'] is List
+          ? (row['topics'] as List).join(' ').toLowerCase()
+          : '';
+      return title.contains(query) ||
+          filename.contains(query) ||
+          topics.contains(query);
+    }).toList(growable: false);
+  }
+
+  Future<void> _load() async {
+    if (!mounted) return;
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    try {
+      final uri = Uri.parse('$_base/list').replace(
+        queryParameters: <String, String>{
+          'club_id': '${widget.clubId}',
+          'user_id': '${widget.userId}',
+          if ((widget.teamId ?? 0) > 0) 'team_id': '${widget.teamId}',
+        },
+      );
+
+      final response = await http.get(uri).timeout(const Duration(seconds: 30));
+      final data = _decode(response);
+
+      if (response.statusCode < 200 ||
+          response.statusCode >= 300 ||
+          data is! Map ||
+          data['success'] != true) {
+        throw Exception(
+          data is Map
+              ? (data['detail'] ?? data['message'] ?? 'Ошибка загрузки')
+              : 'HTTP ${response.statusCode}',
+        );
+      }
+
+      final rows = data['documents'] is List
+          ? (data['documents'] as List)
+              .whereType<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList()
+          : <Map<String, dynamic>>[];
+
+      if (!mounted) return;
+      setState(() {
+        _documents = rows;
+        _loading = false;
+        if (_selected != null) {
+          final id = '${_selected!['document_id'] ?? ''}';
+          _selected = rows.cast<Map<String, dynamic>?>().firstWhere(
+                (row) => '${row?['document_id'] ?? ''}' == id,
+                orElse: () => rows.isEmpty ? null : rows.first,
+              );
+        } else if (rows.isNotEmpty) {
+          _selected = rows.first;
+        }
+      });
+
+      if (_selected != null) {
+        await _loadItem(_selected!);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = '$e';
+      });
+    }
+  }
+
+  Future<void> _loadItem(Map<String, dynamic> row) async {
+    final id = '${row['document_id'] ?? ''}'.trim();
+    if (id.isEmpty) return;
+
+    setState(() {
+      _selected = row;
+      _textPreview = '';
+      _answer = '';
+      _sources = <Map<String, dynamic>>[];
+      _history = <Map<String, dynamic>>[];
+      _error = null;
+    });
+
+    try {
+      final uri = Uri.parse('$_base/item').replace(
+        queryParameters: <String, String>{
+          'club_id': '${widget.clubId}',
+          'document_id': id,
+        },
+      );
+      final response = await http.get(uri).timeout(const Duration(seconds: 30));
+      final data = _decode(response);
+
+      if (response.statusCode < 200 ||
+          response.statusCode >= 300 ||
+          data is! Map ||
+          data['success'] != true) {
+        throw Exception(
+          data is Map
+              ? (data['detail'] ?? data['message'] ?? 'Ошибка документа')
+              : 'HTTP ${response.statusCode}',
+        );
+      }
+
+      final document = data['document'] is Map
+          ? Map<String, dynamic>.from(data['document'] as Map)
+          : row;
+
+      if (!mounted) return;
+      setState(() {
+        _selected = document;
+        _textPreview = '${data['text_preview'] ?? ''}';
+      });
+      await _loadHistory(id);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = '$e');
+    }
+  }
+
+  Future<void> _openDocumentInEditor(
+    Map<String, dynamic> row,
+  ) async {
+    await _loadItem(row);
+    if (!mounted || _selected == null) return;
+
+    final document = Map<String, dynamic>.from(_selected!);
+    final body = _textPreview;
+    final documentId = '${document['document_id'] ?? ''}'.trim();
+    final title =
+        '${document['title'] ?? document['filename'] ?? 'Документ'}'.trim();
+
+    final opener = widget.onOpenDocumentEditor;
+    if (opener != null && documentId.isNotEmpty) {
+      await opener(
+        documentId,
+        title,
+        (closeWindow) => _buildDocumentEditor(
+          sourceDocument: document,
+          sourceBody: body,
+          externalClose: closeWindow,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _editorOpen = true);
+  }
+
+  Future<void> _saveDocumentEditor(
+    String title,
+    String body,
+  ) async {
+    final selected = _selected;
+    if (selected == null) return;
+    final documentId = '${selected['document_id'] ?? ''}'.trim();
+    if (documentId.isEmpty) return;
+
+    final response = await http
+        .post(
+          Uri.parse('$_base/text/save'),
+          headers: const <String, String>{
+            'Content-Type': 'application/json; charset=utf-8',
+            'Accept': 'application/json',
+          },
+          body: jsonEncode(
+            <String, dynamic>{
+              'club_id': widget.clubId,
+              'user_id': widget.userId,
+              'document_id': documentId,
+              'title': title,
+              'body': body,
+            },
+          ),
+        )
+        .timeout(const Duration(minutes: 2));
+
+    final data = _decode(response);
+    if (response.statusCode < 200 ||
+        response.statusCode >= 300 ||
+        data is! Map ||
+        data['success'] != true) {
+      throw Exception(
+        data is Map
+            ? (data['detail'] ??
+                data['message'] ??
+                'Не удалось сохранить документ')
+            : 'HTTP ${response.statusCode}',
+      );
+    }
+
+    if (!mounted) return;
+    final document = data['document'] is Map
+        ? Map<String, dynamic>.from(data['document'] as Map)
+        : selected;
+
+    setState(() {
+      _selected = document;
+      _textPreview = '${data['text_preview'] ?? body}';
+      final index = _documents.indexWhere(
+        (item) => '${item['document_id'] ?? ''}' == documentId,
+      );
+      if (index >= 0) {
+        _documents[index] = document;
+      }
+    });
+  }
+
+  Future<void> _saveExternalDocumentEditor(
+    String documentId,
+    String title,
+    String body,
+  ) async {
+    if (documentId.trim().isEmpty) return;
+
+    final response = await http
+        .post(
+          Uri.parse('$_base/text/save'),
+          headers: const <String, String>{
+            'Content-Type': 'application/json; charset=utf-8',
+            'Accept': 'application/json',
+          },
+          body: jsonEncode(
+            <String, dynamic>{
+              'club_id': widget.clubId,
+              'user_id': widget.userId,
+              'document_id': documentId,
+              'title': title,
+              'body': body,
+            },
+          ),
+        )
+        .timeout(const Duration(minutes: 2));
+
+    final data = _decode(response);
+    if (response.statusCode < 200 ||
+        response.statusCode >= 300 ||
+        data is! Map ||
+        data['success'] != true) {
+      throw Exception(
+        data is Map
+            ? (data['detail'] ??
+                data['message'] ??
+                'Не удалось сохранить документ')
+            : 'HTTP ${response.statusCode}',
+      );
+    }
+
+    if (!mounted) return;
+    final document = data['document'] is Map
+        ? Map<String, dynamic>.from(data['document'] as Map)
+        : <String, dynamic>{
+            'document_id': documentId,
+            'title': title,
+          };
+
+    setState(() {
+      final index = _documents.indexWhere(
+        (item) => '${item['document_id'] ?? ''}' == documentId,
+      );
+      if (index >= 0) {
+        _documents[index] = <String, dynamic>{
+          ..._documents[index],
+          ...document,
+        };
+      }
+
+      if ('${_selected?['document_id'] ?? ''}' == documentId) {
+        _selected = <String, dynamic>{
+          ...?_selected,
+          ...document,
+        };
+        _textPreview = '${data['text_preview'] ?? body}';
+      }
+    });
+  }
+
+  Widget _buildDocumentEditor({
+    Map<String, dynamic>? sourceDocument,
+    String? sourceBody,
+    VoidCallback? externalClose,
+  }) {
+    final selected = sourceDocument ?? _selected!;
+    final documentId = '${selected['document_id'] ?? ''}'.trim();
+    final extension = '${selected['extension'] ?? ''}'.trim().toUpperCase();
+    final title = '${selected['title'] ?? selected['filename'] ?? 'Документ'}';
+
+    return WorkspaceDocumentEditor(
+      key: ValueKey<String>(
+        'document-ai-editor:$documentId:${selected['updated_at'] ?? ''}',
+      ),
+      initialTitle: title,
+      initialBody: sourceBody ?? _textPreview,
+      contextLabel: 'Методические материалы',
+      contextName: widget.clubName,
+      documentType: 'Методический материал',
+      liveBlocksKey: 'document-ai:$documentId',
+      onSave: externalClose == null
+          ? _saveDocumentEditor
+          : (title, body) => _saveExternalDocumentEditor(
+                documentId,
+                title,
+                body,
+              ),
+      onClose: () {
+        if (externalClose != null) {
+          externalClose();
+          unawaited(_load());
+          return;
+        }
+        if (!mounted) return;
+        setState(() => _editorOpen = false);
+        unawaited(_load());
+      },
+      aiClubId: widget.clubId,
+      aiUserId: widget.userId,
+      aiTeamId: widget.teamId,
+      aiClubName: widget.clubName,
+      aiTeamName: '',
+      aiDocumentKey: documentId,
+      aiExtraPayload: <String, dynamic>{
+        'document_id': documentId,
+        'document_ai': true,
+        'workspace_section': 'documents',
+        'document_filename': '${selected['filename'] ?? ''}',
+        'document_extension': '${selected['extension'] ?? ''}',
+        'document_file_url': '${selected['file_url'] ?? ''}',
+        'document_file_size': selected['file_size'] ?? 0,
+        'document_pages': selected['extraction'] is Map
+            ? (selected['extraction'] as Map)['pages']
+            : null,
+      },
+    );
+  }
+
+  Future<void> _upload() async {
+    if (_uploading) return;
+
+    final result = await FilePicker.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const <String>[
+        'pdf',
+        'doc',
+        'docx',
+        'txt',
+        'md',
+        'rtf',
+        'csv',
+        'xlsx',
+        'pptx',
+        'odt',
+        'jpg',
+        'jpeg',
+        'png',
+        'webp',
+        'heic',
+      ],
+      allowMultiple: false,
+      withData: true,
+    );
+
+    if (result == null || result.files.isEmpty) return;
+    final file = result.files.single;
+    final bytes = file.bytes;
+
+    if (bytes == null || bytes.isEmpty) {
+      if (!mounted) return;
+      setState(() {
+        _error =
+            'Не удалось прочитать выбранный файл. Повторите выбор документа.';
+      });
+      return;
+    }
+
+    setState(() {
+      _uploading = true;
+      _error = null;
+    });
+
+    try {
+      final request = http.MultipartRequest(
+        'POST',
+        Uri.parse('$_base/upload'),
+      );
+      request.fields['club_id'] = '${widget.clubId}';
+      request.fields['user_id'] = '${widget.userId}';
+      if ((widget.teamId ?? 0) > 0) {
+        request.fields['team_id'] = '${widget.teamId}';
+      }
+      request.fields['title'] = file.name.replaceFirst(RegExp(r'\.[^.]+$'), '');
+      request.fields['ocr'] = 'auto';
+      request.fields['extract_images'] = '1';
+      request.fields['vision'] = '1';
+      request.fields['analyze_layout'] = '1';
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          'file',
+          bytes,
+          filename: file.name,
+        ),
+      );
+
+      final streamed = await request.send().timeout(const Duration(minutes: 5));
+      final response = await http.Response.fromStream(streamed);
+      final data = _decode(response);
+
+      if (response.statusCode < 200 ||
+          response.statusCode >= 300 ||
+          data is! Map ||
+          data['success'] != true) {
+        throw Exception(
+          data is Map
+              ? (data['detail'] ?? data['message'] ?? 'Ошибка загрузки')
+              : 'HTTP ${response.statusCode}',
+        );
+      }
+
+      final document = data['document'] is Map
+          ? Map<String, dynamic>.from(data['document'] as Map)
+          : <String, dynamic>{};
+
+      await _load();
+
+      if (!mounted) return;
+      if (document.isNotEmpty) {
+        final id = '${document['document_id'] ?? ''}';
+        final found = _documents.cast<Map<String, dynamic>?>().firstWhere(
+              (row) => '${row?['document_id'] ?? ''}' == id,
+              orElse: () => document,
+            );
+        if (found != null) {
+          await _loadItem(found);
+        }
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = '$e');
+    } finally {
+      if (mounted) setState(() => _uploading = false);
+    }
+  }
+
+  Future<void> _ask([String? forced]) async {
+    final selected = _selected;
+    if (selected == null || _asking) return;
+
+    final question = (forced ?? _question.text).trim();
+    if (question.isEmpty) return;
+
+    final documentId = '${selected['document_id'] ?? ''}'.trim();
+    if (documentId.isEmpty) return;
+
+    setState(() {
+      _asking = true;
+      _answer = '';
+      _sources = <Map<String, dynamic>>[];
+      _error = null;
+    });
+
+    try {
+      final response = await http
+          .post(
+            Uri.parse('$_base/ask'),
+            headers: const <String, String>{
+              'Content-Type': 'application/json; charset=utf-8',
+              'Accept': 'application/json',
+            },
+            body: jsonEncode(
+              <String, dynamic>{
+                'club_id': widget.clubId,
+                'user_id': widget.userId,
+                if ((widget.teamId ?? 0) > 0) 'team_id': widget.teamId,
+                'document_ids': <String>[documentId],
+                'q': question,
+                'conversation_id':
+                    'os-doc:${widget.clubId}:${widget.userId}:$documentId',
+                'memory': <String, dynamic>{
+                  'client_turns': _history
+                      .take(12)
+                      .map((row) => <String, dynamic>{
+                            'role': '${row['role'] ?? ''}',
+                            'text': '${row['text'] ?? ''}',
+                          })
+                      .toList(growable: false),
+                },
+                'context': <String, dynamic>{
+                  'scope': 'workspace_document',
+                  'document_id': documentId,
+                  'extracted_text_preview': _textPreview,
+                  'ocr': true,
+                  'include_images': true,
+                  'vision': true,
+                },
+              },
+            ),
+          )
+          .timeout(const Duration(minutes: 4));
+
+      final data = _decode(response);
+      if (response.statusCode < 200 ||
+          response.statusCode >= 300 ||
+          data is! Map ||
+          data['success'] != true) {
+        throw Exception(
+          data is Map
+              ? (data['detail'] ?? data['message'] ?? 'Ошибка AI')
+              : 'HTTP ${response.statusCode}',
+        );
+      }
+
+      final sources = data['sources'] is List
+          ? (data['sources'] as List)
+              .whereType<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList()
+          : <Map<String, dynamic>>[];
+
+      if (!mounted) return;
+      setState(() {
+        _answer = '${data['answer'] ?? ''}'.trim();
+        _sources = sources;
+        _question.clear();
+      });
+      await _loadHistory(documentId);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = '$e');
+    } finally {
+      if (mounted) setState(() => _asking = false);
+    }
+  }
+
+  Future<void> _loadHistory(String documentId) async {
+    if (documentId.trim().isEmpty || !mounted) return;
+    setState(() => _historyLoading = true);
+    try {
+      final uri = Uri.parse('$_base/history').replace(
+        queryParameters: <String, String>{
+          'club_id': '${widget.clubId}',
+          'user_id': '${widget.userId}',
+          'document_id': documentId,
+        },
+      );
+      final response = await http.get(uri).timeout(const Duration(seconds: 30));
+      final data = _decode(response);
+      if (response.statusCode >= 200 &&
+          response.statusCode < 300 &&
+          data is Map &&
+          data['success'] == true &&
+          data['history'] is List) {
+        final rows = (data['history'] as List)
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList(growable: false);
+        if (!mounted) return;
+        setState(() => _history = rows);
+      }
+    } catch (_) {
+      // История не должна блокировать работу с документом.
+    } finally {
+      if (mounted) setState(() => _historyLoading = false);
+    }
+  }
+
+  String _historyDay(dynamic raw) {
+    final parsed = DateTime.tryParse('$raw')?.toLocal();
+    if (parsed == null) return '';
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final day = DateTime(parsed.year, parsed.month, parsed.day);
+    final diff = today.difference(day).inDays;
+    if (diff == 0) return 'Сегодня';
+    if (diff == 1) return 'Вчера';
+    String two(int value) => value.toString().padLeft(2, '0');
+    return '${two(parsed.day)}.${two(parsed.month)}.${parsed.year}';
+  }
+
+  String _historyTime(dynamic raw) {
+    final parsed = DateTime.tryParse('$raw')?.toLocal();
+    if (parsed == null) return '';
+    String two(int value) => value.toString().padLeft(2, '0');
+    return '${two(parsed.hour)}:${two(parsed.minute)}';
+  }
+
+  Future<void> _copyExtractedText() async {
+    final value = _textPreview.trim();
+    if (value.isEmpty) return;
+    await Clipboard.setData(ClipboardData(text: value));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Текст документа скопирован')),
+    );
+  }
+
+  Future<void> _copyAnswer() async {
+    final value = _answer.trim();
+    if (value.isEmpty) return;
+    await Clipboard.setData(ClipboardData(text: value));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Ответ SPORTOTEKA AI скопирован')),
+    );
+  }
+
+  Future<void> _reanalyze() async {
+    final selected = _selected;
+    if (selected == null || _analyzing) return;
+    final id = '${selected['document_id'] ?? ''}'.trim();
+    if (id.isEmpty) return;
+
+    setState(() {
+      _analyzing = true;
+      _error = null;
+    });
+
+    try {
+      final response = await http
+          .post(
+            Uri.parse('$_base/analyze'),
+            headers: const <String, String>{
+              'Content-Type': 'application/json; charset=utf-8',
+            },
+            body: jsonEncode(
+              <String, dynamic>{
+                'club_id': widget.clubId,
+                'user_id': widget.userId,
+                'document_id': id,
+                'focus': '',
+              },
+            ),
+          )
+          .timeout(const Duration(minutes: 4));
+
+      final data = _decode(response);
+      if (response.statusCode < 200 ||
+          response.statusCode >= 300 ||
+          data is! Map ||
+          data['success'] != true) {
+        throw Exception(
+          data is Map
+              ? (data['detail'] ?? data['message'] ?? 'Ошибка анализа')
+              : 'HTTP ${response.statusCode}',
+        );
+      }
+
+      if (data['document'] is Map) {
+        await _loadItem(
+          Map<String, dynamic>.from(data['document'] as Map),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = '$e');
+    } finally {
+      if (mounted) setState(() => _analyzing = false);
+    }
+  }
+
+  Future<void> _delete() async {
+    final selected = _selected;
+    if (selected == null) return;
+    final id = '${selected['document_id'] ?? ''}'.trim();
+    if (id.isEmpty) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Удалить документ?'),
+        content: Text(
+          '«${selected['title'] ?? selected['filename'] ?? 'Документ'}» '
+          'будет удалён из AI-библиотеки клуба.',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Удалить'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    try {
+      final response = await http
+          .post(
+            Uri.parse('$_base/delete'),
+            headers: const <String, String>{
+              'Content-Type': 'application/json; charset=utf-8',
+            },
+            body: jsonEncode(
+              <String, dynamic>{
+                'club_id': widget.clubId,
+                'user_id': widget.userId,
+                'document_id': id,
+              },
+            ),
+          )
+          .timeout(const Duration(seconds: 30));
+
+      final data = _decode(response);
+      if (response.statusCode < 200 ||
+          response.statusCode >= 300 ||
+          data is! Map ||
+          data['success'] != true) {
+        throw Exception('Не удалось удалить документ');
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _selected = null;
+        _textPreview = '';
+        _answer = '';
+      });
+      await _load();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = '$e');
+    }
+  }
+
+  Future<void> _openOriginal() async {
+    final raw = '${_selected?['file_url'] ?? ''}'.trim();
+    if (raw.isEmpty) return;
+    final uri = Uri.tryParse(_absoluteUrl(raw));
+    if (uri == null) return;
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  String _sizeLabel(dynamic raw) {
+    final bytes = int.tryParse('$raw') ?? 0;
+    if (bytes <= 0) return '—';
+    if (bytes < 1024 * 1024) {
+      return '${(bytes / 1024).toStringAsFixed(0)} КБ';
+    }
+    return '${(bytes / 1024 / 1024).toStringAsFixed(1)} МБ';
+  }
+
+  String _dateLabel(dynamic raw) {
+    final value = '$raw'.trim();
+    if (value.isEmpty) return '';
+    final parsed = DateTime.tryParse(value);
+    if (parsed == null) return value;
+    final date = parsed.toLocal();
+    String two(int value) => value.toString().padLeft(2, '0');
+    return '${two(date.day)}.${two(date.month)}.${date.year} '
+        '${two(date.hour)}:${two(date.minute)}';
+  }
+
+  Widget _statusPill(Map<String, dynamic> row) {
+    final needsOcr = row['needs_ocr'] == true;
+    final status = '${row['status'] ?? ''}';
+    final text = needsOcr
+        ? 'Нужен OCR'
+        : status == 'ready'
+            ? 'Обработан'
+            : 'Документ';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: needsOcr ? const Color(0xFFFFF4E5) : _greenSoft,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: needsOcr ? const Color(0xFFB54708) : _greenDark,
+          fontSize: 10.5,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+
+  Widget _documentList(bool compact) {
+    final rows = _visible;
+
+    return Container(
+      width: compact ? double.infinity : 278,
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(
+          right: BorderSide(color: _line),
+        ),
+      ),
+      child: Column(
+        children: <Widget>[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
+            child: Row(
+              children: <Widget>[
+                const Expanded(
+                  child: Text(
+                    'Методические материалы',
+                    style: TextStyle(
+                      color: _text,
+                      fontSize: 15.5,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Обновить',
+                  onPressed: _loading ? null : _load,
+                  icon: const Icon(Icons.refresh_rounded),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            child: TextField(
+              controller: _search,
+              decoration: InputDecoration(
+                hintText: 'Поиск в «Методические материалы»',
+                prefixIcon: const Icon(Icons.search_rounded, size: 19),
+                filled: true,
+                fillColor: _bg,
+                isDense: true,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: _line),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: _line),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            child: SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: _uploading ? null : _upload,
+                icon: _uploading
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(Icons.upload_file_rounded),
+                label: Text(
+                  _uploading ? 'Читаю и анализирую…' : 'Добавить документ',
+                ),
+                style: FilledButton.styleFrom(
+                  backgroundColor: _green,
+                  foregroundColor: Colors.white,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          const Divider(height: 1, color: _line),
+          Expanded(
+            child: _loading
+                ? const Center(
+                    child: CircularProgressIndicator(color: _green),
+                  )
+                : rows.isEmpty
+                    ? const Center(
+                        child: Padding(
+                          padding: EdgeInsets.all(24),
+                          child: Text(
+                            'Методические материалы пока не добавлены.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: _muted,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                      )
+                    : ListView.separated(
+                        padding: const EdgeInsets.all(10),
+                        itemCount: rows.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 6),
+                        itemBuilder: (context, index) {
+                          final row = rows[index];
+                          final selected = '${row['document_id']}' ==
+                              '${_selected?['document_id']}';
+
+                          return Material(
+                            color: selected ? _greenSoft : Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(12),
+                              onTap: () =>
+                                  unawaited(_openDocumentInEditor(row)),
+                              child: Padding(
+                                padding:
+                                    const EdgeInsets.fromLTRB(10, 10, 8, 10),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: <Widget>[
+                                    Container(
+                                      width: 38,
+                                      height: 38,
+                                      decoration: BoxDecoration(
+                                        color: selected ? Colors.white : _bg,
+                                        borderRadius: BorderRadius.circular(10),
+                                        border: Border.all(color: _line),
+                                      ),
+                                      child: const Icon(
+                                        Icons.description_outlined,
+                                        color: _greenDark,
+                                        size: 20,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 9),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: <Widget>[
+                                          Text(
+                                            '${row['title'] ?? row['filename'] ?? 'Документ'}',
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: const TextStyle(
+                                              color: _text,
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 3),
+                                          Text(
+                                            '${row['extension'] ?? ''} · '
+                                            '${_sizeLabel(row['file_size'])}',
+                                            style: const TextStyle(
+                                              color: _muted,
+                                              fontSize: 10.8,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 6),
+                                          _statusPill(row),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _detail() {
+    final row = _selected;
+    if (row == null) {
+      return const Center(
+        child: Text(
+          'Выберите документ слева или добавьте новый.',
+          style: TextStyle(color: _muted, fontSize: 13),
+        ),
+      );
+    }
+
+    final topics = row['topics'] is List
+        ? (row['topics'] as List).map((e) => '$e').toList()
+        : <String>[];
+
+    return Column(
+      children: <Widget>[
+        Container(
+          padding: const EdgeInsets.fromLTRB(16, 10, 10, 10),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            border: Border(bottom: BorderSide(color: _line)),
+          ),
+          child: Row(
+            children: <Widget>[
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: _greenSoft,
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                child: const Icon(
+                  Icons.description_rounded,
+                  color: _greenDark,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      '${row['title'] ?? row['filename'] ?? 'Документ'}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: _text,
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${row['filename'] ?? ''} · ${_dateLabel(row['created_at'])}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: _muted,
+                        fontSize: 10.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              TextButton.icon(
+                onPressed: _openOriginal,
+                icon: const Icon(Icons.open_in_new_rounded, size: 16),
+                label: const Text('Оригинал'),
+              ),
+              IconButton(
+                tooltip: 'Копировать извлечённый текст',
+                onPressed:
+                    _textPreview.trim().isEmpty ? null : _copyExtractedText,
+                icon: const Icon(Icons.content_copy_rounded, size: 19),
+              ),
+              IconButton(
+                tooltip:
+                    _aiOpen ? 'Скрыть SPORTOTEKA AI' : 'Открыть SPORTOTEKA AI',
+                onPressed: () => setState(() => _aiOpen = !_aiOpen),
+                icon: Icon(
+                  Icons.auto_awesome_rounded,
+                  color: _aiOpen ? _greenDark : _muted,
+                ),
+              ),
+              IconButton(
+                tooltip: 'Удалить',
+                onPressed: _delete,
+                icon: const Icon(Icons.delete_outline_rounded, size: 20),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: SingleChildScrollView(
+            controller: _detailScroll,
+            padding: const EdgeInsets.fromLTRB(18, 16, 18, 28),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                if (topics.isNotEmpty) ...<Widget>[
+                  const Text(
+                    'Ключевые темы',
+                    style: TextStyle(
+                      color: _text,
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 7),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: topics.take(12).map((topic) {
+                      return Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: _greenSoft,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          topic,
+                          style: const TextStyle(
+                            color: _greenDark,
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+                Row(
+                  children: <Widget>[
+                    const Expanded(
+                      child: Text(
+                        'Анализ SPORTOTEKA AI',
+                        style: TextStyle(
+                          color: _text,
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    TextButton.icon(
+                      onPressed: _analyzing ? null : _reanalyze,
+                      icon: _analyzing
+                          ? const SizedBox(
+                              width: 13,
+                              height: 13,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.refresh_rounded, size: 16),
+                      label: const Text('Обновить'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                _panel(
+                  child: Text(
+                    '${row['analysis'] ?? 'Анализ пока не создан.'}',
+                    style: const TextStyle(
+                      color: _text,
+                      fontSize: 12.4,
+                      height: 1.45,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                ExpansionTile(
+                  initiallyExpanded: true,
+                  tilePadding: EdgeInsets.zero,
+                  childrenPadding: EdgeInsets.zero,
+                  title: const Text(
+                    'Извлечённый текст',
+                    style: TextStyle(
+                      color: _text,
+                      fontSize: 12.8,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  subtitle: Text(
+                    '${row['text_chars'] ?? 0} символов · ${row['chunks_count'] ?? 0} фрагментов',
+                    style: const TextStyle(
+                      color: _muted,
+                      fontSize: 10.5,
+                    ),
+                  ),
+                  trailing: TextButton.icon(
+                    onPressed:
+                        _textPreview.trim().isEmpty ? null : _copyExtractedText,
+                    icon: const Icon(Icons.content_copy_rounded, size: 15),
+                    label: const Text('Копировать'),
+                  ),
+                  children: <Widget>[
+                    _panel(
+                      child: SelectionArea(
+                        child: Text(
+                          _textPreview.isEmpty
+                              ? 'Текст не извлечён.'
+                              : _textPreview,
+                          style: const TextStyle(
+                            color: _text,
+                            fontSize: 12,
+                            height: 1.48,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (_error != null)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            color: const Color(0xFFFFF4E5),
+            child: Text(
+              _error!,
+              style: const TextStyle(
+                color: Color(0xFFB54708),
+                fontSize: 11.2,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _aiPanel() {
+    final row = _selected;
+    if (row == null) return const SizedBox.shrink();
+
+    return Container(
+      width: 372,
+      decoration: const BoxDecoration(
+        color: Color(0xFFFBFCFB),
+        border: Border(left: BorderSide(color: _line)),
+      ),
+      child: Column(
+        children: <Widget>[
+          Container(
+            padding: const EdgeInsets.fromLTRB(14, 11, 10, 10),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              border: Border(bottom: BorderSide(color: _line)),
+            ),
+            child: Row(
+              children: <Widget>[
+                Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: _greenSoft,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(
+                    Icons.auto_awesome_rounded,
+                    color: _greenDark,
+                    size: 19,
+                  ),
+                ),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      const Text(
+                        'SPORTOTEKA AI',
+                        style: TextStyle(
+                          color: _text,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      Text(
+                        '${row['title'] ?? row['filename'] ?? 'Документ'}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: _muted, fontSize: 10.5),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Скрыть AI',
+                  onPressed: () => setState(() => _aiOpen = false),
+                  icon: const Icon(Icons.close_rounded, size: 19),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: _historyLoading && _history.isEmpty
+                ? const Center(child: CircularProgressIndicator(color: _green))
+                : ListView(
+                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
+                    children: <Widget>[
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: <Widget>[
+                          _aiQuick('Краткий конспект'),
+                          _aiQuick('Найди упражнения'),
+                          _aiQuick('Ключевые принципы'),
+                          if ((widget.teamId ?? 0) > 0)
+                            _aiQuick('Сравни с тренировкой'),
+                        ],
+                      ),
+                      if (_history.isEmpty && _answer.isEmpty) ...<Widget>[
+                        const SizedBox(height: 18),
+                        _panel(
+                          child: const Text(
+                            'Задавай вопросы по документу. SPORTOTEKA AI использует '
+                            'текст методички и, когда это нужно, проверенные данные команды.',
+                            style: TextStyle(
+                              color: _muted,
+                              fontSize: 11.8,
+                              height: 1.45,
+                            ),
+                          ),
+                        ),
+                      ],
+                      if (_history.isNotEmpty) ..._historyWidgets(),
+                      if (_answer.isNotEmpty && _history.isEmpty) ...<Widget>[
+                        const SizedBox(height: 12),
+                        _aiAnswerCard(_answer),
+                      ],
+                    ],
+                  ),
+          ),
+          Container(
+            padding: const EdgeInsets.fromLTRB(10, 9, 10, 11),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              border: Border(top: BorderSide(color: _line)),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: <Widget>[
+                Expanded(
+                  child: TextField(
+                    controller: _question,
+                    minLines: 1,
+                    maxLines: 5,
+                    onSubmitted: (_) => unawaited(_ask()),
+                    decoration: InputDecoration(
+                      hintText: 'Спроси по документу…',
+                      hintStyle: const TextStyle(fontSize: 11.5),
+                      filled: true,
+                      fillColor: _bg,
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 11),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(11),
+                        borderSide: const BorderSide(color: _line),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(11),
+                        borderSide: const BorderSide(color: _line),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 7),
+                SizedBox(
+                  width: 42,
+                  height: 42,
+                  child: FilledButton(
+                    onPressed: _asking ? null : _ask,
+                    style: FilledButton.styleFrom(
+                        padding: EdgeInsets.zero, backgroundColor: _green),
+                    child: _asking
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: Colors.white),
+                          )
+                        : const Icon(Icons.arrow_upward_rounded, size: 19),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _aiQuick(String title) {
+    String prompt = title;
+    if (title == 'Краткий конспект') {
+      prompt = 'Сделай краткий структурированный конспект этого документа.';
+    } else if (title == 'Найди упражнения') {
+      prompt =
+          'Найди и перечисли упражнения, которые описаны в этом документе.';
+    } else if (title == 'Ключевые принципы') {
+      prompt = 'Выдели ключевые методические и футбольные принципы документа.';
+    } else if (title == 'Сравни с тренировкой') {
+      prompt =
+          'Сопоставь рекомендации этого документа с последней тренировкой команды.';
+    }
+    return ActionChip(
+      avatar:
+          const Icon(Icons.auto_awesome_rounded, size: 14, color: _greenDark),
+      label: Text(
+        title,
+        style: const TextStyle(
+            color: _greenDark, fontSize: 10.6, fontWeight: FontWeight.w700),
+      ),
+      side: const BorderSide(color: _line),
+      backgroundColor: Colors.white,
+      onPressed: _asking ? null : () => unawaited(_ask(prompt)),
+    );
+  }
+
+  List<Widget> _historyWidgets() {
+    final widgets = <Widget>[];
+    String lastDay = '';
+    for (final row in _history) {
+      final day = _historyDay(row['created_at']);
+      if (day.isNotEmpty && day != lastDay) {
+        widgets.add(
+          Padding(
+            padding: const EdgeInsets.fromLTRB(2, 15, 2, 6),
+            child: Text(
+              day,
+              style: const TextStyle(
+                  color: _muted, fontSize: 10.4, fontWeight: FontWeight.w700),
+            ),
+          ),
+        );
+        lastDay = day;
+      }
+      final role = '${row['role'] ?? ''}';
+      final value = '${row['text'] ?? ''}'.trim();
+      if (value.isEmpty) continue;
+      widgets.add(
+        Align(
+          alignment:
+              role == 'user' ? Alignment.centerRight : Alignment.centerLeft,
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 320),
+            margin: const EdgeInsets.only(bottom: 7),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: role == 'user' ? _greenSoft : Colors.white,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: _line),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  value,
+                  style: const TextStyle(
+                      color: _text, fontSize: 11.7, height: 1.42),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  _historyTime(row['created_at']),
+                  style: const TextStyle(color: _muted, fontSize: 9.2),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+    return widgets;
+  }
+
+  Widget _aiAnswerCard(String value) {
+    return _panel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              const Expanded(
+                child: Text(
+                  'Ответ SPORTOTEKA AI',
+                  style: TextStyle(
+                      color: _text,
+                      fontSize: 11.8,
+                      fontWeight: FontWeight.w800),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Копировать ответ',
+                onPressed: _copyAnswer,
+                icon: const Icon(Icons.content_copy_rounded, size: 16),
+              ),
+            ],
+          ),
+          Text(
+            value,
+            style: const TextStyle(color: _text, fontSize: 11.8, height: 1.45),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _finderTopBar({required bool compact}) {
+    return Container(
+      height: compact ? 58 : 62,
+      padding: EdgeInsets.symmetric(horizontal: compact ? 10 : 14),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: _line)),
+      ),
+      child: Row(
+        children: <Widget>[
+          IconButton(
+            tooltip: 'Назад',
+            onPressed: widget.onClose,
+            icon: const Icon(Icons.arrow_back_rounded),
+          ),
+          if (!compact)
+            IconButton(
+              tooltip: 'Обновить',
+              onPressed: _loading ? null : _load,
+              icon: const Icon(Icons.refresh_rounded),
+            ),
+          const SizedBox(width: 4),
+          Expanded(
+            child: Container(
+              height: 36,
+              constraints: const BoxConstraints(maxWidth: 420),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF4F6F4),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: TextField(
+                controller: _search,
+                style: AppTypography.formText(),
+                decoration: InputDecoration(
+                  border: InputBorder.none,
+                  isDense: true,
+                  prefixIcon: const Icon(Icons.search_rounded, size: 18),
+                  hintText:
+                      compact ? 'Поиск' : 'Поиск в «Методические материалы»',
+                  hintStyle: AppTypography.formHint(),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 9),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          if (!_uploading)
+            InkWell(
+              borderRadius: BorderRadius.circular(10),
+              onTap: _upload,
+              child: Container(
+                height: 36,
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                decoration: BoxDecoration(
+                  color: _green,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    const Icon(Icons.add_rounded,
+                        color: Colors.white, size: 18),
+                    if (!compact) ...<Widget>[
+                      const SizedBox(width: 5),
+                      Text(
+                        'Добавить документ',
+                        style: AppTypography.actionStrong(color: Colors.white),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            )
+          else
+            const SizedBox.square(
+              dimension: 26,
+              child: Padding(
+                padding: EdgeInsets.all(4),
+                child: CircularProgressIndicator(strokeWidth: 2, color: _green),
+              ),
+            ),
+          const SizedBox(width: 6),
+          IconButton(
+            tooltip: 'Иконки',
+            onPressed: () {},
+            icon: const Icon(Icons.grid_view_rounded),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _finderBreadcrumb() {
+    return Container(
+      height: 46,
+      padding: const EdgeInsets.symmetric(horizontal: 18),
+      alignment: Alignment.centerLeft,
+      child: Row(
+        children: <Widget>[
+          Text(
+            'Клуб',
+            style: AppTypography.menuTitle(color: _muted),
+          ),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 4),
+            child: Icon(Icons.chevron_right_rounded, size: 16, color: _muted),
+          ),
+          Text(
+            'Документы',
+            style: AppTypography.menuTitle(color: _muted),
+          ),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 4),
+            child: Icon(Icons.chevron_right_rounded, size: 16, color: _muted),
+          ),
+          Expanded(
+            child: Text(
+              'Методические материалы',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.menuTitle(color: _text),
+            ),
+          ),
+          if (widget.clubName.trim().isNotEmpty)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEAF5EF),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                widget.clubName,
+                style: AppTypography.captionMedium(color: _green),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _finderDocumentList({required bool compact}) {
+    final rows = _visible;
+
+    if (_loading) {
+      return const Center(
+        child: CircularProgressIndicator(strokeWidth: 2.2, color: _green),
+      );
+    }
+
+    if (rows.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              const SportotekaWorkspaceFolderIcon(
+                size: 58,
+                color: Color(0xFFAAB8B1),
+                fillColor: Colors.white,
+                showBrandDots: false,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Методических материалов пока нет',
+                style: AppTypography.sectionTitle(color: _text),
+              ),
+              const SizedBox(height: 5),
+              Text(
+                'Добавьте PDF, Word или другой документ клуба.',
+                textAlign: TextAlign.center,
+                style: AppTypography.secondary(color: _muted),
+              ),
+              const SizedBox(height: 14),
+              OutlinedButton.icon(
+                onPressed: _uploading ? null : _upload,
+                icon: const Icon(Icons.upload_file_rounded, size: 18),
+                label: Text('Добавить документ', style: AppTypography.action()),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return ListView.separated(
+      padding: EdgeInsets.fromLTRB(compact ? 8 : 14, 2, compact ? 8 : 14, 28),
+      itemCount: rows.length,
+      separatorBuilder: (_, __) =>
+          const Divider(height: 1, indent: 52, color: _line),
+      itemBuilder: (context, index) {
+        final row = rows[index];
+        final selected = '${row['document_id'] ?? ''}' ==
+            '${_selected?['document_id'] ?? ''}';
+        final title = '${row['title'] ?? row['filename'] ?? 'Документ'}';
+        final extension =
+            '${row['extension'] ?? ''}'.replaceFirst('.', '').toUpperCase();
+        final subtitle = <String>[
+          if (extension.isNotEmpty) extension,
+          _sizeLabel(row['file_size']),
+          row['status'] == 'ready' ? 'обработан' : '${row['status'] ?? ''}',
+        ].where((value) => value.trim().isNotEmpty).join(' · ');
+
+        final tile = Material(
+          color: selected ? const Color(0xFFEAF3EE) : Colors.white,
+          borderRadius: BorderRadius.circular(9),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(9),
+            onTap: () async {
+              await _loadItem(row);
+              if (compact && mounted) {
+                await _openDocumentInEditor(row);
+              }
+            },
+            onDoubleTap:
+                compact ? null : () => unawaited(_openDocumentInEditor(row)),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              child: Row(
+                children: <Widget>[
+                  Container(
+                    width: 34,
+                    height: 34,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(9),
+                    ),
+                    child: SportotekaWorkspaceIcon(
+                      kind: SportotekaWorkspaceIconKind.document,
+                      size: 20,
+                      color: const Color(0xFF3E4A43),
+                      accentColor: const Color(0xFF0B8F55),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Row(
+                          children: <Widget>[
+                            Expanded(
+                              child: Text(
+                                title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTypography.menuTitle(color: _text),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            const _DocumentBrandDots(),
+                          ],
+                        ),
+                        if (subtitle.isNotEmpty)
+                          Text(
+                            subtitle,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTypography.caption(color: _muted),
+                          ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Ещё',
+                    onPressed: () {},
+                    icon: const Icon(Icons.more_horiz_rounded, size: 19),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onDoubleTap:
+              compact ? null : () => unawaited(_openDocumentInEditor(row)),
+          child: tile,
+        );
+      },
+    );
+  }
+
+  Widget _finderInspector() {
+    final row = _selected;
+    if (row == null) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Text(
+            'Выберите документ',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: _muted, fontSize: 12.5),
+          ),
+        ),
+      );
+    }
+
+    final title = '${row['title'] ?? row['filename'] ?? 'Документ'}';
+    final extension =
+        '${row['extension'] ?? ''}'.replaceFirst('.', '').toUpperCase();
+    final status = row['status'] == 'ready'
+        ? 'Обработан'
+        : '${row['status'] ?? 'Документ'}';
+
+    return Container(
+      color: Colors.white,
+      child: Column(
+        children: <Widget>[
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF4F8F5),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFDCE5E0)),
+                    ),
+                    child: Icon(
+                      extension == 'PDF'
+                          ? Icons.picture_as_pdf_outlined
+                          : Icons.description_outlined,
+                      color: _greenDark,
+                      size: 28,
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  Text(
+                    title,
+                    style: const TextStyle(
+                        color: _text,
+                        fontSize: 17,
+                        height: 1.15,
+                        fontWeight: FontWeight.w800),
+                  ),
+                  if (widget.clubName.trim().isNotEmpty) ...<Widget>[
+                    const SizedBox(height: 4),
+                    Text(widget.clubName,
+                        style: const TextStyle(color: _muted, fontSize: 12)),
+                  ],
+                  const SizedBox(height: 28),
+                  _inspectorValue('Тип', 'Методический документ'),
+                  _inspectorValue(
+                      'Формат', extension.isEmpty ? 'Документ' : extension),
+                  _inspectorValue('Размер', _sizeLabel(row['file_size'])),
+                  _inspectorValue('Статус', status),
+                  if ('${row['created_at'] ?? ''}'.trim().isNotEmpty)
+                    _inspectorValue('Добавлен', _dateLabel(row['created_at'])),
+                ],
+              ),
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.fromLTRB(18, 14, 18, 18),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              border: Border(top: BorderSide(color: _line)),
+            ),
+            child: SizedBox(
+              width: double.infinity,
+              height: 44,
+              child: FilledButton(
+                onPressed: () => unawaited(_openDocumentInEditor(row)),
+                style: FilledButton.styleFrom(
+                  backgroundColor: _green,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+                child: const Text('Открыть',
+                    style: TextStyle(fontWeight: FontWeight.w800)),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _inspectorValue(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(label, style: const TextStyle(color: _muted, fontSize: 11.5)),
+          const SizedBox(height: 3),
+          Text(
+            value.trim().isEmpty ? '—' : value,
+            style: const TextStyle(
+                color: _text, fontSize: 13, fontWeight: FontWeight.w700),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _panel({required Widget child}) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(13),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _line),
+      ),
+      child: child,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_editorOpen && _selected != null) {
+      return _buildDocumentEditor();
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 760;
+        return Column(
+          children: <Widget>[
+            _finderTopBar(compact: compact),
+            _finderBreadcrumb(),
+            const Divider(height: 1, color: _line),
+            Expanded(
+              child: compact
+                  ? _finderDocumentList(compact: true)
+                  : Row(
+                      children: <Widget>[
+                        Expanded(child: _finderDocumentList(compact: false)),
+                        const VerticalDivider(
+                            width: 1, thickness: 1, color: _line),
+                        SizedBox(width: 340, child: _finderInspector()),
+                      ],
+                    ),
+            ),
+            if (_error != null)
+              Container(
+                width: double.infinity,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                color: const Color(0xFFFFF4E5),
+                child: Text(
+                  _error!,
+                  style:
+                      const TextStyle(color: Color(0xFFB54708), fontSize: 11.5),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _DocumentBrandDots extends StatelessWidget {
+  const _DocumentBrandDots();
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: List.generate(
+        3,
+        (index) => Padding(
+          padding: EdgeInsets.only(left: index == 0 ? 0 : 4),
+          child: Container(
+            width: 5,
+            height: 5,
+            decoration: BoxDecoration(
+              color: index == 1
+                  ? const Color(0xFF17A36A)
+                  : const Color(0xFFB8D9C6),
+              shape: BoxShape.circle,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

@@ -24,9 +24,9 @@ import 'package:sportoteka/presentation/training_graphics/training_graphics_scre
 
 /// ================== ПАЛИТРА (ФК ГОМЕЛЬ #00a750) ==================
 class ClubDashboardPalette {
-  static const primaryGreen = Color(0xFF00A750);
-  static const primaryGreenDark = Color(0xFF008C40);
-  static const primaryGreenLight = Color(0xFF00C060);
+  static const primaryGreen = Color(0xFF0B8F55);
+  static const primaryGreenDark = Color(0xFF0B7448);
+  static const primaryGreenLight = Color(0xFF55AA7A);
   static const lightGreen = Color(0xFFE8F5E9);
 
   static const white = Color(0xFFFFFFFF);
@@ -436,6 +436,7 @@ class PlanAttachmentsApi {
 /// ================== SCREEN ==================
 class PlanDetailScreen extends StatefulWidget {
   final bool embedded;
+  final bool workspaceWindowMode;
   final Map<String, dynamic>? initialArgs;
   final VoidCallback? onOpenFullscreen;
   final VoidCallback? onClose;
@@ -444,6 +445,7 @@ class PlanDetailScreen extends StatefulWidget {
   const PlanDetailScreen({
     super.key,
     this.embedded = false,
+    this.workspaceWindowMode = false,
     this.initialArgs,
     this.onOpenFullscreen,
     this.onClose,
@@ -1917,6 +1919,71 @@ Future<void> _pickSchemesForExercise(int exerciseIndex) async {
     );
   }
 
+  Widget _buildWorkspaceWindowToolbar({required bool compact}) {
+    return Container(
+      height: compact ? 44 : 46,
+      padding: EdgeInsets.symmetric(horizontal: compact ? 8 : 12),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(
+          bottom: BorderSide(color: Color(0xFFE6EAE7), width: .7),
+        ),
+      ),
+      child: Row(
+        children: [
+          const _DetailDotCluster(compact: true),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Text(
+              planId == null ? 'Новый план-конспект' : 'Редактор плана-конспекта',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.menuTitle(
+                color: const Color(0xFF101814),
+              ),
+            ),
+          ),
+          if (!compact) ...[
+            TextButton.icon(
+              onPressed: _handleExportPlan,
+              icon: const Icon(Icons.ios_share_rounded, size: 16),
+              label: const Text('Экспорт'),
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFF667085),
+              ),
+            ),
+            const SizedBox(width: 4),
+          ],
+          FilledButton.icon(
+            onPressed: saving ? null : _save,
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFEAF5EF),
+              foregroundColor: const Color(0xFF0B7B4B),
+              disabledBackgroundColor: const Color(0xFFF0F3F1),
+              disabledForegroundColor: const Color(0xFF98A2B3),
+              elevation: 0,
+              padding: EdgeInsets.symmetric(horizontal: compact ? 10 : 13),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            icon: saving
+                ? const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 1.7,
+                      color: Color(0xFF0B7B4B),
+                    ),
+                  )
+                : const Icon(Icons.save_outlined, size: 16),
+            label: Text(saving ? 'Сохраняем' : 'Сохранить'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildCmrTopBar({required bool embedded, required bool compact}) {
     final embeddedCompact = embedded;
     return Container(
@@ -2454,7 +2521,10 @@ Future<void> _pickSchemesForExercise(int exerciseIndex) async {
 
         return Column(
           children: [
-            _buildCmrTopBar(embedded: embedded, compact: compact),
+            if (widget.workspaceWindowMode)
+              _buildWorkspaceWindowToolbar(compact: compact)
+            else
+              _buildCmrTopBar(embedded: embedded, compact: compact),
             if (saving)
               const LinearProgressIndicator(
                 minHeight: 3,

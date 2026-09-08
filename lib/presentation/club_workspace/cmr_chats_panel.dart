@@ -249,7 +249,8 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
     }
     _searchDebounce?.cancel();
     _searchDebounce = Timer(const Duration(milliseconds: 350), () {
-      _loadUsers(query: _search.text);
+      if (!mounted) return;
+      unawaited(_loadUsers(query: _search.text));
     });
   }
 
@@ -262,6 +263,7 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
     _unreadTimer = Timer.periodic(
       const Duration(seconds: 6),
       (_) {
+        if (!mounted) return;
         unawaited(_fetchUnreadTotal());
         unawaited(_fetchCallsUnread());
       },
@@ -612,6 +614,7 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
   }
 
   bool get _phoneMessengerLayout {
+    if (!mounted) return false;
     final media = MediaQuery.maybeOf(context);
     final w = media?.size.width ?? 9999;
     return w < 700;
@@ -624,10 +627,13 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
         fullscreenDialog: true,
-        builder: (_) => Scaffold(
+        builder: (routeContext) => Scaffold(
           backgroundColor: const Color(0xFFF6F8FA),
           resizeToAvoidBottomInset: true,
-          body: CmrClubAiAssistantPanel(
+          body: SafeArea(
+            top: true,
+            bottom: false,
+            child: CmrClubAiAssistantPanel(
             clubId: widget.clubId ?? 0,
             userId: widget.userId,
             teamId: widget.teamId,
@@ -635,7 +641,8 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
             teamName: widget.teamName,
             onNavigate: widget.onAiNavigate ?? _fallbackAiNavigate,
             onOpenPdf: widget.onAiOpenPdf,
-            onBack: () => Navigator.of(context).maybePop(),
+            onBack: () => Navigator.of(routeContext).maybePop(),
+            ),
           ),
         ),
       ),
@@ -713,7 +720,7 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
       _aiSelected = true;
       _selectedChat = null;
       _selectedChatId = null;
-      _selectedChatName = 'ИИ клуба';
+      _selectedChatName = 'SPORTOTEKA ИИ';
     });
   }
 
@@ -759,6 +766,7 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
       _markReadServer(chatId);
       _fetchUnreadTotal();
     }
+    if (!mounted) return;
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => ChatRoomScreen(
@@ -905,6 +913,11 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
     Get.to(() => ChatScreen(
           userId: widget.userId,
           onUnreadChanged: widget.onUnreadChanged,
+          clubMode: true,
+          clubId: widget.clubId,
+          teamId: widget.teamId,
+          clubName: widget.clubName,
+          teamName: widget.teamName,
         ));
   }
 
@@ -915,7 +928,11 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
+    return SafeArea(
+      top: true,
+      bottom: false,
+      minimum: const EdgeInsets.only(top: 2),
+      child: LayoutBuilder(
       builder: (context, constraints) {
         final media = MediaQuery.sizeOf(context);
         final width = constraints.maxWidth.isFinite && constraints.maxWidth > 0
@@ -1041,6 +1058,7 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
           ),
         );
       },
+      ),
     );
   }
 
@@ -1661,7 +1679,7 @@ class _AiPinnedChatRow extends StatelessWidget {
                     Row(
                       children: [
                         Expanded(
-                            child: Text('ИИ клуба',
+                            child: Text('SPORTOTEKA ИИ',
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style:
@@ -1682,7 +1700,7 @@ class _AiPinnedChatRow extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 4),
-                    Text('Найду отчет, игрока, тренировку, PDF и аналитику',
+                    Text('Анализ клуба, изображения, видео, PDF и данные',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: _CmrChatText.muted(mobile ? 12.8 : 12.8)),

@@ -70,6 +70,11 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
 
   int _currentUserId = 0;
 
+  // Аватар автора поста всегда сверяем с профилем пользователя.
+  // get_posts.php у старых/части публикаций может не возвращать photo.
+  final Map<int, String> _postAvatarByUserId = <int, String>{};
+  final Set<int> _postAvatarLoading = <int>{};
+
   @override
   void initState() {
     super.initState();
@@ -133,7 +138,179 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
     final u = s.trim();
     if (u.isEmpty) return "";
     if (u.startsWith("http://") || u.startsWith("https://")) return u;
-    return "https://sportotekaapp.ru/$u";
+    final clean = u.replaceFirst(RegExp(r'^/+'), '');
+    return "https://sportotekaapp.ru/$clean";
+  }
+
+  /// Нормализация именно пользовательских аватаров.
+  /// В профиле Sportoteka поле photo часто содержит только имя файла,
+  /// поэтому такой файл живёт в /uploads/, а не в корне сайта.
+  String _normalizeAvatarUrl(dynamic raw) {
+    var value = _safeStr(raw).trim();
+    if (value.isEmpty || value.toLowerCase() == 'null') return '';
+
+    // Иногда JSON/БД сохраняет экранированные слеши.
+    value = value.replaceAll(r'\/', '/');
+
+    if (value.startsWith('http://') || value.startsWith('https://')) {
+      return value;
+    }
+    if (value.startsWith('//')) return 'https:$value';
+
+    final clean = value.replaceFirst(RegExp(r'^/+'), '');
+    if (clean.startsWith('sportotekaapp.ru/')) {
+      return 'https://$clean';
+    }
+    if (clean.startsWith('www.sportotekaapp.ru/')) {
+      return 'https://$clean';
+    }
+
+    // Уже готовые относительные пути сайта оставляем как есть.
+    if (clean.startsWith('uploads/') ||
+        clean.startsWith('api/uploads/') ||
+        clean.startsWith('storage/') ||
+        clean.startsWith('images/')) {
+      return 'https://sportotekaapp.ru/$clean';
+    }
+
+    // Главное отличие от обычного _fixUrl: голое имя photo относится к /uploads.
+    return 'https://sportotekaapp.ru/uploads/$clean';
+  }
+
+  String _avatarFromMap(Map<String, dynamic> map) {
+    const keys = <String>[
+      'avatar_url',
+      'avatarUrl',
+      'avatar',
+      'photo_url',
+      'photoUrl',
+      'photo_urls',
+      'photo',
+      'profile_photo_url',
+      'profilePhotoUrl',
+      'profile_photo',
+      'profilePhoto',
+      'user_photo_url',
+      'userPhotoUrl',
+      'user_photo',
+      'userPhoto',
+      'user_avatar',
+      'userAvatar',
+      'author_photo_url',
+      'authorPhotoUrl',
+      'author_photo',
+      'authorPhoto',
+      'author_avatar_url',
+      'authorAvatarUrl',
+      'author_avatar',
+      'authorAvatar',
+      'image_url',
+      'imageUrl',
+      'avatar_path',
+      'avatarPath',
+    ];
+
+    for (final key in keys) {
+      final url = _normalizeAvatarUrl(map[key]);
+      if (url.isNotEmpty) return url;
+    }
+    return '';
+  }
+
+  int _userIdFromAny(dynamic raw) {
+    if (raw is! Map) return 0;
+    final root = Map<String, dynamic>.from(raw);
+
+    int id = _safeInt(
+      root['user_id'] ??
+          root['userId'] ??
+          root['author_id'] ??
+          root['authorId'] ??
+          root['created_by'] ??
+          root['createdBy'],
+    );
+    if (id > 0) return id;
+
+    for (final key in const ['user', 'author', 'profile']) {
+      final nested = root[key];
+      if (nested is Map) {
+        final map = Map<String, dynamic>.from(nested);
+        id = _safeInt(map['id'] ?? map['user_id'] ?? map['userId']);
+        if (id > 0) return id;
+      }
+    }
+    return 0;
+  }
+
+  String _avatarFromAny(dynamic decoded) {
+    if (decoded is! Map) return '';
+    final root = Map<String, dynamic>.from(decoded);
+
+    // get_user.php в проекте обычно возвращает root['user'],
+    // но для разных ролей фото встречается и в player/profile/root.
+    for (final key in const ['user', 'player', 'profile', 'author']) {
+      final nested = root[key];
+      if (nested is Map) {
+        final url = _avatarFromMap(Map<String, dynamic>.from(nested));
+        if (url.isNotEmpty) return url;
+      }
+    }
+
+    return _avatarFromMap(root);
+  }
+
+  Future<void> _hydratePostAvatars() async {
+    final ids =
+        posts.map((p) => _safeInt(p['user_id'])).where((id) => id > 0).toSet();
+
+    if (ids.isEmpty) return;
+
+    await Future.wait(ids.map((id) async {
+      if (_postAvatarLoading.contains(id)) return;
+
+      // Если уже есть актуальный кеш профиля — применяем его сразу.
+      final cached = _postAvatarByUserId[id] ?? '';
+      if (cached.isNotEmpty) {
+        var changed = false;
+        for (final post in posts) {
+          if (_safeInt(post['user_id']) == id &&
+              _safeStr(post['authorAvatar']) != cached) {
+            post['authorAvatar'] = cached;
+            changed = true;
+          }
+        }
+        if (changed && mounted) setState(() {});
+        return;
+      }
+
+      _postAvatarLoading.add(id);
+      try {
+        final response = await http
+            .get(Uri.parse('$_apiBase/get_user.php?user_id=$id'))
+            .timeout(const Duration(seconds: 12));
+        if (response.statusCode != 200) return;
+
+        final decoded = json.decode(utf8.decode(response.bodyBytes));
+        final avatar = _avatarFromAny(decoded);
+        if (avatar.isEmpty) return;
+
+        _postAvatarByUserId[id] = avatar;
+        var changed = false;
+        for (final post in posts) {
+          if (_safeInt(post['user_id']) == id &&
+              _safeStr(post['authorAvatar']) != avatar) {
+            post['authorAvatar'] = avatar;
+            changed = true;
+          }
+        }
+
+        if (changed && mounted) setState(() {});
+      } catch (e) {
+        debugPrint('Community avatar load error for user $id: $e');
+      } finally {
+        _postAvatarLoading.remove(id);
+      }
+    }));
   }
 
   bool _looksLikeDirectVideoUrl(String url) {
@@ -296,12 +473,14 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
           final fullName = ('$firstName $lastName').trim();
 
           final image = _fixUrl(_safeStr(raw['image']));
-          final avatar = _fixUrl(
-            _safeStr(raw['photo'] ?? raw['photo_url'] ?? raw['avatar']),
-          );
+
+          // Не используем обычный _fixUrl для photo: голое имя аватарки
+          // находится в /uploads/. Поддерживаем также новые имена полей.
+          final avatar = _avatarFromAny(raw);
 
           final rawBody = _safeStr(raw['body']);
-          final plainBody = _looksLikeHtml(rawBody) ? _htmlToPlain(rawBody) : rawBody;
+          final plainBody =
+              _looksLikeHtml(rawBody) ? _htmlToPlain(rawBody) : rawBody;
 
           final preview = _extractPostPreview(rawBody);
           final previewImage = _safeStr(preview['previewImage']);
@@ -319,13 +498,14 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
             'imageUrl': image.isNotEmpty ? image : previewImage,
             'hasVideo': hasVideo,
             'videoUrl': videoUrl,
-            'date': DateTime.tryParse(_safeStr(raw['created_at'])) ?? DateTime.now(),
+            'date': DateTime.tryParse(_safeStr(raw['created_at'])) ??
+                DateTime.now(),
             'authorName': fullName.isNotEmpty
                 ? fullName
                 : (_safeStr(raw['author_name']).isNotEmpty
                     ? _safeStr(raw['author_name'])
                     : 'Пользователь'),
-            'user_id': _safeInt(raw['user_id']),
+            'user_id': _userIdFromAny(raw),
             'authorAvatar': avatar,
             'likes': _safeInt(raw['likes_count']),
             'comments': _safeInt(raw['comments_count']),
@@ -336,6 +516,10 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
 
         if (!mounted) return;
         setState(() => posts = list);
+
+        // get_posts.php не гарантирует наличие/актуальность фото автора.
+        // Сразу после показа ленты подтягиваем аватар из профиля каждого автора.
+        await _hydratePostAvatars();
       } else {
         _showError('Ошибка загрузки: ${res.statusCode}');
       }
@@ -614,7 +798,8 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
     _fetchPosts();
   }
 
-  TextStyle _title(double size, {FontWeight weight = FontWeight.w600, Color color = FeedPalette.text}) {
+  TextStyle _title(double size,
+      {FontWeight weight = FontWeight.w600, Color color = FeedPalette.text}) {
     final TextStyle base;
     if (size >= 15.5) {
       base = AppTypography.screenTitle(color: color);
@@ -630,7 +815,9 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
     return base.copyWith(fontWeight: weight);
   }
 
-  TextStyle _text(double size, {FontWeight weight = FontWeight.w400, Color color = FeedPalette.secondary}) {
+  TextStyle _text(double size,
+      {FontWeight weight = FontWeight.w400,
+      Color color = FeedPalette.secondary}) {
     final TextStyle base;
     if (size >= 12.5) {
       base = AppTypography.body(color: color);
@@ -798,7 +985,8 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
             alignment: Alignment.topCenter,
             child: ConstrainedBox(
               constraints: BoxConstraints(
-                maxWidth: desktop ? (width >= 900 ? 780 : 620) : double.infinity,
+                maxWidth:
+                    desktop ? (width >= 900 ? 780 : 620) : double.infinity,
               ),
               child: feed,
             ),
@@ -870,7 +1058,11 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
                   ] else if (desktop) ...[
                     Container(width: .7, color: FeedPalette.border),
                     SizedBox(
-                      width: width >= 1240 ? 340 : width >= 900 ? 300 : 260,
+                      width: width >= 1240
+                          ? 340
+                          : width >= 900
+                              ? 300
+                              : 260,
                       child: _buildDesktopInsightsRail(),
                     ),
                   ],
@@ -924,7 +1116,6 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
       },
     );
   }
-
 
   Widget _buildDesktopInsightsRail() {
     final latest = posts.take(4).toList(growable: false);
@@ -1194,7 +1385,8 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
   }
 
   Widget _buildDesktopRail() {
-    Widget item(IconData icon, String title, String subtitle, {bool active = false, VoidCallback? onTap}) {
+    Widget item(IconData icon, String title, String subtitle,
+        {bool active = false, VoidCallback? onTap}) {
       return Material(
         color: Colors.transparent,
         child: InkWell(
@@ -1203,19 +1395,36 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
             decoration: BoxDecoration(
               color: active ? FeedPalette.greenSoft : Colors.transparent,
-              border: Border(left: BorderSide(color: active ? FeedPalette.primaryGreen : Colors.transparent, width: 3)),
+              border: Border(
+                  left: BorderSide(
+                      color: active
+                          ? FeedPalette.primaryGreen
+                          : Colors.transparent,
+                      width: 3)),
             ),
             child: Row(
               children: [
-                Icon(icon, size: 17, color: active ? FeedPalette.primaryGreenDark : FeedPalette.secondary),
+                Icon(icon,
+                    size: 17,
+                    color: active
+                        ? FeedPalette.primaryGreenDark
+                        : FeedPalette.secondary),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _title(12.2, weight: active ? FontWeight.w600 : FontWeight.w600)),
+                      Text(title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: _title(12.2,
+                              weight:
+                                  active ? FontWeight.w600 : FontWeight.w600)),
                       const SizedBox(height: 2),
-                      Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: _text(10.2)),
+                      Text(subtitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: _text(10.2)),
                     ],
                   ),
                 ),
@@ -1237,7 +1446,10 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('СООБЩЕСТВО', style: _text(9.2, weight: FontWeight.w600, color: const Color(0xFF8A9099))),
+                Text('СООБЩЕСТВО',
+                    style: _text(9.2,
+                        weight: FontWeight.w600,
+                        color: const Color(0xFF8A9099))),
                 const SizedBox(height: 5),
                 Text(widget.sportName, style: _title(16)),
                 const SizedBox(height: 3),
@@ -1245,13 +1457,19 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
               ],
             ),
           ),
-          item(Icons.dynamic_feed_rounded, 'Общая лента', 'публикации и новости', active: true),
-          item(Icons.add_box_outlined, 'Создать', 'фото, текст или видео', onTap: _openCreateEditor),
-          item(Icons.refresh_rounded, 'Обновить', 'загрузить новые записи', onTap: _fetchPosts),
+          item(
+              Icons.dynamic_feed_rounded, 'Общая лента', 'публикации и новости',
+              active: true),
+          item(Icons.add_box_outlined, 'Создать', 'фото, текст или видео',
+              onTap: _openCreateEditor),
+          item(Icons.refresh_rounded, 'Обновить', 'загрузить новые записи',
+              onTap: _fetchPosts),
           const Spacer(),
           Padding(
             padding: const EdgeInsets.all(10),
-            child: Text('SPORTOTEKA', style: _text(9.5, weight: FontWeight.w600, color: const Color(0xFF98A2B3))),
+            child: Text('SPORTOTEKA',
+                style: _text(9.5,
+                    weight: FontWeight.w600, color: const Color(0xFF98A2B3))),
           ),
         ],
       ),
@@ -1312,8 +1530,7 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
                   style: _text(12.2, color: FeedPalette.text),
                   decoration: InputDecoration(
                     hintText: 'Поиск публикаций и #хэштегов',
-                    hintStyle:
-                        _text(11.5, color: const Color(0xFF98A2B3)),
+                    hintStyle: _text(11.5, color: const Color(0xFF98A2B3)),
                     prefixIcon: const Icon(
                       Icons.search_rounded,
                       size: 20,
@@ -1557,7 +1774,8 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
       icon: const Icon(Icons.add_rounded, size: 17),
-      label: Text('Создать', style: _text(11.5, weight: FontWeight.w600, color: Colors.white)),
+      label: Text('Создать',
+          style: _text(11.5, weight: FontWeight.w600, color: Colors.white)),
     );
   }
 
@@ -1691,7 +1909,8 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => MyProfileScreen(userId: userId, publicView: true),
+                        builder: (_) =>
+                            MyProfileScreen(userId: userId, publicView: true),
                       ),
                     );
                   },
@@ -1788,7 +2007,8 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
                   padding: const EdgeInsets.fromLTRB(14, 0, 14, 8),
                   child: Text(
                     text,
-                    style: _text(13.2, weight: FontWeight.w400, color: FeedPalette.text),
+                    style: _text(13.2,
+                        weight: FontWeight.w400, color: FeedPalette.text),
                     maxLines: img.isEmpty ? 6 : 4,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -1855,10 +2075,14 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
                         transitionBuilder: (child, anim) =>
                             ScaleTransition(scale: anim, child: child),
                         child: Icon(
-                          liked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                          liked
+                              ? Icons.favorite_rounded
+                              : Icons.favorite_border_rounded,
                           key: ValueKey(liked),
                           size: 24,
-                          color: liked ? const Color(0xFFE53935) : FeedPalette.text,
+                          color: liked
+                              ? const Color(0xFFE53935)
+                              : FeedPalette.text,
                         ),
                       ),
                     ),
@@ -1937,7 +2161,7 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
       decoration: BoxDecoration(
         color: FeedPalette.white,
         borderRadius: BorderRadius.circular(14),
-              ),
+      ),
       child: child,
     );
   }
@@ -2012,23 +2236,40 @@ class _AvatarCircle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final initial =
-        name.trim().isNotEmpty ? name.trim().characters.first.toUpperCase() : 'П';
-    final hasUrl = url.trim().isNotEmpty;
+    final initial = name.trim().isNotEmpty
+        ? name.trim().characters.first.toUpperCase()
+        : 'П';
+    final avatarUrl = url.trim();
 
-    return CircleAvatar(
-      radius: radius,
-      backgroundColor: FeedPalette.lightGreen,
-      backgroundImage: hasUrl ? NetworkImage(url) : null,
-      onBackgroundImageError: hasUrl ? (_, __) {} : null,
-      child: hasUrl
-          ? null
-          : Text(
-              initial,
-              style: AppTypography.captionMedium(
-                color: FeedPalette.primaryGreen,
-              ),
+    Widget fallback() => Container(
+          width: radius * 2,
+          height: radius * 2,
+          alignment: Alignment.center,
+          decoration: const BoxDecoration(
+            shape: BoxShape.circle,
+            color: FeedPalette.lightGreen,
+          ),
+          child: Text(
+            initial,
+            style: AppTypography.captionMedium(
+              color: FeedPalette.primaryGreen,
             ),
+          ),
+        );
+
+    if (avatarUrl.isEmpty) return fallback();
+
+    return ClipOval(
+      child: SizedBox(
+        width: radius * 2,
+        height: radius * 2,
+        child: Image.network(
+          avatarUrl,
+          fit: BoxFit.cover,
+          gaplessPlayback: true,
+          errorBuilder: (_, __, ___) => fallback(),
+        ),
+      ),
     );
   }
 }

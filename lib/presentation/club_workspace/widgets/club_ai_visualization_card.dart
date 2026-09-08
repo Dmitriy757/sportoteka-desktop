@@ -32,7 +32,7 @@ class ClubAiVisualizationCard extends StatelessWidget {
       ClubAiVisualizationType.load => _SeriesChart(
           data: visualization.data,
           icon: Icons.bolt_rounded,
-          unit: '',
+          unit: '${visualization.data['unit'] ?? ''}',
         ),
       ClubAiVisualizationType.trajectory =>
         _TrajectoryChart(data: visualization.data),

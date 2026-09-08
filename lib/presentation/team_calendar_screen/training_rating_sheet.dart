@@ -8,6 +8,8 @@ import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
 import 'package:sportoteka/core/utils/confirm_dialogs.dart';
 
+import 'training_lifecycle_api.dart';
+
 /// Открывает оценки как независимое CMR-окно поверх всего приложения.
 /// Это не bottom sheet и не переход на отдельный экран: окно можно двигать,
 /// свернуть, развернуть и закрыть, как внутреннее desktop-окно.
@@ -18,6 +20,7 @@ Future<void> showTrainingRatingWindow(
   required int eventId,
   required int coachId,
   required String title,
+  int clubId = 0,
 }) {
   final overlay = Overlay.of(context, rootOverlay: true);
   final completer = Completer<void>();
@@ -35,6 +38,7 @@ Future<void> showTrainingRatingWindow(
       eventId: eventId,
       coachId: coachId,
       title: title,
+      clubId: clubId,
       onClose: closeWindow,
     ),
   );
@@ -45,12 +49,13 @@ Future<void> showTrainingRatingWindow(
 
 /// Совместимость со старыми точками входа.
 /// Вместо плавающей модалки оценки открываются справа как рабочая панель.
-class _TrainingRatingRightPane extends StatelessWidget {
+class _TrainingRatingRightPane extends StatefulWidget {
   final String apiBase;
   final int teamId;
   final int eventId;
   final int coachId;
   final String title;
+  final int clubId;
   final VoidCallback onClose;
 
   const _TrainingRatingRightPane({
@@ -59,13 +64,147 @@ class _TrainingRatingRightPane extends StatelessWidget {
     required this.eventId,
     required this.coachId,
     required this.title,
+    this.clubId = 0,
     required this.onClose,
   });
 
   @override
+  State<_TrainingRatingRightPane> createState() => _TrainingRatingRightPaneState();
+}
+
+class _TrainingRatingRightPaneState extends State<_TrainingRatingRightPane> {
+  bool _headerExpanded = true;
+
+  void _setHeaderExpanded(bool expanded) {
+    if (_headerExpanded == expanded || !mounted) return;
+    setState(() => _headerExpanded = expanded);
+  }
+
+  Widget _windowHeader() {
+    if (!_headerExpanded) {
+      return Material(
+        color: Colors.white,
+        child: InkWell(
+          onTap: () => _setHeaderExpanded(true),
+          child: SizedBox(
+            height: 40,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 4, 8, 4),
+              child: Row(
+                children: [
+                  const _RatingBrandDots(),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Оценки · ${widget.title}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.formLabel(
+                        color: const Color(0xFF0B0F14),
+                      ),
+                    ),
+                  ),
+                  const Icon(
+                    Icons.keyboard_arrow_down_rounded,
+                    size: 17,
+                    color: Color(0xFF667085),
+                  ),
+                  const SizedBox(width: 4),
+                  Material(
+                    color: const Color(0xFFF7F8F7),
+                    borderRadius: BorderRadius.circular(8),
+                    child: InkWell(
+                      onTap: widget.onClose,
+                      borderRadius: BorderRadius.circular(8),
+                      child: const SizedBox(
+                        width: 30,
+                        height: 30,
+                        child: Icon(
+                          Icons.close_rounded,
+                          size: 15,
+                          color: Color(0xFF667085),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      height: 58,
+      padding: const EdgeInsets.fromLTRB(14, 8, 10, 8),
+      color: Colors.white,
+      child: Row(
+        children: [
+          const _RatingBrandDots(),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Оценки тренировки',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.subsectionTitle(
+                    color: const Color(0xFF0B0F14),
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  widget.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.caption(
+                    color: const Color(0xFF667085),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Material(
+            color: const Color(0xFFF7F8F7),
+            borderRadius: BorderRadius.circular(9),
+            child: InkWell(
+              onTap: widget.onClose,
+              borderRadius: BorderRadius.circular(9),
+              child: const SizedBox(
+                width: 32,
+                height: 32,
+                child: Icon(
+                  Icons.close_rounded,
+                  size: 16,
+                  color: Color(0xFF667085),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context);
-    final width = math.min(520.0, math.max(320.0, media.size.width - 16)).toDouble();
+    final availableWidth = math.max(300.0, media.size.width - 16.0).toDouble();
+    final double width;
+    if (media.size.width < 600) {
+      width = availableWidth;
+    } else if (media.size.width < 1100) {
+      width = math.min(760.0, availableWidth).toDouble();
+    } else {
+      width = math.min(
+        860.0,
+        math.min(availableWidth, math.max(680.0, media.size.width * .52)),
+      ).toDouble();
+    }
 
     return Material(
       color: Colors.transparent,
@@ -92,69 +231,23 @@ class _TrainingRatingRightPane extends StatelessWidget {
               ),
               child: Column(
                 children: [
-                  Container(
-                    height: 58,
-                    padding: const EdgeInsets.fromLTRB(14, 8, 10, 8),
-                    color: Colors.white,
-                    child: Row(
-                      children: [
-                        const _RatingBrandDots(),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Оценки тренировки',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: AppTypography.subsectionTitle(
-                                  color: const Color(0xFF0B0F14),
-                                ),
-                              ),
-                              const SizedBox(height: 3),
-                              Text(
-                                title,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: AppTypography.caption(
-                                  color: const Color(0xFF667085),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Material(
-                          color: const Color(0xFFF7F8F7),
-                          borderRadius: BorderRadius.circular(9),
-                          child: InkWell(
-                            onTap: onClose,
-                            borderRadius: BorderRadius.circular(9),
-                            child: const SizedBox(
-                              width: 32,
-                              height: 32,
-                              child: Icon(
-                                Icons.close_rounded,
-                                size: 16,
-                                color: Color(0xFF667085),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+                  AnimatedSize(
+                    duration: const Duration(milliseconds: 190),
+                    curve: Curves.easeOutCubic,
+                    alignment: Alignment.topCenter,
+                    child: _windowHeader(),
                   ),
                   Expanded(
                     child: TrainingRatingSheet(
-                      apiBase: apiBase,
-                      teamId: teamId,
-                      eventId: eventId,
-                      coachId: coachId,
-                      title: title,
+                      apiBase: widget.apiBase,
+                      teamId: widget.teamId,
+                      eventId: widget.eventId,
+                      coachId: widget.coachId,
+                      title: widget.title,
+                      clubId: widget.clubId,
                       embedded: true,
-                      onClose: onClose,
-                      onSaved: onClose,
+                      onClose: widget.onClose,
+                      onChromeExpandedChanged: _setHeaderExpanded,
                     ),
                   ),
                 ],
@@ -176,7 +269,7 @@ class _RatingBrandDot extends StatelessWidget {
   const _RatingBrandDot({
     required this.size,
     required this.opacity,
-    this.color = const Color(0xFF00A750),
+    this.color = const Color(0xFF14915D),
     this.glow = false,
   });
 
@@ -212,7 +305,7 @@ class _RatingBrandDot extends StatelessWidget {
 
 class _RatingBrandDots extends StatelessWidget {
   final Color color;
-  const _RatingBrandDots({this.color = const Color(0xFF00A750)});
+  const _RatingBrandDots({this.color = const Color(0xFF14915D)});
 
   @override
   Widget build(BuildContext context) {
@@ -237,9 +330,11 @@ class TrainingRatingSheet extends StatefulWidget {
   final int eventId;
   final int coachId;
   final String title;
+  final int clubId;
   final VoidCallback? onClose;
   final bool embedded;
   final VoidCallback? onSaved;
+  final ValueChanged<bool>? onChromeExpandedChanged;
 
   const TrainingRatingSheet({
     super.key,
@@ -248,9 +343,11 @@ class TrainingRatingSheet extends StatefulWidget {
     required this.eventId,
     required this.coachId,
     required this.title,
+    this.clubId = 0,
     this.onClose,
     this.embedded = false,
     this.onSaved,
+    this.onChromeExpandedChanged,
   });
 
   @override
@@ -268,6 +365,16 @@ class _TrainingRatingSheetState extends State<TrainingRatingSheet> {
 
   List<_Player> players = [];
   final Map<int, int> ratingByPlayerId = {};
+  final TextEditingController _noteC = TextEditingController();
+  TrainingLifecycleState lifecycle = const TrainingLifecycleState();
+  bool lifecycleSaving = false;
+  bool _ratingsSaved = false;
+
+  // На планшете и ПК верхняя служебная часть окна оценок автоматически
+  // освобождает место списку игроков при прокрутке вниз и возвращается
+  // при движении вверх.
+  bool _ratingsChromeExpanded = true;
+  double _ratingsLastScrollPixels = 0;
 
   Color get primary => _WinColors.green;
 
@@ -275,6 +382,12 @@ class _TrainingRatingSheetState extends State<TrainingRatingSheet> {
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void dispose() {
+    _noteC.dispose();
+    super.dispose();
   }
 
   void _close() {
@@ -285,11 +398,20 @@ class _TrainingRatingSheetState extends State<TrainingRatingSheet> {
     }
   }
 
+  void _setRatingsChromeExpanded(bool expanded) {
+    if (_ratingsChromeExpanded == expanded || !mounted) return;
+    setState(() => _ratingsChromeExpanded = expanded);
+    widget.onChromeExpandedChanged?.call(expanded);
+  }
+
   Future<void> _load() async {
     setState(() {
       loading = true;
       error = null;
+      _ratingsChromeExpanded = true;
+      _ratingsLastScrollPixels = 0;
     });
+    widget.onChromeExpandedChanged?.call(true);
 
     try {
       players = await _fetchPlayers(widget.teamId);
@@ -301,6 +423,18 @@ class _TrainingRatingSheetState extends State<TrainingRatingSheet> {
       for (final p in players) {
         ratingByPlayerId.putIfAbsent(p.id, () => 0);
       }
+
+      lifecycle = await TrainingLifecycleApi(
+        apiBase: widget.apiBase,
+        clubId: widget.clubId,
+        teamId: widget.teamId,
+        eventId: widget.eventId,
+      ).load();
+      _noteC.text = lifecycle.coachNote;
+      final ratedCount = existing.values.where((value) => value > 0).length;
+      _ratingsSaved = lifecycle.attendancePresent > 0
+          ? ratedCount >= lifecycle.attendancePresent
+          : ratedCount > 0;
     } catch (e) {
       error = e.toString();
     }
@@ -353,6 +487,14 @@ class _TrainingRatingSheetState extends State<TrainingRatingSheet> {
 
   Future<void> _save() async {
     if (saving) return;
+    if (!lifecycle.started) {
+      Get.snackbar(
+        'Тренировка',
+        'Сначала начните тренировку во вкладке «Обзор»',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      return;
+    }
     setState(() => saving = true);
 
     try {
@@ -380,14 +522,171 @@ class _TrainingRatingSheetState extends State<TrainingRatingSheet> {
         throw (data['message'] ?? 'save error').toString();
       }
 
-      Get.snackbar('Оценка', 'Сохранено', snackPosition: SnackPosition.BOTTOM);
+      final nextLifecycle = await TrainingLifecycleApi(
+        apiBase: widget.apiBase,
+        clubId: widget.clubId,
+        teamId: widget.teamId,
+        eventId: widget.eventId,
+      ).markRatingsSaved(userId: widget.coachId);
+
+      final required = nextLifecycle.attendancePresent;
+      final complete = required > 0
+          ? nextLifecycle.ratingsCount >= required
+          : nextLifecycle.ratingsCount > 0;
+      if (mounted) {
+        setState(() {
+          lifecycle = nextLifecycle;
+          _ratingsSaved = complete;
+        });
+      }
+      Get.snackbar(
+        'Оценка',
+        complete
+            ? 'Оценки сохранены. Теперь можно завершить тренировку.'
+            : 'Оценки сохранены: ${nextLifecycle.ratingsCount}/${nextLifecycle.attendancePresent}. Оцените всех присутствующих.',
+        snackPosition: SnackPosition.BOTTOM,
+      );
       widget.onSaved?.call();
-      if (mounted && !widget.embedded) _close();
     } catch (e) {
       Get.snackbar('Ошибка', e.toString(), snackPosition: SnackPosition.BOTTOM);
     }
 
     if (mounted) setState(() => saving = false);
+  }
+
+
+  Future<void> _finishTraining() async {
+    if (lifecycleSaving || lifecycle.finished) return;
+    if (!lifecycle.started) {
+      Get.snackbar(
+        'Тренировка',
+        'Сначала начните тренировку во вкладке «Обзор»',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      return;
+    }
+    if (!_ratingsSaved) {
+      Get.snackbar(
+        'Тренировка',
+        'Сначала сохраните оценки игроков',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      return;
+    }
+
+    setState(() => lifecycleSaving = true);
+    try {
+      final next = await TrainingLifecycleApi(
+        apiBase: widget.apiBase,
+        clubId: widget.clubId,
+        teamId: widget.teamId,
+        eventId: widget.eventId,
+      ).finish(
+        userId: widget.coachId,
+        coachNote: _noteC.text.trim(),
+      );
+      if (!mounted) return;
+      setState(() => lifecycle = next);
+      widget.onSaved?.call();
+      Get.snackbar(
+        'Тренировка',
+        '${next.finishedByLabel} завершил тренировку. Итоги сохранены, клубный администратор получил уведомление.',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      if (widget.onClose != null) {
+        await Future<void>.delayed(const Duration(milliseconds: 180));
+        _close();
+      }
+    } catch (e) {
+      Get.snackbar(
+        'Ошибка',
+        'Не удалось завершить тренировку: $e',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    } finally {
+      if (mounted) setState(() => lifecycleSaving = false);
+    }
+  }
+
+  Widget _bottomActions() {
+    final finishEnabled = lifecycle.started &&
+        !lifecycle.finished &&
+        _ratingsSaved &&
+        !saving &&
+        !lifecycleSaving;
+
+    final finishText = lifecycle.finished
+        ? 'Тренировка окончена'
+        : !_ratingsSaved
+            ? 'Сохраните оценки — затем окончите тренировку'
+            : 'Окончить тренировку';
+
+    return _CmrBottomBar(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: _GhostButton(
+                  text: saving ? 'Сброс...' : 'Сбросить',
+                  icon: Icons.restart_alt_rounded,
+                  onTap: saving || lifecycle.finished ? null : _resetRatings,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _PrimaryButton(
+                  text: _ratingsSaved ? 'Оценки сохранены' : 'Сохранить оценки',
+                  saving: saving,
+                  onTap: saving || lifecycle.finished ? null : _save,
+                ),
+              ),
+            ],
+          ),
+          if (lifecycle.started || lifecycle.finished) ...[
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: FilledButton.icon(
+                onPressed: finishEnabled ? _finishTraining : null,
+                style: FilledButton.styleFrom(
+                  backgroundColor: _WinColors.greenDark,
+                  disabledBackgroundColor: const Color(0xFFE9ECEA),
+                  disabledForegroundColor: const Color(0xFF8A9099),
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                icon: lifecycleSaving
+                    ? const SizedBox(
+                        width: 15,
+                        height: 15,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 1.8,
+                          color: Colors.white,
+                        ),
+                      )
+                    : Icon(
+                        lifecycle.finished
+                            ? Icons.check_circle_rounded
+                            : Icons.stop_circle_outlined,
+                        size: 20,
+                      ),
+                label: Text(
+                  finishText,
+                  style: AppTypography.action(
+                    color: finishEnabled ? Colors.white : const Color(0xFF8A9099),
+                  ).copyWith(fontSize: 12.6, fontWeight: FontWeight.w700),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
   }
 
   @override
@@ -396,15 +695,7 @@ class _TrainingRatingSheetState extends State<TrainingRatingSheet> {
       return Column(
         children: [
           Expanded(child: _buildRatingsBody()),
-          _CmrBottomBar(
-            child: Row(
-              children: [
-                Expanded(child: _GhostButton(text: saving ? 'Сброс...' : 'Сбросить', icon: Icons.restart_alt_rounded, onTap: saving ? null : _resetRatings)),
-                const SizedBox(width: 10),
-                Expanded(child: _PrimaryButton(text: 'Сохранить оценки', saving: saving, onTap: saving ? null : _save)),
-              ],
-            ),
-          ),
+          _bottomActions(),
         ],
       );
     }
@@ -433,13 +724,13 @@ class _TrainingRatingSheetState extends State<TrainingRatingSheet> {
       );
     }
 
-    final isCompact = size.width < 760;
+    final isCompact = size.width < 840;
     final windowWidth = _windowMaximized
         ? math.max(320.0, size.width - 28)
-        : math.min(isCompact ? size.width - 22 : 760.0, size.width - 28);
+        : math.min(isCompact ? size.width - 22 : 900.0, size.width - 28);
     final windowHeight = _windowMaximized
         ? math.max(420.0, size.height - 28 - bottomInset)
-        : math.min(isCompact ? size.height - 32 - bottomInset : 620.0, size.height - 36 - bottomInset);
+        : math.min(isCompact ? size.height - 32 - bottomInset : 720.0, size.height - 36 - bottomInset);
 
     final defaultOffset = Offset(
       math.max(10, (size.width - windowWidth) / 2),
@@ -487,27 +778,7 @@ class _TrainingRatingSheetState extends State<TrainingRatingSheet> {
               child: Column(
                 children: [
                   Expanded(child: _buildRatingsBody()),
-                  _CmrBottomBar(
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: _GhostButton(
-                            text: saving ? 'Сброс...' : 'Сбросить',
-                            icon: Icons.restart_alt_rounded,
-                            onTap: saving ? null : _resetRatings,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: _PrimaryButton(
-                            text: 'Сохранить оценки',
-                            saving: saving,
-                            onTap: saving ? null : _save,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                  _bottomActions(),
                 ],
               ),
             ),
@@ -539,10 +810,429 @@ class _TrainingRatingSheetState extends State<TrainingRatingSheet> {
       for (final p in players) {
         ratingByPlayerId[p.id] = 0;
       }
+      _ratingsSaved = false;
     });
 
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Оценки сброшены')),
+    );
+  }
+
+  bool _handleRatingsScrollNotification(ScrollNotification notification) {
+    if (notification.metrics.axis != Axis.vertical) return false;
+
+    final pixels = notification.metrics.pixels;
+
+    if (notification is ScrollStartNotification) {
+      _ratingsLastScrollPixels = pixels;
+      return false;
+    }
+
+    if (notification is ScrollUpdateNotification) {
+      final delta = notification.scrollDelta ??
+          (pixels - _ratingsLastScrollPixels);
+      _ratingsLastScrollPixels = pixels;
+
+      if (delta > 3.5 && pixels > 34) {
+        _setRatingsChromeExpanded(false);
+      }
+
+      // Не разворачиваем окно оценок от первого же движения вверх. Шапка
+      // возвращается только когда список дошёл примерно до первых двух игроков.
+      if (delta < -3.0 && pixels <= 105) {
+        _setRatingsChromeExpanded(true);
+      }
+    }
+
+    if (pixels <= 4 && !_ratingsChromeExpanded) {
+      _setRatingsChromeExpanded(true);
+    }
+
+    return false;
+  }
+
+  Widget _ratingsExpandedChrome() {
+    final rated = ratingByPlayerId.values.where((v) => v > 0).length;
+    final avg = _averageRating();
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+      child: Column(
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF7F8F7),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const _RatingBrandDots(),
+                    const SizedBox(width: 9),
+                    Expanded(
+                      child: Text(
+                        'Оценки игроков',
+                        style: AppTypography.subsectionTitle(
+                          color: const Color(0xFF0B0F14),
+                        ),
+                      ),
+                    ),
+                    Text(
+                      '$rated/${players.length}',
+                      style: AppTypography.captionMedium(
+                        color: const Color(0xFF667085),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _RatingSummaryItem(
+                        title: 'Игроков',
+                        value: '${players.length}',
+                      ),
+                    ),
+                    Container(
+                      width: 1,
+                      height: 30,
+                      color: const Color(0xFFE9ECEA),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _RatingSummaryItem(
+                        title: 'Оценено',
+                        value: '$rated',
+                      ),
+                    ),
+                    Container(
+                      width: 1,
+                      height: 30,
+                      color: const Color(0xFFE9ECEA),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _RatingSummaryItem(
+                        title: 'Средняя',
+                        value: avg <= 0 ? '—' : avg.toStringAsFixed(1),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          _buildRatingsLifecycleBanner(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRatingsLifecycleBanner() {
+    final bannerColor = lifecycle.finished
+        ? _WinColors.tint(_WinColors.green, opacity: .08)
+        : lifecycle.started
+            ? _WinColors.tint(_WinColors.green, opacity: .055)
+            : const Color(0xFFF8FAF9);
+    final icon = lifecycle.finished
+        ? Icons.check_circle_rounded
+        : lifecycle.started
+            ? Icons.play_circle_fill_rounded
+            : Icons.schedule_rounded;
+    final iconColor = lifecycle.finished
+        ? _WinColors.green
+        : lifecycle.started
+            ? _WinColors.greenDark
+            : _WinColors.muted2;
+    final statusTitle = lifecycle.finished
+        ? 'Тренировка завершена'
+        : lifecycle.started
+            ? (_ratingsSaved ? 'Оценки сохранены' : 'Тренировка идёт')
+            : 'Сначала начните тренировку';
+    final description = lifecycle.finished
+        ? 'Итоги сохранены · ${lifecycle.finishedByLabel}'
+        : lifecycle.started
+            ? (_ratingsSaved
+                ? 'Все оценки сохранены. Теперь тренировку можно окончить.'
+                : 'Поставьте оценки игрокам и нажмите «Сохранить оценки».')
+            : 'Сначала заполните «Журнал», затем начните тренировку во вкладке «Обзор».';
+    final statusPill = lifecycle.finished
+        ? 'ОКОНЧЕНА'
+        : lifecycle.started
+            ? (_ratingsSaved ? 'ГОТОВО' : 'ИДЁТ')
+            : 'ЖУРНАЛ';
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      decoration: BoxDecoration(
+        color: bannerColor,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 30,
+                height: 30,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(.72),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  icon,
+                  size: 17,
+                  color: iconColor,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      statusTitle,
+                      style: AppTypography.formLabel(
+                        color: const Color(0xFF0B0F14),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      description,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.captionMedium(
+                        color: const Color(0xFF475467),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(.74),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  statusPill,
+                  style: AppTypography.captionMedium(
+                    color: lifecycle.started || lifecycle.finished
+                        ? _WinColors.greenDark
+                        : const Color(0xFF667085),
+                  ).copyWith(fontWeight: FontWeight.w700),
+                ),
+              ),
+            ],
+          ),
+          if (!lifecycle.started) ...[
+            const SizedBox(height: 9),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(.66),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.arrow_back_rounded,
+                    size: 16,
+                    color: Color(0xFF667085),
+                  ),
+                  const SizedBox(width: 7),
+                  Expanded(
+                    child: Text(
+                      'Сначала заполните «Журнал», затем запустите тренировку во вкладке «Обзор».',
+                      style: AppTypography.captionMedium(
+                        color: const Color(0xFF475467),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCoachNoteCard() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(0, 10, 0, 4),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(11),
+        decoration: BoxDecoration(
+          color: lifecycle.finished
+              ? const Color(0xFFF7FBF8)
+              : const Color(0xFFF7F8F7),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  lifecycle.finished
+                      ? Icons.check_circle_rounded
+                      : Icons.notes_rounded,
+                  size: 17,
+                  color: _WinColors.green,
+                ),
+                const SizedBox(width: 7),
+                Expanded(
+                  child: Text(
+                    'Заметка тренера / итоги тренировки',
+                    style: AppTypography.formLabel(
+                      color: const Color(0xFF0B0F14),
+                    ),
+                  ),
+                ),
+                Text(
+                  lifecycle.finished
+                      ? 'ЗАВЕРШЕНА'
+                      : lifecycle.started
+                          ? 'ИДЁТ'
+                          : 'НЕ НАЧАТА',
+                  style: AppTypography.captionMedium(
+                    color: lifecycle.started
+                        ? _WinColors.green
+                        : const Color(0xFF667085),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _noteC,
+              enabled: !lifecycle.finished,
+              minLines: 2,
+              maxLines: 4,
+              decoration: InputDecoration(
+                hintText:
+                    'Что получилось, над чем работать, индивидуальные замечания...',
+                filled: true,
+                fillColor: Colors.white,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 10,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(9),
+                  borderSide: BorderSide.none,
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(9),
+                  borderSide: BorderSide.none,
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(9),
+                  borderSide: BorderSide(
+                    color: _WinColors.green.withOpacity(.22),
+                    width: .8,
+                  ),
+                ),
+              ),
+              style: AppTypography.formText(
+                color: const Color(0xFF0B0F14),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _ratingsCollapsedChrome() {
+    final rated = ratingByPlayerId.values.where((v) => v > 0).length;
+    final avg = _averageRating();
+    final stateLabel = lifecycle.finished
+        ? 'Окончена'
+        : lifecycle.started
+            ? 'Идёт'
+            : 'Не начата';
+
+    return Material(
+      color: Colors.white,
+      child: InkWell(
+        onTap: () => _setRatingsChromeExpanded(true),
+        child: SizedBox(
+          height: 46,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Row(
+              children: [
+                const _RatingBrandDots(),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: Text(
+                    'Оценено $rated/${players.length}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.formLabel(
+                      color: const Color(0xFF0B0F14),
+                    ),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: _WinColors.tint(_WinColors.green, opacity: .065),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    stateLabel,
+                    style: AppTypography.captionMedium(
+                      color: _WinColors.greenDark,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: _WinColors.tint(_WinColors.green, opacity: .04),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    avg <= 0 ? 'Средняя —' : 'Средняя ${avg.toStringAsFixed(1)}',
+                    style: AppTypography.captionMedium(
+                      color: _WinColors.greenDark,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 7),
+                const Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  size: 18,
+                  color: Color(0xFF667085),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -566,49 +1256,53 @@ class _TrainingRatingSheetState extends State<TrainingRatingSheet> {
 
     return Column(
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 2),
-          child: Row(
-            children: [
-              const _RatingBrandDots(),
-              const SizedBox(width: 9),
-              Expanded(
-                child: Text(
-                  'Оценки игроков',
-                  style: AppTypography.formLabel(
-                    color: const Color(0xFF0B0F14),
-                  ),
-                ),
-              ),
-              Text(
-                '${ratingByPlayerId.values.where((v) => v > 0).length}/${players.length}',
-                style: AppTypography.captionMedium(
-                  color: const Color(0xFF667085),
-                ),
-              ),
-            ],
-          ),
-        ),
-        _RatingsSummaryBar(
-          playersCount: players.length,
-          ratedCount: ratingByPlayerId.values.where((v) => v > 0).length,
-          avg: _averageRating(),
+        AnimatedSize(
+          duration: const Duration(milliseconds: 210),
+          curve: Curves.easeOutCubic,
+          alignment: Alignment.topCenter,
+          child: _ratingsChromeExpanded
+              ? _ratingsExpandedChrome()
+              : _ratingsCollapsedChrome(),
         ),
         Expanded(
-          child: ListView.builder(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-            itemCount: players.length,
-            itemBuilder: (_, i) {
-              final p = players[i];
-              final r = ratingByPlayerId[p.id] ?? 0;
+          child: Container(
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: NotificationListener<ScrollNotification>(
+              onNotification: _handleRatingsScrollNotification,
+              child: ListView.builder(
+                padding: EdgeInsets.fromLTRB(
+                  12,
+                  _ratingsChromeExpanded ? 0 : 2,
+                  12,
+                  18,
+                ),
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
+                itemCount: players.length + 1,
+                itemBuilder: (_, i) {
+                  if (i == players.length) {
+                    return _buildCoachNoteCard();
+                  }
 
-              return _PlayerRow(
-                primary: primary,
-                p: p,
-                rating: r,
-                onChanged: (v) => setState(() => ratingByPlayerId[p.id] = v),
-              );
-            },
+                  final p = players[i];
+                  final r = ratingByPlayerId[p.id] ?? 0;
+
+                  return _PlayerRow(
+                    primary: primary,
+                    p: p,
+                    rating: r,
+                    onChanged: (v) => setState(() {
+                      ratingByPlayerId[p.id] = v;
+                      _ratingsSaved = false;
+                    }),
+                  );
+                },
+              ),
+            ),
           ),
         ),
       ],
@@ -690,7 +1384,7 @@ class _CmrWindowFrame extends StatelessWidget {
                       width: 32,
                       height: 32,
                       decoration: BoxDecoration(
-                        color: _WinColors.tint(_WinColors.green, opacity: .10),
+                        color: _WinColors.tint(_WinColors.green, opacity: .075),
                         borderRadius: BorderRadius.circular(14),
                                     ),
                       child: Icon(icon, color: _WinColors.green, size: 13),
@@ -720,6 +1414,37 @@ class _CmrWindowFrame extends StatelessWidget {
   }
 }
 
+class _RatingSummaryItem extends StatelessWidget {
+  final String title;
+  final String value;
+
+  const _RatingSummaryItem({
+    required this.title,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          value,
+          style: _WinText.title(13.8),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: _WinText.muted(9.8),
+        ),
+      ],
+    );
+  }
+}
+
 class _RatingsSummaryBar extends StatelessWidget {
   final int playersCount;
   final int ratedCount;
@@ -734,7 +1459,7 @@ class _RatingsSummaryBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 58,
+      constraints: const BoxConstraints(minHeight: 64),
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
       decoration: const BoxDecoration(
         color: Colors.white,
@@ -763,18 +1488,18 @@ class _MiniStat extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 8),
       decoration: BoxDecoration(
-        color: _WinColors.tint(_WinColors.green, opacity: .060),
-        borderRadius: BorderRadius.circular(9),
-      ),
+        color: const Color(0xFFF7F8F7),
+        borderRadius: BorderRadius.circular(10),
+              ),
       child: Row(
         children: [
           Container(
-            width: 24,
-            height: 24,
+            width: 26,
+            height: 26,
             decoration: BoxDecoration(
-              color: _WinColors.tint(_WinColors.green, opacity: .12),
+              color: _WinColors.tint(_WinColors.green, opacity: .085),
               borderRadius: BorderRadius.circular(11),
             ),
             child: Icon(icon, color: _WinColors.green, size: 13),
@@ -865,7 +1590,7 @@ class _CmrMinimizedPill extends StatelessWidget {
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              color: _WinColors.tint(_WinColors.green, opacity: .10),
+              color: _WinColors.tint(_WinColors.green, opacity: .075),
               borderRadius: BorderRadius.circular(14),
             ),
             child: Icon(icon, color: _WinColors.green, size: 13),
@@ -905,13 +1630,18 @@ class _PlayerRow extends StatelessWidget {
     final rated = rating > 0;
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 6),
+      constraints: const BoxConstraints(minHeight: 68),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
         color: rated
-            ? _WinColors.tint(primary, opacity: .055)
-            : const Color(0xFFF7F8F7),
-        borderRadius: BorderRadius.circular(9),
+            ? _WinColors.tint(primary, opacity: .032)
+            : Colors.white,
+        border: const Border(
+          bottom: BorderSide(
+            color: Color(0xFFE9ECEA),
+            width: .65,
+          ),
+        ),
       ),
       child: Row(
         children: [
@@ -979,11 +1709,11 @@ class _Stars extends StatelessWidget {
         borderRadius: BorderRadius.circular(999),
         onTap: () => onChanged(i),
         child: Padding(
-          padding: const EdgeInsets.all(1),
+          padding: const EdgeInsets.all(2),
           child: Icon(
             filled ? Icons.star_rounded : Icons.star_outline_rounded,
             color: filled ? activeColor : const Color(0xFF9CA3AF),
-            size: 18,
+            size: 20,
           ),
         ),
       );
@@ -1008,7 +1738,7 @@ class _PrimaryButton extends StatelessWidget {
       child: Container(
         height: 36,
         decoration: BoxDecoration(
-          color: _WinColors.tint(_WinColors.green, opacity: .10),
+          color: _WinColors.tint(_WinColors.green, opacity: .075),
           borderRadius: BorderRadius.circular(13),
         ),
         child: Center(
@@ -1064,8 +1794,7 @@ class _ErrorView extends StatelessWidget {
       decoration: BoxDecoration(
         color: _WinColors.tint(_WinColors.red, opacity: .055),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _WinColors.red.withOpacity(.12)),
-      ),
+              ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -1082,9 +1811,10 @@ class _WinColors {
   static const Color text = Color(0xFF0B0F14);
   static const Color muted = Color(0xFF5F6670);
   static const Color muted2 = Color(0xFF8A9099);
-  static const Color green = Color(0xFF00A750);
+  static const Color green = Color(0xFF14915D);
+  static const Color greenDark = Color(0xFF315447);
   static const Color slate = Color(0xFF64748B);
-  static const Color red = Color(0xFFD92D20);
+  static const Color red = Color(0xFFB96D6D);
 
   static Color tint(Color color, {double opacity = .075}) => Color.alphaBlend(color.withOpacity(opacity), Colors.white);
 }

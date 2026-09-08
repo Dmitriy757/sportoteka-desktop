@@ -77,10 +77,17 @@ class _WorkspacePlayerSectionDocumentState
   String _workspaceNote = '';
 
   String get _playerName {
-    final last = '${widget.player['last_name'] ?? widget.player['lastname'] ?? ''}'.trim();
-    final first = '${widget.player['first_name'] ?? widget.player['firstname'] ?? ''}'.trim();
-    final full = '${widget.player['full_name'] ?? widget.player['fullName'] ?? widget.player['name'] ?? ''}'.trim();
-    final joined = <String>[last, first].where((e) => e.isNotEmpty).join(' ').trim();
+    final last =
+        '${widget.player['last_name'] ?? widget.player['lastname'] ?? ''}'
+            .trim();
+    final first =
+        '${widget.player['first_name'] ?? widget.player['firstname'] ?? ''}'
+            .trim();
+    final full =
+        '${widget.player['full_name'] ?? widget.player['fullName'] ?? widget.player['name'] ?? ''}'
+            .trim();
+    final joined =
+        <String>[last, first].where((e) => e.isNotEmpty).join(' ').trim();
     return joined.isNotEmpty ? joined : (full.isNotEmpty ? full : 'Игрок');
   }
 
@@ -110,7 +117,9 @@ class _WorkspacePlayerSectionDocumentState
     if (record == null) return _sectionTitle;
     switch (widget.section) {
       case WorkspacePlayerSection.matches:
-        final opponent = '${record['opponent'] ?? record['opponent_name'] ?? record['opponent_team'] ?? record['opponent_team_name'] ?? record['rival'] ?? record['rival_name'] ?? ''}'.trim();
+        final opponent =
+            '${record['opponent'] ?? record['opponent_name'] ?? record['opponent_team'] ?? record['opponent_team_name'] ?? record['rival'] ?? record['rival_name'] ?? ''}'
+                .trim();
         if (opponent.isNotEmpty) return 'Матч — $opponent';
         break;
       case WorkspacePlayerSection.health:
@@ -119,22 +128,30 @@ class _WorkspacePlayerSectionDocumentState
         if (title.isNotEmpty) return title;
         break;
       case WorkspacePlayerSection.activity:
-        final title = '${record['title'] ?? record['training_title'] ?? record['event_title'] ?? record['name'] ?? ''}'.trim();
+        final title =
+            '${record['title'] ?? record['training_title'] ?? record['event_title'] ?? record['name'] ?? ''}'
+                .trim();
         if (title.isNotEmpty) return title;
         break;
       case WorkspacePlayerSection.diary:
       case WorkspacePlayerSection.readiness:
-        final title = '${record['title'] ?? record['training_title'] ?? record['event_title'] ?? ''}'.trim();
+        final title =
+            '${record['title'] ?? record['training_title'] ?? record['event_title'] ?? ''}'
+                .trim();
         if (title.isNotEmpty) return title;
         break;
       case WorkspacePlayerSection.testing:
-        final title = '${record['title'] ?? record['name'] ?? record['session_name'] ?? ''}'.trim();
+        final title =
+            '${record['title'] ?? record['name'] ?? record['session_name'] ?? ''}'
+                .trim();
         if (title.isNotEmpty) return title;
         break;
       case WorkspacePlayerSection.card:
         break;
     }
-    return widget.recordTitle?.trim().isNotEmpty == true ? widget.recordTitle!.trim() : _sectionTitle;
+    return widget.recordTitle?.trim().isNotEmpty == true
+        ? widget.recordTitle!.trim()
+        : _sectionTitle;
   }
 
   String get _legacyNoteStorageKey {
@@ -143,8 +160,16 @@ class _WorkspacePlayerSectionDocumentState
     String recordKey = 'folder';
     if (record != null) {
       for (final key in const <String>[
-        'id', 'match_id', 'event_id', 'session_id', 'test_id',
-        'record_id', 'date', 'test_date', 'match_date', 'created_at',
+        'id',
+        'match_id',
+        'event_id',
+        'session_id',
+        'test_id',
+        'record_id',
+        'date',
+        'test_date',
+        'match_date',
+        'created_at',
       ]) {
         final value = '${record[key] ?? ''}'.trim();
         if (value.isNotEmpty && value != 'null') {
@@ -176,7 +201,8 @@ class _WorkspacePlayerSectionDocumentState
   }
 
   String get _noteStorageKey => _recordIdentity?.key ?? _legacyNoteStorageKey;
-  String get _notePendingStorageKey => '${_noteStorageKey}_workspace_sync_pending_v1';
+  String get _notePendingStorageKey =>
+      '${_noteStorageKey}_workspace_sync_pending_v1';
 
   String get _serverParentKey {
     final identity = _recordIdentity;
@@ -267,9 +293,11 @@ class _WorkspacePlayerSectionDocumentState
             note = canonicalServerBody;
           } else if (note.isEmpty && _legacyNoteStorageKey != _noteStorageKey) {
             final legacyServerBody = snapshot.noteBodies[_legacyNoteStorageKey];
-            if (legacyServerBody != null && legacyServerBody.isNotEmpty) note = legacyServerBody;
+            if (legacyServerBody != null && legacyServerBody.isNotEmpty)
+              note = legacyServerBody;
           }
-          final hasNode = snapshot.nodes.any((node) => node.id == _noteStorageKey);
+          final hasNode =
+              snapshot.nodes.any((node) => node.id == _noteStorageKey);
           if (!hasNode && note.isNotEmpty) {
             final node = WorkspaceFinderNode(
               id: _noteStorageKey,
@@ -279,7 +307,8 @@ class _WorkspacePlayerSectionDocumentState
               parentId: _serverParentKey,
               createdAt: DateTime.now(),
             );
-            await server.syncNodeDocument(node: node, body: note, createHint: true);
+            await server.syncNodeDocument(
+                node: node, body: note, createHint: true);
             snapshot = await server.load();
           }
           final serverBody = snapshot.noteBodies[_noteStorageKey];
@@ -309,7 +338,9 @@ class _WorkspacePlayerSectionDocumentState
                 kind: WorkspaceFinderNodeKind.note,
                 parentId: _serverParentKey,
                 createdAt: DateTime.tryParse('${document['created_at'] ?? ''}'),
-                updatedAt: DateTime.tryParse('${document['updated_at'] ?? ''}') ?? DateTime.now(),
+                updatedAt:
+                    DateTime.tryParse('${document['updated_at'] ?? ''}') ??
+                        DateTime.now(),
               );
               await server.syncNodeDocument(
                 node: childNode,
@@ -333,7 +364,8 @@ class _WorkspacePlayerSectionDocumentState
               syncedPendingChild = true;
             }
             if (syncedPendingChild) {
-              await prefs.setString(_recordDocumentsStorageKey, jsonEncode(recordDocuments));
+              await prefs.setString(
+                  _recordDocumentsStorageKey, jsonEncode(recordDocuments));
               snapshot = await server.load();
             }
             final mergedDocuments = <String, Map<String, dynamic>>{
@@ -359,8 +391,10 @@ class _WorkspacePlayerSectionDocumentState
               };
             }
             recordDocuments = mergedDocuments.values.toList()
-              ..sort((a, b) => '${b['updated_at'] ?? ''}'.compareTo('${a['updated_at'] ?? ''}'));
-            await prefs.setString(_recordDocumentsStorageKey, jsonEncode(recordDocuments));
+              ..sort((a, b) => '${b['updated_at'] ?? ''}'
+                  .compareTo('${a['updated_at'] ?? ''}'));
+            await prefs.setString(
+                _recordDocumentsStorageKey, jsonEncode(recordDocuments));
           }
           if (_canUseRecordAttachments) {
             try {
@@ -465,7 +499,8 @@ class _WorkspacePlayerSectionDocumentState
       } catch (e) {
         _serverAvailable = false;
         if (mounted) setState(() => _workspaceNote = body);
-        throw Exception('Документ сохранён локально, но серверная синхронизация не выполнена: $e');
+        throw Exception(
+            'Документ сохранён локально, но серверная синхронизация не выполнена: $e');
       }
     }
     if (mounted) setState(() => _workspaceNote = body);
@@ -492,7 +527,8 @@ class _WorkspacePlayerSectionDocumentState
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             color: const Color(0xFFFFF3F1),
-            child: Text(_error!, style: AppTypography.caption(color: const Color(0xFFB42318))),
+            child: Text(_error!,
+                style: AppTypography.caption(color: const Color(0xFFB42318))),
           ),
         Expanded(
           child: _loading
@@ -524,7 +560,16 @@ class _WorkspacePlayerSectionDocumentState
 
   String _humanRecordDate(Map<String, dynamic> record) {
     for (final key in const <String>[
-      'date', 'record_date', 'match_date', 'test_date', 'event_date', 'scheduled_at', 'start_at', 'start_time', 'datetime', 'created_at',
+      'date',
+      'record_date',
+      'match_date',
+      'test_date',
+      'event_date',
+      'scheduled_at',
+      'start_at',
+      'start_time',
+      'datetime',
+      'created_at',
     ]) {
       final raw = '${record[key] ?? ''}'.trim();
       if (raw.isEmpty) continue;
@@ -578,7 +623,10 @@ class _WorkspacePlayerSectionDocumentState
 
     return Column(
       children: [
-        if (summary.isNotEmpty || details.isNotEmpty || _canEditServerRecord(record) || fileUrl.isNotEmpty)
+        if (summary.isNotEmpty ||
+            details.isNotEmpty ||
+            _canEditServerRecord(record) ||
+            fileUrl.isNotEmpty)
           Container(
             width: double.infinity,
             padding: const EdgeInsets.fromLTRB(14, 8, 14, 8),
@@ -595,15 +643,20 @@ class _WorkspacePlayerSectionDocumentState
                         crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
                           for (final pair in summary)
-                            _CompactRecordProperty(label: pair.$1, value: pair.$2),
+                            _CompactRecordProperty(
+                                label: pair.$1, value: pair.$2),
                           if (details.isNotEmpty)
                             InkWell(
-                              onTap: () => setState(() => _recordDetailsOpen = !_recordDetailsOpen),
+                              onTap: () => setState(() =>
+                                  _recordDetailsOpen = !_recordDetailsOpen),
                               borderRadius: BorderRadius.circular(6),
                               child: Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 3),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 2, vertical: 3),
                                 child: Text(
-                                  _recordDetailsOpen ? 'Скрыть данные' : 'Все данные',
+                                  _recordDetailsOpen
+                                      ? 'Скрыть данные'
+                                      : 'Все данные',
                                   style: AppTypography.action(color: _green),
                                 ),
                               ),
@@ -613,7 +666,9 @@ class _WorkspacePlayerSectionDocumentState
                     ),
                     if (_canEditServerRecord(record))
                       TextButton(
-                        onPressed: _savingServerRecord ? null : () => _editServerRecord(record),
+                        onPressed: _savingServerRecord
+                            ? null
+                            : () => _editServerRecord(record),
                         child: Text(
                           _savingServerRecord ? 'Сохранение…' : 'Редактировать',
                           style: AppTypography.actionStrong(color: _green),
@@ -622,7 +677,8 @@ class _WorkspacePlayerSectionDocumentState
                     if (fileUrl.isNotEmpty)
                       TextButton(
                         onPressed: () => _openRecordFile(fileUrl),
-                        child: Text('Вложение', style: AppTypography.actionStrong(color: _green)),
+                        child: Text('Вложение',
+                            style: AppTypography.actionStrong(color: _green)),
                       ),
                   ],
                 ),
@@ -637,7 +693,8 @@ class _WorkspacePlayerSectionDocumentState
                       for (final pair in details)
                         SizedBox(
                           width: pair.$2.length > 90 ? 440 : 230,
-                          child: _CompactRecordProperty(label: pair.$1, value: pair.$2, multiline: true),
+                          child: _CompactRecordProperty(
+                              label: pair.$1, value: pair.$2, multiline: true),
                         ),
                     ],
                   ),
@@ -665,11 +722,12 @@ class _WorkspacePlayerSectionDocumentState
                     titleReadOnly: true,
                     contextLabel: 'Игрок · $title',
                     contextName: _playerName,
-                    documentType: widget.section == WorkspacePlayerSection.matches
-                        ? 'Рабочий документ матча'
-                        : widget.section == WorkspacePlayerSection.activity
-                            ? 'Рабочий документ тренировки'
-                            : 'Заметка тренера',
+                    documentType:
+                        widget.section == WorkspacePlayerSection.matches
+                            ? 'Рабочий документ матча'
+                            : widget.section == WorkspacePlayerSection.activity
+                                ? 'Рабочий документ тренировки'
+                                : 'Заметка тренера',
                     liveBlocksKey: _noteStorageKey,
                     onSave: _saveWorkspaceNote,
                   ),
@@ -681,7 +739,8 @@ class _WorkspacePlayerSectionDocumentState
                         color: Colors.white.withOpacity(.84),
                         alignment: Alignment.center,
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 20, vertical: 14),
                           decoration: BoxDecoration(
                             color: const Color(0xFFEAF5EF),
                             borderRadius: BorderRadius.circular(12),
@@ -747,7 +806,8 @@ class _WorkspacePlayerSectionDocumentState
                               title: _recordAttachmentTitle(attachment),
                               icon: Icons.insert_drive_file_outlined,
                               onOpen: () => _openRecordAttachment(attachment),
-                              onDelete: () => _deleteRecordAttachment(attachment),
+                              onDelete: () =>
+                                  _deleteRecordAttachment(attachment),
                             ),
                             const SizedBox(width: 6),
                           ],
@@ -760,8 +820,10 @@ class _WorkspacePlayerSectionDocumentState
                   tooltip: 'Создать документ',
                   onPressed: _createRecordDocument,
                   padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints.tightFor(width: 34, height: 34),
-                  icon: const Icon(Icons.note_add_outlined, size: 19, color: _green),
+                  constraints:
+                      const BoxConstraints.tightFor(width: 34, height: 34),
+                  icon: const Icon(Icons.note_add_outlined,
+                      size: 19, color: _green),
                 )
               else
                 TextButton.icon(
@@ -770,19 +832,23 @@ class _WorkspacePlayerSectionDocumentState
                     minimumSize: const Size(0, 34),
                     padding: const EdgeInsets.symmetric(horizontal: 8),
                   ),
-                  icon: const Icon(Icons.note_add_outlined, size: 17, color: _green),
-                  label: Text('Документ', style: AppTypography.actionStrong(color: _green)),
+                  icon: const Icon(Icons.note_add_outlined,
+                      size: 17, color: _green),
+                  label: Text('Документ',
+                      style: AppTypography.actionStrong(color: _green)),
                 ),
               if (compact)
                 IconButton(
                   tooltip: 'Добавить файл',
                   onPressed: _uploading ? null : _pickRecordAttachment,
                   padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints.tightFor(width: 34, height: 34),
+                  constraints:
+                      const BoxConstraints.tightFor(width: 34, height: 34),
                   icon: _uploading
                       ? const SizedBox.square(
                           dimension: 15,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: _green),
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: _green),
                         )
                       : const Icon(Icons.add_rounded, size: 20, color: _green),
                 )
@@ -796,7 +862,8 @@ class _WorkspacePlayerSectionDocumentState
                   icon: _uploading
                       ? const SizedBox.square(
                           dimension: 14,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: _green),
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: _green),
                         )
                       : const Icon(Icons.add_rounded, size: 17, color: _green),
                   label: Text(
@@ -866,7 +933,8 @@ class _WorkspacePlayerSectionDocumentState
   Future<void> _persistRecordDocuments() async {
     if (widget.record == null) return;
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_recordDocumentsStorageKey, jsonEncode(_recordDocuments));
+    await prefs.setString(
+        _recordDocumentsStorageKey, jsonEncode(_recordDocuments));
   }
 
   Future<void> _createRecordDocument() async {
@@ -881,7 +949,10 @@ class _WorkspacePlayerSectionDocumentState
       '_workspace_record_document': true,
       '_workspace_pending_sync': true,
     };
-    setState(() => _recordDocuments = <Map<String, dynamic>>[document, ..._recordDocuments]);
+    setState(() => _recordDocuments = <Map<String, dynamic>>[
+          document,
+          ..._recordDocuments
+        ]);
     await _persistRecordDocuments();
     try {
       await _syncRecordDocument(document, create: true);
@@ -914,9 +985,12 @@ class _WorkspacePlayerSectionDocumentState
           ),
         ),
         transitionsBuilder: (_, animation, __, child) => FadeTransition(
-          opacity: CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+          opacity:
+              CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
           child: SlideTransition(
-            position: Tween<Offset>(begin: const Offset(.018, 0), end: Offset.zero).animate(
+            position:
+                Tween<Offset>(begin: const Offset(.018, 0), end: Offset.zero)
+                    .animate(
               CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
             ),
             child: child,
@@ -1011,7 +1085,8 @@ class _WorkspacePlayerSectionDocumentState
       await _markRecordDocumentSynced(id);
     } catch (e) {
       _serverAvailable = false;
-      throw Exception('Документ сохранён локально, но серверная синхронизация не выполнена: $e');
+      throw Exception(
+          'Документ сохранён локально, но серверная синхронизация не выполнена: $e');
     }
   }
 
@@ -1023,8 +1098,10 @@ class _WorkspacePlayerSectionDocumentState
       builder: (dialogContext) => AlertDialog(
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.white,
-        title: Text('Удалить документ?', style: AppTypography.sectionTitle(color: _text)),
-        content: Text('${document['title'] ?? 'Документ'}', style: AppTypography.body(color: _text)),
+        title: Text('Удалить документ?',
+            style: AppTypography.sectionTitle(color: _text)),
+        content: Text('${document['title'] ?? 'Документ'}',
+            style: AppTypography.body(color: _text)),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),
@@ -1032,13 +1109,15 @@ class _WorkspacePlayerSectionDocumentState
           ),
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: Text('Удалить', style: AppTypography.action(color: const Color(0xFFB42318))),
+            child: Text('Удалить',
+                style: AppTypography.action(color: const Color(0xFFB42318))),
           ),
         ],
       ),
     );
     if (confirmed != true || !mounted) return;
-    setState(() => _recordDocuments.removeWhere((row) => '${row['id'] ?? ''}' == id));
+    setState(() =>
+        _recordDocuments.removeWhere((row) => '${row['id'] ?? ''}' == id));
     await _persistRecordDocuments();
     final server = _serverStorage;
     if (server != null) {
@@ -1051,15 +1130,20 @@ class _WorkspacePlayerSectionDocumentState
   }
 
   String _recordAttachmentTitle(Map<String, dynamic> attachment) {
-    final title = '${attachment['title'] ?? attachment['original_name'] ?? attachment['file_name'] ?? attachment['name'] ?? ''}'.trim();
+    final title =
+        '${attachment['title'] ?? attachment['original_name'] ?? attachment['file_name'] ?? attachment['name'] ?? ''}'
+            .trim();
     return title.isEmpty ? 'Файл' : title;
   }
 
   int _recordAttachmentId(Map<String, dynamic> attachment) =>
-      int.tryParse('${attachment['id'] ?? attachment['attachment_id'] ?? ''}'.trim()) ?? 0;
+      int.tryParse(
+          '${attachment['id'] ?? attachment['attachment_id'] ?? ''}'.trim()) ??
+      0;
 
   String _recordAttachmentUrl(Map<String, dynamic> attachment) =>
-      '${attachment['file_url'] ?? attachment['url'] ?? attachment['file'] ?? ''}'.trim();
+      '${attachment['file_url'] ?? attachment['url'] ?? attachment['file'] ?? ''}'
+          .trim();
 
   Future<void> _reloadRecordAttachments() async {
     if (!_canUseRecordAttachments) return;
@@ -1159,7 +1243,8 @@ class _WorkspacePlayerSectionDocumentState
       builder: (dialogContext) => AlertDialog(
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.white,
-        title: Text('Добавить файл в запись', style: AppTypography.sectionTitle(color: _text)),
+        title: Text('Добавить файл в запись',
+            style: AppTypography.sectionTitle(color: _text)),
         content: SizedBox(
           width: 440,
           child: TextField(
@@ -1179,11 +1264,15 @@ class _WorkspacePlayerSectionDocumentState
             child: Text('Отмена', style: AppTypography.action(color: _muted)),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: _green, elevation: 0),
+            style:
+                FilledButton.styleFrom(backgroundColor: _green, elevation: 0),
             onPressed: () => Navigator.of(dialogContext).pop(
-              controller.text.trim().isEmpty ? fileName : controller.text.trim(),
+              controller.text.trim().isEmpty
+                  ? fileName
+                  : controller.text.trim(),
             ),
-            child: Text('Добавить', style: AppTypography.actionStrong(color: Colors.white)),
+            child: Text('Добавить',
+                style: AppTypography.actionStrong(color: Colors.white)),
           ),
         ],
       ),
@@ -1200,8 +1289,10 @@ class _WorkspacePlayerSectionDocumentState
       builder: (dialogContext) => AlertDialog(
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.white,
-        title: Text('Удалить файл?', style: AppTypography.sectionTitle(color: _text)),
-        content: Text(_recordAttachmentTitle(attachment), style: AppTypography.body(color: _text)),
+        title: Text('Удалить файл?',
+            style: AppTypography.sectionTitle(color: _text)),
+        content: Text(_recordAttachmentTitle(attachment),
+            style: AppTypography.body(color: _text)),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),
@@ -1209,7 +1300,8 @@ class _WorkspacePlayerSectionDocumentState
           ),
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: Text('Удалить', style: AppTypography.action(color: const Color(0xFFB42318))),
+            child: Text('Удалить',
+                style: AppTypography.action(color: const Color(0xFFB42318))),
           ),
         ],
       ),
@@ -1238,7 +1330,15 @@ class _WorkspacePlayerSectionDocumentState
       }
     }
 
-    for (final key in const <String>['test_date', 'match_date', 'event_date', 'record_date', 'date', 'start_at', 'created_at']) {
+    for (final key in const <String>[
+      'test_date',
+      'match_date',
+      'event_date',
+      'record_date',
+      'date',
+      'start_at',
+      'created_at'
+    ]) {
       final raw = '${record[key] ?? ''}'.trim();
       if (raw.isEmpty || raw == 'null') continue;
       out.add(('Дата', _formatRecordDateTime(raw)));
@@ -1246,11 +1346,28 @@ class _WorkspacePlayerSectionDocumentState
     }
     switch (widget.section) {
       case WorkspacePlayerSection.matches:
-        add('Соперник', const ['opponent', 'opponent_name', 'opponent_team', 'opponent_team_name', 'rival', 'rival_name']);
-        final our = '${record['our_score'] ?? record['team_score'] ?? record['score_for'] ?? record['home_score'] ?? ''}'.trim();
-        final opp = '${record['opponent_score'] ?? record['score_against'] ?? record['away_score'] ?? ''}'.trim();
+        add('Соперник', const [
+          'opponent',
+          'opponent_name',
+          'opponent_team',
+          'opponent_team_name',
+          'rival',
+          'rival_name'
+        ]);
+        final our =
+            '${record['our_score'] ?? record['team_score'] ?? record['score_for'] ?? record['home_score'] ?? ''}'
+                .trim();
+        final opp =
+            '${record['opponent_score'] ?? record['score_against'] ?? record['away_score'] ?? ''}'
+                .trim();
         if (our.isNotEmpty || opp.isNotEmpty) out.add(('Счёт', '$our:$opp'));
-        add('Турнир', const ['competition_name', 'tournament_name', 'competition', 'event_type', 'league_name']);
+        add('Турнир', const [
+          'competition_name',
+          'tournament_name',
+          'competition',
+          'event_type',
+          'league_name'
+        ]);
         add('Стадион', const ['stadium']);
         add('Тур', const ['tour_label']);
         add('Минуты', const ['minutes']);
@@ -1268,10 +1385,12 @@ class _WorkspacePlayerSectionDocumentState
         if (metrics is List) {
           for (final raw in metrics.whereType<Map>().take(8)) {
             final metric = Map<String, dynamic>.from(raw);
-            final metricTitle = '${metric['title'] ?? metric['code'] ?? 'Тест'}'.trim();
+            final metricTitle =
+                '${metric['title'] ?? metric['code'] ?? 'Тест'}'.trim();
             final value = '${metric['value'] ?? ''}'.trim();
             final unit = '${metric['unit'] ?? ''}'.trim();
-            final rating = '${metric['rating'] ?? metric['status'] ?? ''}'.trim();
+            final rating =
+                '${metric['rating'] ?? metric['status'] ?? ''}'.trim();
             final points = '${metric['points'] ?? ''}'.trim();
             final details = <String>[
               <String>[value, unit].where((e) => e.isNotEmpty).join(' '),
@@ -1285,20 +1404,37 @@ class _WorkspacePlayerSectionDocumentState
         }
         break;
       case WorkspacePlayerSection.activity:
-        add('Тренировка', const ['title', 'event_title', 'event_name', 'training_title', 'training_type', 'name', 'event_type']);
+        add('Тренировка', const [
+          'title',
+          'event_title',
+          'event_name',
+          'training_title',
+          'training_type',
+          'name',
+          'event_type'
+        ]);
         add('Статус', const ['mark', 'status', 'attendance_status']);
         add('Оценка игрока', const ['player_rating', 'self_rating', 'rating']);
         add('Оценка тренера', const ['coach_rating', 'trainer_rating']);
-        add('Комментарий', const ['coach_note', 'trainer_note', 'note', 'comment']);
+        add('Комментарий',
+            const ['coach_note', 'trainer_note', 'note', 'comment']);
         break;
       case WorkspacePlayerSection.diary:
       case WorkspacePlayerSection.readiness:
         add('Самооценка', const ['self_rating', 'player_rating', 'rating']);
-        add('Самочувствие', const ['wellbeing', 'mood', 'feeling', 'readiness']);
+        add('Самочувствие',
+            const ['wellbeing', 'mood', 'feeling', 'readiness']);
         add('Сон', const ['sleep', 'sleep_quality', 'sleep_hours']);
         add('Нагрузка', const ['load', 'rpe', 'fatigue']);
-        add('Заметка игрока', const ['player_note', 'self_note', 'diary_note', 'note', 'comment']);
-        add('Комментарий тренера', const ['coach_comment', 'trainer_comment', 'coach_note']);
+        add('Заметка игрока', const [
+          'player_note',
+          'self_note',
+          'diary_note',
+          'note',
+          'comment'
+        ]);
+        add('Комментарий тренера',
+            const ['coach_comment', 'trainer_comment', 'coach_note']);
         break;
       case WorkspacePlayerSection.health:
       case WorkspacePlayerSection.documents:
@@ -1324,9 +1460,17 @@ class _WorkspacePlayerSectionDocumentState
   }
 
   String _recordFileUrl(Map<String, dynamic> record) {
-    for (final key in const <String>['file_url', 'file', 'url', 'document_url', 'pdf_url', 'clips_url']) {
+    for (final key in const <String>[
+      'file_url',
+      'file',
+      'url',
+      'document_url',
+      'pdf_url',
+      'clips_url'
+    ]) {
       final value = '${record[key] ?? ''}'.trim();
-      if (value.startsWith('http://') || value.startsWith('https://')) return value;
+      if (value.startsWith('http://') || value.startsWith('https://'))
+        return value;
     }
     return '';
   }
@@ -1338,7 +1482,8 @@ class _WorkspacePlayerSectionDocumentState
   }
 
   int _diaryEntryId(Map<String, dynamic> record) {
-    final direct = int.tryParse('${record['diary_entry_id'] ?? ''}'.trim()) ?? 0;
+    final direct =
+        int.tryParse('${record['diary_entry_id'] ?? ''}'.trim()) ?? 0;
     if (direct > 0) return direct;
     final source = '${record['_workspace_diary_source'] ?? ''}'.trim();
     if (source != 'player_diary') return 0;
@@ -1347,26 +1492,35 @@ class _WorkspacePlayerSectionDocumentState
   }
 
   bool _isGenericDiaryRecord(Map<String, dynamic> record) =>
-      _diaryEntryId(record) > 0 || '${record['_workspace_diary_source'] ?? ''}'.trim() == 'player_diary';
+      _diaryEntryId(record) > 0 ||
+      '${record['_workspace_diary_source'] ?? ''}'.trim() == 'player_diary';
 
   bool _canEditServerRecord(Map<String, dynamic> record) {
     switch (widget.section) {
       case WorkspacePlayerSection.health:
       case WorkspacePlayerSection.documents:
-        return (int.tryParse('${record['id'] ?? record['record_id'] ?? ''}'.trim()) ?? 0) > 0;
+        return (int.tryParse(
+                    '${record['id'] ?? record['record_id'] ?? ''}'.trim()) ??
+                0) >
+            0;
       case WorkspacePlayerSection.matches:
-        return (int.tryParse('${record['match_id'] ?? record['id'] ?? ''}'.trim()) ?? 0) > 0;
+        return (int.tryParse(
+                    '${record['match_id'] ?? record['id'] ?? ''}'.trim()) ??
+                0) >
+            0;
       case WorkspacePlayerSection.diary:
         if (_isGenericDiaryRecord(record)) return true;
         return (int.tryParse(
-                  '${record['event_id'] ?? record['team_event_id'] ?? record['training_id'] ?? ''}'.trim(),
+                  '${record['event_id'] ?? record['team_event_id'] ?? record['training_id'] ?? ''}'
+                      .trim(),
                 ) ??
                 0) >
             0;
       case WorkspacePlayerSection.activity:
       case WorkspacePlayerSection.readiness:
         return (int.tryParse(
-                  '${record['event_id'] ?? record['team_event_id'] ?? record['training_id'] ?? ''}'.trim(),
+                  '${record['event_id'] ?? record['team_event_id'] ?? record['training_id'] ?? ''}'
+                      .trim(),
                 ) ??
                 0) >
             0;
@@ -1404,7 +1558,16 @@ class _WorkspacePlayerSectionDocumentState
 
   DateTime _recordDate(Map<String, dynamic> record) {
     for (final key in const <String>[
-      'date', 'record_date', 'match_date', 'test_date', 'event_date', 'scheduled_at', 'start_at', 'start_time', 'datetime', 'created_at',
+      'date',
+      'record_date',
+      'match_date',
+      'test_date',
+      'event_date',
+      'scheduled_at',
+      'start_at',
+      'start_time',
+      'datetime',
+      'created_at',
     ]) {
       final raw = '${record[key] ?? ''}'.trim();
       if (raw.isEmpty) continue;
@@ -1429,7 +1592,9 @@ class _WorkspacePlayerSectionDocumentState
       return SafeArea(
         top: !mobile,
         child: ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: 620, maxHeight: MediaQuery.sizeOf(sheetContext).height * .90),
+          constraints: BoxConstraints(
+              maxWidth: 620,
+              maxHeight: MediaQuery.sizeOf(sheetContext).height * .90),
           child: Container(
             decoration: BoxDecoration(
               color: Colors.white,
@@ -1449,10 +1614,13 @@ class _WorkspacePlayerSectionDocumentState
                       Container(
                         width: 7,
                         height: 7,
-                        decoration: const BoxDecoration(color: _green, shape: BoxShape.circle),
+                        decoration: const BoxDecoration(
+                            color: _green, shape: BoxShape.circle),
                       ),
                       const SizedBox(width: 9),
-                      Expanded(child: Text(title, style: AppTypography.sectionTitle(color: _text))),
+                      Expanded(
+                          child: Text(title,
+                              style: AppTypography.sectionTitle(color: _text))),
                       IconButton(
                         onPressed: () => Navigator.of(sheetContext).pop(false),
                         icon: const Icon(Icons.close_rounded, size: 19),
@@ -1476,13 +1644,17 @@ class _WorkspacePlayerSectionDocumentState
                     children: [
                       TextButton(
                         onPressed: () => Navigator.of(sheetContext).pop(false),
-                        child: Text('Отмена', style: AppTypography.action(color: _muted)),
+                        child: Text('Отмена',
+                            style: AppTypography.action(color: _muted)),
                       ),
                       const SizedBox(width: 8),
                       FilledButton(
                         onPressed: () => Navigator.of(sheetContext).pop(true),
-                        style: FilledButton.styleFrom(backgroundColor: _green, elevation: 0),
-                        child: Text('Сохранить', style: AppTypography.actionStrong(color: Colors.white)),
+                        style: FilledButton.styleFrom(
+                            backgroundColor: _green, elevation: 0),
+                        child: Text('Сохранить',
+                            style: AppTypography.actionStrong(
+                                color: Colors.white)),
                       ),
                     ],
                   ),
@@ -1516,7 +1688,8 @@ class _WorkspacePlayerSectionDocumentState
           builder: (dialogContext) => Dialog(
             backgroundColor: Colors.transparent,
             child: StatefulBuilder(
-              builder: (dialogContext, setLocal) => content(dialogContext, setLocal),
+              builder: (dialogContext, setLocal) =>
+                  content(dialogContext, setLocal),
             ),
           ),
         )) ??
@@ -1548,23 +1721,47 @@ class _WorkspacePlayerSectionDocumentState
   }
 
   Future<void> _editMedicalServerRecord(Map<String, dynamic> record) async {
-    final titleC = TextEditingController(text: '${record['title'] ?? record['name'] ?? ''}'.trim());
-    final typeC = TextEditingController(text: '${record['type'] ?? record['record_type'] ?? (_sectionTitle == 'Документы' ? 'Документ' : 'Запись')}'.trim());
-    final valueC = TextEditingController(text: '${record['value'] ?? ''}'.trim());
-    final commentC = TextEditingController(text: '${record['comment'] ?? record['notes'] ?? ''}'.trim());
+    final titleC = TextEditingController(
+        text: '${record['title'] ?? record['name'] ?? ''}'.trim());
+    final typeC = TextEditingController(
+        text:
+            '${record['type'] ?? record['record_type'] ?? (_sectionTitle == 'Документы' ? 'Документ' : 'Запись')}'
+                .trim());
+    final valueC =
+        TextEditingController(text: '${record['value'] ?? ''}'.trim());
+    final commentC = TextEditingController(
+        text: '${record['comment'] ?? record['notes'] ?? ''}'.trim());
     var date = _recordDate(record);
 
     final confirmed = await _showServerEditor(
-      title: widget.section == WorkspacePlayerSection.documents ? 'Редактировать документ' : 'Редактировать медицинскую запись',
+      title: widget.section == WorkspacePlayerSection.documents
+          ? 'Редактировать документ'
+          : 'Редактировать медицинскую запись',
       fields: (sheetContext, setLocal) => Column(
         children: [
-          TextField(controller: titleC, style: AppTypography.formText(color: _text), decoration: _editorDecoration('Название')),
+          TextField(
+              controller: titleC,
+              style: AppTypography.formText(color: _text),
+              decoration: _editorDecoration('Название')),
           const SizedBox(height: 10),
-          TextField(controller: typeC, style: AppTypography.formText(color: _text), decoration: _editorDecoration('Тип')),
+          TextField(
+              controller: typeC,
+              style: AppTypography.formText(color: _text),
+              decoration: _editorDecoration('Тип')),
           const SizedBox(height: 10),
-          TextField(controller: valueC, minLines: 2, maxLines: 4, style: AppTypography.formText(color: _text), decoration: _editorDecoration('Описание / значение')),
+          TextField(
+              controller: valueC,
+              minLines: 2,
+              maxLines: 4,
+              style: AppTypography.formText(color: _text),
+              decoration: _editorDecoration('Описание / значение')),
           const SizedBox(height: 10),
-          TextField(controller: commentC, minLines: 2, maxLines: 4, style: AppTypography.formText(color: _text), decoration: _editorDecoration('Комментарий')),
+          TextField(
+              controller: commentC,
+              minLines: 2,
+              maxLines: 4,
+              style: AppTypography.formText(color: _text),
+              decoration: _editorDecoration('Комментарий')),
           const SizedBox(height: 10),
           Align(
             alignment: Alignment.centerLeft,
@@ -1578,7 +1775,9 @@ class _WorkspacePlayerSectionDocumentState
                 );
                 if (picked != null) setLocal(() => date = picked);
               },
-              child: Text('Дата: ${date.day.toString().padLeft(2, '0')}.${date.month.toString().padLeft(2, '0')}.${date.year}', style: AppTypography.action()),
+              child: Text(
+                  'Дата: ${date.day.toString().padLeft(2, '0')}.${date.month.toString().padLeft(2, '0')}.${date.year}',
+                  style: AppTypography.action()),
             ),
           ),
         ],
@@ -1614,10 +1813,13 @@ class _WorkspacePlayerSectionDocumentState
       await widget.onRefresh?.call();
       if (mounted) {
         setState(() {});
-        ScaffoldMessenger.maybeOf(context)?.showSnackBar(const SnackBar(content: Text('Запись обновлена')));
+        ScaffoldMessenger.maybeOf(context)
+            ?.showSnackBar(const SnackBar(content: Text('Запись обновлена')));
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(content: Text('$e')));
+      if (mounted)
+        ScaffoldMessenger.maybeOf(context)
+            ?.showSnackBar(SnackBar(content: Text('$e')));
     } finally {
       titleC.dispose();
       typeC.dispose();
@@ -1628,44 +1830,96 @@ class _WorkspacePlayerSectionDocumentState
   }
 
   Future<void> _editMatchServerRecord(Map<String, dynamic> record) async {
-    final opponentC = TextEditingController(text: '${record['opponent'] ?? record['opponent_name'] ?? ''}'.trim());
-    final dateC = TextEditingController(text: '${record['match_date'] ?? record['date'] ?? ''}'.toString().split(' ').first);
-    final competitionC = TextEditingController(text: '${record['competition_name'] ?? ''}'.trim());
-    final ourScoreC = TextEditingController(text: '${record['our_score'] ?? ''}'.trim());
-    final opponentScoreC = TextEditingController(text: '${record['opponent_score'] ?? ''}'.trim());
-    final videoC = TextEditingController(text: '${record['video_url'] ?? record['video'] ?? ''}'.trim());
-    final ttdC = TextEditingController(text: '${record['ttd_text'] ?? record['ttd'] ?? ''}'.trim());
-    final notesC = TextEditingController(text: '${record['notes'] ?? record['coach_comment'] ?? ''}'.trim());
+    final opponentC = TextEditingController(
+        text: '${record['opponent'] ?? record['opponent_name'] ?? ''}'.trim());
+    final dateC = TextEditingController(
+        text: '${record['match_date'] ?? record['date'] ?? ''}'
+            .toString()
+            .split(' ')
+            .first);
+    final competitionC = TextEditingController(
+        text: '${record['competition_name'] ?? ''}'.trim());
+    final ourScoreC =
+        TextEditingController(text: '${record['our_score'] ?? ''}'.trim());
+    final opponentScoreC =
+        TextEditingController(text: '${record['opponent_score'] ?? ''}'.trim());
+    final videoC = TextEditingController(
+        text: '${record['video_url'] ?? record['video'] ?? ''}'.trim());
+    final ttdC = TextEditingController(
+        text: '${record['ttd_text'] ?? record['ttd'] ?? ''}'.trim());
+    final notesC = TextEditingController(
+        text: '${record['notes'] ?? record['coach_comment'] ?? ''}'.trim());
 
     final confirmed = await _showServerEditor(
       title: 'Редактировать матч',
       fields: (sheetContext, setLocal) => Column(
         children: [
-          TextField(controller: opponentC, style: AppTypography.formText(color: _text), decoration: _editorDecoration('Соперник')),
+          TextField(
+              controller: opponentC,
+              style: AppTypography.formText(color: _text),
+              decoration: _editorDecoration('Соперник')),
           const SizedBox(height: 10),
-          TextField(controller: dateC, style: AppTypography.formText(color: _text), decoration: _editorDecoration('Дата матча', hint: '2026-08-25')),
+          TextField(
+              controller: dateC,
+              style: AppTypography.formText(color: _text),
+              decoration: _editorDecoration('Дата матча', hint: '2026-08-25')),
           const SizedBox(height: 10),
-          TextField(controller: competitionC, style: AppTypography.formText(color: _text), decoration: _editorDecoration('Турнир / соревнование')),
+          TextField(
+              controller: competitionC,
+              style: AppTypography.formText(color: _text),
+              decoration: _editorDecoration('Турнир / соревнование')),
           const SizedBox(height: 10),
           Row(
             children: [
-              Expanded(child: TextField(controller: ourScoreC, keyboardType: TextInputType.number, style: AppTypography.formText(color: _text), decoration: _editorDecoration('Голы команды'))),
+              Expanded(
+                  child: TextField(
+                      controller: ourScoreC,
+                      keyboardType: TextInputType.number,
+                      style: AppTypography.formText(color: _text),
+                      decoration: _editorDecoration('Голы команды'))),
               const SizedBox(width: 10),
-              Expanded(child: TextField(controller: opponentScoreC, keyboardType: TextInputType.number, style: AppTypography.formText(color: _text), decoration: _editorDecoration('Голы соперника'))),
+              Expanded(
+                  child: TextField(
+                      controller: opponentScoreC,
+                      keyboardType: TextInputType.number,
+                      style: AppTypography.formText(color: _text),
+                      decoration: _editorDecoration('Голы соперника'))),
             ],
           ),
           const SizedBox(height: 10),
-          TextField(controller: videoC, style: AppTypography.formText(color: _text), decoration: _editorDecoration('Ссылка на видео')),
+          TextField(
+              controller: videoC,
+              style: AppTypography.formText(color: _text),
+              decoration: _editorDecoration('Ссылка на видео')),
           const SizedBox(height: 10),
-          TextField(controller: ttdC, minLines: 2, maxLines: 4, style: AppTypography.formText(color: _text), decoration: _editorDecoration('ТТД')),
+          TextField(
+              controller: ttdC,
+              minLines: 2,
+              maxLines: 4,
+              style: AppTypography.formText(color: _text),
+              decoration: _editorDecoration('ТТД')),
           const SizedBox(height: 10),
-          TextField(controller: notesC, minLines: 2, maxLines: 4, style: AppTypography.formText(color: _text), decoration: _editorDecoration('Комментарий тренера')),
+          TextField(
+              controller: notesC,
+              minLines: 2,
+              maxLines: 4,
+              style: AppTypography.formText(color: _text),
+              decoration: _editorDecoration('Комментарий тренера')),
         ],
       ),
     );
 
     if (!confirmed || !mounted) {
-      for (final c in <TextEditingController>[opponentC, dateC, competitionC, ourScoreC, opponentScoreC, videoC, ttdC, notesC]) {
+      for (final c in <TextEditingController>[
+        opponentC,
+        dateC,
+        competitionC,
+        ourScoreC,
+        opponentScoreC,
+        videoC,
+        ttdC,
+        notesC
+      ]) {
         c.dispose();
       }
       return;
@@ -1694,12 +1948,24 @@ class _WorkspacePlayerSectionDocumentState
       await widget.onRefresh?.call();
       if (mounted) {
         setState(() {});
-        ScaffoldMessenger.maybeOf(context)?.showSnackBar(const SnackBar(content: Text('Матч обновлён')));
+        ScaffoldMessenger.maybeOf(context)
+            ?.showSnackBar(const SnackBar(content: Text('Матч обновлён')));
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(content: Text('$e')));
+      if (mounted)
+        ScaffoldMessenger.maybeOf(context)
+            ?.showSnackBar(SnackBar(content: Text('$e')));
     } finally {
-      for (final c in <TextEditingController>[opponentC, dateC, competitionC, ourScoreC, opponentScoreC, videoC, ttdC, notesC]) {
+      for (final c in <TextEditingController>[
+        opponentC,
+        dateC,
+        competitionC,
+        ourScoreC,
+        opponentScoreC,
+        videoC,
+        ttdC,
+        notesC
+      ]) {
         c.dispose();
       }
       if (mounted) setState(() => _savingServerRecord = false);
@@ -1716,7 +1982,9 @@ class _WorkspacePlayerSectionDocumentState
     }
 
     final noteC = TextEditingController(
-      text: '${record['note'] ?? record['coach_note'] ?? record['comment'] ?? ''}'.trim(),
+      text:
+          '${record['note'] ?? record['coach_note'] ?? record['comment'] ?? ''}'
+              .trim(),
     );
     var date = _recordDate(record);
     final confirmed = await _showServerEditor(
@@ -1790,7 +2058,8 @@ class _WorkspacePlayerSectionDocumentState
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(content: Text('$e')));
+        ScaffoldMessenger.maybeOf(context)
+            ?.showSnackBar(SnackBar(content: Text('$e')));
       }
     } finally {
       noteC.dispose();
@@ -1800,7 +2069,9 @@ class _WorkspacePlayerSectionDocumentState
 
   Future<void> _editEventNote(Map<String, dynamic> record) async {
     final noteC = TextEditingController(
-      text: '${record['coach_note'] ?? record['trainer_note'] ?? record['note'] ?? record['coach_comment'] ?? ''}'.trim(),
+      text:
+          '${record['coach_note'] ?? record['trainer_note'] ?? record['note'] ?? record['coach_comment'] ?? ''}'
+              .trim(),
     );
     final confirmed = await _showServerEditor(
       title: 'Комментарий тренера',
@@ -1818,16 +2089,20 @@ class _WorkspacePlayerSectionDocumentState
     }
     setState(() => _savingServerRecord = true);
     try {
-      await _bridge.savePlayerEventNote(player: widget.player, record: record, note: noteC.text);
+      await _bridge.savePlayerEventNote(
+          player: widget.player, record: record, note: noteC.text);
       record['coach_note'] = noteC.text.trim();
       record['note'] = noteC.text.trim();
       await widget.onRefresh?.call();
       if (mounted) {
         setState(() {});
-        ScaffoldMessenger.maybeOf(context)?.showSnackBar(const SnackBar(content: Text('Комментарий сохранён')));
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+            const SnackBar(content: Text('Комментарий сохранён')));
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(content: Text('$e')));
+      if (mounted)
+        ScaffoldMessenger.maybeOf(context)
+            ?.showSnackBar(SnackBar(content: Text('$e')));
     } finally {
       noteC.dispose();
       if (mounted) setState(() => _savingServerRecord = false);
@@ -1844,7 +2119,8 @@ class _WorkspacePlayerSectionDocumentState
               width: double.infinity,
               constraints: BoxConstraints(maxHeight: compact ? 128 : 150),
               color: Colors.white,
-              padding: EdgeInsets.fromLTRB(compact ? 12 : 18, 10, compact ? 12 : 18, 10),
+              padding: EdgeInsets.fromLTRB(
+                  compact ? 12 : 18, 10, compact ? 12 : 18, 10),
               child: SingleChildScrollView(child: liveSummary),
             ),
             const Divider(height: 1, color: _line),
@@ -1890,13 +2166,16 @@ class _WorkspacePlayerSectionDocumentState
           children: [
             const _SyncDot(),
             const SizedBox(width: 8),
-            Text('Живой дневник · ${_diary.length} записей', style: AppTypography.menuTitle(color: _text)),
+            Text('Живой дневник · ${_diary.length} записей',
+                style: AppTypography.menuTitle(color: _text)),
           ],
         ),
         const SizedBox(height: 7),
         ...items.map((item) {
-          final title = '${item['title'] ?? item['training_title'] ?? 'Тренировка'}';
-          final date = '${item['start_at'] ?? item['updated_at'] ?? item['created_at'] ?? ''}';
+          final title =
+              '${item['title'] ?? item['training_title'] ?? 'Тренировка'}';
+          final date =
+              '${item['start_at'] ?? item['updated_at'] ?? item['created_at'] ?? ''}';
           return Padding(
             padding: const EdgeInsets.only(bottom: 4),
             child: Text(
@@ -1927,9 +2206,11 @@ class _WorkspacePlayerSectionDocumentState
           children: [
             const _SyncDot(),
             const SizedBox(width: 8),
-            Text('Данные профиля', style: AppTypography.menuTitle(color: _text)),
+            Text('Данные профиля',
+                style: AppTypography.menuTitle(color: _text)),
             const SizedBox(width: 8),
-            Text('read-only snapshot', style: AppTypography.menuGroup(color: _muted)),
+            Text('read-only snapshot',
+                style: AppTypography.menuGroup(color: _muted)),
           ],
         ),
         const SizedBox(height: 8),
@@ -1945,13 +2226,15 @@ class _WorkspacePlayerSectionDocumentState
             children: rows
                 .map(
                   (row) => Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(color: _line),
                     ),
-                    child: Text('${row.key}: ${row.value}', style: AppTypography.captionMedium(color: _text)),
+                    child: Text('${row.key}: ${row.value}',
+                        style: AppTypography.captionMedium(color: _text)),
                   ),
                 )
                 .toList(),
@@ -1960,7 +2243,8 @@ class _WorkspacePlayerSectionDocumentState
     );
   }
 
-  List<(String, String)> _summaryKeysForSection(WorkspacePlayerSection section) {
+  List<(String, String)> _summaryKeysForSection(
+      WorkspacePlayerSection section) {
     switch (section) {
       case WorkspacePlayerSection.readiness:
         return const <(String, String)>[
@@ -2023,12 +2307,16 @@ class _WorkspacePlayerSectionDocumentState
                 ),
               ),
               FilledButton.icon(
-                onPressed: _uploading ? null : () => _pickAndUpload(documentsOnly: documentsOnly),
-                style: FilledButton.styleFrom(backgroundColor: _green, elevation: 0),
+                onPressed: _uploading
+                    ? null
+                    : () => _pickAndUpload(documentsOnly: documentsOnly),
+                style: FilledButton.styleFrom(
+                    backgroundColor: _green, elevation: 0),
                 icon: _uploading
                     ? const SizedBox.square(
                         dimension: 14,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white),
                       )
                     : const Icon(Icons.add_rounded, size: 17),
                 label: Text(
@@ -2045,7 +2333,8 @@ class _WorkspacePlayerSectionDocumentState
             onDragExited: (_) => setState(() => _draggingFile = false),
             onDragDone: (details) async {
               setState(() => _draggingFile = false);
-              await _handleDroppedFiles(details.files, documentsOnly: documentsOnly);
+              await _handleDroppedFiles(details.files,
+                  documentsOnly: documentsOnly);
             },
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 120),
@@ -2061,12 +2350,14 @@ class _WorkspacePlayerSectionDocumentState
                     child: records.isEmpty
                         ? _MedicalEmpty(
                             documentsOnly: documentsOnly,
-                            onAdd: () => _pickAndUpload(documentsOnly: documentsOnly),
+                            onAdd: () =>
+                                _pickAndUpload(documentsOnly: documentsOnly),
                           )
                         : ListView.separated(
                             padding: const EdgeInsets.fromLTRB(12, 12, 12, 28),
                             itemCount: records.length,
-                            separatorBuilder: (_, __) => const SizedBox(height: 8),
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(height: 8),
                             itemBuilder: (_, index) => _MedicalRecordRow(
                               record: records[index],
                               onOpen: () => _openRecord(records[index]),
@@ -2080,7 +2371,8 @@ class _WorkspacePlayerSectionDocumentState
                           color: Colors.white.withOpacity(.82),
                           alignment: Alignment.center,
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 18, vertical: 14),
                             decoration: BoxDecoration(
                               color: const Color(0xFFEAF5EF),
                               borderRadius: BorderRadius.circular(12),
@@ -2106,7 +2398,8 @@ class _WorkspacePlayerSectionDocumentState
 
   bool _looksLikeDocument(Map<String, dynamic> record) {
     final type = '${record['type'] ?? ''}'.toLowerCase();
-    final url = '${record['file_url'] ?? record['file'] ?? record['url'] ?? ''}'.trim();
+    final url =
+        '${record['file_url'] ?? record['file'] ?? record['url'] ?? ''}'.trim();
     return url.isNotEmpty ||
         type.contains('док') ||
         type.contains('справ') ||
@@ -2115,7 +2408,8 @@ class _WorkspacePlayerSectionDocumentState
   }
 
   Future<void> _openRecord(Map<String, dynamic> record) async {
-    final raw = '${record['file_url'] ?? record['file'] ?? record['url'] ?? ''}'.trim();
+    final raw =
+        '${record['file_url'] ?? record['file'] ?? record['url'] ?? ''}'.trim();
     if (raw.isEmpty) return;
     final url = _absoluteFileUrl(raw);
     final uri = Uri.tryParse(url);
@@ -2226,7 +2520,8 @@ class _WorkspacePlayerSectionDocumentState
     required String fileName,
     required bool documentsOnly,
   }) async {
-    final title = TextEditingController(text: fileName.replaceFirst(RegExp(r'\.[^.]+$'), ''));
+    final title = TextEditingController(
+        text: fileName.replaceFirst(RegExp(r'\.[^.]+$'), ''));
     final comment = TextEditingController();
     var type = documentsOnly ? 'Документ' : 'Справка';
     var date = DateTime.now();
@@ -2235,31 +2530,49 @@ class _WorkspacePlayerSectionDocumentState
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: Text(documentsOnly ? 'Новый документ' : 'Новый медицинский файл', style: AppTypography.sectionTitle()),
+          title: Text(
+              documentsOnly ? 'Новый документ' : 'Новый медицинский файл',
+              style: AppTypography.sectionTitle()),
           content: SizedBox(
             width: 480,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(fileName, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTypography.caption(color: _muted)),
+                Text(fileName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.caption(color: _muted)),
                 const SizedBox(height: 12),
                 TextField(
                   controller: title,
                   autofocus: true,
                   style: AppTypography.formText(),
-                  decoration: InputDecoration(labelText: 'Название', labelStyle: AppTypography.formLabel()),
+                  decoration: InputDecoration(
+                      labelText: 'Название',
+                      labelStyle: AppTypography.formLabel()),
                 ),
                 if (!documentsOnly) ...[
                   const SizedBox(height: 10),
                   DropdownButtonFormField<String>(
                     value: type,
                     style: AppTypography.formText(color: _text),
-                    decoration: InputDecoration(labelText: 'Тип', labelStyle: AppTypography.formLabel()),
-                    items: const <String>['Справка', 'Осмотр', 'Травма', 'Допуск', 'Рекомендация', 'Документ']
-                        .map((value) => DropdownMenuItem<String>(value: value, child: Text(value)))
+                    decoration: InputDecoration(
+                        labelText: 'Тип',
+                        labelStyle: AppTypography.formLabel()),
+                    items: const <String>[
+                      'Справка',
+                      'Осмотр',
+                      'Травма',
+                      'Допуск',
+                      'Рекомендация',
+                      'Документ'
+                    ]
+                        .map((value) => DropdownMenuItem<String>(
+                            value: value, child: Text(value)))
                         .toList(),
-                    onChanged: (value) => setDialogState(() => type = value ?? type),
+                    onChanged: (value) =>
+                        setDialogState(() => type = value ?? type),
                   ),
                 ],
                 const SizedBox(height: 10),
@@ -2267,7 +2580,9 @@ class _WorkspacePlayerSectionDocumentState
                   controller: comment,
                   maxLines: 2,
                   style: AppTypography.formText(),
-                  decoration: InputDecoration(labelText: 'Комментарий', labelStyle: AppTypography.formLabel()),
+                  decoration: InputDecoration(
+                      labelText: 'Комментарий',
+                      labelStyle: AppTypography.formLabel()),
                 ),
                 const SizedBox(height: 10),
                 OutlinedButton(
@@ -2280,23 +2595,28 @@ class _WorkspacePlayerSectionDocumentState
                     );
                     if (picked != null) setDialogState(() => date = picked);
                   },
-                  child: Text('Дата: ${_displayDate(date)}', style: AppTypography.action()),
+                  child: Text('Дата: ${_displayDate(date)}',
+                      style: AppTypography.action()),
                 ),
               ],
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.of(dialogContext).pop(), child: Text('Отмена', style: AppTypography.action())),
+            TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: Text('Отмена', style: AppTypography.action())),
             FilledButton(
               onPressed: () => Navigator.of(dialogContext).pop(
                 _UploadMeta(
-                  title: title.text.trim().isEmpty ? fileName : title.text.trim(),
+                  title:
+                      title.text.trim().isEmpty ? fileName : title.text.trim(),
                   type: type,
                   comment: comment.text.trim(),
                   date: date,
                 ),
               ),
-              child: Text('Добавить', style: AppTypography.actionStrong(color: Colors.white)),
+              child: Text('Добавить',
+                  style: AppTypography.actionStrong(color: Colors.white)),
             ),
           ],
         ),
@@ -2313,12 +2633,14 @@ class _WorkspacePlayerSectionDocumentState
   }
 
   void _snack(String text) {
-    ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(content: Text(text)));
+    ScaffoldMessenger.maybeOf(context)
+        ?.showSnackBar(SnackBar(content: Text(text)));
   }
 }
 
 class _CompactRecordProperty extends StatelessWidget {
-  const _CompactRecordProperty({required this.label, required this.value, this.multiline = false});
+  const _CompactRecordProperty(
+      {required this.label, required this.value, this.multiline = false});
   final String label;
   final String value;
   final bool multiline;
@@ -2332,8 +2654,14 @@ class _CompactRecordProperty extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
         text: TextSpan(
           children: [
-            TextSpan(text: '$label  ', style: AppTypography.caption(color: _WorkspacePlayerSectionDocumentState._muted)),
-            TextSpan(text: value, style: AppTypography.secondaryMedium(color: _WorkspacePlayerSectionDocumentState._text)),
+            TextSpan(
+                text: '$label  ',
+                style: AppTypography.caption(
+                    color: _WorkspacePlayerSectionDocumentState._muted)),
+            TextSpan(
+                text: value,
+                style: AppTypography.secondaryMedium(
+                    color: _WorkspacePlayerSectionDocumentState._text)),
           ],
         ),
       ),
@@ -2360,13 +2688,15 @@ class _RecordField extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(label, style: AppTypography.caption(color: const Color(0xFF758079))),
+          Text(label,
+              style: AppTypography.caption(color: const Color(0xFF758079))),
           const SizedBox(height: 3),
           Text(
             value,
             maxLines: 3,
             overflow: TextOverflow.ellipsis,
-            style: AppTypography.secondaryMedium(color: const Color(0xFF101814)),
+            style:
+                AppTypography.secondaryMedium(color: const Color(0xFF101814)),
           ),
         ],
       ),
@@ -2395,20 +2725,34 @@ class _DocumentHeader extends StatelessWidget {
       color: Colors.white,
       child: Row(
         children: [
-          IconButton(onPressed: onBack, tooltip: 'Назад', icon: const Icon(Icons.arrow_back_rounded, size: 20)),
+          IconButton(
+              onPressed: onBack,
+              tooltip: 'Назад',
+              icon: const Icon(Icons.arrow_back_rounded, size: 20)),
           const SizedBox(width: 2),
           Expanded(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTypography.screenTitle(color: _WorkspacePlayerSectionDocumentState._text)),
+                Text(title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.screenTitle(
+                        color: _WorkspacePlayerSectionDocumentState._text)),
                 if (!compact)
-                  Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTypography.caption(color: _WorkspacePlayerSectionDocumentState._muted)),
+                  Text(subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.caption(
+                          color: _WorkspacePlayerSectionDocumentState._muted)),
               ],
             ),
           ),
-          IconButton(onPressed: onRefresh, tooltip: 'Обновить', icon: const Icon(Icons.refresh_rounded, size: 19)),
+          IconButton(
+              onPressed: onRefresh,
+              tooltip: 'Обновить',
+              icon: const Icon(Icons.refresh_rounded, size: 19)),
         ],
       ),
     );
@@ -2433,7 +2777,8 @@ class _PlayerCardDocument extends StatefulWidget {
 }
 
 class _PlayerCardDocumentState extends State<_PlayerCardDocument> {
-  final Map<String, TextEditingController> _controllers = <String, TextEditingController>{};
+  final Map<String, TextEditingController> _controllers =
+      <String, TextEditingController>{};
   bool _saving = false;
   String? _error;
 
@@ -2453,7 +2798,8 @@ class _PlayerCardDocumentState extends State<_PlayerCardDocument> {
   void initState() {
     super.initState();
     for (final field in _fields) {
-      _controllers[field.$1] = TextEditingController(text: _initialValue(field.$1));
+      _controllers[field.$1] =
+          TextEditingController(text: _initialValue(field.$1));
     }
   }
 
@@ -2492,7 +2838,8 @@ class _PlayerCardDocumentState extends State<_PlayerCardDocument> {
     });
     try {
       final fields = <String, String>{
-        for (final field in _fields) field.$1: _controllers[field.$1]!.text.trim(),
+        for (final field in _fields)
+          field.$1: _controllers[field.$1]!.text.trim(),
       };
       await widget.bridge.updatePlayerFields(
         player: widget.player,
@@ -2502,7 +2849,8 @@ class _PlayerCardDocumentState extends State<_PlayerCardDocument> {
       widget.player.addAll(fields);
       await widget.onSaved();
       if (mounted) {
-        ScaffoldMessenger.maybeOf(context)?.showSnackBar(const SnackBar(content: Text('Карточка игрока сохранена')));
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+            const SnackBar(content: Text('Карточка игрока сохранена')));
       }
     } catch (e) {
       if (mounted) setState(() => _error = '$e');
@@ -2521,19 +2869,30 @@ class _PlayerCardDocumentState extends State<_PlayerCardDocument> {
           padding: const EdgeInsets.symmetric(horizontal: 12),
           decoration: const BoxDecoration(
             color: Colors.white,
-            border: Border(bottom: BorderSide(color: _WorkspacePlayerSectionDocumentState._line)),
+            border: Border(
+                bottom: BorderSide(
+                    color: _WorkspacePlayerSectionDocumentState._line)),
           ),
           child: Row(
             children: [
-              Text('Редактирование карточки', style: AppTypography.menuTitle(color: _WorkspacePlayerSectionDocumentState._text)),
+              Text('Редактирование карточки',
+                  style: AppTypography.menuTitle(
+                      color: _WorkspacePlayerSectionDocumentState._text)),
               const Spacer(),
               FilledButton.icon(
                 onPressed: _saving ? null : _save,
-                style: FilledButton.styleFrom(backgroundColor: _WorkspacePlayerSectionDocumentState._green, elevation: 0),
+                style: FilledButton.styleFrom(
+                    backgroundColor:
+                        _WorkspacePlayerSectionDocumentState._green,
+                    elevation: 0),
                 icon: _saving
-                    ? const SizedBox.square(dimension: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    ? const SizedBox.square(
+                        dimension: 14,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white))
                     : const Icon(Icons.save_rounded, size: 17),
-                label: Text('Сохранить', style: AppTypography.actionStrong(color: Colors.white)),
+                label: Text('Сохранить',
+                    style: AppTypography.actionStrong(color: Colors.white)),
               ),
             ],
           ),
@@ -2541,11 +2900,13 @@ class _PlayerCardDocumentState extends State<_PlayerCardDocument> {
         if (_error != null)
           Padding(
             padding: const EdgeInsets.fromLTRB(14, 8, 14, 0),
-            child: Text(_error!, style: AppTypography.caption(color: const Color(0xFFB42318))),
+            child: Text(_error!,
+                style: AppTypography.caption(color: const Color(0xFFB42318))),
           ),
         Expanded(
           child: SingleChildScrollView(
-            padding: EdgeInsets.fromLTRB(mobile ? 12 : 24, 18, mobile ? 12 : 24, 40),
+            padding:
+                EdgeInsets.fromLTRB(mobile ? 12 : 24, 18, mobile ? 12 : 24, 40),
             child: Center(
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 850),
@@ -2553,9 +2914,13 @@ class _PlayerCardDocumentState extends State<_PlayerCardDocument> {
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: _WorkspacePlayerSectionDocumentState._line),
+                    border: Border.all(
+                        color: _WorkspacePlayerSectionDocumentState._line),
                     boxShadow: const <BoxShadow>[
-                      BoxShadow(color: Color(0x0E000000), blurRadius: 20, offset: Offset(0, 8)),
+                      BoxShadow(
+                          color: Color(0x0E000000),
+                          blurRadius: 20,
+                          offset: Offset(0, 8)),
                     ],
                   ),
                   child: Padding(
@@ -2563,14 +2928,23 @@ class _PlayerCardDocumentState extends State<_PlayerCardDocument> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Text('Карточка игрока', style: AppTypography.screenTitle(color: _WorkspacePlayerSectionDocumentState._text)),
+                        Text('Карточка игрока',
+                            style: AppTypography.screenTitle(
+                                color: _WorkspacePlayerSectionDocumentState
+                                    ._text)),
                         const SizedBox(height: 4),
-                        Text('Изменения записываются через update_player.php и используются обычным профилем.', style: AppTypography.secondary(color: _WorkspacePlayerSectionDocumentState._muted)),
+                        Text(
+                            'Изменения записываются через update_player.php и используются обычным профилем.',
+                            style: AppTypography.secondary(
+                                color: _WorkspacePlayerSectionDocumentState
+                                    ._muted)),
                         const SizedBox(height: 20),
                         LayoutBuilder(
                           builder: (context, constraints) {
                             final columns = constraints.maxWidth >= 650 ? 2 : 1;
-                            final width = columns == 2 ? (constraints.maxWidth - 12) / 2 : constraints.maxWidth;
+                            final width = columns == 2
+                                ? (constraints.maxWidth - 12) / 2
+                                : constraints.maxWidth;
                             return Wrap(
                               spacing: 12,
                               runSpacing: 12,
@@ -2587,8 +2961,20 @@ class _PlayerCardDocumentState extends State<_PlayerCardDocument> {
                                       hintStyle: AppTypography.formHint(),
                                       filled: true,
                                       fillColor: Colors.white,
-                                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: _WorkspacePlayerSectionDocumentState._line)),
-                                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: _WorkspacePlayerSectionDocumentState._line)),
+                                      border: OutlineInputBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(10),
+                                          borderSide: const BorderSide(
+                                              color:
+                                                  _WorkspacePlayerSectionDocumentState
+                                                      ._line)),
+                                      enabledBorder: OutlineInputBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(10),
+                                          borderSide: const BorderSide(
+                                              color:
+                                                  _WorkspacePlayerSectionDocumentState
+                                                      ._line)),
                                     ),
                                   ),
                                 );
@@ -2618,9 +3004,12 @@ class _MedicalRecordRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final title = '${record['title'] ?? record['name'] ?? 'Запись'}'.trim();
     final type = '${record['type'] ?? 'Медкарта'}'.trim();
-    final date = '${record['date'] ?? record['record_date'] ?? record['created_at'] ?? ''}'.trim();
+    final date =
+        '${record['date'] ?? record['record_date'] ?? record['created_at'] ?? ''}'
+            .trim();
     final comment = '${record['comment'] ?? record['notes'] ?? ''}'.trim();
-    final file = '${record['file_url'] ?? record['file'] ?? record['url'] ?? ''}'.trim();
+    final file =
+        '${record['file_url'] ?? record['file'] ?? record['url'] ?? ''}'.trim();
 
     return Material(
       color: Colors.white,
@@ -2640,29 +3029,47 @@ class _MedicalRecordRow extends StatelessWidget {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 alignment: Alignment.center,
-                child: Icon(file.isEmpty ? Icons.medical_information_outlined : Icons.description_outlined, size: 19, color: _WorkspacePlayerSectionDocumentState._green),
+                child: Icon(
+                    file.isEmpty
+                        ? Icons.medical_information_outlined
+                        : Icons.description_outlined,
+                    size: 19,
+                    color: _WorkspacePlayerSectionDocumentState._green),
               ),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title.isEmpty ? 'Без названия' : title, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTypography.itemTitle(color: _WorkspacePlayerSectionDocumentState._text)),
+                    Text(title.isEmpty ? 'Без названия' : title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.itemTitle(
+                            color: _WorkspacePlayerSectionDocumentState._text)),
                     const SizedBox(height: 2),
                     Text(
                       <String>[type, if (date.isNotEmpty) date].join(' · '),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: AppTypography.caption(color: _WorkspacePlayerSectionDocumentState._muted),
+                      style: AppTypography.caption(
+                          color: _WorkspacePlayerSectionDocumentState._muted),
                     ),
                     if (comment.isNotEmpty) ...[
                       const SizedBox(height: 3),
-                      Text(comment, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTypography.caption(color: _WorkspacePlayerSectionDocumentState._muted)),
+                      Text(comment,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTypography.caption(
+                              color:
+                                  _WorkspacePlayerSectionDocumentState._muted)),
                     ],
                   ],
                 ),
               ),
-              if (file.isNotEmpty) const Icon(Icons.open_in_new_rounded, size: 17, color: _WorkspacePlayerSectionDocumentState._muted),
+              if (file.isNotEmpty)
+                const Icon(Icons.open_in_new_rounded,
+                    size: 17,
+                    color: _WorkspacePlayerSectionDocumentState._muted),
             ],
           ),
         ),
@@ -2684,17 +3091,25 @@ class _MedicalEmpty extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.folder_open_rounded, size: 48, color: Color(0xFFB9C2BC)),
+            const Icon(Icons.folder_open_rounded,
+                size: 48, color: Color(0xFFB9C2BC)),
             const SizedBox(height: 10),
-            Text(documentsOnly ? 'Документов пока нет' : 'Медицинских записей пока нет', style: AppTypography.sectionTitle()),
+            Text(
+                documentsOnly
+                    ? 'Документов пока нет'
+                    : 'Медицинских записей пока нет',
+                style: AppTypography.sectionTitle()),
             const SizedBox(height: 5),
             Text(
               'Добавленный здесь файл будет привязан к этому игроку на сервере.',
               textAlign: TextAlign.center,
-              style: AppTypography.secondary(color: _WorkspacePlayerSectionDocumentState._muted),
+              style: AppTypography.secondary(
+                  color: _WorkspacePlayerSectionDocumentState._muted),
             ),
             const SizedBox(height: 12),
-            OutlinedButton(onPressed: onAdd, child: Text('Добавить файл', style: AppTypography.action())),
+            OutlinedButton(
+                onPressed: onAdd,
+                child: Text('Добавить файл', style: AppTypography.action())),
           ],
         ),
       ),
@@ -2709,13 +3124,19 @@ class _SyncDot extends StatelessWidget {
     return Container(
       width: 7,
       height: 7,
-      decoration: const BoxDecoration(color: _WorkspacePlayerSectionDocumentState._green, shape: BoxShape.circle),
+      decoration: const BoxDecoration(
+          color: _WorkspacePlayerSectionDocumentState._green,
+          shape: BoxShape.circle),
     );
   }
 }
 
 class _UploadMeta {
-  const _UploadMeta({required this.title, required this.type, required this.comment, required this.date});
+  const _UploadMeta(
+      {required this.title,
+      required this.type,
+      required this.comment,
+      required this.date});
   final String title;
   final String type;
   final String comment;

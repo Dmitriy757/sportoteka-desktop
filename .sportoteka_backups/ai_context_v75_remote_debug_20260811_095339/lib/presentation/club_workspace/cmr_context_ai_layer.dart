@@ -31,6 +31,7 @@ class CmrContextAiLayer extends StatelessWidget {
     this.playerName,
     this.onNavigate,
     this.onOpenPdf,
+    this.showCollapsedLauncher = true,
   });
 
   final Widget child;
@@ -52,6 +53,7 @@ class CmrContextAiLayer extends StatelessWidget {
   final String? playerName;
   final void Function(String target, Map<String, dynamic> payload)? onNavigate;
   final ValueChanged<String>? onOpenPdf;
+  final bool showCollapsedLauncher;
 
   @override
   Widget build(BuildContext context) {
@@ -75,8 +77,9 @@ class CmrContextAiLayer extends StatelessWidget {
           clipBehavior: Clip.hardEdge,
           children: [
             Positioned.fill(child: child),
-            if (expanded)
-              Positioned.fill(
+            Positioned.fill(
+              child: Offstage(
+                offstage: !expanded,
                 child: _ModalBackdrop(
                   mobile: mobile,
                   width: modalWidth,
@@ -87,8 +90,9 @@ class CmrContextAiLayer extends StatelessWidget {
                   onDismiss: onToggle,
                   child: _assistant(),
                 ),
-              )
-            else
+              ),
+            ),
+            if (!expanded && showCollapsedLauncher)
               Positioned(
                 right: mobile ? 12 : 14,
                 bottom: safeBottom,
@@ -116,7 +120,7 @@ class CmrContextAiLayer extends StatelessWidget {
       playerName: playerName,
       initialPrompt: initialPrompt,
       initialPayload: initialPayload,
-      autoSendInitialPrompt: true,
+      autoSendInitialPrompt: expanded,
       onNavigate: onNavigate,
       onOpenPdf: onOpenPdf,
     );
@@ -155,11 +159,12 @@ class _ModalBackdrop extends StatelessWidget {
           children: [
             Positioned.fill(
               child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: onDismiss,
-                  child: ColoredBox(
-                    color: Colors.black.withOpacity(.28 * value),
-                  )),
+                behavior: HitTestBehavior.opaque,
+                onTap: onDismiss,
+                child: ColoredBox(
+                  color: Colors.black.withOpacity(.28 * value),
+                )
+              ),
             ),
             Positioned(
               left: mobile ? 8 : null,
@@ -169,8 +174,7 @@ class _ModalBackdrop extends StatelessWidget {
               width: mobile ? null : width,
               height: height,
               child: Transform.translate(
-                offset: Offset((1 - value) * (mobile ? 0 : 32),
-                    (1 - value) * (mobile ? 24 : 0)),
+                offset: Offset((1 - value) * (mobile ? 0 : 32), (1 - value) * (mobile ? 24 : 0)),
                 child: Opacity(
                   opacity: value,
                   child: GestureDetector(
@@ -265,8 +269,7 @@ class _ExpandedHeader extends StatelessWidget {
                     ),
                     const SizedBox(width: 6),
                     Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 2),
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
                         color: const Color(0xFFE8F7EF),
                         borderRadius: BorderRadius.circular(999),

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:sportoteka/core/theme/app_typography.dart';
 import 'package:sportoteka/presentation/workspace_os/workspace_document_editor.dart';
+import 'package:sportoteka/presentation/workspace_os/workspace_ai_document_library.dart';
 import 'package:sportoteka/presentation/workspace_os/workspace_finder_models.dart';
 import 'package:sportoteka/presentation/workspace_os/workspace_player_project_screen.dart';
 import 'package:sportoteka/presentation/workspace_os/workspace_team_project_screen.dart';
@@ -76,11 +77,14 @@ class _SportotekaWorkspaceFinderPanelState
   String? _selectedNodeId;
   WorkspaceFinderNode? _clipboardNode;
   bool _showSidebarOnCompact = false;
+  bool _inlineAiDocumentLibrary = false;
   late final WorkspaceServerStorage _serverStorage;
   bool _serverAvailable = false;
   bool _serverLoading = false;
-  final WorkspaceEntityMoveBridge _entityMoveBridge = const WorkspaceEntityMoveBridge();
-  final Map<String, List<WorkspaceFinderNode>> _realFolderNodes = <String, List<WorkspaceFinderNode>>{};
+  final WorkspaceEntityMoveBridge _entityMoveBridge =
+      const WorkspaceEntityMoveBridge();
+  final Map<String, List<WorkspaceFinderNode>> _realFolderNodes =
+      <String, List<WorkspaceFinderNode>>{};
   final Set<String> _realFolderLoading = <String>{};
   final Map<String, String> _realFolderErrors = <String, String>{};
 
@@ -93,6 +97,17 @@ class _SportotekaWorkspaceFinderPanelState
   final List<WorkspaceWindowEntry> _windows = <WorkspaceWindowEntry>[];
   String? _activeWindowId;
   int _windowCascade = 0;
+
+  // Folder creation is kept inside the Finder widget tree.
+  // Do not open showDialog immediately from PopupMenuButton.onSelected:
+  // on macOS / nested Workspace Navigator that can overlap route teardown and
+  // produce framework.dart `_dependents.isEmpty` during deactivate().
+  final TextEditingController _newFolderNameController =
+      TextEditingController();
+  final FocusNode _newFolderNameFocus = FocusNode();
+  bool _showInlineFolderCreator = false;
+  bool _creatingFolder = false;
+  String? _folderCreateError;
 
   static const Set<String> _projectedFolders = <String>{
     'matches',
@@ -130,7 +145,7 @@ class _SportotekaWorkspaceFinderPanelState
   };
 
   bool get _canCreateWorkspaceNode =>
-      _folderKey == 'home' || _folderKey.startsWith('local-folder:');
+      _folderKey != 'recent' && _folderKey != 'favorites';
 
   WorkspaceRootDataBridge get _rootDataBridge => WorkspaceRootDataBridge(
         clubId: widget.clubId,
@@ -154,12 +169,20 @@ class _SportotekaWorkspaceFinderPanelState
   @override
   void initState() {
     super.initState();
-    _serverStorage = WorkspaceServerStorage(clubId: widget.clubId, userId: widget.currentUserId);
+    _serverStorage = WorkspaceServerStorage(
+        clubId: widget.clubId, userId: widget.currentUserId);
     _wsLog('INIT api=${_serverStorage.apiUrl}');
     if (widget.currentUserId <= 0) {
       _wsLog('WARNING currentUserId <= 0: server access may fail');
     }
     _loadWorkspace();
+  }
+
+  @override
+  void dispose() {
+    _newFolderNameController.dispose();
+    _newFolderNameFocus.dispose();
+    super.dispose();
   }
 
   @override
@@ -181,7 +204,9 @@ class _SportotekaWorkspaceFinderPanelState
 
   Future<void> _loadRealFolder(String key, {bool force = false}) async {
     if (!_projectedFolders.contains(key)) return;
-    if (!force && (_realFolderNodes.containsKey(key) || _realFolderLoading.contains(key))) return;
+    if (!force &&
+        (_realFolderNodes.containsKey(key) || _realFolderLoading.contains(key)))
+      return;
     if (mounted) {
       setState(() {
         _realFolderLoading.add(key);
@@ -205,9 +230,11 @@ class _SportotekaWorkspaceFinderPanelState
     }
   }
 
-  Future<void> _enterFolder(String key, {bool closeCompactSidebar = false}) async {
+  Future<void> _enterFolder(String key,
+      {bool closeCompactSidebar = false}) async {
     if (!mounted) return;
     setState(() {
+      _inlineAiDocumentLibrary = false;
       _folderKey = key;
       _search = '';
       _selectedNodeId = null;
@@ -219,9 +246,11 @@ class _SportotekaWorkspaceFinderPanelState
   Future<void> _loadWorkspace() async {
     _wsLog('LOAD_WORKSPACE begin');
     await _loadLocalWorkspace();
-    _wsLog('LOAD_WORKSPACE local loaded nodes=${_localChildren.values.fold<int>(0, (sum, list) => sum + list.length)} notes=${_noteBodies.length} pending=${_pendingSyncIds.toList()}');
+    _wsLog(
+        'LOAD_WORKSPACE local loaded nodes=${_localChildren.values.fold<int>(0, (sum, list) => sum + list.length)} notes=${_noteBodies.length} pending=${_pendingSyncIds.toList()}');
     await _loadServerWorkspace();
-    _wsLog('LOAD_WORKSPACE end serverAvailable=$_serverAvailable pending=${_pendingSyncIds.toList()}');
+    _wsLog(
+        'LOAD_WORKSPACE end serverAvailable=$_serverAvailable pending=${_pendingSyncIds.toList()}');
   }
 
   Future<void> _loadServerWorkspace() async {
@@ -230,18 +259,24 @@ class _SportotekaWorkspaceFinderPanelState
     _wsLog('SERVER_LOAD begin pending=${_pendingSyncIds.toList()}');
     try {
       var snapshot = await _serverStorage.load();
-      _wsLog('SERVER_LOAD bootstrap OK nodes=${snapshot.nodes.length} docs=${snapshot.noteBodies.length}');
+      _wsLog(
+          'SERVER_LOAD bootstrap OK nodes=${snapshot.nodes.length} docs=${snapshot.noteBodies.length}');
       final localNodes = <WorkspaceFinderNode>[
         for (final list in _localChildren.values) ...list,
       ];
-      final localById = <String, WorkspaceFinderNode>{for (final node in localNodes) node.id: node};
-      final serverById = <String, WorkspaceFinderNode>{for (final node in snapshot.nodes) node.id: node};
+      final localById = <String, WorkspaceFinderNode>{
+        for (final node in localNodes) node.id: node
+      };
+      final serverById = <String, WorkspaceFinderNode>{
+        for (final node in snapshot.nodes) node.id: node
+      };
       final retryIds = <String>{..._pendingSyncIds};
 
       // New local nodes that never reached the server are always retried.
       for (final node in localNodes) {
         final wasServerMirror = node.payload?['_workspace_server'] == true;
-        if (!serverById.containsKey(node.id) && (!wasServerMirror || _pendingSyncIds.contains(node.id))) {
+        if (!serverById.containsKey(node.id) &&
+            (!wasServerMirror || _pendingSyncIds.contains(node.id))) {
           retryIds.add(node.id);
         }
       }
@@ -249,7 +284,8 @@ class _SportotekaWorkspaceFinderPanelState
       // Migration for documents created by older app versions: if the same ID
       // exists on the server but the local body is newer, do not let bootstrap
       // overwrite it. Mark it as pending and push it first.
-      for (final node in localNodes.where((n) => n.kind == WorkspaceFinderNodeKind.note)) {
+      for (final node
+          in localNodes.where((n) => n.kind == WorkspaceFinderNodeKind.note)) {
         final serverNode = serverById[node.id];
         if (serverNode == null) continue;
         final localBody = _noteBodies[node.id] ?? '';
@@ -258,7 +294,9 @@ class _SportotekaWorkspaceFinderPanelState
         final localUpdated = node.updatedAt;
         final serverUpdated = serverNode.updatedAt;
         final localLooksNewer = localUpdated != null &&
-            (serverUpdated == null || !localUpdated.isBefore(serverUpdated.subtract(const Duration(seconds: 5))));
+            (serverUpdated == null ||
+                !localUpdated.isBefore(
+                    serverUpdated.subtract(const Duration(seconds: 5))));
         if (localLooksNewer) retryIds.add(node.id);
       }
 
@@ -269,7 +307,8 @@ class _SportotekaWorkspaceFinderPanelState
           _pendingSyncIds.remove(id);
           continue;
         }
-        _wsLog('SERVER_RETRY uid=$id kind=${node.kind.name} bodyLen=${(_noteBodies[id] ?? '').length} existsOnServer=${serverById.containsKey(id)}');
+        _wsLog(
+            'SERVER_RETRY uid=$id kind=${node.kind.name} bodyLen=${(_noteBodies[id] ?? '').length} existsOnServer=${serverById.containsKey(id)}');
         try {
           if (node.kind == WorkspaceFinderNodeKind.note) {
             await _serverStorage.syncNodeDocument(
@@ -296,7 +335,8 @@ class _SportotekaWorkspaceFinderPanelState
         } catch (e, st) {
           _pendingSyncIds.add(id);
           _wsLog('SERVER_RETRY FAILED uid=$id error=$e');
-          _wsLog('SERVER_RETRY stack=${st.toString().split('\n').take(4).join(' | ')}');
+          _wsLog(
+              'SERVER_RETRY stack=${st.toString().split('\n').take(4).join(' | ')}');
         }
       }
 
@@ -304,7 +344,8 @@ class _SportotekaWorkspaceFinderPanelState
 
       final grouped = <String, List<WorkspaceFinderNode>>{};
       for (final node in snapshot.nodes) {
-        (grouped[node.parentId ?? 'home'] ??= <WorkspaceFinderNode>[]).add(node);
+        (grouped[node.parentId ?? 'home'] ??= <WorkspaceFinderNode>[])
+            .add(node);
       }
       final mergedNotes = <String, String>{...snapshot.noteBodies};
 
@@ -316,7 +357,8 @@ class _SportotekaWorkspaceFinderPanelState
         for (final list in grouped.values) {
           list.removeWhere((item) => item.id == id);
         }
-        (grouped[local.parentId ?? 'home'] ??= <WorkspaceFinderNode>[]).add(local);
+        (grouped[local.parentId ?? 'home'] ??= <WorkspaceFinderNode>[])
+            .add(local);
         if (local.kind == WorkspaceFinderNodeKind.note) {
           mergedNotes[id] = _noteBodies[id] ?? '';
         }
@@ -346,7 +388,8 @@ class _SportotekaWorkspaceFinderPanelState
     } catch (e, st) {
       _serverAvailable = false;
       _wsLog('SERVER_LOAD FAILED error=$e');
-      _wsLog('SERVER_LOAD stack=${st.toString().split('\n').take(5).join(' | ')}');
+      _wsLog(
+          'SERVER_LOAD stack=${st.toString().split('\n').take(5).join(' | ')}');
       // Keep the local cache and pending queue intact. No local document is
       // replaced when the server is unavailable.
     } finally {
@@ -398,13 +441,19 @@ class _SportotekaWorkspaceFinderPanelState
           ..addAll(loadedNotes);
         _favoriteIds
           ..clear()
-          ..addAll(favoriteRaw is List ? favoriteRaw.map((e) => '$e') : const <String>[]);
+          ..addAll(favoriteRaw is List
+              ? favoriteRaw.map((e) => '$e')
+              : const <String>[]);
         _recentIds
           ..clear()
-          ..addAll(recentRaw is List ? recentRaw.map((e) => '$e') : const <String>[]);
+          ..addAll(recentRaw is List
+              ? recentRaw.map((e) => '$e')
+              : const <String>[]);
         _pendingSyncIds
           ..clear()
-          ..addAll(pendingRaw is List ? pendingRaw.map((e) => '$e') : const <String>[]);
+          ..addAll(pendingRaw is List
+              ? pendingRaw.map((e) => '$e')
+              : const <String>[]);
         _viewMode = WorkspaceFinderViewMode.list;
       });
     } catch (_) {
@@ -412,7 +461,8 @@ class _SportotekaWorkspaceFinderPanelState
     }
   }
 
-  Map<String, dynamic> _nodeToJson(WorkspaceFinderNode node) => <String, dynamic>{
+  Map<String, dynamic> _nodeToJson(WorkspaceFinderNode node) =>
+      <String, dynamic>{
         'id': node.id,
         'title': node.title,
         'subtitle': node.subtitle,
@@ -470,7 +520,8 @@ class _SportotekaWorkspaceFinderPanelState
       await prefs.setString(_storageKey, jsonEncode(data));
       if (_serverAvailable) {
         try {
-          await _serverStorage.saveState(favorites: _favoriteIds, recent: _recentIds);
+          await _serverStorage.saveState(
+              favorites: _favoriteIds, recent: _recentIds);
         } catch (_) {
           _serverAvailable = false;
         }
@@ -527,17 +578,20 @@ class _SportotekaWorkspaceFinderPanelState
   String _playerTitle(Map<String, dynamic> player) {
     final last = '${player['last_name'] ?? player['lastname'] ?? ''}'.trim();
     final first = '${player['first_name'] ?? player['firstname'] ?? ''}'.trim();
-    final full = '${player['full_name'] ?? player['fullName'] ?? player['name'] ?? ''}'
-        .trim();
+    final full =
+        '${player['full_name'] ?? player['fullName'] ?? player['name'] ?? ''}'
+            .trim();
     final joined = [last, first].where((e) => e.isNotEmpty).join(' ').trim();
     return joined.isNotEmpty ? joined : (full.isNotEmpty ? full : 'Игрок');
   }
 
   String _trainerTitle(Map<String, dynamic> trainer) {
     final last = '${trainer['last_name'] ?? trainer['lastname'] ?? ''}'.trim();
-    final first = '${trainer['first_name'] ?? trainer['firstname'] ?? ''}'.trim();
-    final full = '${trainer['full_name'] ?? trainer['fullName'] ?? trainer['name'] ?? ''}'
-        .trim();
+    final first =
+        '${trainer['first_name'] ?? trainer['firstname'] ?? ''}'.trim();
+    final full =
+        '${trainer['full_name'] ?? trainer['fullName'] ?? trainer['name'] ?? ''}'
+            .trim();
     final joined = [last, first].where((e) => e.isNotEmpty).join(' ').trim();
     return joined.isNotEmpty ? joined : (full.isNotEmpty ? full : 'Тренер');
   }
@@ -561,8 +615,9 @@ class _SportotekaWorkspaceFinderPanelState
     return List<WorkspaceFinderNode>.generate(widget.teams.length, (index) {
       final team = widget.teams[index];
       final title = _teamTitle(team);
-      final stage = '${team['age_group'] ?? team['stage'] ?? team['category'] ?? ''}'
-          .trim();
+      final stage =
+          '${team['age_group'] ?? team['stage'] ?? team['category'] ?? ''}'
+              .trim();
       return WorkspaceFinderNode(
         id: _nodeId('team', team, index),
         title: title,
@@ -578,9 +633,11 @@ class _SportotekaWorkspaceFinderPanelState
   List<WorkspaceFinderNode> _playerNodes() {
     return List<WorkspaceFinderNode>.generate(widget.players.length, (index) {
       final player = widget.players[index];
-      final number = '${player['number'] ?? player['shirt_number'] ?? ''}'.trim();
+      final number =
+          '${player['number'] ?? player['shirt_number'] ?? ''}'.trim();
       final subtitleParts = <String>[
-        if (widget.selectedTeamName.trim().isNotEmpty) widget.selectedTeamName.trim(),
+        if (widget.selectedTeamName.trim().isNotEmpty)
+          widget.selectedTeamName.trim(),
         if (number.isNotEmpty) '№$number',
       ];
       return WorkspaceFinderNode(
@@ -598,8 +655,9 @@ class _SportotekaWorkspaceFinderPanelState
   List<WorkspaceFinderNode> _trainerNodes() {
     return List<WorkspaceFinderNode>.generate(widget.trainers.length, (index) {
       final trainer = widget.trainers[index];
-      final role = '${trainer['role'] ?? trainer['position'] ?? trainer['specialization'] ?? ''}'
-          .trim();
+      final role =
+          '${trainer['role'] ?? trainer['position'] ?? trainer['specialization'] ?? ''}'
+              .trim();
       return WorkspaceFinderNode(
         id: _nodeId('trainer', trainer, index),
         title: _trainerTitle(trainer),
@@ -639,27 +697,43 @@ class _SportotekaWorkspaceFinderPanelState
     switch (key) {
       case 'trainings':
         return <WorkspaceFinderNode>[
-          link('calendar', 'Календарь тренировок', 'Расписание и события', WorkspaceFinderNodeKind.calendar, 'calendar'),
-          link('plans', 'Планы-конспекты', 'Упражнения и методические материалы', WorkspaceFinderNodeKind.plan, 'plans'),
-          link('attendance', 'Посещаемость', 'Журнал тренировок', WorkspaceFinderNodeKind.training, 'attendance'),
-          link('tracker', 'Tracker Live', 'GPS и нагрузка на тренировке', WorkspaceFinderNodeKind.tracker, 'tracker'),
+          link('calendar', 'Календарь тренировок', 'Расписание и события',
+              WorkspaceFinderNodeKind.calendar, 'calendar'),
+          link(
+              'plans',
+              'Планы-конспекты',
+              'Упражнения и методические материалы',
+              WorkspaceFinderNodeKind.plan,
+              'plans'),
+          link('attendance', 'Посещаемость', 'Журнал тренировок',
+              WorkspaceFinderNodeKind.training, 'attendance'),
+          link('tracker', 'Tracker Live', 'GPS и нагрузка на тренировке',
+              WorkspaceFinderNodeKind.tracker, 'tracker'),
         ];
       case 'video':
         return <WorkspaceFinderNode>[
-          link('analysis', 'Видеоанализ матчей', 'Разбор, эпизоды и AI', WorkspaceFinderNodeKind.video, 'videoAnalysis'),
-          link('lessons', 'Видеоуроки', 'Методическая видеотека клуба', WorkspaceFinderNodeKind.video, 'videoLessons'),
+          link('analysis', 'Видеоанализ матчей', 'Разбор, эпизоды и AI',
+              WorkspaceFinderNodeKind.video, 'videoAnalysis'),
+          link('lessons', 'Видеоуроки', 'Методическая видеотека клуба',
+              WorkspaceFinderNodeKind.video, 'videoLessons'),
         ];
       case 'reports':
         return <WorkspaceFinderNode>[
-          link('tracker', 'Tracker отчёты', 'GPS, ЧСС, нагрузка и карты', WorkspaceFinderNodeKind.report, 'tracker'),
-          link('testing', 'Отчёты тестирования', 'Динамика и результаты тестов', WorkspaceFinderNodeKind.testing, 'testing'),
-          link('attendance', 'Посещаемость', 'Журнал и выгрузка', WorkspaceFinderNodeKind.report, 'attendance'),
+          link('tracker', 'Tracker отчёты', 'GPS, ЧСС, нагрузка и карты',
+              WorkspaceFinderNodeKind.report, 'tracker'),
+          link('testing', 'Отчёты тестирования', 'Динамика и результаты тестов',
+              WorkspaceFinderNodeKind.testing, 'testing'),
+          link('attendance', 'Посещаемость', 'Журнал и выгрузка',
+              WorkspaceFinderNodeKind.report, 'attendance'),
         ];
       case 'documents':
         return <WorkspaceFinderNode>[
-          link('players', 'Документы игроков', 'Карточки и личные документы', WorkspaceFinderNodeKind.document, 'players'),
-          link('trainers', 'Документы тренеров', 'Профили и HR-документы', WorkspaceFinderNodeKind.document, 'trainers'),
-          link('medical', 'Медицинские документы', 'Медкарта игроков', WorkspaceFinderNodeKind.medical, 'medical'),
+          link('players', 'Документы игроков', 'Карточки и личные документы',
+              WorkspaceFinderNodeKind.document, 'players'),
+          link('trainers', 'Документы тренеров', 'Профили и HR-документы',
+              WorkspaceFinderNodeKind.document, 'trainers'),
+          link('medical', 'Медицинские документы', 'Медкарта игроков',
+              WorkspaceFinderNodeKind.medical, 'medical'),
         ];
       default:
         return const <WorkspaceFinderNode>[];
@@ -697,7 +771,20 @@ class _SportotekaWorkspaceFinderPanelState
         break;
       default:
         if (_projectedFolders.contains(_folderKey)) {
-          nodes = <WorkspaceFinderNode>[...?_realFolderNodes[_folderKey]];
+          nodes = <WorkspaceFinderNode>[
+            if (_folderKey == 'documents')
+              WorkspaceFinderNode(
+                id: 'smart:documents:ai-library',
+                title: 'Методические материалы',
+                subtitle: 'PDF, Word, Excel, презентации · документы клуба',
+                kind: WorkspaceFinderNodeKind.document,
+                payload: const <String, dynamic>{
+                  '_workspace_ai_document_library': true,
+                },
+                isSystem: true,
+              ),
+            ...?_realFolderNodes[_folderKey],
+          ];
         } else {
           nodes = <WorkspaceFinderNode>[
             ..._smartModuleNodes(_folderKey),
@@ -707,10 +794,26 @@ class _SportotekaWorkspaceFinderPanelState
         break;
     }
 
+    // Some system collections (notably _rootNodes) are intentionally
+    // created as fixed-length lists. Below we merge user/server documents
+    // and later sort the collection, so always continue with a mutable copy.
+    // Without this, opening Home after creating a document throws:
+    // Unsupported operation: Cannot add to a fixed-length list.
+    nodes = List<WorkspaceFinderNode>.of(nodes, growable: true);
+
+    // Local/server Workspace documents are valid children of EVERY real
+    // Sportoteka OS section. Previously we did not merge them into home,
+    // teams, players, trainers or projected modules (Plans, Calendar,
+    // Documents, etc.), so a freshly created document was saved but then
+    // disappeared from the folder view.
     final local = _localChildren[_folderKey];
-    if (local != null && !_projectedFolders.contains(_folderKey) && _folderKey != 'home' && _folderKey != 'favorites' && _folderKey != 'recent') {
+    if (local != null &&
+        _folderKey != 'favorites' &&
+        _folderKey != 'recent') {
       final known = nodes.map((e) => e.id).toSet();
-      nodes.addAll(local.where((node) => !known.contains(node.id)));
+      nodes.addAll(
+        local.where((node) => !known.contains(node.id)),
+      );
     }
 
     if (_folderKey != 'home' &&
@@ -786,9 +889,30 @@ class _SportotekaWorkspaceFinderPanelState
   }
 
   Rect _nextWindowRect() {
-    final offset = (_windowCascade % 7) * 24.0;
+    final size = MediaQuery.sizeOf(context);
+    final offset = (_windowCascade % 7) * 22.0;
     _windowCascade += 1;
-    return Rect.fromLTWH(246 + offset, 58 + offset, 920, 690);
+
+    final width = math.min(
+      920.0,
+      math.max(620.0, size.width * .82),
+    );
+    final height = math.min(
+      690.0,
+      math.max(460.0, size.height * .80),
+    );
+
+    final maxLeft = math.max(14.0, size.width - width - 14.0);
+    final maxTop = math.max(14.0, size.height - height - 14.0);
+    final centeredLeft = (size.width - width) / 2;
+    final centeredTop = (size.height - height) / 2;
+
+    return Rect.fromLTWH(
+      (centeredLeft + offset).clamp(14.0, maxLeft).toDouble(),
+      (centeredTop + offset).clamp(14.0, maxTop).toDouble(),
+      width,
+      height,
+    );
   }
 
   void _closeWindow(String id) {
@@ -809,11 +933,34 @@ class _SportotekaWorkspaceFinderPanelState
     });
   }
 
+
   void _moveWindow(String id, Offset delta) {
     final index = _windows.indexWhere((entry) => entry.id == id);
     if (index < 0) return;
+
     final entry = _windows[index];
-    setState(() => _windows[index] = entry.copyWith(rect: entry.rect.shift(delta), snap: WorkspaceWindowSnap.none));
+    final size = MediaQuery.sizeOf(context);
+    const gap = 10.0;
+
+    final shifted = entry.rect.shift(delta);
+    final maxLeft = math.max(gap, size.width - entry.rect.width - gap);
+    final maxTop = math.max(gap, size.height - entry.rect.height - gap);
+
+    final moved = Rect.fromLTWH(
+      shifted.left.clamp(gap, maxLeft).toDouble(),
+      shifted.top.clamp(gap, maxTop).toDouble(),
+      entry.rect.width,
+      entry.rect.height,
+    );
+
+    setState(() {
+      _windows[index] = entry.copyWith(
+        rect: moved,
+        snap: WorkspaceWindowSnap.none,
+        minimized: false,
+      );
+      _activeWindowId = id;
+    });
   }
 
   void _resizeWindow(String id, Offset delta) {
@@ -822,7 +969,10 @@ class _SportotekaWorkspaceFinderPanelState
     final entry = _windows[index];
     final nextWidth = math.max(520.0, entry.rect.width + delta.dx);
     final nextHeight = math.max(420.0, entry.rect.height + delta.dy);
-    setState(() => _windows[index] = entry.copyWith(rect: Rect.fromLTWH(entry.rect.left, entry.rect.top, nextWidth, nextHeight), snap: WorkspaceWindowSnap.none));
+    setState(() => _windows[index] = entry.copyWith(
+        rect: Rect.fromLTWH(
+            entry.rect.left, entry.rect.top, nextWidth, nextHeight),
+        snap: WorkspaceWindowSnap.none));
   }
 
   void _minimizeWindow(String id) {
@@ -830,7 +980,9 @@ class _SportotekaWorkspaceFinderPanelState
     if (index < 0) return;
     setState(() {
       _windows[index] = _windows[index].copyWith(minimized: true);
-      final visible = _windows.where((entry) => !entry.minimized && entry.id != id).toList();
+      final visible = _windows
+          .where((entry) => !entry.minimized && entry.id != id)
+          .toList();
       _activeWindowId = visible.isEmpty ? null : visible.last.id;
     });
   }
@@ -901,6 +1053,11 @@ class _SportotekaWorkspaceFinderPanelState
       return;
     }
 
+    if (node.payload?['_workspace_ai_document_library'] == true) {
+      await _openAiDocumentLibrary();
+      return;
+    }
+
     switch (node.kind) {
       case WorkspaceFinderNodeKind.player:
         if (node.payload != null) await _openPlayerProject(node.payload!);
@@ -934,10 +1091,52 @@ class _SportotekaWorkspaceFinderPanelState
     }
   }
 
+  Future<void> _openAiDocumentLibrary() async {
+    if (!mounted) return;
+    setState(() {
+      _inlineAiDocumentLibrary = true;
+      _folderKey = 'documents';
+      _selectedNodeId = null;
+      _search = '';
+      _showSidebarOnCompact = false;
+    });
+  }
+
+  Future<void> _openMethodDocumentEditorWindow(
+    String documentId,
+    String title,
+    Widget Function(VoidCallback closeWindow) builder,
+  ) async {
+    final width = MediaQuery.sizeOf(context).width;
+
+    if (width < 760) {
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (routeContext) => Scaffold(
+            backgroundColor: Colors.white,
+            body: builder(
+              () => Navigator.of(routeContext).maybePop(),
+            ),
+          ),
+        ),
+      );
+      return;
+    }
+
+    await _openDesktopWindow(
+      id: 'method-document:$documentId',
+      title: title,
+      subtitle: 'Методические материалы · ${widget.clubName}',
+      iconKind: SportotekaWorkspaceIconKind.document,
+      builder: (closeWindow) => builder(closeWindow),
+    );
+  }
+
   Future<void> _openVideoCenter({
     required WorkspaceVideoCenterSection initialSection,
   }) async {
-    SportotekaWorkspaceVideoCenter buildCenter() => SportotekaWorkspaceVideoCenter(
+    SportotekaWorkspaceVideoCenter buildCenter() =>
+        SportotekaWorkspaceVideoCenter(
           clubId: widget.clubId,
           clubName: widget.clubName,
           teams: widget.teams,
@@ -966,15 +1165,20 @@ class _SportotekaWorkspaceFinderPanelState
     await _openDesktopWindow(
       id: lessons ? 'video-center:lessons' : 'video-center:matches',
       title: lessons ? 'Видеоуроки' : 'Видео матчей',
-      subtitle: lessons ? 'Методическая видеотека клуба' : 'Матчи, видео, загрузка и AI-анализ',
+      subtitle: lessons
+          ? 'Методическая видеотека клуба'
+          : 'Матчи, видео, загрузка и AI-анализ',
       iconKind: SportotekaWorkspaceIconKind.video,
       builder: (_) => buildCenter(),
     );
   }
 
   Future<void> _openRealRecord(WorkspaceFinderNode node) async {
-    final record = Map<String, dynamic>.from(node.payload ?? const <String, dynamic>{});
-    final owner = '${record['_workspace_owner'] ?? record['team_name'] ?? widget.selectedTeamName}'.trim();
+    final record =
+        Map<String, dynamic>.from(node.payload ?? const <String, dynamic>{});
+    final owner =
+        '${record['_workspace_owner'] ?? record['team_name'] ?? widget.selectedTeamName}'
+            .trim();
     final sectionTitle = _sectionTitleForNode(node);
     final fileUrl = _absoluteRecordFileUrl(record);
 
@@ -987,7 +1191,8 @@ class _SportotekaWorkspaceFinderPanelState
     );
     final legacyNoteKey = 'sportoteka_real_${widget.clubId}_${node.id}';
 
-    WorkspaceEntityRecordDocument buildDocument({VoidCallback? onClose}) => WorkspaceEntityRecordDocument(
+    WorkspaceEntityRecordDocument buildDocument({VoidCallback? onClose}) =>
+        WorkspaceEntityRecordDocument(
           ownerTitle: owner.isEmpty ? widget.clubName : owner,
           sectionTitle: sectionTitle,
           title: node.title,
@@ -1000,6 +1205,7 @@ class _SportotekaWorkspaceFinderPanelState
           entityId: identity.id,
           fileUrl: fileUrl,
           clubId: widget.clubId,
+          currentUserId: widget.currentUserId,
           serverParentKey: 'entity:${identity.type}:${identity.id}',
           onClose: onClose,
           onEdit: node.moduleKey == null
@@ -1015,7 +1221,10 @@ class _SportotekaWorkspaceFinderPanelState
 
     final width = MediaQuery.sizeOf(context).width;
     if (width < 760) {
-      await Navigator.of(context).push<void>(MaterialPageRoute<void>(builder: (_) => Scaffold(backgroundColor: Colors.white, body: SafeArea(child: buildDocument()))));
+      await Navigator.of(context).push<void>(MaterialPageRoute<void>(
+          builder: (_) => Scaffold(
+              backgroundColor: Colors.white,
+              body: SafeArea(child: buildDocument()))));
       return;
     }
     await _openDesktopWindow(
@@ -1054,29 +1263,100 @@ class _SportotekaWorkspaceFinderPanelState
     }
   }
 
-  List<WorkspaceEntityProperty> _realRecordProperties(WorkspaceFinderNode node) {
+  String _workspaceRecordTypeLabel(String raw) {
+    final value = raw.trim();
+    final type = value.toLowerCase();
+    switch (type) {
+      case 'training':
+        return 'Тренировка';
+      case 'league':
+      case 'league_match':
+      case 'championship':
+      case 'official':
+        return 'Игра (чемпионат)';
+      case 'friendly':
+      case 'friendly_match':
+        return 'Товарищеская игра';
+      case 'match':
+        return 'Игра';
+      case 'theory':
+      case 'lecture':
+      case 'class':
+        return 'Теория';
+      case 'gym':
+      case 'ofp':
+      case 'training_gym':
+        return 'ОФП / Зал';
+      case 'dayoff':
+      case 'day_off':
+      case 'off':
+        return 'Выходной';
+      default:
+        return value;
+    }
+  }
+
+  String _workspaceRecordDateLabel(String raw) {
+    final value = raw.trim();
+    if (value.isEmpty) return value;
+    final parsed = DateTime.tryParse(value.replaceFirst(' ', 'T'));
+    if (parsed == null) return value;
+    final local = parsed.toLocal();
+    final date =
+        '${local.day.toString().padLeft(2, '0')}.${local.month.toString().padLeft(2, '0')}.${local.year}';
+    final hasTime = value.contains(':');
+    if (!hasTime) return date;
+    final time =
+        '${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
+    return '$date · $time';
+  }
+
+  List<WorkspaceEntityProperty> _realRecordProperties(
+      WorkspaceFinderNode node) {
     final row = node.payload ?? const <String, dynamic>{};
     final out = <WorkspaceEntityProperty>[];
     void add(String label, List<String> keys) {
       for (final key in keys) {
-        final value = '${row[key] ?? ''}'.trim();
-        if (value.isNotEmpty && value.toLowerCase() != 'null') {
-          out.add(WorkspaceEntityProperty(label, value));
-          return;
-        }
+        final raw = '${row[key] ?? ''}'.trim();
+        if (raw.isEmpty || raw.toLowerCase() == 'null') continue;
+        final value = label == 'Тип'
+            ? _workspaceRecordTypeLabel(raw)
+            : label == 'Дата'
+                ? _workspaceRecordDateLabel(raw)
+                : raw;
+        out.add(WorkspaceEntityProperty(label, value));
+        return;
       }
     }
+
     add('Команда', const <String>['team_name']);
-    add('Дата', const <String>['start_at', 'event_date', 'training_date', 'match_date', 'test_date', 'plan_date', 'record_date', 'date']);
-    add('Тип', const <String>['type', 'event_type', 'category', 'record_type', 'document_type']);
+    add('Дата', const <String>[
+      'start_at',
+      'event_date',
+      'training_date',
+      'match_date',
+      'test_date',
+      'plan_date',
+      'record_date',
+      'date'
+    ]);
+    add('Тип', const <String>[
+      'type',
+      'event_type',
+      'category',
+      'record_type',
+      'document_type'
+    ]);
     add('Соперник', const <String>['opponent', 'opponent_name', 'rival']);
     add('Счёт', const <String>['score', 'result', 'final_score']);
     add('Место', const <String>['location', 'venue', 'stadium', 'place']);
     add('Тренер', const <String>['trainer_name', 'coach_name', 'author_name']);
     add('Владелец', const <String>['_workspace_owner']);
     add('Номер', const <String>['document_number', 'number']);
-    add('Срок действия', const <String>['valid_until', 'expires_at', 'expiry_date']);
-    add('Описание', const <String>['notes', 'note', 'comment', 'description', 'value']);
+    add('Срок действия',
+        const <String>['valid_until', 'expires_at', 'expiry_date']);
+    add('Описание',
+        const <String>['notes', 'note', 'comment', 'description', 'value']);
     add('Файл', const <String>['file_name', 'original_name']);
     return out;
   }
@@ -1101,8 +1381,10 @@ class _SportotekaWorkspaceFinderPanelState
     player['teamName'] ??= widget.selectedTeamName;
     final last = '${player['last_name'] ?? player['lastname'] ?? ''}'.trim();
     final first = '${player['first_name'] ?? player['firstname'] ?? ''}'.trim();
-    final fallback = '${player['full_name'] ?? player['name'] ?? 'Игрок'}'.trim();
-    final title = <String>[last, first].where((e) => e.isNotEmpty).join(' ').trim();
+    final fallback =
+        '${player['full_name'] ?? player['name'] ?? 'Игрок'}'.trim();
+    final title =
+        <String>[last, first].where((e) => e.isNotEmpty).join(' ').trim();
     final id = '${player['player_id'] ?? player['id'] ?? title}';
     final width = MediaQuery.sizeOf(context).width;
     if (width < 760) {
@@ -1114,7 +1396,9 @@ class _SportotekaWorkspaceFinderPanelState
         teamName: widget.selectedTeamName,
         onRefresh: widget.onRefresh,
       );
-      await Navigator.of(context).push<void>(MaterialPageRoute<void>(builder: (_) => Scaffold(backgroundColor: Colors.white, body: SafeArea(child: project))));
+      await Navigator.of(context).push<void>(MaterialPageRoute<void>(
+          builder: (_) => Scaffold(
+              backgroundColor: Colors.white, body: SafeArea(child: project))));
       return;
     }
     await _openDesktopWindow(
@@ -1137,11 +1421,21 @@ class _SportotekaWorkspaceFinderPanelState
   Future<void> _openTeamProject(Map<String, dynamic> rawTeam) async {
     final team = Map<String, dynamic>.from(rawTeam);
     final id = '${team['team_id'] ?? team['id'] ?? team['name'] ?? 'team'}';
-    final title = '${team['name'] ?? team['team_name'] ?? team['title'] ?? 'Команда'}'.trim();
+    final title =
+        '${team['name'] ?? team['team_name'] ?? team['title'] ?? 'Команда'}'
+            .trim();
     final width = MediaQuery.sizeOf(context).width;
     if (width < 760) {
-      final project = SportotekaTeamProjectScreen(team: team, clubId: widget.clubId, currentUserId: widget.currentUserId, players: widget.players, onRefresh: widget.onRefresh, onOpenModule: widget.onOpenModule);
-      await Navigator.of(context).push<void>(MaterialPageRoute<void>(builder: (_) => Scaffold(backgroundColor: Colors.white, body: SafeArea(child: project))));
+      final project = SportotekaTeamProjectScreen(
+          team: team,
+          clubId: widget.clubId,
+          currentUserId: widget.currentUserId,
+          players: widget.players,
+          onRefresh: widget.onRefresh,
+          onOpenModule: widget.onOpenModule);
+      await Navigator.of(context).push<void>(MaterialPageRoute<void>(
+          builder: (_) => Scaffold(
+              backgroundColor: Colors.white, body: SafeArea(child: project))));
       return;
     }
     await _openDesktopWindow(
@@ -1162,15 +1456,27 @@ class _SportotekaWorkspaceFinderPanelState
 
   Future<void> _openTrainerProject(Map<String, dynamic> rawTrainer) async {
     final trainer = Map<String, dynamic>.from(rawTrainer);
-    final id = '${trainer['trainer_id'] ?? trainer['id'] ?? trainer['name'] ?? 'trainer'}';
+    final id =
+        '${trainer['trainer_id'] ?? trainer['id'] ?? trainer['name'] ?? 'trainer'}';
     final last = '${trainer['last_name'] ?? trainer['lastname'] ?? ''}'.trim();
-    final first = '${trainer['first_name'] ?? trainer['firstname'] ?? ''}'.trim();
-    final fallback = '${trainer['full_name'] ?? trainer['name'] ?? 'Тренер'}'.trim();
-    final title = <String>[last, first].where((e) => e.isNotEmpty).join(' ').trim();
+    final first =
+        '${trainer['first_name'] ?? trainer['firstname'] ?? ''}'.trim();
+    final fallback =
+        '${trainer['full_name'] ?? trainer['name'] ?? 'Тренер'}'.trim();
+    final title =
+        <String>[last, first].where((e) => e.isNotEmpty).join(' ').trim();
     final width = MediaQuery.sizeOf(context).width;
     if (width < 760) {
-      final project = SportotekaTrainerProjectScreen(trainer: trainer, clubId: widget.clubId, currentUserId: widget.currentUserId, teams: widget.teams, players: widget.players, onRefresh: widget.onRefresh);
-      await Navigator.of(context).push<void>(MaterialPageRoute<void>(builder: (_) => Scaffold(backgroundColor: Colors.white, body: SafeArea(child: project))));
+      final project = SportotekaTrainerProjectScreen(
+          trainer: trainer,
+          clubId: widget.clubId,
+          currentUserId: widget.currentUserId,
+          teams: widget.teams,
+          players: widget.players,
+          onRefresh: widget.onRefresh);
+      await Navigator.of(context).push<void>(MaterialPageRoute<void>(
+          builder: (_) => Scaffold(
+              backgroundColor: Colors.white, body: SafeArea(child: project))));
       return;
     }
     await _openDesktopWindow(
@@ -1200,15 +1506,25 @@ class _SportotekaWorkspaceFinderPanelState
   }) async {
     final width = MediaQuery.sizeOf(context).width;
     if (width < 760) {
-      await Navigator.of(context).push<void>(MaterialPageRoute<void>(builder: (_) => Scaffold(backgroundColor: Colors.white, body: SafeArea(child: project))));
+      await Navigator.of(context).push<void>(MaterialPageRoute<void>(
+          builder: (_) => Scaffold(
+              backgroundColor: Colors.white, body: SafeArea(child: project))));
       return;
     }
-    final id = windowId.trim().isEmpty ? 'surface:${DateTime.now().microsecondsSinceEpoch}' : windowId;
-    await _openDesktopWindow(id: id, title: windowTitle, subtitle: windowSubtitle, iconKind: iconKind, builder: (_) => project);
+    final id = windowId.trim().isEmpty
+        ? 'surface:${DateTime.now().microsecondsSinceEpoch}'
+        : windowId;
+    await _openDesktopWindow(
+        id: id,
+        title: windowTitle,
+        subtitle: windowSubtitle,
+        iconKind: iconKind,
+        builder: (_) => project);
   }
 
   void _goHome() {
     setState(() {
+      _inlineAiDocumentLibrary = false;
       _folderKey = 'home';
       _search = '';
       _selectedNodeId = null;
@@ -1216,7 +1532,8 @@ class _SportotekaWorkspaceFinderPanelState
   }
 
   String get _currentTitle {
-    if (_folderKey == 'home') return widget.clubName.trim().isEmpty ? 'SPORTOTEKA' : widget.clubName;
+    if (_folderKey == 'home')
+      return widget.clubName.trim().isEmpty ? 'SPORTOTEKA' : widget.clubName;
     if (_folderKey == 'favorites') return 'Избранное';
     if (_folderKey == 'recent') return 'Недавние';
     final module = _moduleFor(_folderKey);
@@ -1233,52 +1550,104 @@ class _SportotekaWorkspaceFinderPanelState
   }
 
   Future<void> _createFolder() async {
-    if (!_canCreateWorkspaceNode) return;
-    final controller = TextEditingController();
-    final name = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Новая папка', style: AppTypography.sectionTitle()),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: InputDecoration(
-            hintText: 'Название папки',
-            hintStyle: AppTypography.formHint(),
-          ),
-          style: AppTypography.formText(),
-          onSubmitted: (value) => Navigator.of(context).pop(value.trim()),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text('Отмена', style: AppTypography.action()),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(controller.text.trim()),
-            child: Text('Создать', style: AppTypography.actionStrong(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-    controller.dispose();
-    if (name == null || name.isEmpty || !mounted) return;
+    if (!_canCreateWorkspaceNode || _creatingFolder) return;
+
+    // PopupMenuButton.onSelected fires while the popup route is still being
+    // removed. Let that route finish first, then reveal an in-tree editor.
+    await Future<void>.delayed(const Duration(milliseconds: 90));
+    if (!mounted) return;
+
+    _newFolderNameController.clear();
+    setState(() {
+      _showInlineFolderCreator = true;
+      _folderCreateError = null;
+    });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_showInlineFolderCreator) return;
+      _newFolderNameFocus.requestFocus();
+    });
+  }
+
+  void _cancelInlineFolderCreator() {
+    if (!mounted || _creatingFolder) return;
+    _newFolderNameFocus.unfocus();
+    setState(() {
+      _showInlineFolderCreator = false;
+      _folderCreateError = null;
+    });
+  }
+
+  Future<void> _commitInlineFolderCreator() async {
+    if (_creatingFolder || !_showInlineFolderCreator) return;
+
+    final name = _newFolderNameController.text.trim();
+    if (name.isEmpty) {
+      setState(() => _folderCreateError = 'Введите название папки');
+      return;
+    }
+
+    final currentNames = (_localChildren[_folderKey] ?? const <WorkspaceFinderNode>[])
+        .where((node) => node.isFolder)
+        .map((node) => node.title.trim().toLowerCase())
+        .toSet();
+    if (currentNames.contains(name.toLowerCase())) {
+      setState(() => _folderCreateError = 'Папка с таким названием уже есть');
+      return;
+    }
+
+    setState(() {
+      _creatingFolder = true;
+      _folderCreateError = null;
+    });
 
     final id = 'local-folder:${DateTime.now().microsecondsSinceEpoch}';
     final node = WorkspaceFinderNode(
       id: id,
       title: name,
-      subtitle: 'Папка Спортотека OS',
+      subtitle: 'Папка',
       kind: WorkspaceFinderNodeKind.folder,
       parentId: _folderKey,
       createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
     );
-    setState(() {
-      (_localChildren[_folderKey] ??= <WorkspaceFinderNode>[]).add(node);
-    });
-    await _persistLocalWorkspace();
-    await _serverCreateNode(node);
+
+    try {
+      if (!mounted) return;
+
+      setState(() {
+        final list = List<WorkspaceFinderNode>.of(
+          _localChildren[_folderKey] ?? const <WorkspaceFinderNode>[],
+          growable: true,
+        );
+        list.add(node);
+        _localChildren[_folderKey] = list;
+        _selectedNodeId = id;
+        _showInlineFolderCreator = false;
+        _creatingFolder = false;
+      });
+
+      _newFolderNameFocus.unfocus();
+
+      await _persistLocalWorkspace();
+
+      try {
+        await _serverCreateNode(node);
+      } catch (e) {
+        // The local folder must remain usable even when the server is
+        // temporarily unavailable. Existing Workspace sync will retry later.
+        _wsLog('CREATE_FOLDER server sync failed uid=$id error=$e');
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _creatingFolder = false;
+        _folderCreateError = 'Не удалось создать папку: $e';
+        _showInlineFolderCreator = true;
+      });
+    }
   }
+
 
   Future<void> _createNote() async {
     if (!_canCreateWorkspaceNode) return;
@@ -1300,7 +1669,8 @@ class _SportotekaWorkspaceFinderPanelState
     await _persistLocalWorkspace();
     _wsLog('CREATE_NOTE local uid=$id -> sync');
     try {
-      await _serverStorage.syncNodeDocument(node: node, body: '', createHint: true);
+      await _serverStorage.syncNodeDocument(
+          node: node, body: '', createHint: true);
       _serverAvailable = true;
       _pendingSyncIds.remove(id);
       await _persistLocalWorkspace();
@@ -1308,14 +1678,16 @@ class _SportotekaWorkspaceFinderPanelState
     } catch (e, st) {
       _serverAvailable = false;
       _wsLog('CREATE_NOTE sync FAILED uid=$id error=$e');
-      _wsLog('CREATE_NOTE stack=${st.toString().split('\n').take(5).join(' | ')}');
+      _wsLog(
+          'CREATE_NOTE stack=${st.toString().split('\n').take(5).join(' | ')}');
       // Keep pending. The editor save / next refresh retries it.
     }
     await _openNote(node);
   }
 
   Future<void> _openNote(WorkspaceFinderNode node) async {
-    _wsLog('OPEN_NOTE uid=${node.id} pending=${_pendingSyncIds.contains(node.id)} localBodyLen=${(_noteBodies[node.id] ?? '').length}');
+    _wsLog(
+        'OPEN_NOTE uid=${node.id} pending=${_pendingSyncIds.contains(node.id)} localBodyLen=${(_noteBodies[node.id] ?? '').length}');
     // Always ask the server for the latest saved copy before opening the
     // editor, unless this device has a known unsynced local edit. This makes
     // cross-device saves visible as soon as the document is opened.
@@ -1341,15 +1713,18 @@ class _SportotekaWorkspaceFinderPanelState
           final localLooksNewer = localBody != remoteBody &&
               localUpdated != null &&
               (remoteUpdated == null ||
-                  localUpdated.isAfter(remoteUpdated.add(const Duration(seconds: 5))));
+                  localUpdated
+                      .isAfter(remoteUpdated.add(const Duration(seconds: 5))));
 
           if (localLooksNewer) {
-            _wsLog('OPEN_NOTE local newer -> pending uid=${node.id} localUpdated=$localUpdated remoteUpdated=$remoteUpdated localLen=${localBody.length} remoteLen=${remoteBody.length}');
+            _wsLog(
+                'OPEN_NOTE local newer -> pending uid=${node.id} localUpdated=$localUpdated remoteUpdated=$remoteUpdated localLen=${localBody.length} remoteLen=${remoteBody.length}');
             // Older application builds could leave a newer body only in the
             // local cache. Do not overwrite it; queue it for upload instead.
             _pendingSyncIds.add(node.id);
           } else {
-            _wsLog("OPEN_NOTE applying remote uid=${node.id} version=${remote['version']} remoteLen=${remoteBody.length}");
+            _wsLog(
+                "OPEN_NOTE applying remote uid=${node.id} version=${remote['version']} remoteLen=${remoteBody.length}");
             if (mounted) {
               setState(() {
                 _noteBodies[node.id] = remoteBody;
@@ -1373,7 +1748,8 @@ class _SportotekaWorkspaceFinderPanelState
         // retry when connectivity returns.
         _serverAvailable = false;
         _wsLog('OPEN_NOTE remote load FAILED uid=${node.id} error=$e');
-        _wsLog('OPEN_NOTE stack=${st.toString().split('\n').take(5).join(' | ')}');
+        _wsLog(
+            'OPEN_NOTE stack=${st.toString().split('\n').take(5).join(' | ')}');
       }
     }
 
@@ -1383,7 +1759,8 @@ class _SportotekaWorkspaceFinderPanelState
 
     Future<void> save(String title, String body) async {
       final saveTitleForLog = title.isEmpty ? 'Без названия' : title;
-      _wsLog('SAVE begin uid=${node.id} title=$saveTitleForLog bodyLen=${body.length}');
+      _wsLog(
+          'SAVE begin uid=${node.id} title=$saveTitleForLog bodyLen=${body.length}');
       setState(() {
         _noteBodies[node.id] = body;
         _pendingSyncIds.add(node.id);
@@ -1396,7 +1773,8 @@ class _SportotekaWorkspaceFinderPanelState
         );
       });
       await _persistLocalWorkspace();
-      _wsLog('SAVE local persisted uid=${node.id} pending=${_pendingSyncIds.contains(node.id)}');
+      _wsLog(
+          'SAVE local persisted uid=${node.id} pending=${_pendingSyncIds.contains(node.id)}');
       final savedNode = _findLocalNode(node.id);
       if (savedNode == null) {
         _wsLog('SAVE ABORT uid=${node.id}: local node not found');
@@ -1410,10 +1788,34 @@ class _SportotekaWorkspaceFinderPanelState
         _wsLog('SAVE server sync OK uid=${node.id} bodyLen=${body.length}');
       } catch (e, st) {
         _serverAvailable = false;
-        _wsLog('SAVE server sync FAILED uid=${node.id} bodyLen=${body.length} error=$e');
+        _wsLog(
+            'SAVE server sync FAILED uid=${node.id} bodyLen=${body.length} error=$e');
         _wsLog('SAVE stack=${st.toString().split('\n').take(6).join(' | ')}');
-        throw Exception('Документ сохранён локально, но серверная синхронизация не выполнена: $e');
+        throw Exception(
+            'Документ сохранён локально, но серверная синхронизация не выполнена: $e');
       }
+    }
+
+    Future<String?> uploadDocumentImage(String filePath) async {
+      final serverId = int.tryParse(
+            '${node.payload?['_workspace_server_id'] ?? 0}',
+          ) ??
+          0;
+      if (serverId <= 0) {
+        throw Exception('Сначала сохраните документ, затем вставьте фото');
+      }
+      final attachment = await _serverStorage.uploadAttachment(
+        filePath: filePath,
+        entityType: 'document',
+        entityId: serverId,
+        sectionKey: 'images',
+        title: 'Изображение документа',
+      );
+      final url = _absoluteRecordFileUrl(attachment);
+      if (url.isEmpty) {
+        throw Exception('Сервер не вернул ссылку на изображение');
+      }
+      return url;
     }
 
     final width = MediaQuery.sizeOf(context).width;
@@ -1430,8 +1832,21 @@ class _SportotekaWorkspaceFinderPanelState
           contextName: _editorContextName,
           documentType: 'Заметка',
           liveBlocksKey: node.id,
+          compactWorkspaceChrome: true,
           onSave: save,
           onClose: closeWindow,
+          aiClubId: widget.clubId,
+          aiUserId: widget.currentUserId,
+          aiTeamId: widget.selectedTeamId,
+          aiClubName: widget.clubName,
+          aiTeamName: widget.selectedTeamName,
+          aiDocumentKey: node.id,
+          aiExtraPayload: <String, dynamic>{
+            'workspace_section': _folderKey,
+            'workspace_node_id': node.id,
+            'workspace_node_title': initialTitle,
+          },
+          onUploadImage: uploadDocumentImage,
         ),
       );
       return;
@@ -1452,10 +1867,23 @@ class _SportotekaWorkspaceFinderPanelState
               liveBlocksKey: node.id,
               onSave: save,
               onClose: () => Navigator.of(routeContext).pop(),
+              aiClubId: widget.clubId,
+              aiUserId: widget.currentUserId,
+              aiTeamId: widget.selectedTeamId,
+              aiClubName: widget.clubName,
+              aiTeamName: widget.selectedTeamName,
+              aiDocumentKey: node.id,
+              aiExtraPayload: <String, dynamic>{
+                'workspace_section': _folderKey,
+                'workspace_node_id': node.id,
+                'workspace_node_title': initialTitle,
+              },
+              onUploadImage: uploadDocumentImage,
             ),
           ),
         ),
-        transitionsBuilder: (context, animation, secondaryAnimation, child) => FadeTransition(opacity: animation, child: child),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) =>
+            FadeTransition(opacity: animation, child: child),
       ),
     );
   }
@@ -1539,14 +1967,16 @@ class _SportotekaWorkspaceFinderPanelState
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(controller.text.trim()),
-            child: Text('Готово', style: AppTypography.actionStrong(color: Colors.white)),
+            child: Text('Готово',
+                style: AppTypography.actionStrong(color: Colors.white)),
           ),
         ],
       ),
     );
     controller.dispose();
     if (value == null || value.isEmpty || !mounted) return;
-    setState(() => _replaceLocalNode(node.id, (old) => old.copyWith(title: value, updatedAt: DateTime.now())));
+    setState(() => _replaceLocalNode(node.id,
+        (old) => old.copyWith(title: value, updatedAt: DateTime.now())));
     await _persistLocalWorkspace();
     final renamed = _findLocalNode(node.id);
     if (renamed != null) await _serverUpdateNode(renamed);
@@ -1555,7 +1985,8 @@ class _SportotekaWorkspaceFinderPanelState
   void _copyNode(WorkspaceFinderNode node) {
     setState(() => _clipboardNode = node);
     Clipboard.setData(ClipboardData(text: node.title));
-    _showSnack('«${node.title}» скопирован. В Спортотека OS он вставляется как ярлык.');
+    _showSnack(
+        '«${node.title}» скопирован. В Спортотека OS он вставляется как ярлык.');
   }
 
   Future<void> _pasteShortcut() async {
@@ -1565,7 +1996,8 @@ class _SportotekaWorkspaceFinderPanelState
     final shortcut = WorkspaceFinderNode(
       id: 'shortcut:${now.microsecondsSinceEpoch}',
       title: source.title,
-      subtitle: source.subtitle.isEmpty ? 'Ярлык' : '${source.subtitle} · ярлык',
+      subtitle:
+          source.subtitle.isEmpty ? 'Ярлык' : '${source.subtitle} · ярлык',
       kind: source.kind,
       moduleKey: source.moduleKey,
       payload: source.payload,
@@ -1580,13 +2012,16 @@ class _SportotekaWorkspaceFinderPanelState
     await _serverCreateNode(shortcut);
   }
 
-  Future<void> _dropNode(WorkspaceFinderNode source, WorkspaceFinderNode target) async {
-    if (!(target.isFolder || target.kind == WorkspaceFinderNodeKind.team) || source.id == target.id) return;
+  Future<void> _dropNode(
+      WorkspaceFinderNode source, WorkspaceFinderNode target) async {
+    if (!(target.isFolder || target.kind == WorkspaceFinderNodeKind.team) ||
+        source.id == target.id) return;
 
     if (!target.isSystem && target.id.startsWith('local-folder:')) {
       final localSource = _findLocalNode(source.id);
       if (localSource != null && !source.isSystem && !source.isShortcut) {
-        final moved = localSource.copyWith(parentId: target.id, updatedAt: DateTime.now());
+        final moved = localSource.copyWith(
+            parentId: target.id, updatedAt: DateTime.now());
         setState(() {
           for (final list in _localChildren.values) {
             list.removeWhere((item) => item.id == source.id);
@@ -1609,7 +2044,8 @@ class _SportotekaWorkspaceFinderPanelState
       final shortcut = WorkspaceFinderNode(
         id: 'shortcut:${DateTime.now().microsecondsSinceEpoch}',
         title: source.title,
-        subtitle: source.subtitle.isEmpty ? 'Ярлык' : '${source.subtitle} · ярлык',
+        subtitle:
+            source.subtitle.isEmpty ? 'Ярлык' : '${source.subtitle} · ярлык',
         kind: source.kind,
         moduleKey: source.moduleKey,
         payload: source.payload,
@@ -1639,10 +2075,14 @@ class _SportotekaWorkspaceFinderPanelState
       final result = await _entityMoveBridge.move(source, target);
       if (result.handled) {
         if (result.success) {
-          _showSnack(result.message.isEmpty ? 'Изменение применено к данным клуба.' : result.message);
+          _showSnack(result.message.isEmpty
+              ? 'Изменение применено к данным клуба.'
+              : result.message);
           await widget.onRefresh?.call();
         } else {
-          _showSnack(result.message.isEmpty ? 'Не удалось выполнить перенос.' : result.message);
+          _showSnack(result.message.isEmpty
+              ? 'Не удалось выполнить перенос.'
+              : result.message);
         }
         return;
       }
@@ -1651,7 +2091,8 @@ class _SportotekaWorkspaceFinderPanelState
       return;
     }
 
-    _showSnack('Для этого системного переноса нужен подтверждённый API раздела.');
+    _showSnack(
+        'Для этого системного переноса нужен подтверждённый API раздела.');
   }
 
   void _showSnack(String text) {
@@ -1667,22 +2108,37 @@ class _SportotekaWorkspaceFinderPanelState
   Future<void> _showNodeMenu(WorkspaceFinderNode node, Offset position) async {
     final action = await showMenu<String>(
       context: context,
-      position: RelativeRect.fromLTRB(position.dx, position.dy, position.dx, position.dy),
+      position: RelativeRect.fromLTRB(
+          position.dx, position.dy, position.dx, position.dy),
       items: <PopupMenuEntry<String>>[
-        PopupMenuItem(value: 'open', child: Text('Открыть', style: AppTypography.menuTitle())),
-        PopupMenuItem(value: 'copy', child: Text('Копировать', style: AppTypography.menuTitle())),
-        PopupMenuItem(value: 'properties', child: Text('Свойства', style: AppTypography.menuTitle())),
+        PopupMenuItem(
+            value: 'open',
+            child: Text('Открыть', style: AppTypography.menuTitle())),
+        PopupMenuItem(
+            value: 'copy',
+            child: Text('Копировать', style: AppTypography.menuTitle())),
+        PopupMenuItem(
+            value: 'properties',
+            child: Text('Свойства', style: AppTypography.menuTitle())),
         PopupMenuItem(
           value: 'favorite',
           child: Text(
-            _favoriteIds.contains(node.id) ? 'Убрать из избранного' : 'В избранное',
+            _favoriteIds.contains(node.id)
+                ? 'Убрать из избранного'
+                : 'В избранное',
             style: AppTypography.menuTitle(),
           ),
         ),
         if (!node.isSystem)
-          PopupMenuItem(value: 'rename', child: Text('Переименовать', style: AppTypography.menuTitle())),
+          PopupMenuItem(
+              value: 'rename',
+              child: Text('Переименовать', style: AppTypography.menuTitle())),
         if (!node.isSystem)
-          PopupMenuItem(value: 'delete', child: Text('Удалить', style: AppTypography.menuTitle(color: const Color(0xFFB04444)))),
+          PopupMenuItem(
+              value: 'delete',
+              child: Text('Удалить',
+                  style:
+                      AppTypography.menuTitle(color: const Color(0xFFB04444)))),
       ],
     );
 
@@ -1710,7 +2166,6 @@ class _SportotekaWorkspaceFinderPanelState
         break;
     }
   }
-
 
   WorkspaceFinderNode? get _selectedNode {
     final id = _selectedNodeId;
@@ -1769,6 +2224,7 @@ class _SportotekaWorkspaceFinderPanelState
       }
       return '';
     }
+
     final out = <(String, String)>[
       ('Тип', _nodeKindLabel(node)),
     ];
@@ -1791,9 +2247,12 @@ class _SportotekaWorkspaceFinderPanelState
       if (email.isNotEmpty) out.add(('E-mail', email));
     }
     final childCount = _localChildren[node.id]?.length ?? 0;
-    if (node.isFolder && childCount > 0) out.add(('Содержимое', '$childCount объектов'));
-    if (node.createdAt != null) out.add(('Создано', _formatNodeDate(node.createdAt!)));
-    if (node.updatedAt != null) out.add(('Изменено', _formatNodeDate(node.updatedAt!)));
+    if (node.isFolder && childCount > 0)
+      out.add(('Содержимое', '$childCount объектов'));
+    if (node.createdAt != null)
+      out.add(('Создано', _formatNodeDate(node.createdAt!)));
+    if (node.updatedAt != null)
+      out.add(('Изменено', _formatNodeDate(node.updatedAt!)));
     return out;
   }
 
@@ -1805,7 +2264,9 @@ class _SportotekaWorkspaceFinderPanelState
   Widget _buildNodeInspector() {
     final node = _selectedNode;
     if (node == null) {
-      return Center(child: Text('Выберите объект', style: AppTypography.secondary(color: _muted)));
+      return Center(
+          child: Text('Выберите объект',
+              style: AppTypography.secondary(color: _muted)));
     }
     final props = _nodeProperties(node);
     return ColoredBox(
@@ -1825,10 +2286,16 @@ class _SportotekaWorkspaceFinderPanelState
               ),
             ),
             const SizedBox(height: 12),
-            Text(node.title, maxLines: 3, overflow: TextOverflow.ellipsis, style: AppTypography.sectionTitle(color: _text)),
+            Text(node.title,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.sectionTitle(color: _text)),
             if (node.subtitle.trim().isNotEmpty) ...[
               const SizedBox(height: 4),
-              Text(node.subtitle, maxLines: 3, overflow: TextOverflow.ellipsis, style: AppTypography.secondary(color: _muted)),
+              Text(node.subtitle,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.secondary(color: _muted)),
             ],
             const SizedBox(height: 18),
             for (final prop in props)
@@ -1839,15 +2306,18 @@ class _SportotekaWorkspaceFinderPanelState
                   children: [
                     Text(prop.$1, style: AppTypography.caption(color: _muted)),
                     const SizedBox(height: 2),
-                    Text(prop.$2, style: AppTypography.secondaryMedium(color: _text)),
+                    Text(prop.$2,
+                        style: AppTypography.secondaryMedium(color: _text)),
                   ],
                 ),
               ),
             const Spacer(),
             FilledButton(
               onPressed: () => _openNode(node),
-              style: FilledButton.styleFrom(backgroundColor: _green, elevation: 0),
-              child: Text('Открыть', style: AppTypography.actionStrong(color: Colors.white)),
+              style:
+                  FilledButton.styleFrom(backgroundColor: _green, elevation: 0),
+              child: Text('Открыть',
+                  style: AppTypography.actionStrong(color: Colors.white)),
             ),
           ],
         ),
@@ -1863,7 +2333,8 @@ class _SportotekaWorkspaceFinderPanelState
       context: context,
       backgroundColor: Colors.white,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(18))),
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(18))),
       builder: (sheetContext) {
         final props = _nodeProperties(node);
         return SafeArea(
@@ -1876,9 +2347,15 @@ class _SportotekaWorkspaceFinderPanelState
               children: [
                 Row(
                   children: [
-                    const SportotekaWorkspaceFolderIcon(size: 42, color: Color(0xFF6F7973), fillColor: Color(0xFFF0F5F2), showBrandDots: true),
+                    const SportotekaWorkspaceFolderIcon(
+                        size: 42,
+                        color: Color(0xFF6F7973),
+                        fillColor: Color(0xFFF0F5F2),
+                        showBrandDots: true),
                     const SizedBox(width: 10),
-                    Expanded(child: Text('Свойства', style: AppTypography.sectionTitle(color: _text))),
+                    Expanded(
+                        child: Text('Свойства',
+                            style: AppTypography.sectionTitle(color: _text))),
                   ],
                 ),
                 const SizedBox(height: 14),
@@ -1890,8 +2367,14 @@ class _SportotekaWorkspaceFinderPanelState
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        SizedBox(width: 96, child: Text(prop.$1, style: AppTypography.caption(color: _muted))),
-                        Expanded(child: Text(prop.$2, style: AppTypography.secondaryMedium(color: _text))),
+                        SizedBox(
+                            width: 96,
+                            child: Text(prop.$1,
+                                style: AppTypography.caption(color: _muted))),
+                        Expanded(
+                            child: Text(prop.$2,
+                                style: AppTypography.secondaryMedium(
+                                    color: _text))),
                       ],
                     ),
                   ),
@@ -1901,8 +2384,10 @@ class _SportotekaWorkspaceFinderPanelState
                     Navigator.of(sheetContext).pop();
                     _openNode(node);
                   },
-                  style: FilledButton.styleFrom(backgroundColor: _green, elevation: 0),
-                  child: Text('Открыть', style: AppTypography.actionStrong(color: Colors.white)),
+                  style: FilledButton.styleFrom(
+                      backgroundColor: _green, elevation: 0),
+                  child: Text('Открыть',
+                      style: AppTypography.actionStrong(color: Colors.white)),
                 ),
               ],
             ),
@@ -1930,83 +2415,264 @@ class _SportotekaWorkspaceFinderPanelState
     );
 
     return WorkspaceLiveBlockContext(
-      clubId: widget.clubId,
-      teams: widget.teams,
-      players: widget.players,
-      trainers: widget.trainers,
-      selectedTeamId: widget.selectedTeamId,
-      selectedTeamName: widget.selectedTeamName,
-      onOpenModule: widget.onOpenModule,
-      onOpenPlayer: _openPlayerProject,
-      child: Shortcuts(
-      shortcuts: const <ShortcutActivator, Intent>{
-        SingleActivator(LogicalKeyboardKey.keyC, meta: true): _CopyIntent(),
-        SingleActivator(LogicalKeyboardKey.keyC, control: true): _CopyIntent(),
-        SingleActivator(LogicalKeyboardKey.keyV, meta: true): _PasteIntent(),
-        SingleActivator(LogicalKeyboardKey.keyV, control: true): _PasteIntent(),
-      },
-      child: Actions(
-        actions: <Type, Action<Intent>>{
-          _CopyIntent: CallbackAction<_CopyIntent>(onInvoke: (_) {
-            final node = _nodesForCurrentFolder().where((n) => n.id == _selectedNodeId).firstOrNull;
-            if (node != null) _copyNode(node);
-            return null;
-          }),
-          _PasteIntent: CallbackAction<_PasteIntent>(onInvoke: (_) {
-            _pasteShortcut();
-            return null;
-          }),
-        },
-        child: Focus(
-          autofocus: true,
-          child: ColoredBox(
-            color: _bg,
-            child: Stack(
-              children: [
-                Row(
+        clubId: widget.clubId,
+        teams: widget.teams,
+        players: widget.players,
+        trainers: widget.trainers,
+        selectedTeamId: widget.selectedTeamId,
+        selectedTeamName: widget.selectedTeamName,
+        onOpenModule: widget.onOpenModule,
+        onOpenPlayer: _openPlayerProject,
+        child: Shortcuts(
+          shortcuts: const <ShortcutActivator, Intent>{
+            SingleActivator(LogicalKeyboardKey.keyC, meta: true): _CopyIntent(),
+            SingleActivator(LogicalKeyboardKey.keyC, control: true):
+                _CopyIntent(),
+            SingleActivator(LogicalKeyboardKey.keyV, meta: true):
+                _PasteIntent(),
+            SingleActivator(LogicalKeyboardKey.keyV, control: true):
+                _PasteIntent(),
+          },
+          child: Actions(
+            actions: <Type, Action<Intent>>{
+              _CopyIntent: CallbackAction<_CopyIntent>(onInvoke: (_) {
+                final node = _nodesForCurrentFolder()
+                    .where((n) => n.id == _selectedNodeId)
+                    .firstOrNull;
+                if (node != null) _copyNode(node);
+                return null;
+              }),
+              _PasteIntent: CallbackAction<_PasteIntent>(onInvoke: (_) {
+                _pasteShortcut();
+                return null;
+              }),
+            },
+            child: Focus(
+              autofocus: true,
+              child: ColoredBox(
+                color: _bg,
+                child: Stack(
                   children: [
-                    if (showSidebar)
-                      SizedBox(
-                        width: mobile ? math.min(280.0, size.width * .82) : 226.0,
-                        child: _buildSidebar(compact: compact),
+                    Row(
+                      children: [
+                        if (showSidebar)
+                          SizedBox(
+                            width: mobile
+                                ? math.min(280.0, size.width * .82)
+                                : 226.0,
+                            child: _buildSidebar(compact: compact),
+                          ),
+                        Expanded(
+                            child:
+                                _buildMain(mobile: mobile, compact: compact)),
+                        if (!compact &&
+                            size.width >= 1180 &&
+                            _selectedNodeId != null) ...[
+                          const VerticalDivider(width: 1, color: _line),
+                          SizedBox(width: 276, child: _buildNodeInspector()),
+                        ],
+                      ],
+                    ),
+                    if (compact && showSidebar)
+                      Positioned(
+                        right: 12,
+                        top: 12,
+                        child: IconButton.filledTonal(
+                          onPressed: () =>
+                              setState(() => _showSidebarOnCompact = false),
+                          icon: const Icon(Icons.close_rounded),
+                          tooltip: 'Закрыть меню',
+                        ),
                       ),
-                    Expanded(child: _buildMain(mobile: mobile, compact: compact)),
-                    if (!compact && size.width >= 1180 && _selectedNodeId != null) ...[
-                      const VerticalDivider(width: 1, color: _line),
-                      SizedBox(width: 276, child: _buildNodeInspector()),
-                    ],
+                    if (!mobile && _windows.isNotEmpty)
+                      Positioned.fill(
+                        child: WorkspaceWindowLayer(
+                          entries: _windows,
+                          activeId: _activeWindowId,
+                          onActivate: _activateWindow,
+                          onClose: _closeWindow,
+                          onMove: _moveWindow,
+                          onResize: _resizeWindow,
+                          onMinimize: _minimizeWindow,
+                          onRestore: _restoreWindow,
+                          onSnap: _snapWindow,
+                        ),
+                      ),
+                    if (_showInlineFolderCreator)
+                      Positioned(
+                        top: mobile ? 68 : 72,
+                        right: mobile ? 10 : 18,
+                        child: _buildInlineFolderCreator(mobile: mobile),
+                      ),
                   ],
                 ),
-                if (compact && showSidebar)
-                  Positioned(
-                    right: 12,
-                    top: 12,
-                    child: IconButton.filledTonal(
-                      onPressed: () => setState(() => _showSidebarOnCompact = false),
-                      icon: const Icon(Icons.close_rounded),
-                      tooltip: 'Закрыть меню',
-                    ),
-                  ),
-                if (!mobile && _windows.isNotEmpty)
-                  Positioned.fill(
-                    child: WorkspaceWindowLayer(
-                      entries: _windows,
-                      activeId: _activeWindowId,
-                      onActivate: _activateWindow,
-                      onClose: _closeWindow,
-                      onMove: _moveWindow,
-                      onResize: _resizeWindow,
-                      onMinimize: _minimizeWindow,
-                      onRestore: _restoreWindow,
-                      onSnap: _snapWindow,
-                    ),
-                  ),
-              ],
+              ),
             ),
           ),
+        ));
+  }
+
+  Widget _buildInlineFolderCreator({required bool mobile}) {
+    final width = MediaQuery.sizeOf(context).width;
+    final cardWidth = mobile
+        ? math.max(260.0, math.min(width - 20, 360.0))
+        : 360.0;
+
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        width: cardWidth,
+        padding: const EdgeInsets.fromLTRB(12, 11, 12, 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(13),
+          border: Border.all(color: _line, width: .8),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(.10),
+              blurRadius: 24,
+              spreadRadius: -8,
+              offset: const Offset(0, 12),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 32,
+                  height: 32,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF0F6F3),
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  child: const Icon(
+                    Icons.create_new_folder_outlined,
+                    color: _green,
+                    size: 18,
+                  ),
+                ),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Новая папка',
+                        style: AppTypography.itemTitle(color: _text),
+                      ),
+                      const SizedBox(height: 1),
+                      Text(
+                        'Создать в «$_currentTitle»',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.caption(color: _muted),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Закрыть',
+                  onPressed:
+                      _creatingFolder ? null : _cancelInlineFolderCreator,
+                  icon: const Icon(
+                    Icons.close_rounded,
+                    color: _muted,
+                    size: 18,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 9),
+            TextField(
+              controller: _newFolderNameController,
+              focusNode: _newFolderNameFocus,
+              enabled: !_creatingFolder,
+              textInputAction: TextInputAction.done,
+              onChanged: (_) {
+                if (_folderCreateError != null) {
+                  setState(() => _folderCreateError = null);
+                }
+              },
+              onSubmitted: (_) => _commitInlineFolderCreator(),
+              style: AppTypography.formText(color: _text),
+              decoration: InputDecoration(
+                hintText: 'Название папки',
+                hintStyle: AppTypography.formHint(color: _muted),
+                errorText: _folderCreateError,
+                filled: true,
+                fillColor: const Color(0xFFF7F9F8),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 11, vertical: 11),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(9),
+                  borderSide: BorderSide.none,
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(9),
+                  borderSide: const BorderSide(color: _line, width: .7),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(9),
+                  borderSide: const BorderSide(color: _green, width: 1.1),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed:
+                        _creatingFolder ? null : _cancelInlineFolderCreator,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: _text,
+                      side: const BorderSide(color: _line),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(9),
+                      ),
+                    ),
+                    child: const Text('Отмена'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed:
+                        _creatingFolder ? null : _commitInlineFolderCreator,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: _green,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(9),
+                      ),
+                    ),
+                    icon: _creatingFolder
+                        ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 1.8,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(Icons.add_rounded, size: 17),
+                    label: Text(
+                      _creatingFolder ? 'Создание...' : 'Создать',
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
-    ));
+    );
   }
 
   Widget _buildSidebar({required bool compact}) {
@@ -2025,10 +2691,13 @@ class _SportotekaWorkspaceFinderPanelState
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('SPORTOTEKA OS', style: AppTypography.menuGroup(color: _green)),
+                  Text('SPORTOTEKA OS',
+                      style: AppTypography.menuGroup(color: _green)),
                   const SizedBox(height: 4),
                   Text(
-                    widget.clubName.trim().isEmpty ? 'Пространство клуба' : widget.clubName,
+                    widget.clubName.trim().isEmpty
+                        ? 'Пространство клуба'
+                        : widget.clubName,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: AppTypography.itemTitle(color: _text),
@@ -2066,7 +2735,8 @@ class _SportotekaWorkspaceFinderPanelState
             const SizedBox(height: 14),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 9),
-              child: Text('КЛУБ', style: AppTypography.menuGroup(color: _muted)),
+              child:
+                  Text('КЛУБ', style: AppTypography.menuGroup(color: _muted)),
             ),
             const SizedBox(height: 5),
             for (final module in kWorkspaceFinderModules.take(9))
@@ -2102,6 +2772,25 @@ class _SportotekaWorkspaceFinderPanelState
   }
 
   Widget _buildMain({required bool mobile, required bool compact}) {
+    if (_inlineAiDocumentLibrary) {
+      return WorkspaceAiDocumentLibrary(
+        clubId: widget.clubId,
+        userId: widget.currentUserId,
+        teamId: widget.selectedTeamId,
+        clubName: widget.clubName,
+        onClose: () {
+          if (!mounted) return;
+          setState(() {
+            _inlineAiDocumentLibrary = false;
+            _folderKey = 'documents';
+            _selectedNodeId = null;
+            _search = '';
+          });
+        },
+        onOpenDocumentEditor: _openMethodDocumentEditorWindow,
+      );
+    }
+
     final nodes = _nodesForCurrentFolder();
     final loadingRealData = _realFolderLoading.contains(_folderKey);
     final forceList = _listFolders.contains(_folderKey);
@@ -2133,7 +2822,8 @@ class _SportotekaWorkspaceFinderPanelState
             child: CircularProgressIndicator(strokeWidth: 2.2, color: _green),
           ),
           const SizedBox(height: 10),
-          Text('Загружаю реальные данные Спортотеки…', style: AppTypography.secondary(color: _muted)),
+          Text('Загружаю реальные данные Спортотеки…',
+              style: AppTypography.secondary(color: _muted)),
         ],
       ),
     );
@@ -2200,10 +2890,19 @@ class _SportotekaWorkspaceFinderPanelState
                 if (value == 'paste') _pasteShortcut();
               },
               itemBuilder: (_) => <PopupMenuEntry<String>>[
-                PopupMenuItem(value: 'folder', child: Text('Новая папка', style: AppTypography.menuTitle())),
-                PopupMenuItem(value: 'note', child: Text('Новый документ', style: AppTypography.menuTitle())),
+                PopupMenuItem(
+                    value: 'folder',
+                    child:
+                        Text('Новая папка', style: AppTypography.menuTitle())),
+                PopupMenuItem(
+                    value: 'note',
+                    child: Text('Новый документ',
+                        style: AppTypography.menuTitle())),
                 if (_clipboardNode != null)
-                  PopupMenuItem(value: 'paste', child: Text('Вставить ярлык', style: AppTypography.menuTitle())),
+                  PopupMenuItem(
+                      value: 'paste',
+                      child: Text('Вставить ярлык',
+                          style: AppTypography.menuTitle())),
               ],
               child: Container(
                 height: 36,
@@ -2214,16 +2913,20 @@ class _SportotekaWorkspaceFinderPanelState
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.add_rounded, color: Colors.white, size: 18),
+                    const Icon(Icons.add_rounded,
+                        color: Colors.white, size: 18),
                     if (!mobile) ...[
                       const SizedBox(width: 5),
-                      Text('Создать', style: AppTypography.actionStrong(color: Colors.white)),
+                      Text('Создать',
+                          style:
+                              AppTypography.actionStrong(color: Colors.white)),
                     ],
                   ],
                 ),
               ),
             )
-          else if (_clipboardNode != null && _folderKey.startsWith('local-folder:'))
+          else if (_clipboardNode != null &&
+              _folderKey.startsWith('local-folder:'))
             IconButton(
               tooltip: 'Вставить ярлык',
               onPressed: _pasteShortcut,
@@ -2244,7 +2947,8 @@ class _SportotekaWorkspaceFinderPanelState
                   ? Icons.view_list_rounded
                   : Icons.grid_view_rounded,
             ),
-            tooltip: _viewMode == WorkspaceFinderViewMode.grid ? 'Список' : 'Иконки',
+            tooltip:
+                _viewMode == WorkspaceFinderViewMode.grid ? 'Список' : 'Иконки',
           ),
         ],
       ),
@@ -2262,7 +2966,8 @@ class _SportotekaWorkspaceFinderPanelState
             if (i > 0)
               const Padding(
                 padding: EdgeInsets.symmetric(horizontal: 4),
-                child: Icon(Icons.chevron_right_rounded, size: 16, color: _muted),
+                child:
+                    Icon(Icons.chevron_right_rounded, size: 16, color: _muted),
               ),
             InkWell(
               borderRadius: BorderRadius.circular(6),
@@ -2302,9 +3007,11 @@ class _SportotekaWorkspaceFinderPanelState
     return LayoutBuilder(
       builder: (context, constraints) {
         final targetWidth = mobile ? 142.0 : 154.0;
-        final count = math.max(2, (constraints.maxWidth / targetWidth).floor()).toInt();
+        final count =
+            math.max(2, (constraints.maxWidth / targetWidth).floor()).toInt();
         return GridView.builder(
-          padding: EdgeInsets.fromLTRB(mobile ? 10 : 18, 4, mobile ? 10 : 18, 24),
+          padding:
+              EdgeInsets.fromLTRB(mobile ? 10 : 18, 4, mobile ? 10 : 18, 24),
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: count,
             mainAxisExtent: mobile ? 142 : 150,
@@ -2312,7 +3019,8 @@ class _SportotekaWorkspaceFinderPanelState
             mainAxisSpacing: mobile ? 6 : 10,
           ),
           itemCount: nodes.length,
-          itemBuilder: (_, index) => _buildGridNode(nodes[index], mobile: mobile),
+          itemBuilder: (_, index) =>
+              _buildGridNode(nodes[index], mobile: mobile),
         );
       },
     );
@@ -2322,7 +3030,10 @@ class _SportotekaWorkspaceFinderPanelState
     final selected = _selectedNodeId == node.id;
     final favorite = _favoriteIds.contains(node.id);
     final tile = DragTarget<WorkspaceFinderNode>(
-      onWillAccept: (data) => data != null && (node.isFolder || node.kind == WorkspaceFinderNodeKind.team) && data.id != node.id,
+      onWillAccept: (data) =>
+          data != null &&
+          (node.isFolder || node.kind == WorkspaceFinderNodeKind.team) &&
+          data.id != node.id,
       onAccept: (data) => _dropNode(data, node),
       builder: (context, candidate, rejected) {
         final accepting = candidate.isNotEmpty;
@@ -2343,20 +3054,27 @@ class _SportotekaWorkspaceFinderPanelState
                 child: Stack(
                   alignment: Alignment.center,
                   children: [
-                    _FinderFolderGlyph(
-                      size: mobile ? 68 : 74,
-                    ),
+                    node.isFolder
+                        ? _FinderFolderGlyph(
+                            size: mobile ? 68 : 74,
+                          )
+                        : _FinderListGlyph(
+                            kind: _sportIconForNode(node),
+                            size: mobile ? 62 : 68,
+                          ),
                     if (favorite)
                       const Positioned(
                         top: 1,
                         right: 12,
-                        child: Icon(Icons.star_rounded, size: 15, color: Color(0xFFD39C18)),
+                        child: Icon(Icons.star_rounded,
+                            size: 15, color: Color(0xFFD39C18)),
                       ),
                     if (node.isShortcut)
                       const Positioned(
                         bottom: 5,
                         right: 14,
-                        child: Icon(Icons.shortcut_rounded, size: 15, color: _muted),
+                        child: Icon(Icons.shortcut_rounded,
+                            size: 15, color: _muted),
                       ),
                   ],
                 ),
@@ -2374,8 +3092,10 @@ class _SportotekaWorkspaceFinderPanelState
                       style: AppTypography.menuTitle(color: _text),
                     ),
                   ),
-                  const SizedBox(width: 5),
-                  const _FinderBrandDots(),
+                  if (!node.isFolder || node.isSystem) ...[
+                    const SizedBox(width: 5),
+                    const _FinderBrandDots(),
+                  ],
                 ],
               ),
               if (node.subtitle.isNotEmpty && !mobile) ...[
@@ -2398,10 +3118,12 @@ class _SportotekaWorkspaceFinderPanelState
       behavior: HitTestBehavior.opaque,
       onTap: () {
         setState(() => _selectedNodeId = node.id);
-        if (mobile || node.kind == WorkspaceFinderNodeKind.video) _openNode(node);
+        if (mobile || node.kind == WorkspaceFinderNodeKind.video)
+          _openNode(node);
       },
       onDoubleTap: mobile ? null : () => _openNode(node),
-      onSecondaryTapDown: (details) => _showNodeMenu(node, details.globalPosition),
+      onSecondaryTapDown: (details) =>
+          _showNodeMenu(node, details.globalPosition),
       child: tile,
     );
 
@@ -2415,7 +3137,9 @@ class _SportotekaWorkspaceFinderPanelState
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(12),
-              boxShadow: const [BoxShadow(color: Color(0x24000000), blurRadius: 18)],
+              boxShadow: const [
+                BoxShadow(color: Color(0x24000000), blurRadius: 18)
+              ],
             ),
             child: Padding(
               padding: const EdgeInsets.all(10),
@@ -2423,7 +3147,11 @@ class _SportotekaWorkspaceFinderPanelState
                 children: [
                   const _FinderFolderGlyph(size: 24),
                   const SizedBox(width: 7),
-                  Expanded(child: Text(node.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTypography.captionMedium())),
+                  Expanded(
+                      child: Text(node.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTypography.captionMedium())),
                 ],
               ),
             ),
@@ -2439,27 +3167,35 @@ class _SportotekaWorkspaceFinderPanelState
     return ListView.separated(
       padding: EdgeInsets.fromLTRB(mobile ? 8 : 14, 2, mobile ? 8 : 14, 28),
       itemCount: nodes.length,
-      separatorBuilder: (_, __) => const Divider(height: 1, indent: 52, color: _line),
+      separatorBuilder: (_, __) =>
+          const Divider(height: 1, indent: 52, color: _line),
       itemBuilder: (_, index) {
         final node = nodes[index];
         final selected = _selectedNodeId == node.id;
         return DragTarget<WorkspaceFinderNode>(
-          onWillAccept: (data) => data != null && (node.isFolder || node.kind == WorkspaceFinderNodeKind.team) && data.id != node.id,
+          onWillAccept: (data) =>
+              data != null &&
+              (node.isFolder || node.kind == WorkspaceFinderNodeKind.team) &&
+              data.id != node.id,
           onAccept: (data) => _dropNode(data, node),
           builder: (context, candidate, rejected) {
             final tile = Material(
-              color: selected || candidate.isNotEmpty ? const Color(0xFFEAF3EE) : Colors.white,
+              color: selected || candidate.isNotEmpty
+                  ? const Color(0xFFEAF3EE)
+                  : Colors.white,
               borderRadius: BorderRadius.circular(9),
               child: InkWell(
                 borderRadius: BorderRadius.circular(9),
                 onTap: () {
                   setState(() => _selectedNodeId = node.id);
-                  if (mobile || node.kind == WorkspaceFinderNodeKind.video) _openNode(node);
+                  if (mobile || node.kind == WorkspaceFinderNodeKind.video)
+                    _openNode(node);
                 },
                 onDoubleTap: mobile ? null : () => _openNode(node),
                 onLongPress: () => _copyNode(node),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                   child: Row(
                     children: [
                       _FinderListGlyph(kind: _sportIconForNode(node), size: 34),
@@ -2470,26 +3206,37 @@ class _SportotekaWorkspaceFinderPanelState
                           children: [
                             Row(
                               children: [
-                                Expanded(child: Text(node.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTypography.menuTitle(color: _text))),
+                                Expanded(
+                                    child: Text(node.title,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: AppTypography.menuTitle(
+                                            color: _text))),
                                 const SizedBox(width: 6),
                                 const _FinderBrandDots(compact: true),
                               ],
                             ),
                             if (node.subtitle.isNotEmpty)
-                              Text(node.subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTypography.caption(color: _muted)),
+                              Text(node.subtitle,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: AppTypography.caption(color: _muted)),
                           ],
                         ),
                       ),
                       if (_favoriteIds.contains(node.id))
                         const Padding(
                           padding: EdgeInsets.only(right: 2),
-                          child: Icon(Icons.star_rounded, size: 15, color: Color(0xFFD39C18)),
+                          child: Icon(Icons.star_rounded,
+                              size: 15, color: Color(0xFFD39C18)),
                         ),
                       IconButton(
                         icon: const Icon(Icons.more_horiz_rounded, size: 19),
                         onPressed: () {
                           final box = context.findRenderObject() as RenderBox?;
-                          final pos = box?.localToGlobal(const Offset(20, 20)) ?? const Offset(120, 120);
+                          final pos =
+                              box?.localToGlobal(const Offset(20, 20)) ??
+                                  const Offset(120, 120);
                           _showNodeMenu(node, pos);
                         },
                       ),
@@ -2501,7 +3248,8 @@ class _SportotekaWorkspaceFinderPanelState
             return GestureDetector(
               behavior: HitTestBehavior.opaque,
               onDoubleTap: mobile ? null : () => _openNode(node),
-              onSecondaryTapDown: (details) => _showNodeMenu(node, details.globalPosition),
+              onSecondaryTapDown: (details) =>
+                  _showNodeMenu(node, details.globalPosition),
               child: tile,
             );
           },
@@ -2558,7 +3306,8 @@ class _SportotekaWorkspaceFinderPanelState
     if (node.isFolder && node.moduleKey != null) {
       return _moduleFor(node.moduleKey!)?.icon ?? Icons.folder_rounded;
     }
-    if (node.kind == WorkspaceFinderNodeKind.shortcut && node.moduleKey != null) {
+    if (node.kind == WorkspaceFinderNodeKind.shortcut &&
+        node.moduleKey != null) {
       return _moduleFor(node.moduleKey!)?.icon ?? Icons.shortcut_rounded;
     }
     return workspaceFinderIconForKind(node.kind);
@@ -2578,7 +3327,8 @@ class _SportotekaWorkspaceFinderPanelState
               showBrandDots: false,
             ),
             const SizedBox(height: 12),
-            Text('Здесь пока пусто', style: AppTypography.sectionTitle(color: _text)),
+            Text('Здесь пока пусто',
+                style: AppTypography.sectionTitle(color: _text)),
             const SizedBox(height: 5),
             Text(
               _search.trim().isNotEmpty
@@ -2629,13 +3379,15 @@ class _SportotekaWorkspaceFinderPanelState
           Text('$count объектов', style: AppTypography.caption(color: _muted)),
           const Spacer(),
           if (_clipboardNode != null)
-            Text('Буфер: ${_clipboardNode!.title}', maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTypography.caption(color: _muted)),
+            Text('Буфер: ${_clipboardNode!.title}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.caption(color: _muted)),
         ],
       ),
     );
   }
 }
-
 
 class _FinderListGlyph extends StatelessWidget {
   const _FinderListGlyph({required this.kind, required this.size});
@@ -2680,7 +3432,9 @@ class _FinderBrandDots extends StatelessWidget {
             width: dot,
             height: dot,
             decoration: BoxDecoration(
-              color: index == 1 ? const Color(0xFF17A36A) : const Color(0xFFB8D9C6),
+              color: index == 1
+                  ? const Color(0xFF17A36A)
+                  : const Color(0xFFB8D9C6),
               shape: BoxShape.circle,
             ),
           ),
@@ -2730,7 +3484,11 @@ class _SideItem extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
             child: Row(
               children: [
-                Icon(icon, size: 18, color: selected ? const Color(0xFF0B8F55) : const Color(0xFF667169)),
+                Icon(icon,
+                    size: 18,
+                    color: selected
+                        ? const Color(0xFF0B8F55)
+                        : const Color(0xFF667169)),
                 const SizedBox(width: 9),
                 Expanded(
                   child: Text(
@@ -2738,7 +3496,9 @@ class _SideItem extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: AppTypography.menuTitle(
-                      color: selected ? const Color(0xFF101814) : const Color(0xFF4F5A53),
+                      color: selected
+                          ? const Color(0xFF101814)
+                          : const Color(0xFF4F5A53),
                       weight: selected ? FontWeight.w700 : FontWeight.w500,
                     ),
                   ),

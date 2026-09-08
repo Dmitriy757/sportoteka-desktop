@@ -106,6 +106,7 @@ class TrainingEventDetailSheet extends StatelessWidget {
                                 eventId: event.id,
                                 coachId: coachId,
                                 title: event.title,
+                                clubId: event.clubId,
                               );
                             },
                           )

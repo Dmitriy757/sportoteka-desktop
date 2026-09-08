@@ -1,19 +1,29 @@
 // lib/presentation/club_workspace/cmr_club_ai_assistant_panel.dart
-// V6 локальный ИИ клуба без OpenAI: поиск, анализ, схемы, PDF и самообучение на вашем сервере.
+// V6.4 локальный ИИ клуба: история всегда выдвигается сбоку внутри текущего окна.
 // Вставляется внутрь раздела Чаты как закреплённый диалог «ИИ клуба».
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' show FontFeature;
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
+import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
+
+import 'package:sportoteka/presentation/community_screen/app_video_player_screen.dart';
 
 import 'ai_actions/ai_workspace_action_api.dart';
 import 'models/club_ai_tactical_diagram.dart';
+import 'models/club_ai_visualization.dart';
+import 'widgets/ai_plan_preview_card.dart';
 import 'widgets/club_ai_tactical_diagram_card.dart';
+import 'widgets/club_ai_visualization_card.dart';
 
 class CmrClubAiAssistantPanel extends StatefulWidget {
   final int clubId;
@@ -22,49 +32,70 @@ class CmrClubAiAssistantPanel extends StatefulWidget {
   final String? clubName;
   final String? teamName;
   final bool playerOnlyMode;
+
+  /// Личный AI в профиле пользователя. В этом режиме клиент не отправляет
+  /// club/team/player/session context и использует только personal API.
+  final bool personalProfileMode;
   final int? playerId;
   final String? playerName;
 
   /// target: player_profile / tracker / report / calendar / match / testing / plans / attendance
   /// payload: ids/date/team_id/player_id/session_id/etc.
   final void Function(String target, Map<String, dynamic> payload)? onNavigate;
+
   /// Вызывается, когда в карточке есть готовый PDF/HTML отчет.
   /// Если не передать callback, ссылка копируется в буфер обмена.
   final void Function(String url)? onOpenPdf;
 
   /// Для мобильного режима: вернуться к предыдущему экрану.
   final VoidCallback? onBack;
-final String? initialPrompt;
-final Map<String, dynamic>? initialPayload;
-final bool autoSendInitialPrompt;
+  final String? initialPrompt;
+  final Map<String, dynamic>? initialPayload;
+  final bool autoSendInitialPrompt;
 
-const CmrClubAiAssistantPanel({
-  super.key,
-  required this.clubId,
-  required this.userId,
-  this.teamId,
-  this.clubName,
-  this.teamName,
-  this.playerOnlyMode = false,
-  this.playerId,
-  this.playerName,
-  this.onNavigate,
-  this.onOpenPdf,
-  this.onBack,
-  this.initialPrompt,
-  this.initialPayload,
-  this.autoSendInitialPrompt = false,
-});
+  const CmrClubAiAssistantPanel({
+    super.key,
+    required this.clubId,
+    required this.userId,
+    this.teamId,
+    this.clubName,
+    this.teamName,
+    this.playerOnlyMode = false,
+    this.personalProfileMode = false,
+    this.playerId,
+    this.playerName,
+    this.onNavigate,
+    this.onOpenPdf,
+    this.onBack,
+    this.initialPrompt,
+    this.initialPayload,
+    this.autoSendInitialPrompt = false,
+  });
 
   @override
-  State<CmrClubAiAssistantPanel> createState() => _CmrClubAiAssistantPanelState();
+  State<CmrClubAiAssistantPanel> createState() =>
+      _CmrClubAiAssistantPanelState();
 }
 
 class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
-  static const String _askUrl =
-      'https://sportotekaapp.ru/api/ai/v1/assistant/chat';
   static const String _feedbackUrl =
       'https://sportotekaapp.ru/api/ai/v1/assistant/feedback';
+  static const String _documentAskUrl =
+      'https://sportotekaapp.ru/api/ai/v1/documents/ask';
+
+  String get _askUrl => widget.personalProfileMode
+      ? 'https://sportotekaapp.ru/api/ai/v1/personal/assistant/chat'
+      : 'https://sportotekaapp.ru/api/ai/v1/assistant/chat';
+
+  String get _mediaBase => widget.personalProfileMode
+      ? 'https://sportotekaapp.ru/api/ai/v1/personal/media'
+      : 'https://sportotekaapp.ru/api/ai/v1/media';
+
+  String get _documentBase => 'https://sportotekaapp.ru/api/ai/v1/documents';
+
+  String get _historyBase => widget.personalProfileMode
+      ? 'https://sportotekaapp.ru/api/ai/v1/personal/history'
+      : 'https://sportotekaapp.ru/api/ai/v1/assistant/history';
 
   final TextEditingController _input = TextEditingController();
   final ScrollController _scroll = ScrollController();
@@ -74,12 +105,66 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
   final Set<String> _confirmingActionIds = <String>{};
   final Map<String, String> _completedActionMessages = <String, String>{};
 
-  late final String _conversationId;
+  late String _conversationId;
   bool _initialPromptSent = false;
+  final List<_AiHistoryItem> _historyItems = <_AiHistoryItem>[];
+  bool _historyLoading = false;
+  bool _historyRailOpen = false; // по умолчанию история закрыта
+  Timer? _historySaveDebounce;
   bool _sending = false;
   String? _error;
 
+  final ImagePicker _mediaPicker = ImagePicker();
+  _AiComposerMode _composerMode = _AiComposerMode.text;
+  XFile? _attachmentFile;
+  Map<String, dynamic>? _uploadedAttachment;
+  bool _uploadingAttachment = false;
+
+  String get _composerHint {
+    switch (_composerMode) {
+      case _AiComposerMode.image:
+        return 'Опишите изображение, которое нужно создать…';
+      case _AiComposerMode.video:
+        return _attachmentFile == null
+            ? 'Опишите видео, которое нужно создать…'
+            : 'Опишите, как преобразовать выбранное медиа в видео…';
+      case _AiComposerMode.text:
+        if (_attachedDocumentId().isNotEmpty) {
+          return 'Спросите по документу или сопоставьте его с данными команды…';
+        }
+        return _attachmentFile == null
+            ? (widget.personalProfileMode
+                ? 'Спросите что угодно или попросите помочь с текстом…'
+                : widget.playerOnlyMode
+                    ? 'Спросите о нагрузке, пульсе, скорости или тестах игрока...'
+                    : 'Спросите: почему такой спринт, сделай анализ, нарисуй схему...')
+            : 'Добавьте вопрос к выбранному файлу…';
+    }
+  }
+
+  String get _composerModeLabel {
+    switch (_composerMode) {
+      case _AiComposerMode.image:
+        return 'Изображение';
+      case _AiComposerMode.video:
+        return 'Видео';
+      case _AiComposerMode.text:
+        return 'ИИ-чат';
+    }
+  }
+
   List<String> get _starterPrompts {
+    if (widget.personalProfileMode) {
+      return const <String>[
+        'Объясни высокий прессинг простыми словами',
+        'Помоги написать пост для профиля',
+        'Придумай идею для футбольной публикации',
+        'Помоги составить план на день',
+        'Придумай идею для изображения',
+        'Напиши поздравление команде с победой',
+      ];
+    }
+
     if (widget.playerOnlyMode) {
       final player = (widget.playerName ?? '').trim();
       final prefix = player.isEmpty ? 'игрока' : player;
@@ -107,17 +192,640 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
     ];
   }
 
+  _AiMessage _welcomeMessage() {
+    return _AiMessage.assistant(
+      text: widget.personalProfileMode
+          ? 'Я Спортотека AI — ваш личный помощник. Можете задать вопрос, попросить помочь с текстом, придумать публикацию, создать изображение или видео.'
+          : widget.playerOnlyMode
+              ? 'Я ИИ-помощник профиля игрока. В этом окне анализирую только данные ${((widget.playerName ?? '').trim().isEmpty ? 'выбранного игрока' : widget.playerName!.trim())}: тестирования, матчи, GPS/Polar-сессии, скорость, спринты, пульс и нагрузку.'
+              : 'Я локальный ИИ клуба. Работаю на вашем сервере и вижу текущий контекст экрана: выбранную команду, тренировку, игроков и пульсовую точку. Ищу отчеты, делаю разбор GPS/Polar, объясняю причины нагрузки и предлагаю действия тренеру.',
+      suggestions: _starterPrompts.take(4).toList(),
+    );
+  }
+
+  String _newConversationId() {
+    if (widget.personalProfileMode) {
+      return 'personal:${widget.userId}:${DateTime.now().microsecondsSinceEpoch}';
+    }
+    return 'sportoteka:${widget.clubId}:${widget.teamId ?? 0}:'
+        '${widget.playerId ?? 0}:${DateTime.now().microsecondsSinceEpoch}';
+  }
+
+  void _resetConversationState({bool notify = true}) {
+    void apply() {
+      _conversationId = _newConversationId();
+      _messages
+        ..clear()
+        ..add(_welcomeMessage());
+      _messageKeys.clear();
+      _completedActionMessages.clear();
+      _confirmingActionIds.clear();
+      _error = null;
+      _sending = false;
+      _composerMode = _AiComposerMode.text;
+      _attachmentFile = null;
+      _uploadedAttachment = null;
+    }
+
+    if (notify && mounted) {
+      setState(apply);
+      _scrollToBottom();
+    } else {
+      apply();
+    }
+  }
+
+  Uri _historyUri([String suffix = '']) {
+    final path = suffix.isEmpty ? _historyBase : '$_historyBase/$suffix';
+    return Uri.parse(path).replace(
+      queryParameters: widget.personalProfileMode
+          ? <String, String>{
+              'user_id': widget.userId.toString(),
+            }
+          : <String, String>{
+              'club_id': widget.clubId.toString(),
+              'user_id': widget.userId.toString(),
+              if ((widget.teamId ?? 0) > 0) 'team_id': widget.teamId.toString(),
+              if (widget.playerOnlyMode && (widget.playerId ?? 0) > 0)
+                'player_id': widget.playerId.toString(),
+            },
+    );
+  }
+
+  String get _historyTitle {
+    for (final message in _messages) {
+      if (message.role != _AiRole.user) continue;
+      final text = message.text.trim().replaceAll(RegExp(r'\s+'), ' ');
+      if (text.isEmpty) continue;
+      return text.length <= 64 ? text : '${text.substring(0, 61)}...';
+    }
+    if (widget.personalProfileMode) return 'Новый личный диалог';
+    return widget.playerOnlyMode ? 'Новый диалог игрока' : 'Новый диалог';
+  }
+
+  Future<void> _loadHistoryIndex() async {
+    if (_historyLoading) return;
+    if (mounted) setState(() => _historyLoading = true);
+
+    try {
+      final res =
+          await http.get(_historyUri()).timeout(const Duration(seconds: 15));
+      final data = _decodeJson(res.body);
+      if (res.statusCode != 200 || data is! Map) return;
+
+      final raw =
+          data['items'] is List ? data['items'] as List : const <dynamic>[];
+      final items = raw
+          .whereType<Map>()
+          .map((e) => _AiHistoryItem.fromMap(Map<String, dynamic>.from(e)))
+          .where((e) => e.conversationId.isNotEmpty)
+          .toList(growable: false);
+
+      if (!mounted) return;
+      setState(() {
+        _historyItems
+          ..clear()
+          ..addAll(items);
+      });
+    } catch (_) {
+      // История не должна мешать основному AI-чату.
+    } finally {
+      if (mounted) setState(() => _historyLoading = false);
+    }
+  }
+
+  Future<void> _restoreLatestHistory() async {
+    await _loadHistoryIndex();
+    if (!mounted || _historyItems.isEmpty) return;
+    await _openHistoryConversation(_historyItems.first.conversationId);
+  }
+
+  Future<void> _openHistoryConversation(String conversationId) async {
+    if (conversationId.trim().isEmpty) return;
+    try {
+      final uri = _historyUri('item').replace(
+        queryParameters: <String, String>{
+          ..._historyUri('item').queryParameters,
+          'conversation_id': conversationId,
+        },
+      );
+      final res = await http.get(uri).timeout(const Duration(seconds: 15));
+      final data = _decodeJson(res.body);
+      if (res.statusCode != 200 || data is! Map) return;
+
+      final raw = data['messages'] is List
+          ? data['messages'] as List
+          : const <dynamic>[];
+      final restored = raw
+          .whereType<Map>()
+          .map((e) => _AiMessage.fromHistoryMap(Map<String, dynamic>.from(e)))
+          .whereType<_AiMessage>()
+          .toList(growable: true);
+
+      if (!mounted) return;
+      setState(() {
+        _conversationId = '${data['conversation_id'] ?? conversationId}';
+        _messages
+          ..clear()
+          ..addAll(
+              restored.isEmpty ? <_AiMessage>[_welcomeMessage()] : restored);
+        _messageKeys.clear();
+        _error = null;
+        _sending = false;
+      });
+
+      _scrollToBottom();
+
+      // Если пользователь закрыл приложение во время генерации,
+      // после возврата продолжим polling незавершённых media-job.
+      for (final message in _messages) {
+        if (message.jobId.isEmpty || message.mediaKind.isEmpty) continue;
+        if (message.mediaStatus == 'completed' ||
+            message.mediaStatus == 'failed') {
+          continue;
+        }
+        unawaited(_pollMediaJob(
+          kind: message.mediaKind,
+          jobId: message.jobId,
+        ));
+      }
+    } catch (_) {
+      // Оставляем текущий диалог, если сеть временно недоступна.
+    }
+  }
+
+  void _scheduleHistorySave() {
+    _historySaveDebounce?.cancel();
+    _historySaveDebounce = Timer(
+      const Duration(milliseconds: 650),
+      () => unawaited(_saveHistoryNow()),
+    );
+  }
+
+  Future<void> _saveHistoryNow() async {
+    final hasUserMessage =
+        _messages.any((message) => message.role == _AiRole.user);
+    if (!hasUserMessage || _conversationId.trim().isEmpty) return;
+
+    final messages = _messages
+        .take(220)
+        .map((message) => message.toHistoryMap())
+        .toList(growable: false);
+
+    final payload = widget.personalProfileMode
+        ? <String, dynamic>{
+            'user_id': widget.userId,
+            'conversation_id': _conversationId,
+            'title': _historyTitle,
+            'messages': messages,
+          }
+        : <String, dynamic>{
+            'club_id': widget.clubId,
+            'user_id': widget.userId,
+            if ((widget.teamId ?? 0) > 0) 'team_id': widget.teamId,
+            if (widget.playerOnlyMode && (widget.playerId ?? 0) > 0)
+              'player_id': widget.playerId,
+            'player_only': widget.playerOnlyMode,
+            'conversation_id': _conversationId,
+            'title': _historyTitle,
+            'messages': messages,
+          };
+
+    try {
+      final res = await http
+          .post(
+            Uri.parse('$_historyBase/save'),
+            headers: const <String, String>{
+              'Content-Type': 'application/json; charset=utf-8',
+              'Accept': 'application/json',
+            },
+            body: jsonEncode(payload),
+          )
+          .timeout(const Duration(seconds: 15));
+
+      if (res.statusCode == 200) {
+        unawaited(_loadHistoryIndex());
+      }
+    } catch (_) {
+      // Не блокируем чат, если сохранение истории временно недоступно.
+    }
+  }
+
+  Future<void> _startNewConversation() async {
+    await _saveHistoryNow();
+    if (!mounted) return;
+    _resetConversationState();
+  }
+
+  Future<void> _deleteHistoryConversation(String conversationId) async {
+    try {
+      final uri = _historyUri('item').replace(
+        queryParameters: <String, String>{
+          ..._historyUri('item').queryParameters,
+          'conversation_id': conversationId,
+        },
+      );
+      final res = await http.delete(uri).timeout(const Duration(seconds: 15));
+      if (res.statusCode != 200) return;
+
+      if (conversationId == _conversationId && mounted) {
+        _resetConversationState();
+      }
+      await _loadHistoryIndex();
+    } catch (_) {}
+  }
+
+  Future<void> _toggleHistoryRail() async {
+    if (!mounted) return;
+    final next = !_historyRailOpen;
+    setState(() => _historyRailOpen = next);
+    if (next) {
+      await _loadHistoryIndex();
+    }
+  }
+
+  Widget _buildHistoryRail({required double width}) {
+    final railWidth = width < 560
+        ? math.min(326.0, math.max(260.0, width * .86))
+        : width < 930
+            ? 280.0
+            : width < 1180
+                ? 304.0
+                : 324.0;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
+      width: _historyRailOpen ? railWidth : 0,
+      child: _historyRailOpen
+          ? Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8F9FA),
+                border: Border(
+                  right: BorderSide(color: _AiColors.line.withOpacity(.95)),
+                ),
+              ),
+              child: Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(10, 10, 8, 8),
+                    child: Row(
+                      children: [
+                        const _AiSidebarGlyph(
+                          size: 18,
+                          color: _AiColors.greenDark,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'История',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: _AiText.title(15.2),
+                          ),
+                        ),
+                        _AiCircleAction(
+                          icon: Icons.add_rounded,
+                          onTap: () => unawaited(_startNewConversation()),
+                        ),
+                        const SizedBox(width: 4),
+                        _AiCircleAction(
+                          icon: Icons.close_rounded,
+                          onTap: () => unawaited(_toggleHistoryRail()),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(9, 0, 9, 8),
+                    child: Material(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(11),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(11),
+                        onTap: () => unawaited(_startNewConversation()),
+                        child: Container(
+                          height: 39,
+                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(11),
+                            border: Border.all(color: _AiColors.line),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.edit_square,
+                                size: 16,
+                                color: _AiColors.greenDark,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Новый чат',
+                                  style: _AiText.title(13.5).copyWith(
+                                    color: _AiColors.greenDark,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const Divider(height: 1, color: _AiColors.line),
+                  Expanded(
+                    child: _historyLoading
+                        ? const Center(
+                            child: CircularProgressIndicator(
+                              color: _AiColors.green,
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : _historyItems.isEmpty
+                            ? Center(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(20),
+                                  child: Text(
+                                    'История пока пустая',
+                                    textAlign: TextAlign.center,
+                                    style: _AiText.muted(12.4),
+                                  ),
+                                ),
+                              )
+                            : ListView.separated(
+                                padding: const EdgeInsets.fromLTRB(7, 8, 7, 16),
+                                itemCount: _historyItems.length,
+                                separatorBuilder: (_, __) =>
+                                    const SizedBox(height: 5),
+                                itemBuilder: (_, index) {
+                                  final item = _historyItems[index];
+                                  final selected =
+                                      item.conversationId == _conversationId;
+
+                                  return Material(
+                                    color: selected
+                                        ? _AiColors.greenSoft
+                                        : Colors.transparent,
+                                    borderRadius: BorderRadius.circular(10),
+                                    child: InkWell(
+                                      borderRadius: BorderRadius.circular(10),
+                                      onTap: () async {
+                                        await _saveHistoryNow();
+                                        await _openHistoryConversation(
+                                          item.conversationId,
+                                        );
+                                      },
+                                      child: Padding(
+                                        padding: const EdgeInsets.fromLTRB(
+                                          11,
+                                          10,
+                                          5,
+                                          10,
+                                        ),
+                                        child: Row(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.center,
+                                          children: [
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    item.title,
+                                                    maxLines: 1,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                    style: _AiText.title(
+                                                      selected ? 14.0 : 13.6,
+                                                    ),
+                                                  ),
+                                                  if (item.subtitle
+                                                      .trim()
+                                                      .isNotEmpty) ...[
+                                                    const SizedBox(height: 3),
+                                                    Text(
+                                                      item.subtitle,
+                                                      maxLines: 1,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                      style:
+                                                          _AiText.muted(11.4),
+                                                    ),
+                                                  ],
+                                                ],
+                                              ),
+                                            ),
+                                            PopupMenuButton<String>(
+                                              tooltip: 'Действия',
+                                              padding: EdgeInsets.zero,
+                                              icon: const Icon(
+                                                Icons.more_horiz_rounded,
+                                                size: 17,
+                                                color: _AiColors.muted,
+                                              ),
+                                              onSelected: (value) {
+                                                if (value == 'delete') {
+                                                  unawaited(
+                                                    _deleteHistoryConversation(
+                                                      item.conversationId,
+                                                    ),
+                                                  );
+                                                }
+                                              },
+                                              itemBuilder: (_) => const [
+                                                PopupMenuItem<String>(
+                                                  value: 'delete',
+                                                  child: Row(
+                                                    children: [
+                                                      Icon(
+                                                        Icons
+                                                            .delete_outline_rounded,
+                                                        size: 17,
+                                                      ),
+                                                      SizedBox(width: 8),
+                                                      Text('Удалить'),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                  ),
+                ],
+              ),
+            )
+          : const SizedBox.shrink(),
+    );
+  }
+
+  Future<void> _showHistorySheet() async {
+    await _loadHistoryIndex();
+    if (!mounted) return;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (sheetContext, setSheetState) {
+            Future<void> refresh() async {
+              await _loadHistoryIndex();
+              if (sheetContext.mounted) setSheetState(() {});
+            }
+
+            return SafeArea(
+              top: false,
+              child: SizedBox(
+                height: math.min(
+                  MediaQuery.sizeOf(sheetContext).height * .78,
+                  660.0,
+                ),
+                child: Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 4, 12, 10),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('История SPORTOTEKA ИИ',
+                                    style: _AiText.title(17.0)),
+                                const SizedBox(height: 3),
+                                Text(
+                                  'Сохраняется на сервере для этого пользователя',
+                                  style: _AiText.muted(12.0),
+                                ),
+                              ],
+                            ),
+                          ),
+                          TextButton.icon(
+                            onPressed: () async {
+                              Navigator.of(sheetContext).pop();
+                              if (!mounted) return;
+                              await _startNewConversation();
+                            },
+                            icon: const Icon(Icons.add_rounded, size: 17),
+                            label: const Text('Новый'),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Divider(height: 1, color: _AiColors.line),
+                    Expanded(
+                      child: _historyLoading
+                          ? const Center(
+                              child: CircularProgressIndicator(
+                                color: _AiColors.green,
+                                strokeWidth: 2,
+                              ),
+                            )
+                          : _historyItems.isEmpty
+                              ? Center(
+                                  child: Text(
+                                    'История пока пустая',
+                                    style: _AiText.muted(12.5),
+                                  ),
+                                )
+                              : RefreshIndicator(
+                                  color: _AiColors.green,
+                                  onRefresh: refresh,
+                                  child: ListView.separated(
+                                    padding: const EdgeInsets.fromLTRB(
+                                        10, 10, 10, 22),
+                                    itemCount: _historyItems.length,
+                                    separatorBuilder: (_, __) =>
+                                        const SizedBox(height: 4),
+                                    itemBuilder: (_, index) {
+                                      final item = _historyItems[index];
+                                      final selected = item.conversationId ==
+                                          _conversationId;
+                                      return Material(
+                                        color: selected
+                                            ? _AiColors.greenSoft
+                                            : Colors.white,
+                                        borderRadius: BorderRadius.circular(12),
+                                        child: ListTile(
+                                          dense: true,
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(12),
+                                          ),
+                                          leading: Icon(
+                                            item.hasMedia
+                                                ? Icons.photo_library_outlined
+                                                : Icons
+                                                    .chat_bubble_outline_rounded,
+                                            color: _AiColors.greenDark,
+                                            size: 19,
+                                          ),
+                                          title: Text(
+                                            item.title,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: _AiText.title(13.8),
+                                          ),
+                                          subtitle: Text(
+                                            item.subtitle,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: _AiText.muted(11.4),
+                                          ),
+                                          trailing: IconButton(
+                                            tooltip: 'Удалить',
+                                            icon: const Icon(
+                                              Icons.delete_outline_rounded,
+                                              size: 18,
+                                              color: _AiColors.muted,
+                                            ),
+                                            onPressed: () async {
+                                              await _deleteHistoryConversation(
+                                                  item.conversationId);
+                                              if (sheetContext.mounted) {
+                                                setSheetState(() {});
+                                              }
+                                            },
+                                          ),
+                                          onTap: () async {
+                                            Navigator.pop(sheetContext);
+                                            await _saveHistoryNow();
+                                            await _openHistoryConversation(
+                                                item.conversationId);
+                                          },
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   void initState() {
     super.initState();
-    _conversationId = 'sportoteka:${widget.clubId}:${widget.teamId ?? 0}:'
-        '${widget.playerId ?? 0}:${DateTime.now().microsecondsSinceEpoch}';
-    _messages.add(_AiMessage.assistant(
-      text: widget.playerOnlyMode
-          ? 'Я ИИ-помощник профиля игрока. В этом окне анализирую только данные ${((widget.playerName ?? '').trim().isEmpty ? 'выбранного игрока' : widget.playerName!.trim())}: тестирования, матчи, GPS/Polar-сессии, скорость, спринты, пульс и нагрузку.'
-          : 'Я локальный ИИ клуба. Работаю на вашем сервере и вижу текущий контекст экрана: выбранную команду, тренировку, игроков и пульсовую точку. Ищу отчеты, делаю разбор GPS/Polar, объясняю причины нагрузки и предлагаю действия тренеру.',
-      suggestions: _starterPrompts.take(4).toList(),
-    ));
+    _resetConversationState(notify: false);
 
     final initial = (widget.initialPrompt ?? '').trim();
     if (initial.isNotEmpty) {
@@ -128,6 +836,10 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
           if (mounted) _ask(initial);
         });
       }
+    } else {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) unawaited(_restoreLatestHistory());
+      });
     }
   }
 
@@ -147,6 +859,8 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
 
   @override
   void dispose() {
+    _historySaveDebounce?.cancel();
+    unawaited(_saveHistoryNow());
     _input.dispose();
     _scroll.dispose();
     _focus.dispose();
@@ -200,9 +914,469 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
     return json.decode(t);
   }
 
-  Future<void> _ask([String? forced]) async {
-    final q = (forced ?? _input.text).trim();
-    if (q.isEmpty || _sending) return;
+  void _resetComposerMode() {
+    if (!mounted) return;
+    setState(() => _composerMode = _AiComposerMode.text);
+  }
+
+  Future<void> _showAiPlusMenu() async {
+    if (_sending || _uploadingAttachment) return;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withOpacity(.48),
+      builder: (sheetContext) {
+        Widget actionTile({
+          required IconData icon,
+          required String title,
+          required String subtitle,
+          required VoidCallback onTap,
+          bool emphasized = false,
+        }) {
+          return Material(
+            color:
+                emphasized ? _AiColors.greenSoft.withOpacity(.9) : Colors.white,
+            borderRadius: BorderRadius.circular(15),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(15),
+              onTap: onTap,
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(12, 11, 10, 11),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(15),
+                  border: Border.all(
+                    color: emphasized ? _AiColors.greenBorder : _AiColors.line,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 42,
+                      height: 42,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: emphasized ? Colors.white : _AiColors.greenSoft,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(
+                        icon,
+                        size: 20,
+                        color: _AiColors.greenDark,
+                      ),
+                    ),
+                    const SizedBox(width: 11),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            title,
+                            style: _AiText.title(13.4),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            subtitle,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: _AiText.muted(10.7),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    const Icon(
+                      Icons.chevron_right_rounded,
+                      size: 19,
+                      color: _AiColors.muted,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }
+
+        Widget section({
+          required String title,
+          required String subtitle,
+          required List<Widget> children,
+        }) {
+          return Container(
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8FAF9),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: _AiColors.line),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(2, 0, 2, 9),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(title, style: _AiText.title(13.8)),
+                      const SizedBox(height: 2),
+                      Text(subtitle, style: _AiText.muted(10.6)),
+                    ],
+                  ),
+                ),
+                for (var i = 0; i < children.length; i++) ...[
+                  children[i],
+                  if (i != children.length - 1) const SizedBox(height: 8),
+                ],
+              ],
+            ),
+          );
+        }
+
+        void closeThen(VoidCallback callback) {
+          Navigator.of(sheetContext).pop();
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            callback();
+          });
+        }
+
+        final createActions = <Widget>[
+          actionTile(
+            icon: Icons.image_outlined,
+            title: 'Создать изображение',
+            subtitle: 'Sportoteka Image · генерация по описанию',
+            onTap: () => closeThen(() {
+              setState(() => _composerMode = _AiComposerMode.image);
+              if (_focus.canRequestFocus) _focus.requestFocus();
+            }),
+          ),
+          actionTile(
+            icon: Icons.videocam_outlined,
+            title: 'Создать видео',
+            subtitle: 'Sportoteka Video · задача уйдёт в очередь',
+            onTap: () => closeThen(() {
+              setState(() => _composerMode = _AiComposerMode.video);
+              if (_focus.canRequestFocus) _focus.requestFocus();
+            }),
+          ),
+        ];
+
+        final addActions = <Widget>[
+          if (!widget.personalProfileMode)
+            actionTile(
+              icon: Icons.description_outlined,
+              title: 'Добавить документ',
+              subtitle:
+                  'PDF, Word, Excel, презентации · прочитать и сохранить в OS',
+              emphasized: true,
+              onTap: () => closeThen(() {
+                unawaited(_pickDocumentAttachment());
+              }),
+            ),
+          actionTile(
+            icon: Icons.photo_library_outlined,
+            title: 'Добавить изображение',
+            subtitle: 'Прикрепить фото к запросу ИИ',
+            onTap: () => closeThen(() {
+              unawaited(_pickAttachment(video: false));
+            }),
+          ),
+          actionTile(
+            icon: Icons.video_library_outlined,
+            title: 'Добавить видео',
+            subtitle: 'Прикрепить ролик к запросу ИИ',
+            onTap: () => closeThen(() {
+              unawaited(_pickAttachment(video: true));
+            }),
+          ),
+        ];
+
+        return SafeArea(
+          top: false,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final size = MediaQuery.sizeOf(sheetContext);
+              final desktop = size.width >= 760;
+              final horizontalPadding = desktop ? 24.0 : 12.0;
+              final maxWidth = desktop ? 900.0 : 620.0;
+
+              return Align(
+                alignment: Alignment.bottomCenter,
+                child: Container(
+                  width: math.min(size.width, maxWidth),
+                  constraints: BoxConstraints(
+                    maxHeight: size.height * .86,
+                  ),
+                  margin: EdgeInsets.fromLTRB(
+                    horizontalPadding,
+                    0,
+                    horizontalPadding,
+                    10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(.16),
+                        blurRadius: 36,
+                        spreadRadius: -10,
+                        offset: const Offset(0, 18),
+                      ),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(24),
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 42,
+                            height: 5,
+                            margin: const EdgeInsets.only(bottom: 13),
+                            decoration: BoxDecoration(
+                              color: _AiColors.line,
+                              borderRadius: BorderRadius.circular(99),
+                            ),
+                          ),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Что сделать с SPORTOTEKA AI?',
+                                      style: _AiText.title(16.0),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      desktop
+                                          ? 'Создание слева · добавление файлов справа'
+                                          : 'Создание и добавление файлов',
+                                      style: _AiText.muted(10.8),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              IconButton(
+                                tooltip: 'Закрыть',
+                                onPressed: () =>
+                                    Navigator.of(sheetContext).pop(),
+                                icon: const Icon(Icons.close_rounded),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          if (desktop)
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: section(
+                                    title: 'Создать',
+                                    subtitle:
+                                        'Новый контент по вашему описанию',
+                                    children: createActions,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: section(
+                                    title: 'Добавить',
+                                    subtitle: 'Файлы и материалы для работы ИИ',
+                                    children: addActions,
+                                  ),
+                                ),
+                              ],
+                            )
+                          else ...[
+                            section(
+                              title: 'Добавить',
+                              subtitle: 'Файлы и материалы для работы ИИ',
+                              children: addActions,
+                            ),
+                            const SizedBox(height: 10),
+                            section(
+                              title: 'Создать',
+                              subtitle: 'Новый контент по вашему описанию',
+                              children: createActions,
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _pickDocumentAttachment() async {
+    if (_uploadingAttachment || _sending || widget.personalProfileMode) {
+      return;
+    }
+
+    try {
+      final result = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: const <String>[
+          'pdf',
+          'doc',
+          'docx',
+          'txt',
+          'md',
+          'rtf',
+          'csv',
+          'xlsx',
+          'pptx',
+          'odt',
+          'jpg',
+          'jpeg',
+          'png',
+          'webp',
+          'heic',
+        ],
+        allowMultiple: false,
+        withData: true,
+      );
+
+      if (result == null || result.files.isEmpty || !mounted) return;
+
+      final picked = result.files.single;
+      final bytes = picked.bytes;
+      if (bytes == null || bytes.isEmpty) {
+        setState(() {
+          _error = 'Не удалось прочитать выбранный документ.';
+        });
+        return;
+      }
+
+      final xFile = XFile.fromData(
+        bytes,
+        name: picked.name,
+      );
+
+      setState(() {
+        _attachmentFile = xFile;
+        _uploadedAttachment = null;
+        _uploadingAttachment = true;
+        _composerMode = _AiComposerMode.text;
+        _error = null;
+      });
+
+      final request = http.MultipartRequest(
+        'POST',
+        Uri.parse('$_documentBase/upload'),
+      );
+      request.fields['club_id'] = widget.clubId.toString();
+      request.fields['user_id'] = widget.userId.toString();
+      if ((widget.teamId ?? 0) > 0) {
+        request.fields['team_id'] = widget.teamId.toString();
+      }
+      request.fields['title'] =
+          picked.name.replaceFirst(RegExp(r'\.[^.]+$'), '');
+      request.fields['ocr'] = 'auto';
+      request.fields['extract_images'] = '1';
+      request.fields['vision'] = '1';
+      request.fields['analyze_layout'] = '1';
+
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          'file',
+          bytes,
+          filename: picked.name,
+        ),
+      );
+
+      final streamed = await request.send().timeout(const Duration(minutes: 5));
+      final response = await http.Response.fromStream(streamed);
+      final data = _decodeJson(response.body);
+
+      if (response.statusCode < 200 ||
+          response.statusCode >= 300 ||
+          data is! Map ||
+          data['success'] != true) {
+        throw Exception(
+          data is Map
+              ? (data['detail'] ??
+                  data['message'] ??
+                  'Не удалось обработать документ')
+              : 'HTTP ${response.statusCode}',
+        );
+      }
+
+      final attachment = data['attachment'] is Map
+          ? Map<String, dynamic>.from(data['attachment'] as Map)
+          : <String, dynamic>{};
+      final document = data['document'] is Map
+          ? Map<String, dynamic>.from(data['document'] as Map)
+          : <String, dynamic>{};
+
+      if (!mounted) return;
+      setState(() {
+        _uploadedAttachment = attachment;
+        _uploadingAttachment = false;
+        _messages.add(
+          _AiMessage.assistant(
+            text: document['needs_ocr'] == true
+                ? 'Файл «${picked.name}» сохранён. Для него включено распознавание OCR и анализ изображений, поэтому ИИ сможет видеть текст страниц, фото и схемы после обработки.'
+                : 'Файл «${picked.name}» прочитан и сохранён в Спортотека OS → Документы → Методические материалы AI. ИИ сможет использовать текст, изображения и страницы документа в ответах.',
+            suggestions: const <String>[
+              'Сделай краткий конспект документа',
+              'Выдели упражнения и методические принципы',
+              'Какие ограничения указаны в документе?',
+              'Сопоставь рекомендации документа с последней тренировкой команды',
+            ],
+          ),
+        );
+      });
+      _scrollToBottom();
+      _scheduleHistorySave();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _uploadingAttachment = false;
+        _error = 'Не удалось добавить документ: $e';
+      });
+    }
+  }
+
+  String _attachedDocumentId() {
+    final direct = '${_uploadedAttachment?['document_id'] ?? ''}'.trim();
+    if (direct.isNotEmpty) return direct;
+
+    final attachment = _uploadedAttachment?['attachment'];
+    if (attachment is Map) {
+      final nested = '${attachment['document_id'] ?? ''}'.trim();
+      if (nested.isNotEmpty) return nested;
+    }
+
+    final document = _uploadedAttachment?['document'];
+    if (document is Map) {
+      return '${document['document_id'] ?? ''}'.trim();
+    }
+
+    return '';
+  }
+
+  Future<void> _askAttachedDocument(
+    String q,
+    String documentId,
+  ) async {
+    if (q.trim().isEmpty ||
+        documentId.isEmpty ||
+        _sending ||
+        widget.personalProfileMode) {
+      return;
+    }
 
     setState(() {
       _error = null;
@@ -211,16 +1385,498 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
       _input.clear();
     });
     _scrollToBottom();
+    _scheduleHistorySave();
 
     _AiMessage? responseMessage;
+
     try {
       final contextPayload = <String, dynamic>{
         ...?widget.initialPayload,
-        if (widget.playerOnlyMode) 'scope': 'player_profile',
-        if (widget.playerOnlyMode) 'player_only': true,
-        if (widget.playerOnlyMode && (widget.playerId ?? 0) > 0) 'player_id': widget.playerId,
-        if (widget.playerOnlyMode && (widget.playerName ?? '').trim().isNotEmpty) 'player_name': widget.playerName!.trim(),
+        'scope': 'workspace_document',
+        'document_id': documentId,
+        'attachment': _uploadedAttachment,
+        'ocr': true,
+        'include_images': true,
+        'vision': true,
       };
+
+      final response = await http
+          .post(
+            Uri.parse('$_documentBase/ask'),
+            headers: const <String, String>{
+              'Content-Type': 'application/json; charset=utf-8',
+              'Accept': 'application/json',
+            },
+            body: jsonEncode(
+              <String, dynamic>{
+                'club_id': widget.clubId,
+                'user_id': widget.userId,
+                if ((widget.teamId ?? 0) > 0) 'team_id': widget.teamId,
+                'document_ids': <String>[documentId],
+                'q': q,
+                'conversation_id': _conversationId,
+                'memory': _conversationMemory(),
+                'ocr': true,
+                'include_images': true,
+                'vision': true,
+                'context': contextPayload,
+              },
+            ),
+          )
+          .timeout(const Duration(seconds: 210));
+
+      final data = _decodeJson(response.body);
+
+      if (response.statusCode < 200 ||
+          response.statusCode >= 300 ||
+          data is! Map ||
+          data['success'] != true) {
+        throw Exception(
+          data is Map
+              ? (data['detail'] ??
+                  data['message'] ??
+                  'Ошибка анализа документа')
+              : 'HTTP ${response.statusCode}',
+        );
+      }
+
+      if (!mounted) return;
+      setState(() {
+        responseMessage = _AiMessage.fromResponse(
+          Map<String, dynamic>.from(data),
+          allowActions: false,
+          fallbackText: 'Документ обработан.',
+        );
+        _messages.add(responseMessage!);
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = 'Не удалось проанализировать документ: $e';
+        responseMessage = _AiMessage.assistant(
+          text: 'Не удалось получить ответ по документу. '
+              'Проверьте Document AI на сервере и повторите запрос.',
+          suggestions: const <String>[
+            'Сделай краткий конспект документа',
+            'Какие основные принципы в документе?',
+          ],
+        );
+        _messages.add(responseMessage!);
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _sending = false);
+      }
+      final message = responseMessage;
+      if (message != null) {
+        _scrollToMessageStart(message);
+      }
+      _scheduleHistorySave();
+    }
+  }
+
+  Future<void> _pickAttachment({required bool video}) async {
+    if (_uploadingAttachment) return;
+    try {
+      final XFile? file = video
+          ? await _mediaPicker.pickVideo(source: ImageSource.gallery)
+          : await _mediaPicker.pickImage(source: ImageSource.gallery);
+      if (file == null || !mounted) return;
+      setState(() {
+        _attachmentFile = file;
+        _uploadedAttachment = null;
+      });
+      await _uploadAttachment(file, kind: video ? 'video' : 'image');
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = 'Не удалось выбрать файл: $e');
+    }
+  }
+
+  Future<void> _uploadAttachment(XFile file, {required String kind}) async {
+    if (!mounted) return;
+    setState(() {
+      _uploadingAttachment = true;
+      _error = null;
+    });
+    try {
+      final bytes = await file.readAsBytes();
+      final req =
+          http.MultipartRequest('POST', Uri.parse('$_mediaBase/upload'));
+      req.fields['user_id'] = widget.userId.toString();
+      if (!widget.personalProfileMode) {
+        req.fields['club_id'] = widget.clubId.toString();
+        if ((widget.teamId ?? 0) > 0) {
+          req.fields['team_id'] = widget.teamId.toString();
+        }
+      }
+      req.fields['kind'] = kind;
+      req.files.add(http.MultipartFile.fromBytes(
+        'file',
+        bytes,
+        filename: file.name,
+      ));
+
+      final streamed = await req.send().timeout(const Duration(minutes: 5));
+      final res = await http.Response.fromStream(streamed);
+      final data = _decodeJson(res.body);
+      if (res.statusCode != 200 || data is! Map || data['success'] == false) {
+        throw Exception(
+          data is Map
+              ? (data['detail'] ?? data['message'] ?? 'Ошибка загрузки')
+              : 'HTTP ${res.statusCode}',
+        );
+      }
+      if (!mounted) return;
+      setState(() {
+        _uploadedAttachment = Map<String, dynamic>.from(data);
+        _uploadingAttachment = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _uploadingAttachment = false;
+        _error = 'Не удалось загрузить файл: $e';
+      });
+    }
+  }
+
+  void _clearAttachment() {
+    if (!mounted) return;
+    setState(() {
+      _attachmentFile = null;
+      _uploadedAttachment = null;
+    });
+  }
+
+  Future<void> _sendCurrentComposer() async {
+    switch (_composerMode) {
+      case _AiComposerMode.image:
+        await _startMediaGeneration('image');
+        break;
+      case _AiComposerMode.video:
+        await _startMediaGeneration('video');
+        break;
+      case _AiComposerMode.text:
+        await _ask();
+        break;
+    }
+  }
+
+  Future<void> _startMediaGeneration(String kind) async {
+    final prompt = _input.text.trim();
+    if (prompt.isEmpty || _sending || _uploadingAttachment) return;
+
+    setState(() {
+      _error = null;
+      _sending = true;
+      _messages.add(_AiMessage.user(prompt));
+      _input.clear();
+    });
+    _scrollToBottom();
+    _scheduleHistorySave();
+
+    try {
+      final payload = <String, dynamic>{
+        'user_id': widget.userId,
+        if (!widget.personalProfileMode) ...<String, dynamic>{
+          'club_id': widget.clubId,
+          if ((widget.teamId ?? 0) > 0) 'team_id': widget.teamId,
+        },
+        'prompt': prompt,
+        if (_uploadedAttachment != null) 'attachment': _uploadedAttachment,
+        if (kind == 'image') ...<String, dynamic>{
+          'width': 768,
+          'height': 768,
+          'steps': 15,
+          'guidance_scale': 5.0,
+        } else ...<String, dynamic>{
+          'width': 832,
+          'height': 480,
+          if (widget.personalProfileMode) 'frames': 17 else 'num_frames': 17,
+          'steps': 8,
+          'fps': 16,
+        },
+      };
+
+      final res = await http
+          .post(
+            Uri.parse('$_mediaBase/$kind/generate'),
+            headers: const <String, String>{
+              'Content-Type': 'application/json; charset=utf-8',
+              'Accept': 'application/json',
+            },
+            body: jsonEncode(payload),
+          )
+          .timeout(const Duration(seconds: 40));
+      final data = _decodeJson(res.body);
+      if (res.statusCode < 200 || res.statusCode >= 300 || data is! Map) {
+        final detail = data is Map
+            ? '${data['detail'] ?? data['message'] ?? data['error'] ?? 'HTTP ${res.statusCode}'}'
+            : 'HTTP ${res.statusCode}';
+        throw Exception(detail);
+      }
+      final jobId = '${data['job_id'] ?? ''}'.trim();
+      if (jobId.isEmpty) {
+        throw Exception(
+            data['detail'] ?? data['message'] ?? 'job_id отсутствует');
+      }
+      final status = '${data['status'] ?? 'queued'}'.trim().toLowerCase();
+      final progress = _asInt(data['progress']);
+
+      final message = _AiMessage.assistantMedia(
+        text: kind == 'image'
+            ? 'Создаю Sportoteka Image по вашему описанию.'
+            : 'Sportoteka Video поставлено в очередь. Можно продолжать работать в чате.',
+        mediaKind: kind,
+        jobId: jobId,
+        mediaStatus: status,
+        mediaProgress: progress,
+      );
+      if (!mounted) return;
+      setState(() {
+        _messages.add(message);
+        _sending = false;
+        _composerMode = _AiComposerMode.text;
+      });
+      _scrollToMessageStart(message);
+      _scheduleHistorySave();
+      unawaited(_pollMediaJob(kind: kind, jobId: jobId));
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _sending = false;
+        _input.text = prompt;
+        _input.selection = TextSelection.collapsed(offset: _input.text.length);
+        _error = 'Не удалось запустить генерацию: $e';
+        _messages.add(
+          _AiMessage.assistant(
+            text:
+                'Генерация сейчас не запустилась. Проверьте подключение AI Media API и повторите запрос.',
+          ),
+        );
+      });
+    }
+  }
+
+  Uri _mediaJobUri(
+    String kind,
+    String jobId, {
+    bool result = false,
+  }) {
+    final path = result
+        ? '$_mediaBase/$kind/jobs/$jobId/result'
+        : '$_mediaBase/$kind/jobs/$jobId';
+
+    return Uri.parse(path).replace(
+      queryParameters: widget.personalProfileMode
+          ? <String, String>{
+              'user_id': widget.userId.toString(),
+            }
+          : <String, String>{
+              'club_id': widget.clubId.toString(),
+              'user_id': widget.userId.toString(),
+            },
+    );
+  }
+
+  Future<Map<String, dynamic>?> _loadMediaJobResult({
+    required String kind,
+    required String jobId,
+  }) async {
+    final res = await http
+        .get(_mediaJobUri(kind, jobId, result: true))
+        .timeout(const Duration(seconds: 20));
+
+    final data = _decodeJson(res.body);
+    if (res.statusCode != 200 || data is! Map) return null;
+
+    return Map<String, dynamic>.from(data);
+  }
+
+  Future<void> _pollMediaJob({
+    required String kind,
+    required String jobId,
+  }) async {
+    final maxChecks = kind == 'video' ? 720 : 120;
+    final delay = kind == 'video'
+        ? const Duration(seconds: 10)
+        : const Duration(seconds: 3);
+
+    for (var i = 0; i < maxChecks; i++) {
+      if (!mounted) return;
+      if (i > 0) await Future<void>.delayed(delay);
+
+      try {
+        final res = await http
+            .get(_mediaJobUri(kind, jobId))
+            .timeout(const Duration(seconds: 20));
+
+        final data = _decodeJson(res.body);
+
+        if (res.statusCode != 200 || data is! Map) {
+          // 4xx здесь уже означает не "задача ещё идёт", а неправильный
+          // запрос/доступ. Не оставляем карточку бесконечно в очереди.
+          if (res.statusCode >= 400 && res.statusCode < 500) {
+            final detail = data is Map
+                ? '${data['detail'] ?? data['message'] ?? 'HTTP ${res.statusCode}'}'
+                : 'HTTP ${res.statusCode}';
+
+            _updateMediaMessage(
+              jobId,
+              status: 'failed',
+              progress: 0,
+              errorText: detail,
+            );
+            return;
+          }
+          continue;
+        }
+
+        final status = '${data['status'] ?? ''}'.trim().toLowerCase();
+        final progress = _asInt(data['progress']).clamp(0, 100).toInt();
+
+        var rawUrl =
+            '${data['output_url'] ?? data['result_url'] ?? data['url'] ?? ''}'
+                .trim();
+        var errorText = '${data['error'] ?? data['detail'] ?? ''}'.trim();
+
+        // Некоторые worker/API возвращают output_url только через /result.
+        // При completed дочитываем результат отдельным запросом с теми же
+        // club_id/user_id.
+        if (status == 'completed' && rawUrl.isEmpty) {
+          final result = await _loadMediaJobResult(
+            kind: kind,
+            jobId: jobId,
+          );
+          if (result != null) {
+            rawUrl =
+                '${result['output_url'] ?? result['result_url'] ?? result['url'] ?? ''}'
+                    .trim();
+            if (errorText.isEmpty) {
+              errorText = '${result['error'] ?? result['detail'] ?? ''}'.trim();
+            }
+          }
+        }
+
+        final mediaUrl = _absoluteMediaUrl(rawUrl);
+
+        _updateMediaMessage(
+          jobId,
+          status: status.isEmpty ? 'processing' : status,
+          progress: progress,
+          mediaUrl: mediaUrl,
+          errorText: errorText,
+        );
+
+        if (status == 'completed' || status == 'failed') return;
+      } catch (_) {
+        // Сетевая ошибка не отменяет задачу на сервере.
+        // Следующий poll повторит проверку.
+      }
+    }
+
+    if (mounted) {
+      _updateMediaMessage(
+        jobId,
+        status: 'failed',
+        progress: 0,
+        errorText: 'Истекло время ожидания результата',
+      );
+    }
+  }
+
+  String _absoluteMediaUrl(String raw) {
+    final value = raw.trim();
+    if (value.isEmpty) return '';
+    if (value.startsWith('http://') || value.startsWith('https://')) {
+      return value;
+    }
+    if (value.startsWith('/')) return 'https://sportotekaapp.ru$value';
+    return 'https://sportotekaapp.ru/$value';
+  }
+
+  void _updateMediaMessage(
+    String jobId, {
+    required String status,
+    required int progress,
+    String mediaUrl = '',
+    String errorText = '',
+  }) {
+    if (!mounted) return;
+    final index = _messages.indexWhere((m) => m.jobId == jobId);
+    if (index < 0) return;
+    final current = _messages[index];
+    final completed = status == 'completed';
+    final failed = status == 'failed';
+    setState(() {
+      _messages[index] = current.copyWith(
+        text: completed
+            ? (current.mediaKind == 'image'
+                ? 'Sportoteka Image готово.'
+                : 'Sportoteka Video готово.')
+            : failed
+                ? 'Не удалось завершить генерацию${errorText.isEmpty ? '.' : ': $errorText'}'
+                : current.text,
+        mediaStatus: status,
+        mediaProgress: progress,
+        mediaUrl: mediaUrl.isEmpty ? current.mediaUrl : mediaUrl,
+      );
+    });
+    _scheduleHistorySave();
+  }
+
+  Future<void> _ask([String? forced]) async {
+    final q = (forced ?? _input.text).trim();
+    if (q.isEmpty || _sending) return;
+
+    final documentId = _attachedDocumentId();
+    if (documentId.isNotEmpty && !widget.personalProfileMode) {
+      await _askAttachedDocument(q, documentId);
+      return;
+    }
+
+    setState(() {
+      _error = null;
+      _sending = true;
+      _messages.add(_AiMessage.user(q));
+      _input.clear();
+    });
+    _scrollToBottom();
+    _scheduleHistorySave();
+
+    _AiMessage? responseMessage;
+    try {
+      final contextPayload = widget.personalProfileMode
+          ? <String, dynamic>{}
+          : <String, dynamic>{
+              ...?widget.initialPayload,
+              if (_uploadedAttachment != null) ...<String, dynamic>{
+                'attachment': _uploadedAttachment,
+                'attachment_analysis': <String, dynamic>{
+                  'ocr': true,
+                  'include_images': true,
+                  'vision': true,
+                },
+              },
+              if (widget.playerOnlyMode) 'scope': 'player_profile',
+              if (widget.playerOnlyMode) 'player_only': true,
+              if (widget.playerOnlyMode && (widget.playerId ?? 0) > 0)
+                'player_id': widget.playerId,
+              if (widget.playerOnlyMode &&
+                  (widget.playerName ?? '').trim().isNotEmpty)
+                'player_name': widget.playerName!.trim(),
+            };
+      final workspaceDocument = contextPayload['workspace_document'];
+      final nestedDocumentKey = workspaceDocument is Map
+          ? '${workspaceDocument['document_key'] ?? ''}'.trim()
+          : '';
+      final documentId =
+          '${contextPayload['document_id'] ?? ''}'.trim().isNotEmpty
+              ? '${contextPayload['document_id']}'.trim()
+              : nestedDocumentKey;
+      final documentAi =
+          contextPayload['document_ai'] == true && documentId.isNotEmpty;
       final sessionIds = _asIntList(contextPayload['session_ids']);
       final contextSessionId = _asInt(contextPayload['session_id']);
       if (sessionIds.isEmpty && contextSessionId > 0) {
@@ -229,36 +1885,60 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
       final selectionMode = '${contextPayload['selection_mode'] ?? ''}';
       final contextPlayerId = _asInt(contextPayload['player_id']);
       final selectedDate = '${contextPayload['selected_date'] ?? ''}'.trim();
-      final payload = <String, dynamic>{
-        'club_id': widget.clubId,
-        'user_id': widget.userId,
-        if ((widget.teamId ?? 0) > 0) 'team_id': widget.teamId,
-        if (sessionIds.isNotEmpty) 'session_id': sessionIds.first,
-        if (sessionIds.isNotEmpty) 'session_ids': sessionIds,
-        if (selectedDate.isNotEmpty) 'selected_date': selectedDate,
-        if (widget.playerOnlyMode && (widget.playerId ?? 0) > 0)
-          'player_id': widget.playerId
-        else if (selectionMode == 'single_player' && contextPlayerId > 0)
-          'player_id': contextPlayerId,
-        'conversation_id': _conversationId,
-        'q': q,
-        'context': contextPayload,
-        'memory': _conversationMemory(),
-      };
+      final payload = widget.personalProfileMode
+          ? <String, dynamic>{
+              'user_id': widget.userId,
+              'conversation_id': _conversationId,
+              'q': q,
+              'memory': _conversationMemory(),
+            }
+          : <String, dynamic>{
+              'club_id': widget.clubId,
+              'user_id': widget.userId,
+              if ((widget.teamId ?? 0) > 0) 'team_id': widget.teamId,
+              if (sessionIds.isNotEmpty) 'session_id': sessionIds.first,
+              if (sessionIds.isNotEmpty) 'session_ids': sessionIds,
+              if (selectedDate.isNotEmpty) 'selected_date': selectedDate,
+              if (widget.playerOnlyMode && (widget.playerId ?? 0) > 0)
+                'player_id': widget.playerId
+              else if (selectionMode == 'single_player' && contextPlayerId > 0)
+                'player_id': contextPlayerId,
+              'conversation_id': _conversationId,
+              'q': q,
+              'context': contextPayload,
+              'memory': _conversationMemory(),
+              if (_uploadedAttachment != null) 'ocr': true,
+              if (_uploadedAttachment != null) 'include_images': true,
+              if (_uploadedAttachment != null) 'vision': true,
+            };
 
-      debugPrint('[AI_CHAT] URL=$_askUrl');
-      debugPrint('[AI_CHAT] PAYLOAD=${jsonEncode(payload)}');
+      final requestUrl = documentAi ? _documentAskUrl : _askUrl;
+      final requestPayload = documentAi
+          ? <String, dynamic>{
+              'club_id': widget.clubId,
+              'user_id': widget.userId,
+              if ((widget.teamId ?? 0) > 0) 'team_id': widget.teamId,
+              'document_ids': <String>[documentId],
+              'q': q,
+              'conversation_id': _conversationId,
+              'memory': _conversationMemory(),
+              'context': contextPayload,
+            }
+          : payload;
+
+      debugPrint('[AI_CHAT] URL=$requestUrl');
+      debugPrint('[AI_CHAT] PAYLOAD=${jsonEncode(requestPayload)}');
 
       final res = await http
           .post(
-            Uri.parse(_askUrl),
+            Uri.parse(requestUrl),
             headers: const <String, String>{
               'Content-Type': 'application/json; charset=utf-8',
               'Accept': 'application/json',
             },
-            body: jsonEncode(payload),
+            body: jsonEncode(requestPayload),
           )
-          .timeout(const Duration(seconds: 30));
+          .timeout(const Duration(seconds: 210));
 
       debugPrint('[AI_CHAT] STATUS=${res.statusCode}');
       // Тело ответа может содержать одноразовый action_token v15.9.1.
@@ -274,72 +1954,36 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
         );
       }
 
-      final cardsRaw = data['cards'] is List ? data['cards'] as List : const <dynamic>[];
-      final cards = cardsRaw
-          .whereType<Map>()
-          .map((e) => _AiResultCard.fromMap(Map<String, dynamic>.from(e)))
-          .where((e) => e.title.trim().isNotEmpty)
-          .toList();
-
-      final suggestionsRaw = data['suggestions'] is List ? data['suggestions'] as List : const <dynamic>[];
-      final suggestions = suggestionsRaw.map((e) => '$e').where((e) => e.trim().isNotEmpty).take(6).toList();
-
-      final insightsRaw = data['insights'] is List ? data['insights'] as List : const <dynamic>[];
-      final insights = insightsRaw
-          .whereType<Map>()
-          .map((e) => _AiInsightSection.fromMap(Map<String, dynamic>.from(e)))
-          .where((e) => e.title.trim().isNotEmpty && e.items.isNotEmpty)
-          .take(6)
-          .toList();
-
-      final actionsRaw = data['actions'] is List
-          ? data['actions'] as List
-          : const <dynamic>[];
-      final actions = actionsRaw
-          .whereType<Map>()
-          .map((e) => AiWorkspaceAction.fromMap(Map<String, dynamic>.from(e)))
-          .where((e) => e.title.trim().isNotEmpty)
-          .take(4)
-          .toList(growable: false);
-
-      final diagramsRaw = data['diagrams'] is List ? data['diagrams'] as List : const <dynamic>[];
-      final diagrams = diagramsRaw
-          .whereType<Map>()
-          .map((e) => ClubAiTacticalDiagram.fromJson(Map<String, dynamic>.from(e)))
-          .where((e) => e.players.isNotEmpty)
-          .take(3)
-          .toList();
-      final queryId = _asInt(data['query_id']);
-      final toolSource = '${data['tool_source'] ?? ''}'.trim();
-      final verifiedData = data['verified_data'] == true;
-
       if (!mounted) return;
       setState(() {
-        responseMessage = _AiMessage.assistant(
-          text: '${data['answer'] ?? 'Нашёл результаты.'}',
-          queryId: queryId,
-          insights: insights,
-          cards: cards,
-          diagrams: diagrams,
-          actions: actions,
-          suggestions: suggestions,
-          toolSource: toolSource,
-          verifiedData: verifiedData,
+        responseMessage = _AiMessage.fromResponse(
+          Map<String, dynamic>.from(data),
+          allowActions: !widget.personalProfileMode,
+          fallbackText: 'Нашёл результаты.',
         );
         _messages.add(responseMessage!);
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = 'Не удалось выполнить поиск: $e';
+        _error = widget.personalProfileMode
+            ? 'Не удалось получить ответ: $e'
+            : 'Не удалось выполнить поиск: $e';
         responseMessage = _AiMessage.assistant(
-          text:
-              'Не смог получить ответ от сервера. Можно попробовать короче: выбранный игрок + что ищем, например «отчёт за вчера» или «тренировки U13 за неделю».',
-          suggestions: const <String>[
-            'Последние тренировки команды',
-            'Последняя GPS-сессия',
-            'Матчи за месяц',
-          ],
+          text: widget.personalProfileMode
+              ? 'Не смог получить ответ от Спортотека AI. Проверьте подключение и попробуйте ещё раз.'
+              : 'Не смог получить ответ от сервера. Можно попробовать короче: выбранный игрок + что ищем, например «отчёт за вчера» или «тренировки U13 за неделю».',
+          suggestions: widget.personalProfileMode
+              ? const <String>[
+                  'Объясни высокий прессинг',
+                  'Помоги написать короткий пост',
+                  'Придумай идею для публикации',
+                ]
+              : const <String>[
+                  'Последние тренировки команды',
+                  'Последняя GPS-сессия',
+                  'Матчи за месяц',
+                ],
         );
         _messages.add(responseMessage!);
       });
@@ -349,32 +1993,40 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
       if (message != null) {
         _scrollToMessageStart(message);
       }
+      _scheduleHistorySave();
     }
   }
 
-  Future<void> _sendFeedback(_AiMessage message, int rating, {String comment = ''}) async {
-    if (message.queryId <= 0) return;
+  Future<void> _sendFeedback(_AiMessage message, int rating,
+      {String comment = ''}) async {
+    if (widget.personalProfileMode || message.queryId <= 0) return;
     try {
-      await http
-          .post(
-            Uri.parse(_feedbackUrl),
-            body: <String, String>{
-              'club_id': widget.clubId.toString(),
-              'user_id': widget.userId.toString(),
-              if ((widget.teamId ?? 0) > 0) 'team_id': widget.teamId.toString(),
-              'query_id': message.queryId.toString(),
-              'rating': rating.toString(),
-              'comment': comment,
-            },
-          )
-          .timeout(const Duration(seconds: 8));
+      await http.post(
+        Uri.parse(_feedbackUrl),
+        headers: const <String, String>{
+          'Content-Type': 'application/json; charset=utf-8',
+          'Accept': 'application/json',
+        },
+        body: jsonEncode(<String, dynamic>{
+          'club_id': widget.clubId,
+          'user_id': widget.userId,
+          if ((widget.teamId ?? 0) > 0) 'team_id': widget.teamId,
+          'query_id': message.queryId,
+          'rating': rating,
+          'comment': comment,
+        }),
+      ).timeout(const Duration(seconds: 8));
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(rating > 0 ? 'Запомнил: ответ полезный' : 'Запомнил: ответ надо улучшить')),
+        SnackBar(
+            content: Text(rating > 0
+                ? 'Запомнил: ответ полезный'
+                : 'Запомнил: ответ надо улучшить')),
       );
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Не удалось сохранить оценку ИИ')));
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Не удалось сохранить оценку ИИ')));
     }
   }
 
@@ -441,13 +2093,43 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
         clubId: widget.clubId,
         userId: widget.userId,
         teamId: teamId,
+        conversationId: _conversationId,
         actionToken: action.actionToken,
       );
       if (!mounted) return;
       final message = '${result['answer'] ?? 'Действие выполнено'}'.trim();
-      setState(() => _completedActionMessages[key] = message);
+      final completedPayload = <String, dynamic>{...result};
+      final completedAction = result['action'];
+      if (completedAction is Map) {
+        completedPayload['actions'] = <Map<String, dynamic>>[
+          <String, dynamic>{
+            'id': action.id,
+            'type': '${completedAction['type'] ?? action.type}',
+            'title': action.title,
+            'description': message,
+            'status': 'completed',
+            'requires_confirmation': false,
+            'payload': action.payload,
+            'result': completedAction['result'] is Map
+                ? Map<String, dynamic>.from(completedAction['result'] as Map)
+                : const <String, dynamic>{},
+          },
+        ];
+      }
+      final completedMessage = _AiMessage.fromResponse(
+        completedPayload,
+        allowActions: true,
+        fallbackText: 'Действие выполнено',
+      );
+      setState(() {
+        _completedActionMessages[key] = message;
+        _messages.add(completedMessage);
+      });
+      _scheduleHistorySave();
+      _scrollToMessageStart(completedMessage);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message.isEmpty ? 'Действие выполнено' : message)),
+        SnackBar(
+            content: Text(message.isEmpty ? 'Действие выполнено' : message)),
       );
     } catch (e) {
       if (!mounted) return;
@@ -458,8 +2140,9 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
   }
 
   void _scrollToBottom() {
+    if (!mounted) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_scroll.hasClients) return;
+      if (!mounted || !_scroll.hasClients) return;
       _scroll.animateTo(
         _scroll.position.maxScrollExtent + 240,
         duration: const Duration(milliseconds: 260),
@@ -495,7 +2178,9 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
     await Clipboard.setData(ClipboardData(text: url));
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Ссылка на PDF скопирована. Откройте ее в браузере или обработайте через onOpenPdf.')),
+      const SnackBar(
+          content: Text(
+              'Ссылка на PDF скопирована. Откройте ее в браузере или обработайте через onOpenPdf.')),
     );
   }
 
@@ -510,67 +2195,141 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
     }
 
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Переход: $target ${payload.isEmpty ? '' : payload}')),
+      SnackBar(
+          content: Text('Переход: $target ${payload.isEmpty ? '' : payload}')),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final media = MediaQuery.sizeOf(context);
-        final width = constraints.maxWidth.isFinite && constraints.maxWidth > 0 ? constraints.maxWidth : media.width;
-        final safeHeight = constraints.maxHeight.isFinite && constraints.maxHeight > 120
-            ? constraints.maxHeight
-            : math.max(620.0, media.height - MediaQuery.paddingOf(context).vertical - 18);
-        final phone = width < 700;
-        final tablet = width >= 700 && width < 1120;
+    return SafeArea(
+      top: true,
+      bottom: false,
+      minimum: const EdgeInsets.only(top: 2),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final media = MediaQuery.sizeOf(context);
+          final width =
+              constraints.maxWidth.isFinite && constraints.maxWidth > 0
+                  ? constraints.maxWidth
+                  : media.width;
+          final safeHeight = constraints.maxHeight.isFinite &&
+                  constraints.maxHeight > 120
+              ? constraints.maxHeight
+              : math.max(620.0,
+                  media.height - MediaQuery.paddingOf(context).vertical - 18);
+          final phone = width < 700;
+          final tablet = width >= 700 && width < 1120;
 
-        return SizedBox(
-          width: double.infinity,
-          height: safeHeight,
-          child: Container(
-            decoration: _AiDecor.workspaceBg(),
-            padding: EdgeInsets.all(phone ? 6 : tablet ? 8 : 10),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(phone ? 16 : 18),
-              child: Container(
-                decoration: _AiDecor.unifiedWindow(radius: phone ? 16 : 18),
-                child: phone ? _buildPhone() : _buildDesktop(width: width),
+          return SizedBox(
+            width: double.infinity,
+            height: safeHeight,
+            child: Container(
+              decoration: _AiDecor.workspaceBg(),
+              padding: EdgeInsets.all(phone
+                  ? 6
+                  : tablet
+                      ? 8
+                      : 10),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(phone ? 16 : 18),
+                child: Container(
+                  decoration: _AiDecor.unifiedWindow(radius: phone ? 16 : 18),
+                  child: phone ? _buildPhone() : _buildDesktop(width: width),
+                ),
               ),
             ),
-          ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildPhone() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : MediaQuery.sizeOf(context).width;
+
+        return Stack(
+          children: [
+            // Основной AI-чат всегда остаётся в этом же окне.
+            Column(
+              children: [
+                _AiHeader(
+                  clubName: widget.clubName,
+                  teamName: widget.teamName,
+                  compact: true,
+                  onExample: () => _ask(
+                    widget.personalProfileMode
+                        ? 'Объясни высокий прессинг простыми словами'
+                        : widget.playerOnlyMode
+                            ? 'Сделай краткий анализ последних данных игрока'
+                            : 'Найди последний отчет по игроку',
+                  ),
+                  onHistory: () => unawaited(_toggleHistoryRail()),
+                  onNewChat: () => unawaited(_startNewConversation()),
+                  historyOpen: _historyRailOpen,
+                  playerOnlyMode: widget.playerOnlyMode,
+                  personalProfileMode: widget.personalProfileMode,
+                  playerName: widget.playerName,
+                  onBack: widget.onBack,
+                ),
+                Expanded(child: _buildChat(compact: true)),
+                _buildComposer(compact: true),
+              ],
+            ),
+
+            // Это НЕ modal/bottom sheet. Затемнение находится внутри
+            // текущего окна и только визуально отделяет боковую панель.
+            Positioned.fill(
+              child: IgnorePointer(
+                ignoring: !_historyRailOpen,
+                child: AnimatedOpacity(
+                  duration: const Duration(milliseconds: 180),
+                  opacity: _historyRailOpen ? 1 : 0,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => unawaited(_toggleHistoryRail()),
+                    child: Container(
+                      color: Colors.black.withOpacity(.055),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
+            // История выдвигается слева прямо внутри AI-окна.
+            Positioned(
+              left: 0,
+              top: 0,
+              bottom: 0,
+              child: ClipRect(
+                child: _buildHistoryRail(width: width),
+              ),
+            ),
+          ],
         );
       },
     );
   }
 
-  Widget _buildPhone() {
-    return Column(
-      children: [
-        _AiHeader(
-          clubName: widget.clubName,
-          teamName: widget.teamName,
-          compact: true,
-          onExample: () => _ask(widget.playerOnlyMode ? 'Сделай краткий анализ последних данных игрока' : 'Найди последний отчет по игроку'),
-          playerOnlyMode: widget.playerOnlyMode,
-          playerName: widget.playerName,
-          onBack: widget.onBack,
-        ),
-        Expanded(child: _buildChat(compact: true)),
-        _buildComposer(compact: true),
-      ],
-    );
-  }
-
   Widget _buildDesktop({required double width}) {
-    final showRail = !widget.playerOnlyMode && width >= 1050;
+    final showRail =
+        !widget.personalProfileMode && !widget.playerOnlyMode && width >= 1180;
+
     return Row(
       children: [
-        if (showRail) ...[
+        if (showRail && !_historyRailOpen) ...[
           SizedBox(width: 310, child: _buildRail()),
           Container(width: 1, color: _AiColors.line.withOpacity(.9)),
         ],
+
+        // История как в ChatGPT: по умолчанию закрыта.
+        // Нажатие на иконку плавно раскрывает её в этом же окне.
+        _buildHistoryRail(width: width),
+
         Expanded(
           child: Column(
             children: [
@@ -578,8 +2337,16 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
                 clubName: widget.clubName,
                 teamName: widget.teamName,
                 compact: false,
-                onExample: () => _ask(widget.playerOnlyMode ? 'Сделай краткий анализ последних данных игрока' : 'Покажи последнюю тренировку и отчет команды'),
+                onExample: () => _ask(widget.personalProfileMode
+                    ? 'Помоги написать короткий пост для профиля'
+                    : widget.playerOnlyMode
+                        ? 'Сделай краткий анализ последних данных игрока'
+                        : 'Покажи последнюю тренировку и отчет команды'),
+                onHistory: () => unawaited(_toggleHistoryRail()),
+                onNewChat: () => unawaited(_startNewConversation()),
+                historyOpen: _historyRailOpen,
                 playerOnlyMode: widget.playerOnlyMode,
+                personalProfileMode: widget.personalProfileMode,
                 playerName: widget.playerName,
                 onBack: widget.onBack,
               ),
@@ -594,13 +2361,20 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
 
   Widget _buildRail() {
     const blocks = <_AiQuickBlock>[
-      _AiQuickBlock(Icons.person_search_rounded, 'Игрок', 'Найти профиль, тренировки, отчеты и тесты игрока.'),
-      _AiQuickBlock(Icons.monitor_heart_rounded, 'Трекер', 'GPS/Polar, скорость, пульс, спринты, нагрузка.'),
-      _AiQuickBlock(Icons.event_rounded, 'Календарь', 'Тренировки, матчи, события и посещаемость.'),
-      _AiQuickBlock(Icons.assignment_rounded, 'Отчеты', 'PDF/HTML отчет, карточка сессии и экспорт.'),
-      _AiQuickBlock(Icons.tips_and_updates_rounded, 'Советы', 'Выводы по футболу: нагрузка, спринты, пульс, риски.'),
-      _AiQuickBlock(Icons.sports_soccer_rounded, 'Схемы', 'Построение расстановки, прессинга, розыгрыша и стандартов.'),
-      _AiQuickBlock(Icons.psychology_alt_rounded, 'Самообучение', 'ИИ запоминает оценки тренера и лучшие ответы клуба.'),
+      _AiQuickBlock(Icons.person_search_rounded, 'Игрок',
+          'Найти профиль, тренировки, отчеты и тесты игрока.'),
+      _AiQuickBlock(Icons.monitor_heart_rounded, 'Трекер',
+          'GPS/Polar, скорость, пульс, спринты, нагрузка.'),
+      _AiQuickBlock(Icons.event_rounded, 'Календарь',
+          'Тренировки, матчи, события и посещаемость.'),
+      _AiQuickBlock(Icons.assignment_rounded, 'Отчеты',
+          'PDF/HTML отчет, карточка сессии и экспорт.'),
+      _AiQuickBlock(Icons.tips_and_updates_rounded, 'Советы',
+          'Выводы по футболу: нагрузка, спринты, пульс, риски.'),
+      _AiQuickBlock(Icons.sports_soccer_rounded, 'Схемы',
+          'Построение расстановки, прессинга, розыгрыша и стандартов.'),
+      _AiQuickBlock(Icons.psychology_alt_rounded, 'Самообучение',
+          'ИИ запоминает оценки тренера и лучшие ответы клуба.'),
     ];
 
     return Container(
@@ -614,16 +2388,18 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
                 width: 42,
                 height: 42,
                 decoration: _AiDecor.aiGradient(radius: 13),
-                child: const Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 21),
+                child: const Icon(Icons.auto_awesome_rounded,
+                    color: Colors.white, size: 21),
               ),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('ИИ клуба', style: _AiText.title(16.2)),
+                    Text('SPORTOTEKA ИИ', style: _AiText.title(16.2)),
                     const SizedBox(height: 4),
-                    Text('Поиск, разбор, схемы, память', style: _AiText.muted(11)),
+                    Text('Поиск, разбор, схемы, память',
+                        style: _AiText.muted(11)),
                   ],
                 ),
               ),
@@ -657,10 +2433,12 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
       color: Colors.transparent,
       child: ListView.builder(
         controller: _scroll,
-        padding: EdgeInsets.fromLTRB(compact ? 10 : 18, compact ? 10 : 16, compact ? 10 : 18, compact ? 16 : 20),
+        padding: EdgeInsets.fromLTRB(compact ? 10 : 18, compact ? 10 : 16,
+            compact ? 10 : 18, compact ? 16 : 20),
         itemCount: _messages.length + (_sending ? 1 : 0),
         itemBuilder: (context, index) {
-          if (_sending && index == _messages.length) return const _AiTypingBubble();
+          if (_sending && index == _messages.length)
+            return const _AiTypingBubble();
           final msg = _messages[index];
           return KeyedSubtree(
             key: _messageKey(msg),
@@ -685,7 +2463,12 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
 
   Widget _buildComposer({required bool compact}) {
     return Container(
-      padding: EdgeInsets.fromLTRB(compact ? 8 : 14, 8, compact ? 8 : 14, compact ? 8 : 12),
+      padding: EdgeInsets.fromLTRB(
+        compact ? 8 : 14,
+        8,
+        compact ? 8 : 14,
+        compact ? 8 : 12,
+      ),
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(.44),
         border: Border(top: BorderSide(color: _AiColors.line.withOpacity(.7))),
@@ -697,8 +2480,71 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
             _AiInlineError(text: _error!),
             const SizedBox(height: 8),
           ],
+          if (_composerMode != _AiComposerMode.text ||
+              _attachmentFile != null) ...[
+            Row(
+              children: [
+                if (_composerMode != _AiComposerMode.text)
+                  _AiComposerModeChip(
+                    label: _composerModeLabel,
+                    icon: _composerMode == _AiComposerMode.image
+                        ? Icons.image_outlined
+                        : Icons.videocam_outlined,
+                    onClose: _resetComposerMode,
+                  ),
+                if (_composerMode != _AiComposerMode.text &&
+                    _attachmentFile != null)
+                  const SizedBox(width: 6),
+                if (_attachmentFile != null)
+                  Expanded(
+                    child: _AiComposerAttachmentChip(
+                      name: _attachmentFile!.name,
+                      uploading: _uploadingAttachment,
+                      icon: _attachedDocumentId().isNotEmpty
+                          ? Icons.description_outlined
+                          : Icons.attach_file_rounded,
+                      onClose: _clearAttachment,
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 7),
+          ],
           Row(
             children: [
+              // Такой же компактный +, как в Community: зелёный квадрат 25x25
+              // внутри 36x36 зоны нажатия.
+              Tooltip(
+                message: 'AI-инструменты',
+                child: IconButton(
+                  onPressed: (_sending || _uploadingAttachment)
+                      ? null
+                      : _showAiPlusMenu,
+                  visualDensity: VisualDensity.compact,
+                  padding: const EdgeInsets.all(6),
+                  constraints: const BoxConstraints(
+                    minWidth: 36,
+                    minHeight: 36,
+                  ),
+                  icon: Container(
+                    width: 25,
+                    height: 25,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: (_sending || _uploadingAttachment)
+                          ? _AiColors.line
+                          : _AiColors.green,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(
+                      Icons.add_rounded,
+                      size: 18,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 4),
               Expanded(
                 child: Container(
                   constraints: const BoxConstraints(minHeight: 42),
@@ -718,7 +2564,15 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                   child: Row(
                     children: [
-                      const Icon(Icons.auto_awesome_rounded, color: _AiColors.greenDark, size: 18),
+                      Icon(
+                        _composerMode == _AiComposerMode.image
+                            ? Icons.image_outlined
+                            : _composerMode == _AiComposerMode.video
+                                ? Icons.videocam_outlined
+                                : Icons.auto_awesome_rounded,
+                        color: _AiColors.greenDark,
+                        size: 18,
+                      ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: TextField(
@@ -727,12 +2581,10 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
                           minLines: 1,
                           maxLines: compact ? 3 : 4,
                           textInputAction: TextInputAction.send,
-                          onSubmitted: (_) => _ask(),
+                          onSubmitted: (_) => unawaited(_sendCurrentComposer()),
                           decoration: InputDecoration(
                             border: InputBorder.none,
-                            hintText: widget.playerOnlyMode
-                                ? 'Спросите о нагрузке, пульсе, скорости или тестах игрока...'
-                                : 'Спросите: почему такой спринт, сделай анализ, нарисуй схему...',
+                            hintText: _composerHint,
                             isDense: true,
                           ),
                           style: _AiText.value(compact ? 12.5 : 13.2),
@@ -748,17 +2600,131 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
                 borderRadius: BorderRadius.circular(14),
                 child: InkWell(
                   borderRadius: BorderRadius.circular(14),
-                  onTap: _sending ? null : () => _ask(),
+                  onTap: (_sending || _uploadingAttachment)
+                      ? null
+                      : () => unawaited(_sendCurrentComposer()),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 160),
                     width: compact ? 42 : 46,
                     height: compact ? 42 : 46,
-                    decoration: _sending ? _AiDecor.disabledButton(radius: 14) : _AiDecor.aiGradient(radius: 14),
-                    child: Icon(_sending ? Icons.more_horiz_rounded : Icons.arrow_upward_rounded, color: Colors.white, size: 19),
+                    decoration: (_sending || _uploadingAttachment)
+                        ? _AiDecor.disabledButton(radius: 14)
+                        : _AiDecor.aiGradient(radius: 14),
+                    child: Icon(
+                      (_sending || _uploadingAttachment)
+                          ? Icons.more_horiz_rounded
+                          : Icons.arrow_upward_rounded,
+                      color: Colors.white,
+                      size: 19,
+                    ),
                   ),
                 ),
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AiComposerModeChip extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final VoidCallback onClose;
+
+  const _AiComposerModeChip({
+    required this.label,
+    required this.icon,
+    required this.onClose,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 30,
+      padding: const EdgeInsets.only(left: 9, right: 4),
+      decoration: BoxDecoration(
+        color: _AiColors.greenSoft,
+        borderRadius: BorderRadius.circular(9),
+        border: Border.all(color: _AiColors.greenBorder),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: _AiColors.greenDark),
+          const SizedBox(width: 6),
+          Text(label,
+              style: _AiText.chip(size: 10.2, color: _AiColors.greenDark)),
+          const SizedBox(width: 2),
+          InkWell(
+            borderRadius: BorderRadius.circular(99),
+            onTap: onClose,
+            child: const Padding(
+              padding: EdgeInsets.all(4),
+              child: Icon(Icons.close_rounded,
+                  size: 14, color: _AiColors.greenDark),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AiComposerAttachmentChip extends StatelessWidget {
+  final String name;
+  final bool uploading;
+  final IconData icon;
+  final VoidCallback onClose;
+
+  const _AiComposerAttachmentChip({
+    required this.name,
+    required this.uploading,
+    this.icon = Icons.attach_file_rounded,
+    required this.onClose,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 30,
+      padding: const EdgeInsets.only(left: 9, right: 4),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(.92),
+        borderRadius: BorderRadius.circular(9),
+        border: Border.all(color: _AiColors.line),
+      ),
+      child: Row(
+        children: [
+          if (uploading)
+            const SizedBox(
+              width: 13,
+              height: 13,
+              child: CircularProgressIndicator(
+                strokeWidth: 1.8,
+                color: _AiColors.green,
+              ),
+            )
+          else
+            Icon(icon, size: 14, color: _AiColors.greenDark),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              uploading ? 'Загрузка · $name' : name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: _AiText.chip(size: 10.0, color: _AiColors.text2),
+            ),
+          ),
+          InkWell(
+            borderRadius: BorderRadius.circular(99),
+            onTap: uploading ? null : onClose,
+            child: const Padding(
+              padding: EdgeInsets.all(4),
+              child:
+                  Icon(Icons.close_rounded, size: 14, color: _AiColors.muted),
+            ),
           ),
         ],
       ),
@@ -771,26 +2737,48 @@ class _AiHeader extends StatelessWidget {
   final String? teamName;
   final bool compact;
   final VoidCallback onExample;
+  final VoidCallback onHistory;
+  final VoidCallback onNewChat;
+  final bool historyOpen;
   final bool playerOnlyMode;
+  final bool personalProfileMode;
   final String? playerName;
   final VoidCallback? onBack;
 
-  const _AiHeader({required this.clubName, required this.teamName, required this.compact, required this.onExample, this.playerOnlyMode = false, this.playerName, this.onBack});
+  const _AiHeader(
+      {required this.clubName,
+      required this.teamName,
+      required this.compact,
+      required this.onExample,
+      required this.onHistory,
+      required this.onNewChat,
+      this.historyOpen = false,
+      this.playerOnlyMode = false,
+      this.personalProfileMode = false,
+      this.playerName,
+      this.onBack});
 
   @override
   Widget build(BuildContext context) {
-    final scope = playerOnlyMode
-        ? ((playerName ?? '').trim().isEmpty ? 'Только выбранный игрок' : 'Только ${playerName!.trim()}')
-        : [
-            if ((clubName ?? '').trim().isNotEmpty) clubName!.trim(),
-            if ((teamName ?? '').trim().isNotEmpty) teamName!.trim(),
-          ].join(' · ');
+    final scope = personalProfileMode
+        ? 'Личный помощник'
+        : playerOnlyMode
+            ? ((playerName ?? '').trim().isEmpty
+                ? 'Только выбранный игрок'
+                : 'Только ${playerName!.trim()}')
+            : [
+                if ((clubName ?? '').trim().isNotEmpty) clubName!.trim(),
+                if ((teamName ?? '').trim().isNotEmpty) teamName!.trim(),
+              ].join(' · ');
 
     return Container(
-      padding: EdgeInsets.fromLTRB(compact ? 10 : 14, compact ? 9 : 11, compact ? 10 : 14, compact ? 9 : 11),
+      padding: EdgeInsets.fromLTRB(compact ? 10 : 14, compact ? 9 : 11,
+          compact ? 10 : 14, compact ? 9 : 11),
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(.38),
-        border: Border(bottom: BorderSide(color: _AiColors.line.withOpacity(.72), width: 1)),
+        border: Border(
+            bottom:
+                BorderSide(color: _AiColors.line.withOpacity(.72), width: 1)),
       ),
       child: Row(
         children: [
@@ -798,7 +2786,8 @@ class _AiHeader extends StatelessWidget {
             width: compact ? 35 : 38,
             height: compact ? 35 : 38,
             decoration: _AiDecor.aiSoft(radius: 11),
-            child: const Icon(Icons.auto_awesome_rounded, color: _AiColors.greenDark, size: 19),
+            child: const Icon(Icons.auto_awesome_rounded,
+                color: _AiColors.greenDark, size: 19),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -808,17 +2797,42 @@ class _AiHeader extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    Flexible(child: Text(playerOnlyMode ? 'ИИ игрока' : 'ИИ помощник', maxLines: 1, overflow: TextOverflow.ellipsis, style: _AiText.title(compact ? 15 : 15.8))),
+                    Flexible(
+                        child: Text(
+                            personalProfileMode
+                                ? 'Спортотека AI'
+                                : playerOnlyMode
+                                    ? 'ИИ игрока'
+                                    : 'ИИ помощник',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: _AiText.title(compact ? 15 : 15.8))),
                     const SizedBox(width: 7),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                      decoration: BoxDecoration(color: _AiColors.graphite, borderRadius: BorderRadius.circular(8)),
-                      child: const Text('beta', style: TextStyle(color: Colors.white, fontSize: 9.4, fontWeight: FontWeight.w600, height: 1)),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 7, vertical: 3),
+                      decoration: BoxDecoration(
+                          color: _AiColors.graphite,
+                          borderRadius: BorderRadius.circular(8)),
+                      child: const Text('beta',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 9.4,
+                              fontWeight: FontWeight.w600,
+                              height: 1)),
                     ),
                   ],
                 ),
                 const SizedBox(height: 4),
-                Text(scope.isEmpty ? 'Поиск по клубу, командам и отчетам' : scope, maxLines: 1, overflow: TextOverflow.ellipsis, style: _AiText.muted(compact ? 10.2 : 10.8)),
+                Text(
+                    scope.isEmpty
+                        ? (personalProfileMode
+                            ? 'Личный помощник'
+                            : 'Поиск по клубу, командам и отчетам')
+                        : scope,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: _AiText.muted(compact ? 10.2 : 10.8)),
               ],
             ),
           ),
@@ -827,10 +2841,32 @@ class _AiHeader extends StatelessWidget {
             _AiCircleAction(icon: Icons.close_rounded, onTap: onBack!),
             const SizedBox(width: 6),
           ],
-          if (!compact)
-            _AiHeaderAction(icon: Icons.bolt_rounded, text: 'Пример', onTap: onExample)
-          else
-            _AiCircleAction(icon: Icons.bolt_rounded, onTap: onExample),
+          if (!compact) ...[
+            _AiSidebarAction(
+              open: historyOpen,
+              onTap: onHistory,
+            ),
+            const SizedBox(width: 6),
+            _AiCircleAction(
+              icon: Icons.add_comment_outlined,
+              onTap: onNewChat,
+            ),
+            const SizedBox(width: 6),
+            _AiCircleAction(
+              icon: Icons.bolt_rounded,
+              onTap: onExample,
+            ),
+          ] else ...[
+            _AiSidebarAction(
+              open: false,
+              onTap: onHistory,
+            ),
+            const SizedBox(width: 5),
+            _AiCircleAction(
+              icon: Icons.add_comment_outlined,
+              onTap: onNewChat,
+            ),
+          ],
         ],
       ),
     );
@@ -869,11 +2905,14 @@ class _AiBubble extends StatelessWidget {
       child: Align(
         alignment: user ? Alignment.centerRight : Alignment.centerLeft,
         child: ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: math.min(maxWidth, user ? 620 : 780)),
+          constraints:
+              BoxConstraints(maxWidth: math.min(maxWidth, user ? 620 : 780)),
           child: Column(
-            crossAxisAlignment: user ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+            crossAxisAlignment:
+                user ? CrossAxisAlignment.end : CrossAxisAlignment.start,
             children: [
-              if (!user && (message.verifiedData || message.toolSource.isNotEmpty)) ...[
+              if (!user &&
+                  (message.verifiedData || message.toolSource.isNotEmpty)) ...[
                 _AiVerifiedBadge(
                   verified: message.verifiedData,
                   toolSource: message.toolSource,
@@ -881,10 +2920,18 @@ class _AiBubble extends StatelessWidget {
                 const SizedBox(height: 6),
               ],
               Container(
-                padding: EdgeInsets.fromLTRB(compact ? 11 : 13, compact ? 9 : 11, compact ? 11 : 13, compact ? 9 : 11),
+                padding: EdgeInsets.fromLTRB(compact ? 11 : 13,
+                    compact ? 9 : 11, compact ? 11 : 13, compact ? 9 : 11),
                 decoration: user ? _AiDecor.userBubble() : _AiDecor.aiBubble(),
-                child: Text(message.text, style: user ? _AiText.userText(compact ? 12.5 : 13) : _AiText.value(compact ? 12.2 : 13)),
+                child: Text(message.text,
+                    style: user
+                        ? _AiText.userText(compact ? 12.5 : 13)
+                        : _AiText.value(compact ? 12.2 : 13)),
               ),
+              if (!user && message.jobId.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                _AiGeneratedMediaCard(message: message, compact: compact),
+              ],
               if (!user && message.insights.isNotEmpty) ...[
                 const SizedBox(height: 8),
                 for (final section in message.insights.take(6)) ...[
@@ -896,6 +2943,38 @@ class _AiBubble extends StatelessWidget {
                 const SizedBox(height: 8),
                 for (final diagram in message.diagrams.take(3)) ...[
                   ClubAiTacticalDiagramCard(diagram: diagram, compact: compact),
+                  const SizedBox(height: 7),
+                ],
+              ],
+              if (!user && message.visualizations.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                for (final visualization in message.visualizations.take(4)) ...[
+                  ClubAiVisualizationCard(
+                    visualization: visualization,
+                    compact: compact,
+                  ),
+                  const SizedBox(height: 7),
+                ],
+              ],
+              if (!user && message.plans.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                for (final plan in message.plans.take(3)) ...[
+                  AiPlanPreviewCard(
+                    title: '${plan['title'] ?? 'План SPORTOTEKA AI'}',
+                    templateJson: plan,
+                    onOpen: () => onOpenCard(
+                      _AiResultCard(
+                        type: 'plan',
+                        title: '${plan['title'] ?? 'План SPORTOTEKA AI'}',
+                        subtitle: 'Открыть и доработать',
+                        badge: 'ПЛАН',
+                        actionLabel: 'Открыть',
+                        target: 'plans',
+                        metaLine: 'SPORTOTEKA Planner',
+                        payload: <String, dynamic>{'plan': plan},
+                      ),
+                    ),
+                  ),
                   const SizedBox(height: 7),
                 ],
               ],
@@ -914,21 +2993,35 @@ class _AiBubble extends StatelessWidget {
               ],
               if (message.cards.isNotEmpty) ...[
                 const SizedBox(height: 8),
-                for (final card in message.cards.take(8)) ...[
-                  _AiResultCardTile(card: card, compact: compact, onTap: () => onOpenCard(card), onPdfTap: () => onOpenPdf(card)),
+                for (final card in message.cards
+                    .where((item) =>
+                        item.type != 'plan' || message.plans.isEmpty)
+                    .take(8)) ...[
+                  _AiResultCardTile(
+                      card: card,
+                      compact: compact,
+                      onTap: () => onOpenCard(card),
+                      onPdfTap: () => onOpenPdf(card)),
                   const SizedBox(height: 7),
                 ],
               ],
               if (!user && message.queryId > 0) ...[
                 const SizedBox(height: 4),
-                _AiFeedbackBar(compact: compact, onLike: () => onFeedback(message, 1), onDislike: () => onFeedback(message, -1)),
+                _AiFeedbackBar(
+                    compact: compact,
+                    onLike: () => onFeedback(message, 1),
+                    onDislike: () => onFeedback(message, -1)),
               ],
               if (message.suggestions.isNotEmpty) ...[
                 const SizedBox(height: 5),
                 Wrap(
                   spacing: 6,
                   runSpacing: 6,
-                  children: message.suggestions.take(compact ? 4 : 6).map((s) => _AiSuggestionChip(text: s, onTap: () => onSuggestion(s))).toList(),
+                  children: message.suggestions
+                      .take(compact ? 4 : 6)
+                      .map((s) => _AiSuggestionChip(
+                          text: s, onTap: () => onSuggestion(s)))
+                      .toList(),
                 ),
               ],
             ],
@@ -939,6 +3032,431 @@ class _AiBubble extends StatelessWidget {
   }
 }
 
+class _AiGeneratedMediaCard extends StatelessWidget {
+  final _AiMessage message;
+  final bool compact;
+
+  const _AiGeneratedMediaCard({
+    required this.message,
+    required this.compact,
+  });
+
+  String get _statusLabel {
+    switch (message.mediaStatus) {
+      case 'completed':
+        return 'Готово';
+      case 'failed':
+        return 'Ошибка';
+      case 'processing':
+      case 'running':
+        return 'Генерация';
+      default:
+        return 'В очереди';
+    }
+  }
+
+  String get _fileExtension => message.mediaKind == 'video' ? 'mp4' : 'png';
+
+  Future<void> _copyLink(BuildContext context) async {
+    if (message.mediaUrl.trim().isEmpty) return;
+    await Clipboard.setData(ClipboardData(text: message.mediaUrl));
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Ссылка скопирована')),
+    );
+  }
+
+  Future<void> _saveMedia(BuildContext context) async {
+    final url = message.mediaUrl.trim();
+    if (url.isEmpty || !context.mounted) return;
+
+    try {
+      final res =
+          await http.get(Uri.parse(url)).timeout(const Duration(minutes: 3));
+      if (res.statusCode != 200) {
+        throw Exception('HTTP ${res.statusCode}');
+      }
+
+      final fileName =
+          'sportoteka_ai_${DateTime.now().millisecondsSinceEpoch}.$_fileExtension';
+
+      if (Platform.isMacOS || Platform.isWindows || Platform.isLinux) {
+        final downloads = await getDownloadsDirectory();
+        if (downloads != null) {
+          final file = File('${downloads.path}/$fileName');
+          await file.writeAsBytes(res.bodyBytes, flush: true);
+          if (!context.mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Сохранено: ${file.path}')),
+          );
+          return;
+        }
+      }
+
+      // На iOS/Android используем системное меню:
+      // пользователь может выбрать «Сохранить в Файлы», галерею и т.п.
+      final temp = await getTemporaryDirectory();
+      final file = File('${temp.path}/$fileName');
+      await file.writeAsBytes(res.bodyBytes, flush: true);
+
+      await SharePlus.instance.share(
+        ShareParams(
+          files: <XFile>[XFile(file.path)],
+          text: message.mediaKind == 'image'
+              ? 'Sportoteka Image'
+              : 'Sportoteka Video',
+        ),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Не удалось сохранить: $e')),
+      );
+    }
+  }
+
+  void _openImageViewer(BuildContext context) {
+    final size = MediaQuery.sizeOf(context);
+    final small = size.width < 700 || size.height < 650;
+
+    showDialog<void>(
+      context: context,
+      useSafeArea: true,
+      builder: (dialogContext) {
+        return Dialog(
+          backgroundColor: const Color(0xFF0B0F14),
+          insetPadding: EdgeInsets.all(small ? 4 : 18),
+          clipBehavior: Clip.antiAlias,
+          child: SizedBox(
+            width: math.min(size.width - (small ? 8 : 36), 1500),
+            height: math.min(size.height - (small ? 8 : 36), 980),
+            child: Column(
+              children: [
+                Container(
+                  height: 52,
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF111827),
+                    border: Border(
+                      bottom: BorderSide(color: Color(0xFF263041)),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.auto_awesome_rounded,
+                        color: Colors.white,
+                        size: 18,
+                      ),
+                      const SizedBox(width: 8),
+                      const Expanded(
+                        child: Text(
+                          'SPORTOTEKA Image',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Копировать ссылку',
+                        onPressed: () => unawaited(_copyLink(dialogContext)),
+                        icon: const Icon(
+                          Icons.content_copy_rounded,
+                          color: Colors.white,
+                          size: 19,
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Сохранить',
+                        onPressed: () => unawaited(_saveMedia(dialogContext)),
+                        icon: const Icon(
+                          Icons.download_rounded,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Закрыть',
+                        onPressed: () => Navigator.pop(dialogContext),
+                        icon: const Icon(
+                          Icons.close_rounded,
+                          color: Colors.white,
+                          size: 21,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: InteractiveViewer(
+                    minScale: .6,
+                    maxScale: 5,
+                    boundaryMargin: const EdgeInsets.all(80),
+                    child: Center(
+                      child: Image.network(
+                        message.mediaUrl,
+                        fit: BoxFit.contain,
+                        width: double.infinity,
+                        height: double.infinity,
+                        errorBuilder: (_, __, ___) => const Center(
+                          child: Icon(
+                            Icons.broken_image_outlined,
+                            color: Colors.white70,
+                            size: 36,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _actionButton({
+    required BuildContext context,
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: _AiColors.greenSoft,
+      borderRadius: BorderRadius.circular(9),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(9),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 14, color: _AiColors.greenDark),
+              const SizedBox(width: 5),
+              Text(
+                label,
+                style: _AiText.chip(
+                  size: 9.8,
+                  color: _AiColors.greenDark,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final completed =
+        message.mediaStatus == 'completed' && message.mediaUrl.isNotEmpty;
+    final failed = message.mediaStatus == 'failed';
+    final isImage = message.mediaKind == 'image';
+    final progress = message.mediaProgress.clamp(0, 100).toInt();
+    final screen = MediaQuery.sizeOf(context);
+
+    // Главное исправление малого окна:
+    // превью больше не растягивает весь чат по высоте.
+    final previewHeight = math.max(
+      170.0,
+      math.min(
+        compact ? 300.0 : 430.0,
+        screen.height * (compact ? .38 : .46),
+      ),
+    );
+
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(compact ? 9 : 11),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(.94),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: failed ? const Color(0xFFF4C7C3) : _AiColors.line,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 30,
+                height: 30,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: _AiColors.greenSoft,
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                child: Icon(
+                  isImage ? Icons.image_rounded : Icons.movie_creation_outlined,
+                  size: 16,
+                  color: _AiColors.greenDark,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      isImage ? 'Sportoteka Image' : 'Sportoteka Video',
+                      style: _AiText.title(compact ? 11.6 : 12.2),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '$_statusLabel${progress > 0 && !completed ? ' · $progress%' : ''}',
+                      style: _AiText.muted(9.8),
+                    ),
+                  ],
+                ),
+              ),
+              if (completed)
+                const Icon(
+                  Icons.check_circle_rounded,
+                  size: 18,
+                  color: _AiColors.green,
+                ),
+            ],
+          ),
+          if (!completed && !failed) ...[
+            const SizedBox(height: 9),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(99),
+              child: LinearProgressIndicator(
+                value: progress <= 0 ? null : progress / 100,
+                minHeight: 5,
+                backgroundColor: _AiColors.greenSoft,
+                color: _AiColors.green,
+              ),
+            ),
+          ],
+          if (completed && isImage) ...[
+            const SizedBox(height: 9),
+            Container(
+              width: double.infinity,
+              height: previewHeight,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF1F3F5),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: InkWell(
+                onTap: () => _openImageViewer(context),
+                child: Image.network(
+                  message.mediaUrl,
+                  fit: BoxFit.contain,
+                  alignment: Alignment.center,
+                  errorBuilder: (_, __, ___) => Container(
+                    alignment: Alignment.center,
+                    color: _AiColors.greenSoft,
+                    child: const Icon(
+                      Icons.broken_image_outlined,
+                      color: _AiColors.muted,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                _actionButton(
+                  context: context,
+                  icon: Icons.fullscreen_rounded,
+                  label: 'Открыть',
+                  onTap: () => _openImageViewer(context),
+                ),
+                _actionButton(
+                  context: context,
+                  icon: Icons.download_rounded,
+                  label: 'Сохранить',
+                  onTap: () => unawaited(_saveMedia(context)),
+                ),
+                _actionButton(
+                  context: context,
+                  icon: Icons.content_copy_rounded,
+                  label: 'Копировать ссылку',
+                  onTap: () => unawaited(_copyLink(context)),
+                ),
+              ],
+            ),
+          ],
+          if (completed && !isImage) ...[
+            const SizedBox(height: 9),
+            Material(
+              color: _AiColors.graphite,
+              borderRadius: BorderRadius.circular(12),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: () {
+                  Navigator.of(context).push<void>(
+                    MaterialPageRoute<void>(
+                      builder: (_) => AppVideoPlayerScreen(
+                        title: 'SPORTOTEKA ИИ · Видео',
+                        videoUrl: message.mediaUrl,
+                      ),
+                    ),
+                  );
+                },
+                child: SizedBox(
+                  height: math.min(compact ? 118 : 145, screen.height * .28),
+                  width: double.infinity,
+                  child: const Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.play_circle_fill_rounded,
+                        color: Colors.white,
+                        size: 42,
+                      ),
+                      SizedBox(height: 6),
+                      Text(
+                        'Открыть видео',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                _actionButton(
+                  context: context,
+                  icon: Icons.download_rounded,
+                  label: 'Сохранить',
+                  onTap: () => unawaited(_saveMedia(context)),
+                ),
+                _actionButton(
+                  context: context,
+                  icon: Icons.content_copy_rounded,
+                  label: 'Копировать ссылку',
+                  onTap: () => unawaited(_copyLink(context)),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
 
 class _AiActionCard extends StatelessWidget {
   const _AiActionCard({
@@ -1007,9 +3525,8 @@ class _AiActionCard extends StatelessWidget {
                           : 'Нужно явное подтверждение',
                       style: _AiText.chip(
                         size: 9.8,
-                        color: completed
-                            ? _AiColors.greenDark
-                            : _AiColors.orange,
+                        color:
+                            completed ? _AiColors.greenDark : _AiColors.orange,
                       ),
                     ),
                   ],
@@ -1065,7 +3582,6 @@ class _AiActionCard extends StatelessWidget {
   }
 }
 
-
 class _AiVerifiedBadge extends StatelessWidget {
   final bool verified;
   final String toolSource;
@@ -1077,9 +3593,8 @@ class _AiVerifiedBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final label = verified
-        ? 'Проверено по данным клуба'
-        : 'Ответ Assistant Brain';
+    final label =
+        verified ? 'Проверено по данным клуба' : 'Ответ Assistant Brain';
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
@@ -1147,7 +3662,11 @@ class _AiInsightSectionTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: _AiColors.line),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(.032), blurRadius: 18, spreadRadius: -12, offset: const Offset(0, 9)),
+          BoxShadow(
+              color: Colors.black.withOpacity(.032),
+              blurRadius: 18,
+              spreadRadius: -12,
+              offset: const Offset(0, 9)),
         ],
       ),
       child: Column(
@@ -1158,24 +3677,34 @@ class _AiInsightSectionTile extends StatelessWidget {
               width: compact ? 28 : 31,
               height: compact ? 28 : 31,
               decoration: _AiDecor.aiSoft(radius: 10),
-              child: Icon(icon, color: _AiColors.greenDark, size: compact ? 15 : 16),
+              child: Icon(icon,
+                  color: _AiColors.greenDark, size: compact ? 15 : 16),
             ),
             const SizedBox(width: 8),
-            Expanded(child: Text(section.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: _AiText.title(compact ? 12.5 : 13.2))),
+            Expanded(
+                child: Text(section.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: _AiText.title(compact ? 12.5 : 13.2))),
           ]),
           const SizedBox(height: 8),
           for (final item in section.items.take(7))
             Padding(
               padding: const EdgeInsets.only(bottom: 6),
-              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              child:
+                  Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Container(
                   width: 5,
                   height: 5,
                   margin: const EdgeInsets.only(top: 6),
-                  decoration: const BoxDecoration(color: _AiColors.green, shape: BoxShape.circle),
+                  decoration: const BoxDecoration(
+                      color: _AiColors.green, shape: BoxShape.circle),
                 ),
                 const SizedBox(width: 8),
-                Expanded(child: Text(item, style: _AiText.muted(compact ? 10.8 : 11.3).copyWith(color: _AiColors.text2, height: 1.32))),
+                Expanded(
+                    child: Text(item,
+                        style: _AiText.muted(compact ? 10.8 : 11.3)
+                            .copyWith(color: _AiColors.text2, height: 1.32))),
               ]),
             ),
         ],
@@ -1190,7 +3719,11 @@ class _AiResultCardTile extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback onPdfTap;
 
-  const _AiResultCardTile({required this.card, required this.compact, required this.onTap, required this.onPdfTap});
+  const _AiResultCardTile(
+      {required this.card,
+      required this.compact,
+      required this.onTap,
+      required this.onPdfTap});
 
   IconData _icon(String type) {
     switch (type) {
@@ -1230,7 +3763,11 @@ class _AiResultCardTile extends StatelessWidget {
             borderRadius: BorderRadius.circular(13),
             border: Border.all(color: _AiColors.line),
             boxShadow: [
-              BoxShadow(color: Colors.black.withOpacity(.035), blurRadius: 18, spreadRadius: -12, offset: const Offset(0, 10)),
+              BoxShadow(
+                  color: Colors.black.withOpacity(.035),
+                  blurRadius: 18,
+                  spreadRadius: -12,
+                  offset: const Offset(0, 10)),
             ],
           ),
           child: Row(
@@ -1239,7 +3776,8 @@ class _AiResultCardTile extends StatelessWidget {
                 width: compact ? 38 : 42,
                 height: compact ? 38 : 42,
                 decoration: _AiDecor.aiSoft(radius: 12),
-                child: Icon(_icon(card.type), color: _AiColors.greenDark, size: compact ? 18 : 19),
+                child: Icon(_icon(card.type),
+                    color: _AiColors.greenDark, size: compact ? 18 : 19),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -1248,7 +3786,11 @@ class _AiResultCardTile extends StatelessWidget {
                   children: [
                     Row(
                       children: [
-                        Expanded(child: Text(card.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _AiText.title(compact ? 12.7 : 13.4))),
+                        Expanded(
+                            child: Text(card.title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: _AiText.title(compact ? 12.7 : 13.4))),
                         if (card.badge.isNotEmpty) ...[
                           const SizedBox(width: 6),
                           _AiBadge(text: card.badge),
@@ -1257,11 +3799,17 @@ class _AiResultCardTile extends StatelessWidget {
                     ),
                     if (card.subtitle.isNotEmpty) ...[
                       const SizedBox(height: 4),
-                      Text(card.subtitle, maxLines: compact ? 2 : 2, overflow: TextOverflow.ellipsis, style: _AiText.muted(compact ? 10.4 : 11)),
+                      Text(card.subtitle,
+                          maxLines: compact ? 2 : 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: _AiText.muted(compact ? 10.4 : 11)),
                     ],
                     if (card.metaLine.isNotEmpty) ...[
                       const SizedBox(height: 6),
-                      Text(card.metaLine, maxLines: 1, overflow: TextOverflow.ellipsis, style: _AiText.subtle(compact ? 10 : 10.5)),
+                      Text(card.metaLine,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: _AiText.subtle(compact ? 10 : 10.5)),
                     ],
                     if (card.hasPdf || card.type == 'report') ...[
                       const SizedBox(height: 8),
@@ -1269,9 +3817,18 @@ class _AiResultCardTile extends StatelessWidget {
                         spacing: 6,
                         runSpacing: 6,
                         children: [
-                          _AiMiniCardButton(icon: Icons.visibility_rounded, text: card.actionLabel.isEmpty ? 'Открыть' : card.actionLabel, onTap: onTap),
+                          _AiMiniCardButton(
+                              icon: Icons.visibility_rounded,
+                              text: card.actionLabel.isEmpty
+                                  ? 'Открыть'
+                                  : card.actionLabel,
+                              onTap: onTap),
                           if (card.hasPdf)
-                            _AiMiniCardButton(icon: Icons.picture_as_pdf_rounded, text: 'PDF', onTap: onPdfTap, dark: true),
+                            _AiMiniCardButton(
+                                icon: Icons.picture_as_pdf_rounded,
+                                text: 'PDF',
+                                onTap: onPdfTap,
+                                dark: true),
                         ],
                       ),
                     ],
@@ -1282,8 +3839,12 @@ class _AiResultCardTile extends StatelessWidget {
               Container(
                 width: 31,
                 height: 31,
-                decoration: BoxDecoration(color: _AiColors.greenSoft, borderRadius: BorderRadius.circular(9), border: Border.all(color: _AiColors.greenBorder)),
-                child: const Icon(Icons.arrow_forward_rounded, color: _AiColors.greenDark, size: 16),
+                decoration: BoxDecoration(
+                    color: _AiColors.greenSoft,
+                    borderRadius: BorderRadius.circular(9),
+                    border: Border.all(color: _AiColors.greenBorder)),
+                child: const Icon(Icons.arrow_forward_rounded,
+                    color: _AiColors.greenDark, size: 16),
               ),
             ],
           ),
@@ -1293,14 +3854,17 @@ class _AiResultCardTile extends StatelessWidget {
   }
 }
 
-
 class _AiMiniCardButton extends StatelessWidget {
   final IconData icon;
   final String text;
   final VoidCallback onTap;
   final bool dark;
 
-  const _AiMiniCardButton({required this.icon, required this.text, required this.onTap, this.dark = false});
+  const _AiMiniCardButton(
+      {required this.icon,
+      required this.text,
+      required this.onTap,
+      this.dark = false});
 
   @override
   Widget build(BuildContext context) {
@@ -1315,14 +3879,21 @@ class _AiMiniCardButton extends StatelessWidget {
           decoration: BoxDecoration(
             color: dark ? _AiColors.graphite : _AiColors.greenSoft,
             borderRadius: BorderRadius.circular(9),
-            border: Border.all(color: dark ? _AiColors.graphite.withOpacity(.16) : _AiColors.greenBorder),
+            border: Border.all(
+                color: dark
+                    ? _AiColors.graphite.withOpacity(.16)
+                    : _AiColors.greenBorder),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 13, color: dark ? Colors.white : _AiColors.greenDark),
+              Icon(icon,
+                  size: 13, color: dark ? Colors.white : _AiColors.greenDark),
               const SizedBox(width: 5),
-              Text(text, style: _AiText.chip(size: 10.2, color: dark ? Colors.white : _AiColors.greenDark)),
+              Text(text,
+                  style: _AiText.chip(
+                      size: 10.2,
+                      color: dark ? Colors.white : _AiColors.greenDark)),
             ],
           ),
         ),
@@ -1355,7 +3926,8 @@ class _AiSuggestionChip extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.auto_awesome_rounded, size: 12, color: _AiColors.greenDark),
+              const Icon(Icons.auto_awesome_rounded,
+                  size: 12, color: _AiColors.greenDark),
               const SizedBox(width: 5),
               Text(text, style: _AiText.tab()),
             ],
@@ -1366,8 +3938,42 @@ class _AiSuggestionChip extends StatelessWidget {
   }
 }
 
-class _AiTypingBubble extends StatelessWidget {
+class _AiTypingBubble extends StatefulWidget {
   const _AiTypingBubble();
+
+  @override
+  State<_AiTypingBubble> createState() => _AiTypingBubbleState();
+}
+
+class _AiTypingBubbleState extends State<_AiTypingBubble> {
+  static const List<String> _statuses = <String>[
+    'Анализирую запрос…',
+    'Сопоставляю контекст…',
+    'Проверяю данные…',
+    'Формирую ответ…',
+    'Готовлю вывод…',
+  ];
+
+  Timer? _timer;
+  int _statusIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(milliseconds: 1900), (_) {
+      if (!mounted) return;
+      setState(() {
+        _statusIndex = (_statusIndex + 1) % _statuses.length;
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _timer = null;
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1379,10 +3985,33 @@ class _AiTypingBubble extends StatelessWidget {
         decoration: _AiDecor.aiBubble(),
         child: Row(
           mainAxisSize: MainAxisSize.min,
-          children: const [
-            SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: _AiColors.greenDark)),
-            SizedBox(width: 9),
-            Text('Ищу по базе клуба...', style: TextStyle(color: _AiColors.text2, fontSize: 12.2, fontWeight: FontWeight.w600)),
+          children: [
+            const SizedBox(
+              width: 14,
+              height: 14,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: _AiColors.greenDark,
+              ),
+            ),
+            const SizedBox(width: 9),
+            ConstrainedBox(
+              constraints: const BoxConstraints(minWidth: 156),
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 220),
+                switchInCurve: Curves.easeOut,
+                switchOutCurve: Curves.easeIn,
+                child: Text(
+                  _statuses[_statusIndex],
+                  key: ValueKey<int>(_statusIndex),
+                  style: const TextStyle(
+                    color: _AiColors.text2,
+                    fontSize: 12.2,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -1419,7 +4048,10 @@ class _AiQuickBlockTile extends StatelessWidget {
               children: [
                 Text(block.title, style: _AiText.title(12.5)),
                 const SizedBox(height: 3),
-                Text(block.subtitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: _AiText.muted(10.4)),
+                Text(block.subtitle,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: _AiText.muted(10.4)),
               ],
             ),
           ),
@@ -1429,12 +4061,130 @@ class _AiQuickBlockTile extends StatelessWidget {
   }
 }
 
+class _AiSidebarAction extends StatelessWidget {
+  final bool open;
+  final VoidCallback onTap;
+
+  const _AiSidebarAction({
+    required this.open,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: open ? 'Закрыть историю' : 'Открыть историю',
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(10),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(10),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 160),
+            width: 34,
+            height: 34,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: open ? _AiColors.greenSoft : Colors.white.withOpacity(.94),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: open ? _AiColors.greenBorder : _AiColors.line,
+              ),
+            ),
+            child: _AiSidebarGlyph(
+              size: 18,
+              color: open ? _AiColors.greenDark : _AiColors.text2,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AiSidebarGlyph extends StatelessWidget {
+  final double size;
+  final Color color;
+
+  const _AiSidebarGlyph({
+    this.size = 18,
+    this.color = _AiColors.text2,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      size: Size.square(size),
+      painter: _AiSidebarGlyphPainter(color),
+    );
+  }
+}
+
+class _AiSidebarGlyphPainter extends CustomPainter {
+  final Color color;
+
+  const _AiSidebarGlyphPainter(this.color);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final stroke = math.max(1.25, size.width * .085);
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = stroke
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+
+    final rect = RRect.fromRectAndRadius(
+      Rect.fromLTWH(
+        stroke,
+        stroke,
+        size.width - stroke * 2,
+        size.height - stroke * 2,
+      ),
+      Radius.circular(size.width * .18),
+    );
+    canvas.drawRRect(rect, paint);
+
+    final dividerX = size.width * .36;
+    canvas.drawLine(
+      Offset(dividerX, stroke * 1.8),
+      Offset(dividerX, size.height - stroke * 1.8),
+      paint,
+    );
+
+    final linePaint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = stroke
+      ..strokeCap = StrokeCap.round;
+
+    canvas.drawLine(
+      Offset(size.width * .53, size.height * .37),
+      Offset(size.width * .78, size.height * .37),
+      linePaint,
+    );
+    canvas.drawLine(
+      Offset(size.width * .53, size.height * .61),
+      Offset(size.width * .72, size.height * .61),
+      linePaint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _AiSidebarGlyphPainter oldDelegate) {
+    return oldDelegate.color != color;
+  }
+}
+
 class _AiHeaderAction extends StatelessWidget {
   final IconData icon;
   final String text;
   final VoidCallback onTap;
 
-  const _AiHeaderAction({required this.icon, required this.text, required this.onTap});
+  const _AiHeaderAction(
+      {required this.icon, required this.text, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -1475,15 +4225,19 @@ class _AiCircleAction extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(10),
-        child: Container(width: 34, height: 34, decoration: _AiDecor.aiSoft(radius: 10), child: Icon(icon, size: 16, color: _AiColors.greenDark)),
+        child: Container(
+            width: 34,
+            height: 34,
+            decoration: _AiDecor.aiSoft(radius: 10),
+            child: Icon(icon, size: 16, color: _AiColors.greenDark)),
       ),
     );
   }
 }
 
-
 class _AiFeedbackBar extends StatelessWidget {
-  const _AiFeedbackBar({required this.compact, required this.onLike, required this.onDislike});
+  const _AiFeedbackBar(
+      {required this.compact, required this.onLike, required this.onDislike});
 
   final bool compact;
   final VoidCallback onLike;
@@ -1503,7 +4257,8 @@ class _AiFeedbackBar extends StatelessWidget {
         const SizedBox(width: 7),
         _AiFeedbackButton(icon: Icons.thumb_up_alt_outlined, onTap: onLike),
         const SizedBox(width: 5),
-        _AiFeedbackButton(icon: Icons.thumb_down_alt_outlined, onTap: onDislike),
+        _AiFeedbackButton(
+            icon: Icons.thumb_down_alt_outlined, onTap: onDislike),
       ]),
     );
   }
@@ -1522,7 +4277,10 @@ class _AiFeedbackButton extends StatelessWidget {
       child: InkWell(
         borderRadius: BorderRadius.circular(999),
         onTap: onTap,
-        child: SizedBox(width: 28, height: 28, child: Icon(icon, color: _AiColors.greenDark, size: 16)),
+        child: SizedBox(
+            width: 28,
+            height: 28,
+            child: Icon(icon, color: _AiColors.greenDark, size: 16)),
       ),
     );
   }
@@ -1545,9 +4303,15 @@ class _AiInlineError extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(Icons.info_outline_rounded, color: _AiColors.orange, size: 15),
+          const Icon(Icons.info_outline_rounded,
+              color: _AiColors.orange, size: 15),
           const SizedBox(width: 7),
-          Expanded(child: Text(text, maxLines: 2, overflow: TextOverflow.ellipsis, style: _AiText.muted(10.8).copyWith(color: const Color(0xFF9A3412)))),
+          Expanded(
+              child: Text(text,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: _AiText.muted(10.8)
+                      .copyWith(color: const Color(0xFF9A3412)))),
         ],
       ),
     );
@@ -1563,11 +4327,19 @@ class _AiBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-      decoration: BoxDecoration(color: _AiColors.greenSoft, borderRadius: BorderRadius.circular(999), border: Border.all(color: _AiColors.greenBorder)),
-      child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: _AiText.chip(size: 9.8, color: _AiColors.greenDark)),
+      decoration: BoxDecoration(
+          color: _AiColors.greenSoft,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: _AiColors.greenBorder)),
+      child: Text(text,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: _AiText.chip(size: 9.8, color: _AiColors.greenDark)),
     );
   }
 }
+
+enum _AiComposerMode { text, image, video }
 
 enum _AiRole { user, assistant }
 
@@ -1578,10 +4350,17 @@ class _AiMessage {
   final List<_AiInsightSection> insights;
   final List<_AiResultCard> cards;
   final List<ClubAiTacticalDiagram> diagrams;
+  final List<ClubAiVisualization> visualizations;
+  final List<Map<String, dynamic>> plans;
   final List<AiWorkspaceAction> actions;
   final List<String> suggestions;
   final String toolSource;
   final bool verifiedData;
+  final String mediaKind;
+  final String mediaUrl;
+  final String jobId;
+  final String mediaStatus;
+  final int mediaProgress;
 
   const _AiMessage._({
     required this.role,
@@ -1590,10 +4369,17 @@ class _AiMessage {
     this.insights = const <_AiInsightSection>[],
     this.cards = const <_AiResultCard>[],
     this.diagrams = const <ClubAiTacticalDiagram>[],
+    this.visualizations = const <ClubAiVisualization>[],
+    this.plans = const <Map<String, dynamic>>[],
     this.actions = const <AiWorkspaceAction>[],
     this.suggestions = const <String>[],
     this.toolSource = '',
     this.verifiedData = false,
+    this.mediaKind = '',
+    this.mediaUrl = '',
+    this.jobId = '',
+    this.mediaStatus = '',
+    this.mediaProgress = 0,
   });
 
   factory _AiMessage.user(String text) =>
@@ -1605,6 +4391,8 @@ class _AiMessage {
     List<_AiInsightSection> insights = const <_AiInsightSection>[],
     List<_AiResultCard> cards = const <_AiResultCard>[],
     List<ClubAiTacticalDiagram> diagrams = const <ClubAiTacticalDiagram>[],
+    List<ClubAiVisualization> visualizations = const <ClubAiVisualization>[],
+    List<Map<String, dynamic>> plans = const <Map<String, dynamic>>[],
     List<AiWorkspaceAction> actions = const <AiWorkspaceAction>[],
     List<String> suggestions = const <String>[],
     String toolSource = '',
@@ -1617,11 +4405,227 @@ class _AiMessage {
       insights: insights,
       cards: cards,
       diagrams: diagrams,
+      visualizations: visualizations,
+      plans: plans,
       actions: actions,
       suggestions: suggestions,
       toolSource: toolSource,
       verifiedData: verifiedData,
     );
+  }
+
+  factory _AiMessage.fromResponse(
+    Map<String, dynamic> data, {
+    bool allowActions = true,
+    String fallbackText = 'Нашёл результаты.',
+  }) {
+    List<Map<String, dynamic>> maps(String key, {int limit = 20}) {
+      final raw = data[key];
+      if (raw is! List) return <Map<String, dynamic>>[];
+      return raw
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .take(limit)
+          .toList(growable: false);
+    }
+
+    final insights = maps('insights', limit: 6)
+        .map(_AiInsightSection.fromMap)
+        .where((item) => item.title.trim().isNotEmpty && item.items.isNotEmpty)
+        .toList(growable: false);
+    final cards = maps('cards', limit: 8)
+        .map(_AiResultCard.fromMap)
+        .where((item) => item.title.trim().isNotEmpty)
+        .toList(growable: false);
+    final diagrams = maps('diagrams', limit: 3)
+        .map(ClubAiTacticalDiagram.fromJson)
+        .where((item) => item.players.isNotEmpty)
+        .toList(growable: false);
+    final actions = allowActions
+        ? maps('actions', limit: 4)
+            .map(AiWorkspaceAction.fromMap)
+            .where((item) => item.title.trim().isNotEmpty)
+            .toList(growable: false)
+        : <AiWorkspaceAction>[];
+    final suggestions = data['suggestions'] is List
+        ? (data['suggestions'] as List)
+            .map((item) => '$item')
+            .where((item) => item.trim().isNotEmpty)
+            .take(6)
+            .toList(growable: false)
+        : <String>[];
+
+    return _AiMessage._(
+      role: _AiRole.assistant,
+      text: '${data['answer'] ?? fallbackText}'.trim(),
+      queryId: int.tryParse('${data['query_id'] ?? 0}') ?? 0,
+      insights: insights,
+      cards: cards,
+      diagrams: diagrams,
+      visualizations: ClubAiVisualization.fromResponse(data).take(4).toList(),
+      plans: maps('plans', limit: 3),
+      actions: actions,
+      suggestions: suggestions,
+      toolSource: '${data['tool_source'] ?? ''}'.trim(),
+      verifiedData: data['verified_data'] == true,
+    );
+  }
+
+  factory _AiMessage.assistantMedia({
+    required String text,
+    required String mediaKind,
+    required String jobId,
+    required String mediaStatus,
+    int mediaProgress = 0,
+    String mediaUrl = '',
+  }) {
+    return _AiMessage._(
+      role: _AiRole.assistant,
+      text: text,
+      mediaKind: mediaKind,
+      jobId: jobId,
+      mediaStatus: mediaStatus,
+      mediaProgress: mediaProgress,
+      mediaUrl: mediaUrl,
+    );
+  }
+
+  Map<String, dynamic> toHistoryMap() {
+    return <String, dynamic>{
+      'role': role == _AiRole.user ? 'user' : 'assistant',
+      'text': text,
+      if (queryId > 0) 'query_id': queryId,
+      if (suggestions.isNotEmpty) 'suggestions': suggestions.take(6).toList(),
+      if (insights.isNotEmpty)
+        'insights': insights.map((item) => item.toMap()).toList(growable: false),
+      if (cards.isNotEmpty)
+        'cards': cards.map((item) => item.toMap()).toList(growable: false),
+      if (diagrams.isNotEmpty)
+        'diagrams': diagrams.map((item) => item.toJson()).toList(growable: false),
+      if (visualizations.isNotEmpty)
+        'visualizations':
+            visualizations.map((item) => item.toMap()).toList(growable: false),
+      if (plans.isNotEmpty) 'plans': plans,
+      if (actions.isNotEmpty)
+        'actions':
+            actions.map((item) => item.toHistoryMap()).toList(growable: false),
+      if (toolSource.isNotEmpty) 'tool_source': toolSource,
+      if (verifiedData) 'verified_data': true,
+      if (mediaKind.isNotEmpty) 'media_kind': mediaKind,
+      if (mediaUrl.isNotEmpty) 'media_url': mediaUrl,
+      if (jobId.isNotEmpty) 'job_id': jobId,
+      if (mediaStatus.isNotEmpty) 'media_status': mediaStatus,
+      if (mediaProgress > 0) 'media_progress': mediaProgress,
+    };
+  }
+
+  static _AiMessage? fromHistoryMap(Map<String, dynamic> map) {
+    final text = '${map['text'] ?? ''}'.trim();
+    final role = '${map['role'] ?? ''}'.trim().toLowerCase();
+    if (text.isEmpty && '${map['job_id'] ?? ''}'.trim().isEmpty) return null;
+
+    final suggestionsRaw =
+        map['suggestions'] is List ? map['suggestions'] as List : const [];
+    final suggestions = suggestionsRaw
+        .map((e) => '$e')
+        .where((e) => e.trim().isNotEmpty)
+        .take(6)
+        .toList(growable: false);
+
+    final restored = _AiMessage.fromResponse(
+      <String, dynamic>{...map, 'answer': text},
+      allowActions: true,
+      fallbackText: text,
+    );
+    return _AiMessage._(
+      role: role == 'user' ? _AiRole.user : _AiRole.assistant,
+      text: text,
+      queryId: restored.queryId,
+      insights: restored.insights,
+      cards: restored.cards,
+      diagrams: restored.diagrams,
+      visualizations: restored.visualizations,
+      plans: restored.plans,
+      actions: restored.actions,
+      suggestions: suggestions,
+      toolSource: restored.toolSource,
+      verifiedData: restored.verifiedData,
+      mediaKind: '${map['media_kind'] ?? ''}',
+      mediaUrl: '${map['media_url'] ?? ''}',
+      jobId: '${map['job_id'] ?? ''}',
+      mediaStatus: '${map['media_status'] ?? ''}',
+      mediaProgress: int.tryParse('${map['media_progress'] ?? 0}') ?? 0,
+    );
+  }
+
+  _AiMessage copyWith({
+    String? text,
+    String? mediaUrl,
+    String? mediaStatus,
+    int? mediaProgress,
+  }) {
+    return _AiMessage._(
+      role: role,
+      text: text ?? this.text,
+      queryId: queryId,
+      insights: insights,
+      cards: cards,
+      diagrams: diagrams,
+      visualizations: visualizations,
+      plans: plans,
+      actions: actions,
+      suggestions: suggestions,
+      toolSource: toolSource,
+      verifiedData: verifiedData,
+      mediaKind: mediaKind,
+      mediaUrl: mediaUrl ?? this.mediaUrl,
+      jobId: jobId,
+      mediaStatus: mediaStatus ?? this.mediaStatus,
+      mediaProgress: mediaProgress ?? this.mediaProgress,
+    );
+  }
+}
+
+class _AiHistoryItem {
+  final String conversationId;
+  final String title;
+  final String updatedAt;
+  final int messageCount;
+  final bool hasMedia;
+  final String lastPreview;
+
+  const _AiHistoryItem({
+    required this.conversationId,
+    required this.title,
+    required this.updatedAt,
+    required this.messageCount,
+    required this.hasMedia,
+    required this.lastPreview,
+  });
+
+  factory _AiHistoryItem.fromMap(Map<String, dynamic> map) {
+    return _AiHistoryItem(
+      conversationId: '${map['conversation_id'] ?? ''}',
+      title: '${map['title'] ?? 'Диалог'}'.trim().isEmpty
+          ? 'Диалог'
+          : '${map['title']}',
+      updatedAt: '${map['updated_at'] ?? ''}',
+      messageCount: int.tryParse('${map['message_count'] ?? 0}') ?? 0,
+      hasMedia: map['has_media'] == true,
+      lastPreview: '${map['last_preview'] ?? ''}',
+    );
+  }
+
+  String get subtitle {
+    final date = updatedAt.replaceFirst('T', ' ');
+    final shortDate = date.length >= 16 ? date.substring(0, 16) : date;
+    final count = messageCount > 0 ? '$messageCount сообщ.' : '';
+    final preview = lastPreview.trim();
+    return <String>[
+      if (shortDate.isNotEmpty) shortDate,
+      if (count.isNotEmpty) count,
+      if (preview.isNotEmpty) preview,
+    ].join(' · ');
   }
 }
 
@@ -1630,16 +4634,27 @@ class _AiInsightSection {
   final String icon;
   final List<String> items;
 
-  const _AiInsightSection({required this.title, required this.icon, required this.items});
+  const _AiInsightSection(
+      {required this.title, required this.icon, required this.items});
 
   factory _AiInsightSection.fromMap(Map<String, dynamic> map) {
-    final rawItems = map['items'] is List ? map['items'] as List : const <dynamic>[];
+    final rawItems =
+        map['items'] is List ? map['items'] as List : const <dynamic>[];
     return _AiInsightSection(
       title: '${map['title'] ?? ''}',
       icon: '${map['icon'] ?? 'auto'}',
-      items: rawItems.map((e) => '$e').where((e) => e.trim().isNotEmpty).toList(growable: false),
+      items: rawItems
+          .map((e) => '$e')
+          .where((e) => e.trim().isNotEmpty)
+          .toList(growable: false),
     );
   }
+
+  Map<String, dynamic> toMap() => <String, dynamic>{
+        'title': title,
+        'icon': icon,
+        'items': items,
+      };
 }
 
 class _AiResultCard {
@@ -1668,9 +4683,17 @@ class _AiResultCard {
   });
 
   factory _AiResultCard.fromMap(Map<String, dynamic> map) {
-    final route = map['route'] is Map ? Map<String, dynamic>.from(map['route'] as Map) : <String, dynamic>{};
-    final payload = route['payload'] is Map ? Map<String, dynamic>.from(route['payload'] as Map) : <String, dynamic>{};
-    final rawPdf = map['pdf_url'] ?? payload['pdf_url'] ?? map['file_url'] ?? payload['file_url'] ?? '';
+    final route = map['route'] is Map
+        ? Map<String, dynamic>.from(map['route'] as Map)
+        : <String, dynamic>{};
+    final payload = route['payload'] is Map
+        ? Map<String, dynamic>.from(route['payload'] as Map)
+        : <String, dynamic>{};
+    final rawPdf = map['pdf_url'] ??
+        payload['pdf_url'] ??
+        map['file_url'] ??
+        payload['file_url'] ??
+        '';
     return _AiResultCard(
       type: '${map['type'] ?? 'search'}',
       title: '${map['title'] ?? ''}',
@@ -1683,6 +4706,20 @@ class _AiResultCard {
       pdfUrl: '$rawPdf',
     );
   }
+
+  Map<String, dynamic> toMap() => <String, dynamic>{
+        'type': type,
+        'title': title,
+        'subtitle': subtitle,
+        'badge': badge,
+        'action_label': actionLabel,
+        'meta': metaLine,
+        if (pdfUrl.isNotEmpty) 'pdf_url': pdfUrl,
+        'route': <String, dynamic>{
+          'target': target,
+          'payload': payload,
+        },
+      };
 }
 
 class _AiQuickBlock {
@@ -1695,22 +4732,79 @@ class _AiQuickBlock {
 
 class _AiText {
   static const String _family = 'Segoe UI';
-  static const List<String> _fallback = <String>['SF Pro Display', 'SF Pro Text', 'Inter', 'Roboto', 'Arial'];
+  static const List<String> _fallback = <String>[
+    'SF Pro Display',
+    'SF Pro Text',
+    'Inter',
+    'Roboto',
+    'Arial'
+  ];
 
   static double _compact(double size) => size <= 10 ? size : size - .75;
 
-  static TextStyle _base({required double size, required FontWeight weight, required Color color, double height = 1.18, double letterSpacing = -0.08, List<FontFeature>? features}) {
-    return TextStyle(fontFamily: _family, fontFamilyFallback: _fallback, color: color, fontSize: _compact(size), fontWeight: weight, height: height, letterSpacing: letterSpacing, fontFeatures: features);
+  static TextStyle _base(
+      {required double size,
+      required FontWeight weight,
+      required Color color,
+      double height = 1.18,
+      double letterSpacing = -0.08,
+      List<FontFeature>? features}) {
+    return TextStyle(
+        fontFamily: _family,
+        fontFamilyFallback: _fallback,
+        color: color,
+        fontSize: _compact(size),
+        fontWeight: weight,
+        height: height,
+        letterSpacing: letterSpacing,
+        fontFeatures: features);
   }
 
-  static TextStyle title(double size) => _base(size: size, weight: FontWeight.w700, color: _AiColors.text, height: 1.08, letterSpacing: -0.38);
-  static TextStyle value(double size) => _base(size: size, weight: FontWeight.w600, color: _AiColors.text2, height: 1.28, letterSpacing: -0.08, features: const [FontFeature.tabularFigures()]);
-  static TextStyle userText(double size) => _base(size: size, weight: FontWeight.w600, color: Colors.white, height: 1.28, letterSpacing: -0.08);
-  static TextStyle muted(double size) => _base(size: size, weight: FontWeight.w500, color: _AiColors.muted, height: 1.34, letterSpacing: -0.05);
-  static TextStyle subtle(double size) => _base(size: size, weight: FontWeight.w500, color: _AiColors.muted2, height: 1.2, letterSpacing: -0.04);
-  static TextStyle chip({double size = 10.8, Color? color}) => _base(size: size, weight: FontWeight.w700, color: color ?? _AiColors.text, height: 1.08, letterSpacing: -0.02);
-  static TextStyle tab() => _base(size: 10.8, weight: FontWeight.w600, color: _AiColors.greenDark, height: 1.08, letterSpacing: -0.02);
-  static TextStyle action({Color color = _AiColors.text}) => _base(size: 11.8, weight: FontWeight.w700, color: color, height: 1.1);
+  static TextStyle title(double size) => _base(
+      size: size,
+      weight: FontWeight.w700,
+      color: _AiColors.text,
+      height: 1.08,
+      letterSpacing: -0.38);
+  static TextStyle value(double size) => _base(
+      size: size,
+      weight: FontWeight.w600,
+      color: _AiColors.text2,
+      height: 1.28,
+      letterSpacing: -0.08,
+      features: const [FontFeature.tabularFigures()]);
+  static TextStyle userText(double size) => _base(
+      size: size,
+      weight: FontWeight.w600,
+      color: Colors.white,
+      height: 1.28,
+      letterSpacing: -0.08);
+  static TextStyle muted(double size) => _base(
+      size: size,
+      weight: FontWeight.w500,
+      color: _AiColors.muted,
+      height: 1.34,
+      letterSpacing: -0.05);
+  static TextStyle subtle(double size) => _base(
+      size: size,
+      weight: FontWeight.w500,
+      color: _AiColors.muted2,
+      height: 1.2,
+      letterSpacing: -0.04);
+  static TextStyle chip({double size = 10.8, Color? color}) => _base(
+      size: size,
+      weight: FontWeight.w700,
+      color: color ?? _AiColors.text,
+      height: 1.08,
+      letterSpacing: -0.02);
+  static TextStyle tab() => _base(
+      size: 10.8,
+      weight: FontWeight.w600,
+      color: _AiColors.greenDark,
+      height: 1.08,
+      letterSpacing: -0.02);
+  static TextStyle action({Color color = _AiColors.text}) =>
+      _base(size: 11.8, weight: FontWeight.w700, color: color, height: 1.1);
 }
 
 class _AiColors {
@@ -1734,21 +4828,39 @@ class _AiColors {
 }
 
 class _AiDecor {
-  static BoxDecoration workspaceBg() => const BoxDecoration(color: Color(0xFFF6F7F9));
+  static BoxDecoration workspaceBg() =>
+      const BoxDecoration(color: Color(0xFFF6F7F9));
 
   static BoxDecoration unifiedWindow({double radius = 18}) => BoxDecoration(
         color: _AiColors.soft2,
         borderRadius: BorderRadius.circular(radius),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(.055), blurRadius: 22, spreadRadius: -14, offset: const Offset(0, 12)),
-          BoxShadow(color: _AiColors.blue.withOpacity(.035), blurRadius: 14, spreadRadius: -12, offset: const Offset(0, 6)),
+          BoxShadow(
+              color: Colors.black.withOpacity(.055),
+              blurRadius: 22,
+              spreadRadius: -14,
+              offset: const Offset(0, 12)),
+          BoxShadow(
+              color: _AiColors.blue.withOpacity(.035),
+              blurRadius: 14,
+              spreadRadius: -12,
+              offset: const Offset(0, 6)),
         ],
       );
 
   static BoxDecoration aiGradient({double radius = 16}) => BoxDecoration(
-        gradient: const LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [_AiColors.green, _AiColors.blue, _AiColors.violet]),
+        gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [_AiColors.green, _AiColors.blue, _AiColors.violet]),
         borderRadius: BorderRadius.circular(radius),
-        boxShadow: [BoxShadow(color: _AiColors.green.withOpacity(.20), blurRadius: 24, spreadRadius: -12, offset: const Offset(0, 13))],
+        boxShadow: [
+          BoxShadow(
+              color: _AiColors.green.withOpacity(.20),
+              blurRadius: 24,
+              spreadRadius: -12,
+              offset: const Offset(0, 13))
+        ],
       );
 
   static BoxDecoration aiSoft({double radius = 16}) => BoxDecoration(
@@ -1756,23 +4868,56 @@ class _AiDecor {
         borderRadius: BorderRadius.circular(radius),
         border: Border.all(color: _AiColors.green.withOpacity(.18)),
         boxShadow: [
-          BoxShadow(color: _AiColors.green.withOpacity(.055), blurRadius: 18, spreadRadius: -11, offset: const Offset(0, 9)),
-          BoxShadow(color: Colors.black.withOpacity(.035), blurRadius: 12, spreadRadius: -10, offset: const Offset(0, 5)),
+          BoxShadow(
+              color: _AiColors.green.withOpacity(.055),
+              blurRadius: 18,
+              spreadRadius: -11,
+              offset: const Offset(0, 9)),
+          BoxShadow(
+              color: Colors.black.withOpacity(.035),
+              blurRadius: 12,
+              spreadRadius: -10,
+              offset: const Offset(0, 5)),
         ],
       );
 
-  static BoxDecoration disabledButton({double radius = 16}) => BoxDecoration(color: _AiColors.graphite.withOpacity(.55), borderRadius: BorderRadius.circular(radius));
+  static BoxDecoration disabledButton({double radius = 16}) => BoxDecoration(
+      color: _AiColors.graphite.withOpacity(.55),
+      borderRadius: BorderRadius.circular(radius));
 
   static BoxDecoration aiBubble() => BoxDecoration(
         color: Colors.white.withOpacity(.90),
-        borderRadius: const BorderRadius.only(topLeft: Radius.circular(5), topRight: Radius.circular(16), bottomLeft: Radius.circular(16), bottomRight: Radius.circular(16)),
+        borderRadius: const BorderRadius.only(
+            topLeft: Radius.circular(5),
+            topRight: Radius.circular(16),
+            bottomLeft: Radius.circular(16),
+            bottomRight: Radius.circular(16)),
         border: Border.all(color: _AiColors.line),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(.035), blurRadius: 18, spreadRadius: -12, offset: const Offset(0, 10))],
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(.035),
+              blurRadius: 18,
+              spreadRadius: -12,
+              offset: const Offset(0, 10))
+        ],
       );
 
   static BoxDecoration userBubble() => BoxDecoration(
-        gradient: const LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [_AiColors.green, _AiColors.blue]),
-        borderRadius: const BorderRadius.only(topLeft: Radius.circular(16), topRight: Radius.circular(5), bottomLeft: Radius.circular(16), bottomRight: Radius.circular(16)),
-        boxShadow: [BoxShadow(color: _AiColors.green.withOpacity(.18), blurRadius: 20, spreadRadius: -12, offset: const Offset(0, 12))],
+        gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [_AiColors.green, _AiColors.blue]),
+        borderRadius: const BorderRadius.only(
+            topLeft: Radius.circular(16),
+            topRight: Radius.circular(5),
+            bottomLeft: Radius.circular(16),
+            bottomRight: Radius.circular(16)),
+        boxShadow: [
+          BoxShadow(
+              color: _AiColors.green.withOpacity(.18),
+              blurRadius: 20,
+              spreadRadius: -12,
+              offset: const Offset(0, 12))
+        ],
       );
 }

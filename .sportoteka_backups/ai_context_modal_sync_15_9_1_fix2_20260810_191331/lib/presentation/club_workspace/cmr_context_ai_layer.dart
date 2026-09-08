@@ -4,10 +4,11 @@ import 'package:flutter/material.dart';
 
 import 'cmr_club_ai_assistant_panel.dart';
 
-/// Встроенный контекстный слой СПОРТОТЕКА ИИ.
+/// Контекстный слой СПОРТОТЕКА ИИ.
 ///
-/// Это не route, dialog или bottom sheet: панель живёт в Stack текущего
-/// рабочего экрана и поэтому не выбрасывает тренера из Club Workspace/Tracker.
+/// Рабочий экран всегда занимает всю доступную область. В свёрнутом состоянии
+/// остаётся только компактная плавающая кнопка, а раскрытый помощник появляется
+/// как modal overlay поверх текущего раздела и закрывается без смены route.
 class CmrContextAiLayer extends StatelessWidget {
   const CmrContextAiLayer({
     super.key,
@@ -30,6 +31,7 @@ class CmrContextAiLayer extends StatelessWidget {
     this.playerName,
     this.onNavigate,
     this.onOpenPdf,
+    this.showCollapsedLauncher = true,
   });
 
   final Widget child;
@@ -51,60 +53,52 @@ class CmrContextAiLayer extends StatelessWidget {
   final String? playerName;
   final void Function(String target, Map<String, dynamic> payload)? onNavigate;
   final ValueChanged<String>? onOpenPdf;
+  final bool showCollapsedLauncher;
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final mobile = constraints.maxWidth < 720;
-        final tablet =
-            constraints.maxWidth >= 720 && constraints.maxWidth < 1120;
         final safeBottom = math.max(8.0, bottomInset);
-        final expandedWidth = math.min(
-          tablet ? 390.0 : 430.0,
-          math.max(320.0, constraints.maxWidth * (tablet ? .46 : .34)),
+        final modalWidth = mobile
+            ? math.max(280.0, constraints.maxWidth - 16)
+            : math.min(560.0, math.max(420.0, constraints.maxWidth * .52));
+        final availableHeight = math.max(
+          1.0,
+          constraints.maxHeight - (mobile ? safeBottom + 8 : 36),
         );
-        final expandedHeight = math.min(
-          660.0,
-          math.max(360.0, constraints.maxHeight * .74),
-        );
+        final preferredHeight = mobile
+            ? math.max(360.0, constraints.maxHeight * .88)
+            : math.min(780.0, math.max(480.0, constraints.maxHeight * .88));
+        final modalHeight = math.min(availableHeight, preferredHeight);
 
         return Stack(
-          clipBehavior: Clip.none,
+          clipBehavior: Clip.hardEdge,
           children: [
             Positioned.fill(child: child),
-            if (mobile)
-              AnimatedPositioned(
-                duration: const Duration(milliseconds: 240),
-                curve: Curves.easeOutCubic,
-                left: 8,
-                right: 8,
-                bottom: safeBottom,
-                height: expanded ? expandedHeight : 58,
-                child: _LayerSurface(
-                  expanded: expanded,
-                  mobile: true,
+            Positioned.fill(
+              child: Offstage(
+                offstage: !expanded,
+                child: _ModalBackdrop(
+                  mobile: mobile,
+                  width: modalWidth,
+                  height: modalHeight,
+                  bottomInset: safeBottom,
                   contextTitle: contextTitle,
                   contextSubtitle: contextSubtitle,
-                  onToggle: onToggle,
-                  child: expanded ? _assistant() : null,
+                  onDismiss: onToggle,
+                  child: _assistant(),
                 ),
-              )
-            else
-              AnimatedPositioned(
-                duration: const Duration(milliseconds: 240),
-                curve: Curves.easeOutCubic,
-                top: 10,
-                right: 10,
+              ),
+            ),
+            if (!expanded && showCollapsedLauncher)
+              Positioned(
+                right: mobile ? 12 : 14,
                 bottom: safeBottom,
-                width: expanded ? expandedWidth : 58,
-                child: _LayerSurface(
-                  expanded: expanded,
-                  mobile: false,
+                child: _CollapsedLauncher(
                   contextTitle: contextTitle,
-                  contextSubtitle: contextSubtitle,
-                  onToggle: onToggle,
-                  child: expanded ? _assistant() : null,
+                  onTap: onToggle,
                 ),
               ),
           ],
@@ -126,69 +120,96 @@ class CmrContextAiLayer extends StatelessWidget {
       playerName: playerName,
       initialPrompt: initialPrompt,
       initialPayload: initialPayload,
-      autoSendInitialPrompt: true,
+      autoSendInitialPrompt: expanded,
       onNavigate: onNavigate,
       onOpenPdf: onOpenPdf,
     );
   }
 }
 
-class _LayerSurface extends StatelessWidget {
-  const _LayerSurface({
-    required this.expanded,
+class _ModalBackdrop extends StatelessWidget {
+  const _ModalBackdrop({
     required this.mobile,
+    required this.width,
+    required this.height,
+    required this.bottomInset,
     required this.contextTitle,
     required this.contextSubtitle,
-    required this.onToggle,
-    this.child,
+    required this.onDismiss,
+    required this.child,
   });
 
-  final bool expanded;
   final bool mobile;
+  final double width;
+  final double height;
+  final double bottomInset;
   final String contextTitle;
   final String contextSubtitle;
-  final VoidCallback onToggle;
-  final Widget? child;
+  final VoidCallback onDismiss;
+  final Widget child;
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      elevation: 0,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(expanded ? 18 : 16),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(expanded ? 18 : 16),
-            border: Border.all(color: const Color(0xFFDDE7E1)),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x240F172A),
-                blurRadius: 28,
-                offset: Offset(0, 12),
-              ),
-            ],
-          ),
-          child: expanded
-              ? Column(
-                  children: [
-                    _ExpandedHeader(
-                      contextTitle: contextTitle,
-                      contextSubtitle: contextSubtitle,
-                      onToggle: onToggle,
-                    ),
-                    const Divider(height: 1, color: Color(0xFFE7ECE9)),
-                    Expanded(child: child ?? const SizedBox.shrink()),
-                  ],
+    return TweenAnimationBuilder<double>(
+      duration: const Duration(milliseconds: 190),
+      curve: Curves.easeOutCubic,
+      tween: Tween<double>(begin: 0, end: 1),
+      builder: (context, value, _) {
+        return Stack(
+          children: [
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: onDismiss,
+                child: ColoredBox(
+                  color: Colors.black.withOpacity(.28 * value),
                 )
-              : _CollapsedHandle(
-                  mobile: mobile,
-                  contextTitle: contextTitle,
-                  onTap: onToggle,
+              ),
+            ),
+            Positioned(
+              left: mobile ? 8 : null,
+              right: mobile ? 8 : 18,
+              bottom: mobile ? bottomInset : null,
+              top: mobile ? null : 18,
+              width: mobile ? null : width,
+              height: height,
+              child: Transform.translate(
+                offset: Offset((1 - value) * (mobile ? 0 : 32), (1 - value) * (mobile ? 24 : 0)),
+                child: Opacity(
+                  opacity: value,
+                  child: GestureDetector(
+                    onTap: () {},
+                    child: Material(
+                      color: Colors.white,
+                      elevation: 18,
+                      shadowColor: const Color(0x330F172A),
+                      borderRadius: BorderRadius.circular(mobile ? 24 : 20),
+                      clipBehavior: Clip.antiAlias,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          border: Border.all(color: const Color(0xFFDDE7E1)),
+                          borderRadius: BorderRadius.circular(mobile ? 24 : 20),
+                        ),
+                        child: Column(
+                          children: [
+                            _ExpandedHeader(
+                              contextTitle: contextTitle,
+                              contextSubtitle: contextSubtitle,
+                              onDismiss: onDismiss,
+                            ),
+                            const Divider(height: 1, color: Color(0xFFE7ECE9)),
+                            Expanded(child: child),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
-        ),
-      ),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -197,12 +218,12 @@ class _ExpandedHeader extends StatelessWidget {
   const _ExpandedHeader({
     required this.contextTitle,
     required this.contextSubtitle,
-    required this.onToggle,
+    required this.onDismiss,
   });
 
   final String contextTitle;
   final String contextSubtitle;
-  final VoidCallback onToggle;
+  final VoidCallback onDismiss;
 
   @override
   Widget build(BuildContext context) {
@@ -248,8 +269,7 @@ class _ExpandedHeader extends StatelessWidget {
                     ),
                     const SizedBox(width: 6),
                     Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 2),
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
                         color: const Color(0xFFE8F7EF),
                         borderRadius: BorderRadius.circular(999),
@@ -281,10 +301,10 @@ class _ExpandedHeader extends StatelessWidget {
             ),
           ),
           IconButton(
-            tooltip: 'Свернуть ИИ-слой',
-            onPressed: onToggle,
+            tooltip: 'Закрыть ИИ-помощника',
+            onPressed: onDismiss,
             icon: const Icon(
-              Icons.keyboard_double_arrow_right_rounded,
+              Icons.close_rounded,
               color: Color(0xFF667085),
               size: 20,
             ),
@@ -295,77 +315,39 @@ class _ExpandedHeader extends StatelessWidget {
   }
 }
 
-class _CollapsedHandle extends StatelessWidget {
-  const _CollapsedHandle({
-    required this.mobile,
+class _CollapsedLauncher extends StatelessWidget {
+  const _CollapsedLauncher({
     required this.contextTitle,
     required this.onTap,
   });
 
-  final bool mobile;
   final String contextTitle;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final content = mobile
-        ? Row(
-            children: [
-              const SizedBox(width: 12),
-              const Icon(Icons.auto_awesome_rounded,
-                  color: Color(0xFF07883F), size: 20),
-              const SizedBox(width: 9),
-              Expanded(
-                child: Text(
-                  'СПОРТОТЕКА ИИ · $contextTitle',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                      color: Color(0xFF111827),
-                      fontSize: 12.2,
-                      fontWeight: FontWeight.w800),
-                ),
-              ),
-              const Text('Советы',
-                  style: TextStyle(
-                      color: Color(0xFF087A3A),
-                      fontSize: 10,
-                      fontWeight: FontWeight.w800)),
-              const SizedBox(width: 8),
-              const Icon(Icons.keyboard_arrow_up_rounded,
-                  color: Color(0xFF667085), size: 20),
-              const SizedBox(width: 8),
-            ],
-          )
-        : Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.auto_awesome_rounded,
-                  color: Color(0xFF07883F), size: 22),
-              const SizedBox(height: 12),
-              RotatedBox(
-                quarterTurns: 3,
-                child: Text(
-                  'СПОРТОТЕКА ИИ',
-                  style: const TextStyle(
-                    color: Color(0xFF111827),
-                    fontSize: 10.4,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: .8,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              const Icon(Icons.keyboard_double_arrow_left_rounded,
-                  color: Color(0xFF667085), size: 19),
-            ],
-          );
-
-    return InkWell(
-      onTap: onTap,
-      child: Tooltip(
-        message: 'Открыть контекстный ИИ-анализ: $contextTitle',
-        child: content,
+    return Tooltip(
+      message: 'СПОРТОТЕКА ИИ · $contextTitle',
+      child: Material(
+        color: Colors.white,
+        elevation: 7,
+        shadowColor: const Color(0x260F172A),
+        shape: const CircleBorder(
+          side: BorderSide(color: Color(0xFFD7E5DC)),
+        ),
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: onTap,
+          child: const SizedBox(
+            width: 50,
+            height: 50,
+            child: Icon(
+              Icons.auto_awesome_rounded,
+              color: Color(0xFF07883F),
+              size: 22,
+            ),
+          ),
+        ),
       ),
     );
   }

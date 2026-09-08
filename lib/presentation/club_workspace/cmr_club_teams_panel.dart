@@ -8,6 +8,12 @@ import 'dart:ui' show FontFeature, ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
+import 'package:file_picker/file_picker.dart';
+
+import 'package:sportoteka/presentation/workspace_os/workspace_server_storage.dart';
+import 'package:sportoteka/presentation/plans/plan_detail_screen.dart';
+import 'package:sportoteka/presentation/workspace_os/workspace_window_manager.dart';
+import 'package:sportoteka/presentation/workspace_os/sportoteka_workspace_icons.dart';
 
 import 'package:sportoteka/core/theme/app_typography.dart';
 
@@ -353,6 +359,7 @@ class _CmrClubTeamsPanelState extends State<CmrClubTeamsPanel> {
   static const String apiBase = 'https://sportotekaapp.ru/api';
   static const String getPlayersUrl = '$apiBase/get_players.php';
   static const String getTeamTrainersUrl = '$apiBase/get_team_trainers.php';
+  static const String getTeamProfileExtendedUrl = '$apiBase/team_profile_extended.php';
 
   final TextEditingController _searchC = TextEditingController();
   final ScrollController _listScroll = ScrollController();
@@ -363,6 +370,65 @@ class _CmrClubTeamsPanelState extends State<CmrClubTeamsPanel> {
   _TeamsRightMode _rightMode = _TeamsRightMode.overview;
   final Map<int, int> _playersCountByTeam = {};
   final Map<int, int> _trainersCountByTeam = {};
+
+  // Локальный снимок последнего сохранённого паспорта команды.
+  // Нужен, потому что get_club_teams.php на старых версиях API может вернуть
+  // урезанную/устаревшую запись сразу после успешного update_team_profile.php.
+  // Не даём такому refresh мгновенно затереть только что сохранённые поля в UI.
+  final Map<int, Map<String, dynamic>> _teamOverridesById =
+      <int, Map<String, dynamic>>{};
+
+  Map<String, dynamic> _effectiveTeam(Map<String, dynamic> team) {
+    final id = _teamId(team);
+    if (id <= 0) return team;
+    final local = _teamOverridesById[id];
+    if (local == null) return team;
+    return <String, dynamic>{...team, ...local};
+  }
+
+  List<Map<String, dynamic>> get _effectiveTeams => widget.teams
+      .map((team) => _effectiveTeam(team))
+      .toList(growable: false);
+
+  Future<Map<String, dynamic>> _fetchTeamProfileExtended(int teamId) async {
+    if (teamId <= 0) return <String, dynamic>{};
+    try {
+      final uri = Uri.parse(getTeamProfileExtendedUrl).replace(
+        queryParameters: <String, String>{
+          'team_id': '$teamId',
+          if (widget.clubId > 0) 'club_id': '${widget.clubId}',
+        },
+      );
+      final response = await http.get(uri).timeout(const Duration(seconds: 10));
+      final decoded = _tryDecode(response.body);
+      if (response.statusCode < 200 || response.statusCode >= 300 || decoded is! Map) {
+        return <String, dynamic>{};
+      }
+      final ok = decoded['success'] == true || '${decoded['status'] ?? ''}'.toLowerCase() == 'success';
+      if (!ok) return <String, dynamic>{};
+      final raw = decoded['team'] ?? decoded['data'];
+      if (raw is! Map) return <String, dynamic>{};
+      return Map<String, dynamic>.from(raw);
+    } catch (_) {
+      return <String, dynamic>{};
+    }
+  }
+
+  Future<void> _loadTeamProfilesExtended() async {
+    final ids = widget.teams.map(_teamId).where((id) => id > 0).toSet().toList();
+    if (ids.isEmpty) return;
+    final rows = await Future.wait(ids.map((id) async => MapEntry(id, await _fetchTeamProfileExtended(id))));
+    if (!mounted) return;
+    setState(() {
+      for (final entry in rows) {
+        if (entry.value.isEmpty) continue;
+        _teamOverridesById[entry.key] = <String, dynamic>{
+          ...?_teamOverridesById[entry.key],
+          ...entry.value,
+        };
+      }
+    });
+  }
 
   int? get _teamsLimit {
     final value = widget.maxTeams;
@@ -435,25 +501,34 @@ class _CmrClubTeamsPanelState extends State<CmrClubTeamsPanel> {
     final teamId = _teamId(updatedTeam);
     if (!mounted) return;
 
+    final mergedTeam = teamId > 0
+        ? <String, dynamic>{
+            ...?_teamOverridesById[teamId],
+            ...updatedTeam,
+          }
+        : Map<String, dynamic>.from(updatedTeam);
+
     setState(() {
-      _localSelectedTeamId = teamId > 0 ? teamId : _localSelectedTeamId;
+      if (teamId > 0) {
+        _teamOverridesById[teamId] = mergedTeam;
+        _localSelectedTeamId = teamId;
+      }
       _rightMode = _TeamsRightMode.overview;
     });
 
-    // Сразу синхронизируем выбранную команду с родительским workspace,
-    // чтобы название/поля паспорта изменились без ухода на другой экран.
+    // Сразу передаём родителю именно богатую локальную запись, а не старый
+    // элемент widget.teams. Это обновляет имя/паспорт без переключения экрана.
     final selectCallback = widget.onSelectTeam;
     if (selectCallback != null) {
-      selectCallback(updatedTeam);
+      selectCallback(mergedTeam);
+    } else {
+      widget.onOpenTeam(mergedTeam);
     }
 
+    // Refresh нужен для остальных данных клуба, но локальный override выше
+    // защищает паспорт от мгновенного отката, если серверный список команд
+    // пока возвращает старую/неполную запись.
     await widget.onRefresh?.call();
-    if (!mounted) return;
-
-    if (selectCallback == null) {
-      // Обратная совместимость со старыми местами подключения панели.
-      widget.onOpenTeam(updatedTeam);
-    }
   }
 
   Future<void> _teamCreated(int teamId, String teamName) async {
@@ -486,6 +561,7 @@ class _CmrClubTeamsPanelState extends State<CmrClubTeamsPanel> {
     _searchC.addListener(() => setState(() {}));
     _syncSelectedIndex();
     _loadTeamCounts();
+    _loadTeamProfilesExtended();
   }
 
   @override
@@ -507,6 +583,7 @@ class _CmrClubTeamsPanelState extends State<CmrClubTeamsPanel> {
     final newIds = widget.teams.map(_teamId).where((id) => id > 0).join(',');
     if (oldWidget.clubId != widget.clubId || oldIds != newIds) {
       _loadTeamCounts();
+      _loadTeamProfilesExtended();
     }
   }
 
@@ -519,7 +596,7 @@ class _CmrClubTeamsPanelState extends State<CmrClubTeamsPanel> {
 
   List<Map<String, dynamic>> get _visibleTeams {
     final q = _searchC.text.trim().toLowerCase();
-    return widget.teams.where((team) {
+    return _effectiveTeams.where((team) {
       final haystack = [
         _teamName(team),
         _teamSubtitle(team),
@@ -568,14 +645,15 @@ class _CmrClubTeamsPanelState extends State<CmrClubTeamsPanel> {
   }
 
   Map<String, dynamic>? get _selectedTeamAny {
-    if (widget.teams.isEmpty) return null;
+    final effective = _effectiveTeams;
+    if (effective.isEmpty) return null;
     final selectedId = _activeTeamId;
     if (selectedId != null && selectedId > 0) {
-      for (final team in widget.teams) {
+      for (final team in effective) {
         if (_teamId(team) == selectedId) return team;
       }
     }
-    return widget.teams[_selectedIndex.clamp(0, widget.teams.length - 1)];
+    return effective[_selectedIndex.clamp(0, effective.length - 1)];
   }
 
   void _syncSelectedIndex() {
@@ -646,7 +724,7 @@ class _CmrClubTeamsPanelState extends State<CmrClubTeamsPanel> {
               constraints: BoxConstraints(maxWidth: maxWidth, maxHeight: maxHeight),
               child: _TeamsPickerSheet(
                 clubName: widget.clubName,
-                teams: widget.teams,
+                teams: _effectiveTeams,
                 selectedTeamId: _activeTeamId,
                 mobile: mobile,
                 onCreateTeam: _requestCreateTeam,
@@ -880,6 +958,7 @@ class _CmrClubTeamsPanelState extends State<CmrClubTeamsPanel> {
             active: _teamId(selected) == _activeTeamId,
             clubName: widget.clubName,
             clubId: widget.clubId,
+            currentUserId: widget.currentUserId,
             playersCount: _playersCountByTeam[_teamId(selected)],
             trainersCount: _trainersCountByTeam[_teamId(selected)],
             maxPlayersPerTeam: _playersLimit,
@@ -1531,6 +1610,8 @@ class _CmrEditTeamPane extends StatefulWidget {
 class _CmrEditTeamPaneState extends State<_CmrEditTeamPane> {
   static const String _updateTeamUrl =
       'https://sportotekaapp.ru/api/update_team_profile.php';
+  static const String _updateTeamExtendedUrl =
+      'https://sportotekaapp.ru/api/team_profile_extended.php';
 
   final ImagePicker _picker = ImagePicker();
   final TextEditingController _nameC = TextEditingController();
@@ -1650,7 +1731,9 @@ class _CmrEditTeamPaneState extends State<_CmrEditTeamPane> {
         'name': name,
         'sport': sport.isEmpty ? 'Футбол' : sport,
         'sport_name': sport.isEmpty ? 'Футбол' : sport,
-        'category': sport.isEmpty ? 'Футбол' : sport,
+        // В старой схеме teams поле category — это группа/категория команды,
+        // а вид спорта хранится отдельно в sport.
+        'category': group,
         'age_group': group,
         'ageGroup': group,
         'stage': group,
@@ -1682,6 +1765,13 @@ class _CmrEditTeamPaneState extends State<_CmrEditTeamPane> {
 
       final streamed = await req.send().timeout(const Duration(seconds: 22));
       final response = await http.Response.fromStream(streamed);
+      debugPrint(
+        '[TEAM_PROFILE][SAVE] team_id=$teamId status=${response.statusCode} '
+        'response=${response.body.length > 1200 ? response.body.substring(0, 1200) : response.body}',
+      );
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw Exception('HTTP ${response.statusCode} при сохранении паспорта команды');
+      }
       final decoded = _tryDecode(response.body);
       final ok = decoded is Map &&
           (decoded['success'] == true ||
@@ -1699,20 +1789,58 @@ class _CmrEditTeamPaneState extends State<_CmrEditTeamPane> {
         );
       }
 
+      // Расширенные поля паспорта сохраняются отдельно, потому что старая
+      // таблица teams исторически содержит только id/coach_id/club_id/name/category/logo/sport.
+      // Не показываем «сохранено», пока сервер реально не подтвердил сезон,
+      // локацию, главного тренера, статус и описание.
+      final extendedResponse = await http.post(
+        Uri.parse(_updateTeamExtendedUrl),
+        headers: const {'Content-Type': 'application/x-www-form-urlencoded; charset=utf-8'},
+        body: <String, String>{
+          'team_id': '$teamId',
+          'club_id': '${widget.clubId}',
+          'age_group': group,
+          'season': season,
+          'location': location,
+          'head_coach': coach,
+          'team_status': status,
+          'description': description,
+        },
+      ).timeout(const Duration(seconds: 15));
+      final extendedDecoded = _tryDecode(extendedResponse.body);
+      final extendedOk = extendedResponse.statusCode >= 200 &&
+          extendedResponse.statusCode < 300 &&
+          extendedDecoded is Map &&
+          (extendedDecoded['success'] == true ||
+              '${extendedDecoded['status'] ?? ''}'.toLowerCase() == 'success' ||
+              '${extendedDecoded['status'] ?? ''}'.toLowerCase() == 'ok');
+      if (!extendedOk) {
+        final serverMessage = extendedDecoded is Map
+            ? _s(extendedDecoded['message'] ?? extendedDecoded['error'])
+            : '';
+        throw Exception(serverMessage.isEmpty
+            ? 'Расширенные данные паспорта не сохранены на сервере'
+            : serverMessage);
+      }
+
       final serverTeam = decoded is Map
           ? (decoded['team'] ?? decoded['data'])
+          : null;
+      final extendedTeam = extendedDecoded is Map
+          ? (extendedDecoded['team'] ?? extendedDecoded['data'])
           : null;
 
       final updated = <String, dynamic>{
         ...widget.team,
         if (serverTeam is Map) ...Map<String, dynamic>.from(serverTeam),
+        if (extendedTeam is Map) ...Map<String, dynamic>.from(extendedTeam),
         'id': teamId,
         'team_id': teamId,
         'name': name,
         'team_name': name,
         'sport': sport.isEmpty ? 'Футбол' : sport,
         'sport_name': sport.isEmpty ? 'Футбол' : sport,
-        'category': sport.isEmpty ? 'Футбол' : sport,
+        'category': group,
         'age_group': group,
         'stage': group,
         'season': season,
@@ -3455,6 +3583,7 @@ class _TeamDetails extends StatelessWidget {
   final bool active;
   final String clubName;
   final int clubId;
+  final int currentUserId;
   final int? playersCount;
   final int? trainersCount;
   final int? maxPlayersPerTeam;
@@ -3480,6 +3609,7 @@ class _TeamDetails extends StatelessWidget {
     required this.active,
     required this.clubName,
     required this.clubId,
+    required this.currentUserId,
     required this.playersCount,
     required this.trainersCount,
     required this.maxPlayersPerTeam,
@@ -3615,6 +3745,17 @@ class _TeamDetails extends StatelessWidget {
                         : description.trim(),
                   ),
                   const SizedBox(height: 12),
+                  _TeamLatestPlanNotification(
+                    key: ValueKey(
+                      'cmr_latest_plan_${clubId}_${_teamId(team)}',
+                    ),
+                    clubId: clubId,
+                    teamId: _teamId(team),
+                    teamName: name,
+                    fallbackPlans: latestPlans,
+                    onOpenPlans: onOpenPlans,
+                  ),
+                  const SizedBox(height: 12),
                   _TeamLiveOverviewBlock(
                     key: ValueKey('cmr_team_overview_${clubId}_${_teamId(team)}'),
                     clubId: clubId,
@@ -3644,6 +3785,14 @@ class _TeamDetails extends StatelessWidget {
                     sport: sport,
                     subtitle: subtitle,
                     description: description,
+                  ),
+                  const SizedBox(height: 12),
+                  _TeamDocumentsBlock(
+                    key: ValueKey('cmr_team_documents_${clubId}_${_teamId(team)}'),
+                    clubId: clubId,
+                    currentUserId: currentUserId,
+                    teamId: _teamId(team),
+                    teamName: name,
                   ),
                 ],
               ),
@@ -4198,6 +4347,660 @@ class _TeamDetails extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
         child: Text(text, style: _CmrText.action().copyWith(fontSize: 11.2)),
+      ),
+    );
+  }
+}
+
+
+
+class _TeamLatestPlanNotification extends StatefulWidget {
+  final int clubId;
+  final int teamId;
+  final String teamName;
+  final List<Map<String, dynamic>> fallbackPlans;
+  final VoidCallback? onOpenPlans;
+
+  const _TeamLatestPlanNotification({
+    super.key,
+    required this.clubId,
+    required this.teamId,
+    required this.teamName,
+    required this.fallbackPlans,
+    required this.onOpenPlans,
+  });
+
+  @override
+  State<_TeamLatestPlanNotification> createState() =>
+      _TeamLatestPlanNotificationState();
+}
+
+class _TeamLatestPlanNotificationState
+    extends State<_TeamLatestPlanNotification> {
+  bool _expanded = true;
+  bool _loading = true;
+  Map<String, dynamic>? _plan;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant _TeamLatestPlanNotification oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.teamId != widget.teamId ||
+        oldWidget.clubId != widget.clubId ||
+        !identical(oldWidget.fallbackPlans, widget.fallbackPlans)) {
+      _load();
+    }
+  }
+
+  Future<void> _load() async {
+    if (mounted) setState(() => _loading = true);
+
+    Map<String, dynamic>? latest;
+
+    if (widget.teamId > 0) {
+      try {
+        final uri = Uri.parse(
+          'https://sportotekaapp.ru/api/get_latest_training_plans.php',
+        ).replace(
+          queryParameters: <String, String>{
+            'team_id': '${widget.teamId}',
+            'limit': '1',
+            if (widget.clubId > 0) 'club_id': '${widget.clubId}',
+          },
+        );
+        final response =
+            await http.get(uri).timeout(const Duration(seconds: 9));
+        final list = _extractList(
+          _tryDecode(response.body),
+          const ['plans', 'items', 'data', 'result'],
+        );
+        if (list.isNotEmpty) {
+          latest = Map<String, dynamic>.from(list.first);
+        }
+      } catch (_) {}
+    }
+
+    latest ??= _fallbackLatestPlan();
+
+    if (!mounted) return;
+    setState(() {
+      _plan = latest;
+      _loading = false;
+    });
+  }
+
+  Map<String, dynamic>? _fallbackLatestPlan() {
+    final filtered = widget.fallbackPlans.where((item) {
+      final id = _itemTeamId(item);
+      if (id > 0) return id == widget.teamId;
+      final name = _s(
+        item['team_name'] ??
+            item['teamName'] ??
+            item['group_name'],
+      ).trim().toLowerCase();
+      return name.isNotEmpty &&
+          name == widget.teamName.trim().toLowerCase();
+    }).map((e) => Map<String, dynamic>.from(e)).toList(growable: true);
+
+    if (filtered.isEmpty) return null;
+    filtered.sort((a, b) {
+      final ad = _dateOf(a);
+      final bd = _dateOf(b);
+      if (ad == null && bd == null) return 0;
+      if (ad == null) return 1;
+      if (bd == null) return -1;
+      return bd.compareTo(ad);
+    });
+    return filtered.first;
+  }
+
+  String _author(Map<String, dynamic> item) {
+    return _s(
+      item['author_name'] ??
+          item['created_by_name'] ??
+          item['trainer_name'] ??
+          item['coach_name'] ??
+          item['created_by'],
+    );
+  }
+
+  String _description(Map<String, dynamic> item) {
+    return _s(
+      item['description'] ??
+          item['short_description'] ??
+          item['theme'] ??
+          item['topic'] ??
+          item['body'] ??
+          item['notes'],
+    );
+  }
+
+  String _meta(Map<String, dynamic> item) {
+    final date = _teamDateText(item);
+    final author = _author(item);
+    return <String>[
+      if (date.trim().isNotEmpty) date.trim(),
+      if (author.trim().isNotEmpty) 'Создал: ${author.trim()}',
+    ].join(' · ');
+  }
+
+
+  Future<void> _openPlanInSportotekaOs() async {
+    final plan = _plan;
+    if (plan == null) return;
+
+    final planId = _intFromAny(
+      plan['id'] ?? plan['plan_id'] ?? plan['planId'],
+    );
+    final title = _itemTitle(plan);
+
+    final args = <String, dynamic>{
+      ...plan,
+      if (planId > 0) 'planId': planId,
+      if (planId > 0) 'plan_id': planId,
+      if (planId > 0) 'id': planId,
+      'clubId': widget.clubId,
+      'club_id': widget.clubId,
+      'teamId': widget.teamId,
+      'team_id': widget.teamId,
+      'teamName': widget.teamName,
+      'team_name': widget.teamName,
+      if (_author(plan).isNotEmpty) 'trainerName': _author(plan),
+    };
+
+    await showWorkspaceManagedWindow(
+      context,
+      id: 'cmr-team-plan:${widget.teamId}:${planId > 0 ? planId : title.hashCode}',
+      title: title,
+      subtitle: 'План-конспект · ${widget.teamName}',
+      iconKind: SportotekaWorkspaceIconKind.plans,
+      preferredSize: const Size(1060, 720),
+      builder: (closeWindow) => PlanDetailScreen(
+        embedded: true,
+        workspaceWindowMode: true,
+        initialArgs: args,
+        onClose: closeWindow,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading && _plan == null) {
+      return Container(
+        height: 54,
+        alignment: Alignment.centerLeft,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: _CmrColors.greenSoft2,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const SizedBox(
+          width: 18,
+          height: 18,
+          child: CircularProgressIndicator(
+            strokeWidth: 1.8,
+            color: _CmrColors.green,
+          ),
+        ),
+      );
+    }
+
+    final plan = _plan;
+    if (plan == null) return const SizedBox.shrink();
+
+    final title = _itemTitle(plan);
+    final description = _description(plan);
+    final meta = _meta(plan);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: _CmrColors.greenSoft2,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: _CmrColors.greenBorder,
+          width: .75,
+        ),
+      ),
+      child: Column(
+        children: [
+          InkWell(
+            onTap: () => setState(() => _expanded = !_expanded),
+            borderRadius: BorderRadius.circular(12),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
+              child: Row(
+                children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      Icons.assignment_turned_in_outlined,
+                      color: _CmrColors.greenDark,
+                      size: 19,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              width: 6,
+                              height: 6,
+                              decoration: const BoxDecoration(
+                                color: _CmrColors.green,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Последний план-конспект',
+                              style: _CmrText.chip(
+                                size: 10.8,
+                                color: _CmrColors.greenDark,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: _CmrText.value(12.8),
+                        ),
+                        if (meta.isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            meta,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: _CmrText.muted(10.2),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Icon(
+                    _expanded
+                        ? Icons.keyboard_arrow_up_rounded
+                        : Icons.keyboard_arrow_down_rounded,
+                    color: _CmrColors.greenDark,
+                    size: 20,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          AnimatedCrossFade(
+            duration: const Duration(milliseconds: 180),
+            crossFadeState: _expanded
+                ? CrossFadeState.showFirst
+                : CrossFadeState.showSecond,
+            firstChild: Container(
+              width: double.infinity,
+              margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+              padding: const EdgeInsets.all(11),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    description.isEmpty
+                        ? 'План сохранён для этой команды. Можно открыть раздел планов и продолжить работу.'
+                        : description,
+                    maxLines: 4,
+                    overflow: TextOverflow.ellipsis,
+                    style: _CmrText.muted(11.2),
+                  ),
+                  const SizedBox(height: 9),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Предпросмотр в информации команды',
+                          style: _CmrText.caption(),
+                        ),
+                      ),
+                      TextButton.icon(
+                        onPressed: _openPlanInSportotekaOs,
+                        icon: const Icon(
+                          Icons.open_in_new_rounded,
+                          size: 15,
+                        ),
+                        label: const Text('Открыть в Sportoteka OS'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            secondChild: const SizedBox.shrink(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TeamDocumentsBlock extends StatefulWidget {
+  final int clubId;
+  final int currentUserId;
+  final int teamId;
+  final String teamName;
+
+  const _TeamDocumentsBlock({
+    super.key,
+    required this.clubId,
+    required this.currentUserId,
+    required this.teamId,
+    required this.teamName,
+  });
+
+  @override
+  State<_TeamDocumentsBlock> createState() => _TeamDocumentsBlockState();
+}
+
+class _TeamDocumentsBlockState extends State<_TeamDocumentsBlock> {
+  bool _loading = true;
+  bool _uploading = false;
+  String? _error;
+  List<Map<String, dynamic>> _attachments = <Map<String, dynamic>>[];
+  List<Map<String, dynamic>> _linkedDocuments = <Map<String, dynamic>>[];
+
+  WorkspaceServerStorage get _storage => WorkspaceServerStorage(
+        clubId: widget.clubId,
+        userId: widget.currentUserId > 0 ? widget.currentUserId : widget.clubId,
+      );
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant _TeamDocumentsBlock oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.teamId != widget.teamId || oldWidget.clubId != widget.clubId) {
+      _load();
+    }
+  }
+
+  Future<void> _load() async {
+    if (widget.clubId <= 0 || widget.teamId <= 0) {
+      if (mounted) setState(() => _loading = false);
+      return;
+    }
+    if (mounted) {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    }
+    try {
+      final results = await Future.wait<List<Map<String, dynamic>>>([
+        _storage.listAttachments(
+          entityType: 'team',
+          entityId: widget.teamId,
+          sectionKey: 'documents',
+        ),
+        _storage.listEntityDocuments(
+          entityType: 'team',
+          entityId: '${widget.teamId}',
+        ),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        _attachments = results[0];
+        _linkedDocuments = results[1];
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = '$e';
+        _loading = false;
+      });
+    }
+  }
+
+  Future<void> _upload() async {
+    if (_uploading || widget.teamId <= 0) return;
+    final result = await FilePicker.pickFiles(allowMultiple: true);
+    if (result == null) return;
+    final paths = result.files
+        .map((file) => file.path)
+        .whereType<String>()
+        .where((path) => path.trim().isNotEmpty)
+        .toList();
+    if (paths.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Не удалось получить путь к выбранному файлу')),
+        );
+      }
+      return;
+    }
+
+    setState(() => _uploading = true);
+    try {
+      for (final path in paths) {
+        final name = path.split(RegExp(r'[\\/]')).last;
+        await _storage.uploadAttachment(
+          filePath: path,
+          entityType: 'team',
+          entityId: widget.teamId,
+          sectionKey: 'documents',
+          title: name.replaceFirst(RegExp(r'\.[^.]+$'), ''),
+        );
+      }
+      await _load();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Документы команды сохранены и доступны в Sportoteka OS')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Не удалось загрузить документ: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _uploading = false);
+    }
+  }
+
+  Future<void> _delete(Map<String, dynamic> row) async {
+    final id = _intFromAny(row['id']);
+    if (id <= 0) return;
+    try {
+      await _storage.deleteAttachment(id);
+      await _load();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Не удалось удалить документ: $e')),
+        );
+      }
+    }
+  }
+
+  String _title(Map<String, dynamic> row) {
+    for (final key in const ['title', 'original_name', 'file_name', 'name']) {
+      final value = _s(row[key]);
+      if (value.isNotEmpty) return value;
+    }
+    return 'Документ';
+  }
+
+  String _meta(Map<String, dynamic> row, {required bool linked}) {
+    if (linked) return 'Документ Sportoteka OS';
+    final mime = _s(row['mime_type']);
+    final size = _intFromAny(row['file_size']);
+    final sizeText = size <= 0
+        ? ''
+        : size < 1024 * 1024
+            ? '${(size / 1024).toStringAsFixed(0)} КБ'
+            : '${(size / 1024 / 1024).toStringAsFixed(1)} МБ';
+    return <String>[if (mime.isNotEmpty) mime, if (sizeText.isNotEmpty) sizeText]
+        .join(' · ');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final all = <Map<String, dynamic>>[
+      ..._attachments.map((e) => <String, dynamic>{...e, '_linked': false}),
+      ..._linkedDocuments.map((e) => <String, dynamic>{...e, '_linked': true}),
+    ];
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: _CmrColors.soft,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 3,
+                height: 24,
+                decoration: BoxDecoration(
+                  color: _CmrColors.green,
+                  borderRadius: BorderRadius.circular(99),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Документы команды', style: _CmrText.title(15.0)),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Файлы автоматически синхронизируются со Sportoteka OS',
+                      style: _CmrText.muted(10.8),
+                    ),
+                  ],
+                ),
+              ),
+              TextButton.icon(
+                onPressed: _uploading ? null : _upload,
+                icon: _uploading
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 1.8, color: _CmrColors.green),
+                      )
+                    : const Icon(Icons.add_rounded, size: 17),
+                label: Text(_uploading ? 'Загрузка...' : 'Добавить'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          if (_loading)
+            const LinearProgressIndicator(minHeight: 2.5, color: _CmrColors.green)
+          else if (_error != null)
+            Text(_error!, style: _CmrText.muted(10.8).copyWith(color: _CmrColors.red))
+          else if (all.isEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                'Документов пока нет. Добавленные сюда файлы появятся также в Sportoteka OS → Команда → Документы.',
+                style: _CmrText.muted(11.0),
+              ),
+            )
+          else
+            ...all.map((row) {
+              final linked = row['_linked'] == true;
+              return Container(
+                margin: const EdgeInsets.only(bottom: 7),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: _CmrColors.greenSoft,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(
+                        linked ? Icons.description_outlined : Icons.attach_file_rounded,
+                        size: 17,
+                        color: _CmrColors.greenDark,
+                      ),
+                    ),
+                    const SizedBox(width: 9),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _title(row),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: _CmrText.value(11.8),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            _meta(row, linked: linked),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: _CmrText.muted(9.8),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (!linked)
+                      PopupMenuButton<String>(
+                        tooltip: 'Действия',
+                        onSelected: (value) {
+                          if (value == 'delete') _delete(row);
+                        },
+                        itemBuilder: (_) => const [
+                          PopupMenuItem<String>(value: 'delete', child: Text('Удалить')),
+                        ],
+                        child: const Padding(
+                          padding: EdgeInsets.all(6),
+                          child: Icon(Icons.more_horiz_rounded, size: 18, color: _CmrColors.subtle),
+                        ),
+                      ),
+                  ],
+                ),
+              );
+            }),
+        ],
       ),
     );
   }
@@ -5568,10 +6371,13 @@ class _TeamLiveOverviewBlockState extends State<_TeamLiveOverviewBlock> {
   void didUpdateWidget(covariant _TeamLiveOverviewBlock oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.teamId != widget.teamId ||
-        oldWidget.players.length != widget.players.length ||
-        oldWidget.events.length != widget.events.length ||
-        oldWidget.latestPlans.length != widget.latestPlans.length ||
-        oldWidget.latestTests.length != widget.latestTests.length) {
+        oldWidget.teamName != widget.teamName ||
+        !identical(oldWidget.players, widget.players) ||
+        !identical(oldWidget.events, widget.events) ||
+        !identical(oldWidget.latestPlans, widget.latestPlans) ||
+        !identical(oldWidget.news, widget.news) ||
+        !identical(oldWidget.latestTrainings, widget.latestTrainings) ||
+        !identical(oldWidget.latestTests, widget.latestTests)) {
       _future = _load();
     }
   }
@@ -5600,13 +6406,18 @@ class _TeamLiveOverviewBlockState extends State<_TeamLiveOverviewBlock> {
       news = events.where(_looksLikeNews).toList();
     }
 
-    final matches = events.where(_looksLikeMatch).toList();
-    _sortByDate(events);
-    _sortByDate(matches);
-    _sortByDate(trainings);
-    _sortByDate(plans);
-    _sortByDate(news);
-    _sortByDate(tests);
+    // В обзор календаря не тащим исторические события. Показываем только
+    // сегодня/будущее выбранной команды; ближайшее событие идёт первым.
+    events = _upcomingOnly(events);
+    final matches = _upcomingOnly(events.where(_looksLikeMatch).toList());
+    _sortUpcomingByDate(events);
+    _sortUpcomingByDate(matches);
+
+    // Остальные ленты логичнее показывать от новых к старым.
+    _sortNewestFirst(trainings);
+    _sortNewestFirst(plans);
+    _sortNewestFirst(news);
+    _sortNewestFirst(tests);
 
     final localWarnings = _warningsFromTests(tests);
     final matrixWarnings = await _fetchTestingWarnings();
@@ -5642,9 +6453,10 @@ class _TeamLiveOverviewBlockState extends State<_TeamLiveOverviewBlock> {
     ).toLowerCase().trim();
     if (teamName.isNotEmpty) return teamName == widget.teamName.toLowerCase().trim();
 
-    // Если родитель уже загрузил данные после выбора команды, в них иногда нет team_id.
-    // Тогда оставляем их как локальные для текущей правой панели.
-    return true;
+    // КРИТИЧНО: запись без team_id и без точного team_name нельзя считать
+    // событием выбранной команды. Иначе общие/старые события клуба попадают
+    // в каждую команду. Лучше показать пустой календарь, чем чужие данные.
+    return false;
   }
 
   Future<List<Map<String, dynamic>>> _fetchPlayers() async {
@@ -5876,7 +6688,21 @@ class _TeamLiveOverviewBlockState extends State<_TeamLiveOverviewBlock> {
         .toLowerCase();
   }
 
-  void _sortByDate(List<Map<String, dynamic>> items) {
+  List<Map<String, dynamic>> _upcomingOnly(
+    List<Map<String, dynamic>> items,
+  ) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    return items.where((item) {
+      final date = _dateOf(item);
+      // Запись без даты оставляем: она уже прошла строгую проверку team_id.
+      if (date == null) return true;
+      final day = DateTime(date.year, date.month, date.day);
+      return !day.isBefore(today);
+    }).toList();
+  }
+
+  void _sortUpcomingByDate(List<Map<String, dynamic>> items) {
     items.sort((a, b) {
       final ad = _dateOf(a);
       final bd = _dateOf(b);
@@ -5884,6 +6710,17 @@ class _TeamLiveOverviewBlockState extends State<_TeamLiveOverviewBlock> {
       if (ad == null) return 1;
       if (bd == null) return -1;
       return ad.compareTo(bd);
+    });
+  }
+
+  void _sortNewestFirst(List<Map<String, dynamic>> items) {
+    items.sort((a, b) {
+      final ad = _dateOf(a);
+      final bd = _dateOf(b);
+      if (ad == null && bd == null) return 0;
+      if (ad == null) return 1;
+      if (bd == null) return -1;
+      return bd.compareTo(ad);
     });
   }
 
@@ -7574,7 +8411,8 @@ String _rawTeamGroup(Map<String, dynamic> team) {
         team['ageGroup'] ??
         team['stage'] ??
         team['group_name'] ??
-        team['groupName'],
+        team['groupName'] ??
+        team['category'],
   );
 }
 

@@ -37,10 +37,12 @@ class WorkspacePlayerSectionBrowser extends StatefulWidget {
   final int currentUserId;
 
   @override
-  State<WorkspacePlayerSectionBrowser> createState() => _WorkspacePlayerSectionBrowserState();
+  State<WorkspacePlayerSectionBrowser> createState() =>
+      _WorkspacePlayerSectionBrowserState();
 }
 
-class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBrowser> {
+class _WorkspacePlayerSectionBrowserState
+    extends State<WorkspacePlayerSectionBrowser> {
   static const _green = Color(0xFF0B8F55);
   static const _greenSoft = Color(0xFFF2F8F5);
   static const _text = Color(0xFF101814);
@@ -63,10 +65,17 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
   _SortMode _sort = _SortMode.newest;
 
   String get _playerName {
-    final last = '${widget.player['last_name'] ?? widget.player['lastname'] ?? ''}'.trim();
-    final first = '${widget.player['first_name'] ?? widget.player['firstname'] ?? ''}'.trim();
-    final full = '${widget.player['full_name'] ?? widget.player['fullName'] ?? widget.player['name'] ?? ''}'.trim();
-    final joined = <String>[last, first].where((e) => e.isNotEmpty).join(' ').trim();
+    final last =
+        '${widget.player['last_name'] ?? widget.player['lastname'] ?? ''}'
+            .trim();
+    final first =
+        '${widget.player['first_name'] ?? widget.player['firstname'] ?? ''}'
+            .trim();
+    final full =
+        '${widget.player['full_name'] ?? widget.player['fullName'] ?? widget.player['name'] ?? ''}'
+            .trim();
+    final joined =
+        <String>[last, first].where((e) => e.isNotEmpty).join(' ').trim();
     return joined.isNotEmpty ? joined : (full.isNotEmpty ? full : 'Игрок');
   }
 
@@ -91,11 +100,13 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
     }
   }
 
-  bool get _canUpload => widget.clubId > 0 && _bridge.resolvePlayerId(widget.player) > 0;
+  bool get _canUpload =>
+      widget.clubId > 0 && _bridge.resolvePlayerId(widget.player) > 0;
 
   bool get _canCreateDiary => widget.section == WorkspacePlayerSection.diary;
 
-  bool get _canCreateDocument => widget.clubId > 0 && _bridge.resolvePlayerId(widget.player) > 0;
+  bool get _canCreateDocument =>
+      widget.clubId > 0 && _bridge.resolvePlayerId(widget.player) > 0;
 
   bool get _documentsOnly => widget.section == WorkspacePlayerSection.documents;
   bool get _medicalSection => widget.section == WorkspacePlayerSection.health;
@@ -119,7 +130,8 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
     );
     _search.addListener(_onSearch);
     _load().then((_) {
-      if (mounted && widget.createOnOpen && _canCreateDiary) _createLocalRecord();
+      if (mounted && widget.createOnOpen && _canCreateDiary)
+        _createLocalRecord();
     });
   }
 
@@ -144,12 +156,16 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
       List<Map<String, dynamic>> rows;
       switch (widget.section) {
         case WorkspacePlayerSection.card:
-          rows = <Map<String, dynamic>>[<String, dynamic>{
-            'id': _bridge.resolvePlayerId(widget.player),
-            'title': 'Карточка игрока',
-            'type': 'Системный документ',
-            'date': widget.player['updated_at'] ?? widget.player['created_at'] ?? '',
-          }];
+          rows = <Map<String, dynamic>>[
+            <String, dynamic>{
+              'id': _bridge.resolvePlayerId(widget.player),
+              'title': 'Карточка игрока',
+              'type': 'Системный документ',
+              'date': widget.player['updated_at'] ??
+                  widget.player['created_at'] ??
+                  '',
+            }
+          ];
           break;
         case WorkspacePlayerSection.diary:
           rows = await _bridge.loadDiary(
@@ -168,10 +184,12 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
           );
           break;
         case WorkspacePlayerSection.activity:
-          rows = await _bridge.loadPlayerActivity(player: widget.player, teamId: widget.teamId);
+          rows = await _bridge.loadPlayerActivity(
+              player: widget.player, teamId: widget.teamId);
           break;
         case WorkspacePlayerSection.matches:
-          rows = await _bridge.loadTeamMatches(player: widget.player, teamId: widget.teamId);
+          rows = await _bridge.loadTeamMatches(
+              player: widget.player, teamId: widget.teamId);
           break;
         case WorkspacePlayerSection.testing:
           rows = await _bridge.loadTestingSessions(
@@ -190,14 +208,21 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
       }
 
       rows = rows.map((row) => Map<String, dynamic>.from(row)).toList();
-      var localRows = _canCreateDocument ? await _readLocalRecords() : <Map<String, dynamic>>[];
+      var localRows = _canCreateDocument
+          ? await _readLocalRecords()
+          : <Map<String, dynamic>>[];
 
       // Old Diary drafts are still migrated into the canonical diary endpoint,
       // but documents explicitly created in Sportoteka OS remain documents.
       if (_canCreateDiary && localRows.isNotEmpty) {
-        final documents = localRows.where((row) => row['_workspace_document'] == true).toList();
-        final legacyDiary = localRows.where((row) => row['_workspace_document'] != true).toList();
-        final pendingDiary = await _migrateLegacyDiaryRecords(rows, legacyDiary);
+        final documents = localRows
+            .where((row) => row['_workspace_document'] == true)
+            .toList();
+        final legacyDiary = localRows
+            .where((row) => row['_workspace_document'] != true)
+            .toList();
+        final pendingDiary =
+            await _migrateLegacyDiaryRecords(rows, legacyDiary);
         localRows = <Map<String, dynamic>>[...documents, ...pendingDiary];
         if (legacyDiary.isNotEmpty && pendingDiary.isEmpty) {
           rows = await _bridge.loadDiary(
@@ -215,7 +240,10 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
             entityType: 'player',
             entityId: _bridge.resolvePlayerId(widget.player),
             sectionKey: widget.section.name,
-          )).map((row) => <String, dynamic>{...row, '_workspace_attachment': true}).toList();
+          ))
+              .map((row) =>
+                  <String, dynamic>{...row, '_workspace_attachment': true})
+              .toList();
           _serverAvailable = true;
         } catch (_) {}
       }
@@ -235,7 +263,9 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
       });
     } catch (e) {
       if (!mounted) return;
-      final localRows = _canCreateDocument ? await _readLocalRecords() : <Map<String, dynamic>>[];
+      final localRows = _canCreateDocument
+          ? await _readLocalRecords()
+          : <Map<String, dynamic>>[];
       if (!mounted) return;
       setState(() {
         _error = '$e';
@@ -247,8 +277,10 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
     }
   }
 
-  bool _isLocalRecord(Map<String, dynamic> row) => row['_workspace_local'] == true;
-  bool _isAttachment(Map<String, dynamic> row) => row['_workspace_attachment'] == true;
+  bool _isLocalRecord(Map<String, dynamic> row) =>
+      row['_workspace_local'] == true;
+  bool _isAttachment(Map<String, dynamic> row) =>
+      row['_workspace_attachment'] == true;
 
   Future<List<Map<String, dynamic>>> _readLocalRecords() async {
     if (!_canCreateDocument) return <Map<String, dynamic>>[];
@@ -271,14 +303,19 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
     try {
       var snapshot = await _serverStorage.load();
       final serverNodes = snapshot.nodes
-          .where((node) => node.parentId == _serverParentKey && node.kind == WorkspaceFinderNodeKind.note)
+          .where((node) =>
+              node.parentId == _serverParentKey &&
+              node.kind == WorkspaceFinderNodeKind.note)
           .toList();
-      final serverById = <String, WorkspaceFinderNode>{for (final node in serverNodes) node.id: node};
+      final serverById = <String, WorkspaceFinderNode>{
+        for (final node in serverNodes) node.id: node
+      };
       var serverChanged = false;
       for (final row in local) {
         final id = '${row['id'] ?? ''}';
         if (id.isEmpty) continue;
-        final needsSync = row['_workspace_pending_sync'] == true || row['_workspace_server'] != true;
+        final needsSync = row['_workspace_pending_sync'] == true ||
+            row['_workspace_server'] != true;
         if (!needsSync) continue;
         final localTitle = '${row['title'] ?? 'Рабочая заметка'}';
         final localSubtitle = '${row['subtitle'] ?? 'Редактируемая заметка'}';
@@ -291,12 +328,15 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
             title: localTitle,
             subtitle: localSubtitle,
             kind: WorkspaceFinderNodeKind.note,
-            payload: <String, dynamic>{'workspace_document': row['_workspace_document'] == true},
+            payload: <String, dynamic>{
+              'workspace_document': row['_workspace_document'] == true
+            },
             parentId: _serverParentKey,
             createdAt: DateTime.tryParse('${row['created_at'] ?? ''}'),
             updatedAt: localUpdated,
           );
-          await _serverStorage.syncNodeDocument(node: node, body: localBody, createHint: true);
+          await _serverStorage.syncNodeDocument(
+              node: node, body: localBody, createHint: true);
           serverChanged = true;
           continue;
         }
@@ -305,18 +345,22 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
         final serverBody = snapshot.noteBodies[id] ?? '';
         final localIsNotOlder = localUpdated == null ||
             serverUpdated == null ||
-            !localUpdated.isBefore(serverUpdated.subtract(const Duration(seconds: 5)));
+            !localUpdated
+                .isBefore(serverUpdated.subtract(const Duration(seconds: 5)));
         final differs = existing.title != localTitle ||
             existing.subtitle != localSubtitle ||
             serverBody != localBody ||
-            existing.payload?['workspace_document'] != (row['_workspace_document'] == true);
+            existing.payload?['workspace_document'] !=
+                (row['_workspace_document'] == true);
         if (differs && localIsNotOlder) {
           final node = WorkspaceFinderNode(
             id: id,
             title: localTitle,
             subtitle: localSubtitle,
             kind: WorkspaceFinderNodeKind.note,
-            payload: <String, dynamic>{'workspace_document': row['_workspace_document'] == true},
+            payload: <String, dynamic>{
+              'workspace_document': row['_workspace_document'] == true
+            },
             parentId: _serverParentKey,
             createdAt: existing.createdAt,
             updatedAt: localUpdated ?? DateTime.now(),
@@ -327,7 +371,9 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
       }
       if (serverChanged) snapshot = await _serverStorage.load();
       final rows = <Map<String, dynamic>>[];
-      for (final node in snapshot.nodes.where((n) => n.parentId == _serverParentKey && n.kind == WorkspaceFinderNodeKind.note)) {
+      for (final node in snapshot.nodes.where((n) =>
+          n.parentId == _serverParentKey &&
+          n.kind == WorkspaceFinderNodeKind.note)) {
         rows.add(<String, dynamic>{
           'id': node.id,
           '_workspace_local': true,
@@ -335,7 +381,9 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
           '_workspace_document': node.payload?['workspace_document'] == true,
           'title': node.title,
           'subtitle': node.subtitle,
-          'type': node.payload?['workspace_document'] == true ? 'Документ Sportoteka OS' : 'Рабочая заметка',
+          'type': node.payload?['workspace_document'] == true
+              ? 'Документ Sportoteka OS'
+              : 'Рабочая заметка',
           'workspace_note': snapshot.noteBodies[node.id] ?? '',
           'created_at': node.createdAt?.toIso8601String() ?? '',
           'updated_at': node.updatedAt?.toIso8601String() ?? '',
@@ -360,7 +408,8 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
     for (final row in legacyRows) {
       var date = _dateOf(row);
       if (date.year <= 1970) date = DateTime.now();
-      final key = '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+      final key =
+          '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
       byDate.putIfAbsent(key, () => <Map<String, dynamic>>[]).add(row);
     }
 
@@ -368,10 +417,13 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
       for (final entry in byDate.entries) {
         final date = DateTime.tryParse(entry.key) ?? DateTime.now();
         final existing = canonicalRows
-            .where((row) => '${row['_workspace_diary_source'] ?? ''}' == 'player_diary')
+            .where((row) =>
+                '${row['_workspace_diary_source'] ?? ''}' == 'player_diary')
             .where((row) {
               final d = _dateOf(row);
-              return d.year == date.year && d.month == date.month && d.day == date.day;
+              return d.year == date.year &&
+                  d.month == date.month &&
+                  d.day == date.day;
             })
             .map((row) => '${row['note'] ?? ''}'.trim())
             .where((text) => text.isNotEmpty)
@@ -381,7 +433,10 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
           final title = '${row['title'] ?? ''}'.trim();
           final body = '${row['workspace_note'] ?? ''}'.trim();
           final block = <String>[
-            if (title.isNotEmpty && title != 'Новая заметка' && title != 'Рабочая заметка') title,
+            if (title.isNotEmpty &&
+                title != 'Новая заметка' &&
+                title != 'Рабочая заметка')
+              title,
             if (body.isNotEmpty) body,
           ].join('\n\n').trim();
           if (block.isNotEmpty) migrated.add(block);
@@ -409,7 +464,10 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
         } catch (_) {}
       }
       final prefs = await SharedPreferences.getInstance();
-      final legacyIds = legacyRows.map((row) => '${row['id'] ?? ''}').where((id) => id.isNotEmpty).toSet();
+      final legacyIds = legacyRows
+          .map((row) => '${row['id'] ?? ''}')
+          .where((id) => id.isNotEmpty)
+          .toSet();
       final raw = prefs.getString(_localStorageKey);
       if (raw != null && raw.trim().isNotEmpty) {
         try {
@@ -443,16 +501,22 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
 
   bool _looksLikeDocument(Map<String, dynamic> row) {
     final type = '${row['type'] ?? row['record_type'] ?? ''}'.toLowerCase();
-    return type.contains('документ') || type.contains('document') || type.contains('file');
+    return type.contains('документ') ||
+        type.contains('document') ||
+        type.contains('file');
   }
 
   List<Map<String, dynamic>> get _visible {
     final q = _search.text.trim().toLowerCase();
-    final rows = _records.where((r) {
-      if (q.isEmpty) return true;
-      final hay = '${_titleOf(r)} ${_subtitleOf(r)} ${_dateLabel(r)}'.toLowerCase();
-      return hay.contains(q);
-    }).map((e) => Map<String, dynamic>.from(e)).toList();
+    final rows = _records
+        .where((r) {
+          if (q.isEmpty) return true;
+          final hay =
+              '${_titleOf(r)} ${_subtitleOf(r)} ${_dateLabel(r)}'.toLowerCase();
+          return hay.contains(q);
+        })
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
     switch (_sort) {
       case _SortMode.newest:
         rows.sort((a, b) => _dateOf(b).compareTo(_dateOf(a)));
@@ -461,7 +525,8 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
         rows.sort((a, b) => _dateOf(a).compareTo(_dateOf(b)));
         break;
       case _SortMode.title:
-        rows.sort((a, b) => _titleOf(a).toLowerCase().compareTo(_titleOf(b).toLowerCase()));
+        rows.sort((a, b) =>
+            _titleOf(a).toLowerCase().compareTo(_titleOf(b).toLowerCase()));
         break;
     }
     return rows;
@@ -470,16 +535,26 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
   String _titleOf(Map<String, dynamic> row) {
     if (_isLocalRecord(row)) {
       final value = '${row['title'] ?? ''}'.trim();
-      return value.isEmpty ? (row['_workspace_document'] == true ? 'Новый документ' : 'Рабочая заметка') : value;
+      return value.isEmpty
+          ? (row['_workspace_document'] == true
+              ? 'Новый документ'
+              : 'Рабочая заметка')
+          : value;
     }
     if (_isAttachment(row)) {
       final value = '${row['title'] ?? row['original_name'] ?? ''}'.trim();
       return value.isEmpty ? 'Файл' : value;
     }
     if (widget.section == WorkspacePlayerSection.matches) {
-      final opponent = '${row['opponent'] ?? row['opponent_name'] ?? row['opponent_team'] ?? row['opponent_team_name'] ?? row['rival'] ?? row['rival_name'] ?? ''}'.trim();
-      final competition = '${row['competition_name'] ?? row['tournament_name'] ?? row['competition'] ?? row['event_type'] ?? row['league_name'] ?? ''}'.trim();
-      return opponent.isNotEmpty ? 'Матч — $opponent' : (competition.isNotEmpty ? competition : 'Матч');
+      final opponent =
+          '${row['opponent'] ?? row['opponent_name'] ?? row['opponent_team'] ?? row['opponent_team_name'] ?? row['rival'] ?? row['rival_name'] ?? ''}'
+              .trim();
+      final competition =
+          '${row['competition_name'] ?? row['tournament_name'] ?? row['competition'] ?? row['event_type'] ?? row['league_name'] ?? ''}'
+              .trim();
+      return opponent.isNotEmpty
+          ? 'Матч — $opponent'
+          : (competition.isNotEmpty ? competition : 'Матч');
     }
     if (widget.section == WorkspacePlayerSection.testing) {
       final category = '${row['category'] ?? ''}'.trim();
@@ -487,52 +562,87 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
       return 'Тестирование${category.isEmpty ? '' : ' · ${_categoryRu(category)}'}${stage.isEmpty ? '' : ' · $stage'}';
     }
     if (widget.section == WorkspacePlayerSection.activity) {
-      return '${row['title'] ?? row['event_title'] ?? row['event_name'] ?? row['training_title'] ?? row['training_type'] ?? row['name'] ?? row['event_type'] ?? 'Тренировка'}'.trim();
+      return '${row['title'] ?? row['event_title'] ?? row['event_name'] ?? row['training_title'] ?? row['training_type'] ?? row['name'] ?? row['event_type'] ?? 'Тренировка'}'
+          .trim();
     }
-    if (widget.section == WorkspacePlayerSection.diary || widget.section == WorkspacePlayerSection.readiness) {
-      return '${row['title'] ?? row['training_title'] ?? row['event_title'] ?? 'Запись дневника'}'.trim();
+    if (widget.section == WorkspacePlayerSection.diary ||
+        widget.section == WorkspacePlayerSection.readiness) {
+      return '${row['title'] ?? row['training_title'] ?? row['event_title'] ?? 'Запись дневника'}'
+          .trim();
     }
-    return '${row['title'] ?? row['name'] ?? row['type'] ?? row['record_type'] ?? 'Документ'}'.trim();
+    return '${row['title'] ?? row['name'] ?? row['type'] ?? row['record_type'] ?? 'Документ'}'
+        .trim();
   }
 
   String _subtitleOf(Map<String, dynamic> row) {
     if (_isLocalRecord(row)) {
       final value = '${row['subtitle'] ?? ''}'.trim();
-      return value.isEmpty ? (row['_workspace_document'] == true ? 'Документ Sportoteka OS' : 'Редактируемая заметка') : value;
+      return value.isEmpty
+          ? (row['_workspace_document'] == true
+              ? 'Документ Sportoteka OS'
+              : 'Редактируемая заметка')
+          : value;
     }
     if (_isAttachment(row)) {
       final mime = '${row['mime_type'] ?? ''}'.trim();
       final size = int.tryParse('${row['file_size'] ?? '0'}') ?? 0;
-      final sizeLabel = size <= 0 ? '' : (size < 1024 * 1024 ? '${(size / 1024).toStringAsFixed(0)} КБ' : '${(size / 1024 / 1024).toStringAsFixed(1)} МБ');
+      final sizeLabel = size <= 0
+          ? ''
+          : (size < 1024 * 1024
+              ? '${(size / 1024).toStringAsFixed(0)} КБ'
+              : '${(size / 1024 / 1024).toStringAsFixed(1)} МБ');
       return <String>[mime, sizeLabel].where((e) => e.isNotEmpty).join(' · ');
     }
     if (widget.section == WorkspacePlayerSection.matches) {
-      final our = '${row['our_score'] ?? row['team_score'] ?? row['score_for'] ?? row['home_score'] ?? ''}'.trim();
-      final opp = '${row['opponent_score'] ?? row['score_against'] ?? row['away_score'] ?? ''}'.trim();
-      final competition = '${row['competition_name'] ?? row['tournament_name'] ?? row['competition'] ?? row['event_type'] ?? row['league_name'] ?? ''}'.trim();
+      final our =
+          '${row['our_score'] ?? row['team_score'] ?? row['score_for'] ?? row['home_score'] ?? ''}'
+              .trim();
+      final opp =
+          '${row['opponent_score'] ?? row['score_against'] ?? row['away_score'] ?? ''}'
+              .trim();
+      final competition =
+          '${row['competition_name'] ?? row['tournament_name'] ?? row['competition'] ?? row['event_type'] ?? row['league_name'] ?? ''}'
+              .trim();
       final score = our.isNotEmpty && opp.isNotEmpty ? '$our:$opp' : '';
-      return <String>[competition, score].where((e) => e.isNotEmpty).join(' · ');
+      return <String>[competition, score]
+          .where((e) => e.isNotEmpty)
+          .join(' · ');
     }
     if (widget.section == WorkspacePlayerSection.activity) {
       return <String>[
-        '${row['mark'] ?? row['status'] ?? row['attendance_status'] ?? ''}'.trim(),
-        '${row['coach_note'] ?? row['trainer_note'] ?? row['note'] ?? ''}'.trim(),
+        '${row['mark'] ?? row['status'] ?? row['attendance_status'] ?? ''}'
+            .trim(),
+        '${row['coach_note'] ?? row['trainer_note'] ?? row['note'] ?? ''}'
+            .trim(),
       ].where((e) => e.isNotEmpty).join(' · ');
     }
     if (widget.section == WorkspacePlayerSection.testing) {
-      return '${row['title'] ?? row['name'] ?? row['session_name'] ?? 'Контрольные показатели'}'.trim();
+      return '${row['title'] ?? row['name'] ?? row['session_name'] ?? 'Контрольные показатели'}'
+          .trim();
     }
-    if (widget.section == WorkspacePlayerSection.diary || widget.section == WorkspacePlayerSection.readiness) {
-      return '${row['player_note'] ?? row['self_note'] ?? row['diary_note'] ?? row['note'] ?? row['comment'] ?? ''}'.trim();
+    if (widget.section == WorkspacePlayerSection.diary ||
+        widget.section == WorkspacePlayerSection.readiness) {
+      return '${row['player_note'] ?? row['self_note'] ?? row['diary_note'] ?? row['note'] ?? row['comment'] ?? ''}'
+          .trim();
     }
-    return '${row['comment'] ?? row['value'] ?? row['type'] ?? row['record_type'] ?? ''}'.trim();
+    return '${row['comment'] ?? row['value'] ?? row['type'] ?? row['record_type'] ?? ''}'
+        .trim();
   }
-
 
   DateTime _dateOf(Map<String, dynamic> row) {
     for (final key in const <String>[
-      'test_date', 'match_date', 'event_date', 'scheduled_at', 'start_at', 'start_time', 'datetime', 'date',
-      'record_date', 'created_at', 'updated_at', 'uploaded_at',
+      'test_date',
+      'match_date',
+      'event_date',
+      'scheduled_at',
+      'start_at',
+      'start_time',
+      'datetime',
+      'date',
+      'record_date',
+      'created_at',
+      'updated_at',
+      'uploaded_at',
     ]) {
       final value = '${row[key] ?? ''}'.trim();
       if (value.isEmpty) continue;
@@ -630,7 +740,8 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
     required DateTime date,
   }) async {
     final now = DateTime.now().toIso8601String();
-    final existing = _localRecords.indexWhere((row) => '${row['id'] ?? ''}' == id);
+    final existing =
+        _localRecords.indexWhere((row) => '${row['id'] ?? ''}' == id);
     final row = <String, dynamic>{
       'id': id,
       '_workspace_local': true,
@@ -639,13 +750,16 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
       'type': 'Запись дневника',
       'workspace_note': body,
       'date': date.toIso8601String(),
-      'created_at': existing >= 0 ? '${_localRecords[existing]['created_at'] ?? now}' : now,
+      'created_at': existing >= 0
+          ? '${_localRecords[existing]['created_at'] ?? now}'
+          : now,
       'updated_at': now,
     };
     setState(() {
       if (existing >= 0) {
         _localRecords[existing] = row;
-        final recordIndex = _records.indexWhere((item) => '${item['id'] ?? ''}' == id);
+        final recordIndex =
+            _records.indexWhere((item) => '${item['id'] ?? ''}' == id);
         if (recordIndex >= 0) _records[recordIndex] = row;
       } else {
         _localRecords = <Map<String, dynamic>>[row, ..._localRecords];
@@ -667,7 +781,8 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
     setState(() {
       _localRecords.removeWhere((row) => '${row['id'] ?? ''}' == id);
       _records.removeWhere((row) => '${row['id'] ?? ''}' == id);
-      if ('${_selected?['id'] ?? ''}' == id) _selected = _records.isEmpty ? null : _records.first;
+      if ('${_selected?['id'] ?? ''}' == id)
+        _selected = _records.isEmpty ? null : _records.first;
     });
     await _persistLocalRecords();
     if (_serverAvailable) {
@@ -707,9 +822,12 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
           ),
         ),
         transitionsBuilder: (_, animation, __, child) => FadeTransition(
-          opacity: CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+          opacity:
+              CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
           child: SlideTransition(
-            position: Tween<Offset>(begin: const Offset(.018, 0), end: Offset.zero).animate(
+            position:
+                Tween<Offset>(begin: const Offset(.018, 0), end: Offset.zero)
+                    .animate(
               CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
             ),
             child: child,
@@ -739,16 +857,21 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
               initialBody: initialBody,
               contextLabel: 'Игрок · $_sectionTitle',
               contextName: _playerName,
-              documentType: record['_workspace_document'] == true ? 'Документ Sportoteka OS' : 'Рабочая заметка',
+              documentType: record['_workspace_document'] == true
+                  ? 'Документ Sportoteka OS'
+                  : 'Рабочая заметка',
               onSave: (title, body) => _updateLocalRecord(id, title, body),
               onClose: () => Navigator.of(routeContext).maybePop(),
             ),
           ),
         ),
         transitionsBuilder: (_, animation, __, child) => FadeTransition(
-          opacity: CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+          opacity:
+              CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
           child: SlideTransition(
-            position: Tween<Offset>(begin: const Offset(.018, 0), end: Offset.zero).animate(
+            position:
+                Tween<Offset>(begin: const Offset(.018, 0), end: Offset.zero)
+                    .animate(
               CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
             ),
             child: child,
@@ -795,6 +918,7 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
         '_workspace_pending_sync': false,
       };
     }
+
     if (mounted) {
       setState(() {
         _localRecords = _localRecords.map(clean).toList();
@@ -815,7 +939,9 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
       title: '${row['title'] ?? 'Рабочая заметка'}',
       subtitle: '${row['subtitle'] ?? 'Редактируемая заметка'}',
       kind: WorkspaceFinderNodeKind.note,
-      payload: <String, dynamic>{'workspace_document': row['_workspace_document'] == true},
+      payload: <String, dynamic>{
+        'workspace_document': row['_workspace_document'] == true
+      },
       parentId: _serverParentKey,
       createdAt: DateTime.tryParse('${row['created_at'] ?? ''}'),
       updatedAt: DateTime.tryParse('${row['updated_at'] ?? ''}'),
@@ -842,7 +968,9 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
       title: '${row['title'] ?? 'Рабочая заметка'}',
       subtitle: '${row['subtitle'] ?? ''}',
       kind: WorkspaceFinderNodeKind.note,
-      payload: <String, dynamic>{'workspace_document': row['_workspace_document'] == true},
+      payload: <String, dynamic>{
+        'workspace_document': row['_workspace_document'] == true
+      },
       parentId: _serverParentKey,
       updatedAt: DateTime.now(),
     );
@@ -855,7 +983,8 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
       await _markRecordSynced(id);
     } catch (e) {
       _serverAvailable = false;
-      throw Exception('Документ сохранён локально, но серверная синхронизация не выполнена: $e');
+      throw Exception(
+          'Документ сохранён локально, но серверная синхронизация не выполнена: $e');
     }
   }
 
@@ -905,11 +1034,20 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        title: Text(_isAttachment(record) ? 'Удалить файл?' : 'Удалить документ?', style: AppTypography.sectionTitle(color: _text)),
-        content: Text('«${_titleOf(record)}» будет удалён из этого раздела игрока.', style: AppTypography.secondary(color: _muted)),
+        title: Text(
+            _isAttachment(record) ? 'Удалить файл?' : 'Удалить документ?',
+            style: AppTypography.sectionTitle(color: _text)),
+        content: Text(
+            '«${_titleOf(record)}» будет удалён из этого раздела игрока.',
+            style: AppTypography.secondary(color: _muted)),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text('Удалить', style: AppTypography.action(color: _danger))),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Отмена')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child:
+                  Text('Удалить', style: AppTypography.action(color: _danger))),
         ],
       ),
     );
@@ -923,7 +1061,8 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
         if (mounted) await _load();
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Не удалось удалить файл: $e')));
+          ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Не удалось удалить файл: $e')));
         }
       }
       return;
@@ -991,9 +1130,12 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
           body: SafeArea(child: child),
         ),
         transitionsBuilder: (_, animation, __, routeChild) => FadeTransition(
-          opacity: CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+          opacity:
+              CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
           child: SlideTransition(
-            position: Tween<Offset>(begin: const Offset(.018, 0), end: Offset.zero).animate(
+            position:
+                Tween<Offset>(begin: const Offset(.018, 0), end: Offset.zero)
+                    .animate(
               CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
             ),
             child: routeChild,
@@ -1020,25 +1162,29 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
         PopupMenuItem(
           value: _ContextAction.open,
           height: 38,
-          child: Text(_isLocalRecord(record) ? 'Редактировать' : 'Открыть', style: AppTypography.menuTitle(color: _text)),
+          child: Text(_isLocalRecord(record) ? 'Редактировать' : 'Открыть',
+              style: AppTypography.menuTitle(color: _text)),
         ),
         if (_isLocalRecord(record))
           PopupMenuItem(
             value: _ContextAction.duplicate,
             height: 38,
-            child: Text('Создать копию', style: AppTypography.menuTitle(color: _text)),
+            child: Text('Создать копию',
+                style: AppTypography.menuTitle(color: _text)),
           ),
         PopupMenuItem(
           value: _ContextAction.properties,
           height: 38,
           child: Text('Свойства', style: AppTypography.menuTitle(color: _text)),
         ),
-        if (_isLocalRecord(record) || _isAttachment(record)) const PopupMenuDivider(),
+        if (_isLocalRecord(record) || _isAttachment(record))
+          const PopupMenuDivider(),
         if (_isLocalRecord(record) || _isAttachment(record))
           PopupMenuItem(
             value: _ContextAction.delete,
             height: 38,
-            child: Text('Удалить', style: AppTypography.menuTitle(color: _danger)),
+            child:
+                Text('Удалить', style: AppTypography.menuTitle(color: _danger)),
           ),
       ],
     );
@@ -1106,7 +1252,8 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
       } else {
         final path = file.path?.trim() ?? '';
         if (path.isEmpty) {
-          throw StateError('Для загрузки в этот раздел нужен локальный путь к файлу');
+          throw StateError(
+              'Для загрузки в этот раздел нужен локальный путь к файлу');
         }
         await _serverStorage.uploadAttachment(
           filePath: path,
@@ -1121,17 +1268,20 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
       await widget.onRefresh?.call();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Не удалось добавить файл: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Не удалось добавить файл: $e')));
       }
     } finally {
       if (mounted) setState(() => _uploading = false);
     }
   }
 
-  Future<(String, String, String, DateTime)?> _askUploadMeta(String fileName) async {
+  Future<(String, String, String, DateTime)?> _askUploadMeta(
+      String fileName) async {
     final title = TextEditingController(text: fileName);
     final comment = TextEditingController();
-    var type = _documentsOnly ? 'Документ' : (_medicalSection ? 'Справка' : 'Файл');
+    var type =
+        _documentsOnly ? 'Документ' : (_medicalSection ? 'Справка' : 'Файл');
     var date = DateTime.now();
     final result = await showDialog<(String, String, String, DateTime)>(
       context: context,
@@ -1139,37 +1289,66 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
         builder: (ctx, setLocal) => AlertDialog(
           backgroundColor: Colors.white,
           surfaceTintColor: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-          title: Text(_documentsOnly ? 'Новый файл документа' : (_medicalSection ? 'Новый медицинский файл' : 'Добавить файл'), style: AppTypography.sectionTitle(color: _text)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          title: Text(
+              _documentsOnly
+                  ? 'Новый файл документа'
+                  : (_medicalSection
+                      ? 'Новый медицинский файл'
+                      : 'Добавить файл'),
+              style: AppTypography.sectionTitle(color: _text)),
           content: SizedBox(
             width: 460,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                TextField(controller: title, style: AppTypography.formText(color: _text), decoration: const InputDecoration(labelText: 'Название')),
+                TextField(
+                    controller: title,
+                    style: AppTypography.formText(color: _text),
+                    decoration: const InputDecoration(labelText: 'Название')),
                 if (_medicalSection) ...[
                   const SizedBox(height: 10),
                   DropdownButtonFormField<String>(
                     value: type,
                     decoration: const InputDecoration(labelText: 'Тип'),
-                    items: const <String>['Справка', 'Допуск', 'Заключение', 'Анализ', 'Травма', 'Реабилитация', 'Документ']
-                        .map((v) => DropdownMenuItem<String>(value: v, child: Text(v)))
+                    items: const <String>[
+                      'Справка',
+                      'Допуск',
+                      'Заключение',
+                      'Анализ',
+                      'Травма',
+                      'Реабилитация',
+                      'Документ'
+                    ]
+                        .map((v) =>
+                            DropdownMenuItem<String>(value: v, child: Text(v)))
                         .toList(),
                     onChanged: (v) => setLocal(() => type = v ?? type),
                   ),
                 ],
                 if (_medicalSection || _documentsOnly) ...[
                   const SizedBox(height: 10),
-                  TextField(controller: comment, maxLines: 3, style: AppTypography.formText(color: _text), decoration: const InputDecoration(labelText: 'Комментарий')),
+                  TextField(
+                      controller: comment,
+                      maxLines: 3,
+                      style: AppTypography.formText(color: _text),
+                      decoration:
+                          const InputDecoration(labelText: 'Комментарий')),
                   const SizedBox(height: 10),
                   Align(
                     alignment: Alignment.centerLeft,
                     child: TextButton(
                       onPressed: () async {
-                        final picked = await showDatePicker(context: ctx, firstDate: DateTime(2000), lastDate: DateTime(2100), initialDate: date);
+                        final picked = await showDatePicker(
+                            context: ctx,
+                            firstDate: DateTime(2000),
+                            lastDate: DateTime(2100),
+                            initialDate: date);
                         if (picked != null) setLocal(() => date = picked);
                       },
-                      child: Text('Дата: ${date.day.toString().padLeft(2, '0')}.${date.month.toString().padLeft(2, '0')}.${date.year}'),
+                      child: Text(
+                          'Дата: ${date.day.toString().padLeft(2, '0')}.${date.month.toString().padLeft(2, '0')}.${date.year}'),
                     ),
                   ),
                 ],
@@ -1177,10 +1356,17 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Отмена')),
+            TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Отмена')),
             FilledButton(
               style: FilledButton.styleFrom(backgroundColor: _green),
-              onPressed: () => Navigator.pop(ctx, (title.text.trim().isEmpty ? fileName : title.text.trim(), type, comment.text.trim(), date)),
+              onPressed: () => Navigator.pop(ctx, (
+                title.text.trim().isEmpty ? fileName : title.text.trim(),
+                type,
+                comment.text.trim(),
+                date
+              )),
               child: const Text('Добавить'),
             ),
           ],
@@ -1196,7 +1382,11 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
     if (!_canUpload || files.isEmpty || _uploading) return;
     final x = files.first;
     final bytes = kIsWeb ? await x.readAsBytes() : null;
-    await _upload(PlatformFile(name: x.name, size: bytes?.length ?? 0, path: kIsWeb ? null : x.path, bytes: bytes));
+    await _upload(PlatformFile(
+        name: x.name,
+        size: bytes?.length ?? 0,
+        path: kIsWeb ? null : x.path,
+        bytes: bytes));
   }
 
   @override
@@ -1233,24 +1423,32 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               color: const Color(0xFFFFF3F1),
-              child: Text(_error!, style: AppTypography.caption(color: _danger)),
+              child:
+                  Text(_error!, style: AppTypography.caption(color: _danger)),
             ),
           Expanded(
             child: _loading
                 ? const Center(child: CircularProgressIndicator(color: _green))
                 : list.isEmpty
-                    ? _EmptyState(canUpload: _canUpload, canCreate: _canCreateDocument, onCreate: _createWorkspaceDocument, onUpload: _pickAndUpload)
+                    ? _EmptyState(
+                        canUpload: _canUpload,
+                        canCreate: _canCreateDocument,
+                        onCreate: _createWorkspaceDocument,
+                        onUpload: _pickAndUpload)
                     : ListView.separated(
-                        padding: EdgeInsets.fromLTRB(mobile ? 8 : 12, 6, mobile ? 8 : 12, 18),
+                        padding: EdgeInsets.fromLTRB(
+                            mobile ? 8 : 12, 6, mobile ? 8 : 12, 18),
                         itemCount: list.length,
-                        separatorBuilder: (_, __) => const Divider(height: 1, color: _line),
+                        separatorBuilder: (_, __) =>
+                            const Divider(height: 1, color: _line),
                         itemBuilder: (_, i) {
                           final r = list[i];
                           return _RecordRow(
                             title: _titleOf(r),
                             subtitle: _subtitleOf(r),
                             date: _dateLabel(r),
-                            selected: identical(_selected, r) || _sameRecord(_selected, r),
+                            selected: identical(_selected, r) ||
+                                _sameRecord(_selected, r),
                             section: widget.section,
                             onTap: () {
                               if (mobile) {
@@ -1260,8 +1458,12 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
                               }
                             },
                             onOpen: () => _openRecord(r),
-                            onCopy: _isLocalRecord(r) ? () => _duplicateRecord(r) : null,
-                            onDelete: (_isLocalRecord(r) || _isAttachment(r)) ? () => _deleteLocalRecord(r) : null,
+                            onCopy: _isLocalRecord(r)
+                                ? () => _duplicateRecord(r)
+                                : null,
+                            onDelete: (_isLocalRecord(r) || _isAttachment(r))
+                                ? () => _deleteLocalRecord(r)
+                                : null,
                             onProperties: () => _showProperties(r),
                             onSecondary: (p) => _showContext(r, p),
                           );
@@ -1271,12 +1473,15 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
           Container(
             height: 28,
             padding: const EdgeInsets.symmetric(horizontal: 12),
-            decoration: const BoxDecoration(color: _soft, border: Border(top: BorderSide(color: _line))),
+            decoration: const BoxDecoration(
+                color: _soft, border: Border(top: BorderSide(color: _line))),
             child: Row(
               children: [
-                Text('${list.length} объектов', style: AppTypography.caption(color: _muted)),
+                Text('${list.length} объектов',
+                    style: AppTypography.caption(color: _muted)),
                 const Spacer(),
-                Text('SPORTOTEKA PLAYER FILES', style: AppTypography.menuGroup(color: _muted)),
+                Text('SPORTOTEKA PLAYER FILES',
+                    style: AppTypography.menuGroup(color: _muted)),
               ],
             ),
           ),
@@ -1302,9 +1507,15 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
                       color: _green.withOpacity(.07),
                       alignment: Alignment.center,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 15),
-                        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: _green, width: 1.2)),
-                        child: Text('Отпустите файл — он будет привязан к игроку', style: AppTypography.itemTitle(color: _green)),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 22, vertical: 15),
+                        decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: _green, width: 1.2)),
+                        child: Text(
+                            'Отпустите файл — он будет привязан к игроку',
+                            style: AppTypography.itemTitle(color: _green)),
                       ),
                     ),
                   ),
@@ -1314,7 +1525,8 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
         );
       }
 
-      if (!showInspector) return ColoredBox(color: Colors.white, child: wrapped);
+      if (!showInspector)
+        return ColoredBox(color: Colors.white, child: wrapped);
       return ColoredBox(
         color: Colors.white,
         child: Row(
@@ -1344,7 +1556,13 @@ class _WorkspacePlayerSectionBrowserState extends State<WorkspacePlayerSectionBr
 
   bool _sameRecord(Map<String, dynamic>? a, Map<String, dynamic> b) {
     if (a == null) return false;
-    for (final key in const <String>['id', 'match_id', 'event_id', 'session_id', 'test_id']) {
+    for (final key in const <String>[
+      'id',
+      'match_id',
+      'event_id',
+      'session_id',
+      'test_id'
+    ]) {
       final av = '${a[key] ?? ''}'.trim();
       final bv = '${b[key] ?? ''}'.trim();
       if (av.isNotEmpty && bv.isNotEmpty && av == bv) return true;
@@ -1387,7 +1605,10 @@ class _BrowserHeader extends StatelessWidget {
       color: Colors.white,
       child: Row(
         children: [
-          IconButton(onPressed: onBack, icon: const Icon(Icons.arrow_back_rounded, size: 19, color: _WorkspacePlayerSectionBrowserState._text)),
+          IconButton(
+              onPressed: onBack,
+              icon: const Icon(Icons.arrow_back_rounded,
+                  size: 19, color: _WorkspacePlayerSectionBrowserState._text)),
           const SizedBox(width: 4),
           const _FileGlyph(size: 36),
           const SizedBox(width: 10),
@@ -1396,9 +1617,17 @@ class _BrowserHeader extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(sectionTitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTypography.screenTitle(color: _WorkspacePlayerSectionBrowserState._text)),
+                Text(sectionTitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.screenTitle(
+                        color: _WorkspacePlayerSectionBrowserState._text)),
                 const SizedBox(height: 2),
-                Text('$playerName · $count записей', maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTypography.secondary(color: _WorkspacePlayerSectionBrowserState._muted)),
+                Text('$playerName · $count записей',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.secondary(
+                        color: _WorkspacePlayerSectionBrowserState._muted)),
               ],
             ),
           ),
@@ -1406,28 +1635,47 @@ class _BrowserHeader extends StatelessWidget {
             if (mobile)
               IconButton(
                 tooltip: 'Создать документ',
-                onPressed: () { onCreate(); },
-                icon: const Icon(Icons.add_rounded, size: 21, color: _WorkspacePlayerSectionBrowserState._green),
+                onPressed: () {
+                  onCreate();
+                },
+                icon: const Icon(Icons.add_rounded,
+                    size: 21,
+                    color: _WorkspacePlayerSectionBrowserState._green),
               )
             else
               FilledButton.icon(
-                onPressed: () { onCreate(); },
+                onPressed: () {
+                  onCreate();
+                },
                 style: FilledButton.styleFrom(
                   backgroundColor: _WorkspacePlayerSectionBrowserState._green,
                   elevation: 0,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(9)),
                 ),
                 icon: const Icon(Icons.add_rounded, size: 17),
-                label: Text('Создать документ', style: AppTypography.actionStrong(color: Colors.white)),
+                label: Text('Создать документ',
+                    style: AppTypography.actionStrong(color: Colors.white)),
               ),
             const SizedBox(width: 4),
           ],
           if (canUpload)
             TextButton(
-              onPressed: uploading ? null : () { onUpload(); },
-              child: Text(uploading ? 'Загрузка…' : 'Добавить файл', style: AppTypography.actionStrong(color: _WorkspacePlayerSectionBrowserState._green)),
+              onPressed: uploading
+                  ? null
+                  : () {
+                      onUpload();
+                    },
+              child: Text(uploading ? 'Загрузка…' : 'Добавить файл',
+                  style: AppTypography.actionStrong(
+                      color: _WorkspacePlayerSectionBrowserState._green)),
             ),
-          IconButton(tooltip: 'Обновить', onPressed: () { onRefresh(); }, icon: const Icon(Icons.refresh_rounded, size: 18)),
+          IconButton(
+              tooltip: 'Обновить',
+              onPressed: () {
+                onRefresh();
+              },
+              icon: const Icon(Icons.refresh_rounded, size: 18)),
         ],
       ),
     );
@@ -1435,7 +1683,11 @@ class _BrowserHeader extends StatelessWidget {
 }
 
 class _Toolbar extends StatelessWidget {
-  const _Toolbar({required this.search, required this.sort, required this.mobile, required this.onSort});
+  const _Toolbar(
+      {required this.search,
+      required this.sort,
+      required this.mobile,
+      required this.onSort});
   final TextEditingController search;
   final _SortMode sort;
   final bool mobile;
@@ -1451,15 +1703,19 @@ class _Toolbar extends StatelessWidget {
           Expanded(
             child: TextField(
               controller: search,
-              style: AppTypography.formText(color: _WorkspacePlayerSectionBrowserState._text),
+              style: AppTypography.formText(
+                  color: _WorkspacePlayerSectionBrowserState._text),
               decoration: InputDecoration(
                 isDense: true,
                 hintText: 'Поиск по названию, дате, типу…',
-                hintStyle: AppTypography.formHint(color: _WorkspacePlayerSectionBrowserState._muted),
+                hintStyle: AppTypography.formHint(
+                    color: _WorkspacePlayerSectionBrowserState._muted),
                 prefixIcon: const Icon(Icons.search_rounded, size: 18),
                 filled: true,
                 fillColor: _WorkspacePlayerSectionBrowserState._soft,
-                border: OutlineInputBorder(borderSide: BorderSide.none, borderRadius: BorderRadius.circular(8)),
+                border: OutlineInputBorder(
+                    borderSide: BorderSide.none,
+                    borderRadius: BorderRadius.circular(8)),
               ),
             ),
           ),
@@ -1469,9 +1725,17 @@ class _Toolbar extends StatelessWidget {
             color: Colors.white,
             onSelected: onSort,
             itemBuilder: (_) => [
-              PopupMenuItem(value: _SortMode.newest, child: Text('Сначала новые', style: AppTypography.menuTitle())),
-              PopupMenuItem(value: _SortMode.oldest, child: Text('Сначала старые', style: AppTypography.menuTitle())),
-              PopupMenuItem(value: _SortMode.title, child: Text('По названию', style: AppTypography.menuTitle())),
+              PopupMenuItem(
+                  value: _SortMode.newest,
+                  child:
+                      Text('Сначала новые', style: AppTypography.menuTitle())),
+              PopupMenuItem(
+                  value: _SortMode.oldest,
+                  child:
+                      Text('Сначала старые', style: AppTypography.menuTitle())),
+              PopupMenuItem(
+                  value: _SortMode.title,
+                  child: Text('По названию', style: AppTypography.menuTitle())),
             ],
             icon: const Icon(Icons.swap_vert_rounded, size: 19),
           ),
@@ -1510,7 +1774,9 @@ class _RecordRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final content = Material(
-      color: selected ? _WorkspacePlayerSectionBrowserState._greenSoft : Colors.white,
+      color: selected
+          ? _WorkspacePlayerSectionBrowserState._greenSoft
+          : Colors.white,
       child: InkWell(
         onTap: onTap,
         onDoubleTap: onOpen,
@@ -1525,16 +1791,30 @@ class _RecordRow extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTypography.itemTitle(color: _WorkspacePlayerSectionBrowserState._text)),
+                    Text(title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.itemTitle(
+                            color: _WorkspacePlayerSectionBrowserState._text)),
                     if (subtitle.isNotEmpty) ...[
                       const SizedBox(height: 2),
-                      Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTypography.secondary(color: _WorkspacePlayerSectionBrowserState._muted)),
+                      Text(subtitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTypography.secondary(
+                              color:
+                                  _WorkspacePlayerSectionBrowserState._muted)),
                     ],
                   ],
                 ),
               ),
               const SizedBox(width: 10),
-              SizedBox(width: 96, child: Text(date, textAlign: TextAlign.right, style: AppTypography.captionMedium(color: _WorkspacePlayerSectionBrowserState._text))),
+              SizedBox(
+                  width: 96,
+                  child: Text(date,
+                      textAlign: TextAlign.right,
+                      style: AppTypography.captionMedium(
+                          color: _WorkspacePlayerSectionBrowserState._text))),
               const SizedBox(width: 4),
               PopupMenuButton<String>(
                 tooltip: 'Действия',
@@ -1547,11 +1827,28 @@ class _RecordRow extends StatelessWidget {
                   if (value == 'delete') onDelete?.call();
                 },
                 itemBuilder: (_) => [
-                  PopupMenuItem(value: 'open', child: Text(onDelete == null ? 'Открыть' : 'Редактировать', style: AppTypography.menuTitle())),
-                  if (onCopy != null) PopupMenuItem(value: 'copy', child: Text('Создать копию', style: AppTypography.menuTitle())),
-                  PopupMenuItem(value: 'properties', child: Text('Свойства', style: AppTypography.menuTitle())),
+                  PopupMenuItem(
+                      value: 'open',
+                      child: Text(
+                          onDelete == null ? 'Открыть' : 'Редактировать',
+                          style: AppTypography.menuTitle())),
+                  if (onCopy != null)
+                    PopupMenuItem(
+                        value: 'copy',
+                        child: Text('Создать копию',
+                            style: AppTypography.menuTitle())),
+                  PopupMenuItem(
+                      value: 'properties',
+                      child:
+                          Text('Свойства', style: AppTypography.menuTitle())),
                   if (onDelete != null) const PopupMenuDivider(),
-                  if (onDelete != null) PopupMenuItem(value: 'delete', child: Text('Удалить', style: AppTypography.menuTitle(color: _WorkspacePlayerSectionBrowserState._danger))),
+                  if (onDelete != null)
+                    PopupMenuItem(
+                        value: 'delete',
+                        child: Text('Удалить',
+                            style: AppTypography.menuTitle(
+                                color: _WorkspacePlayerSectionBrowserState
+                                    ._danger))),
                 ],
                 icon: const Icon(Icons.more_horiz_rounded, size: 19),
               ),
@@ -1569,7 +1866,12 @@ class _RecordRow extends StatelessWidget {
 }
 
 class _PropertiesPanel extends StatelessWidget {
-  const _PropertiesPanel({required this.title, required this.date, required this.sectionTitle, required this.record, this.onOpen});
+  const _PropertiesPanel(
+      {required this.title,
+      required this.date,
+      required this.sectionTitle,
+      required this.record,
+      this.onOpen});
   final String title;
   final String date;
   final String sectionTitle;
@@ -1584,23 +1886,53 @@ class _PropertiesPanel extends StatelessWidget {
       }
       return '—';
     }
-    final rawType = first(const <String>['type', 'record_type', 'category', 'event_type']);
+
+    final rawType =
+        first(const <String>['type', 'record_type', 'category', 'event_type']);
     final type = rawType == '—' ? sectionTitle : rawType;
-    final status = first(const <String>['status', 'mark', 'attendance_status', 'rating']);
-    final author = first(const <String>['author', 'created_by_name', 'trainer_name', 'coach_name', 'created_by', 'trainer_id']);
-    final updated = first(const <String>['updated_at', 'uploaded_at', 'created_at']);
+    final status =
+        first(const <String>['status', 'mark', 'attendance_status', 'rating']);
+    final author = first(const <String>[
+      'author',
+      'created_by_name',
+      'trainer_name',
+      'coach_name',
+      'created_by',
+      'trainer_id'
+    ]);
+    final updated =
+        first(const <String>['updated_at', 'uploaded_at', 'created_at']);
     final team = first(const <String>['team_name', 'teamName', 'team_id']);
-    final file = first(const <String>['file_name', 'filename', 'title', 'file_url', 'file', 'url', 'document_url', 'pdf_url']);
+    final file = first(const <String>[
+      'file_name',
+      'filename',
+      'title',
+      'file_url',
+      'file',
+      'url',
+      'document_url',
+      'pdf_url'
+    ]);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(children: [const _FileGlyph(size: 38), const SizedBox(width: 10), Expanded(child: Text('Свойства', style: AppTypography.sectionTitle(color: _WorkspacePlayerSectionBrowserState._text)))]),
+        Row(children: [
+          const _FileGlyph(size: 38),
+          const SizedBox(width: 10),
+          Expanded(
+              child: Text('Свойства',
+                  style: AppTypography.sectionTitle(
+                      color: _WorkspacePlayerSectionBrowserState._text)))
+        ]),
         const SizedBox(height: 16),
-        Text(title, style: AppTypography.itemTitle(color: _WorkspacePlayerSectionBrowserState._text)),
+        Text(title,
+            style: AppTypography.itemTitle(
+                color: _WorkspacePlayerSectionBrowserState._text)),
         const SizedBox(height: 14),
         _Prop(label: 'Дата', value: date),
         _Prop(label: 'Тип', value: type),
-        if (status != '—' && status != type) _Prop(label: 'Статус / оценка', value: status),
+        if (status != '—' && status != type)
+          _Prop(label: 'Статус / оценка', value: status),
         if (team != '—') _Prop(label: 'Команда', value: team),
         if (author != '—') _Prop(label: 'Автор / создал', value: author),
         if (updated != '—') _Prop(label: 'Обновлено', value: updated),
@@ -1609,8 +1941,10 @@ class _PropertiesPanel extends StatelessWidget {
         if (onOpen != null)
           FilledButton(
             onPressed: onOpen,
-            style: FilledButton.styleFrom(backgroundColor: _WorkspacePlayerSectionBrowserState._green),
-            child: Text('Открыть', style: AppTypography.actionStrong(color: Colors.white)),
+            style: FilledButton.styleFrom(
+                backgroundColor: _WorkspacePlayerSectionBrowserState._green),
+            child: Text('Открыть',
+                style: AppTypography.actionStrong(color: Colors.white)),
           ),
       ],
     );
@@ -1625,9 +1959,15 @@ class _Prop extends StatelessWidget {
   Widget build(BuildContext context) => Padding(
         padding: const EdgeInsets.only(bottom: 12),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(label, style: AppTypography.caption(color: _WorkspacePlayerSectionBrowserState._muted)),
+          Text(label,
+              style: AppTypography.caption(
+                  color: _WorkspacePlayerSectionBrowserState._muted)),
           const SizedBox(height: 3),
-          Text(value, maxLines: 4, overflow: TextOverflow.ellipsis, style: AppTypography.secondaryMedium(color: _WorkspacePlayerSectionBrowserState._text)),
+          Text(value,
+              maxLines: 4,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.secondaryMedium(
+                  color: _WorkspacePlayerSectionBrowserState._text)),
         ]),
       );
 }
@@ -1638,13 +1978,20 @@ class _InspectorEmpty extends StatelessWidget {
   Widget build(BuildContext context) => Center(
         child: Padding(
           padding: const EdgeInsets.all(22),
-          child: Text('Выберите запись — свойства появятся здесь', textAlign: TextAlign.center, style: AppTypography.secondary(color: _WorkspacePlayerSectionBrowserState._muted)),
+          child: Text('Выберите запись — свойства появятся здесь',
+              textAlign: TextAlign.center,
+              style: AppTypography.secondary(
+                  color: _WorkspacePlayerSectionBrowserState._muted)),
         ),
       );
 }
 
 class _EmptyState extends StatelessWidget {
-  const _EmptyState({required this.canUpload, required this.canCreate, required this.onCreate, required this.onUpload});
+  const _EmptyState(
+      {required this.canUpload,
+      required this.canCreate,
+      required this.onCreate,
+      required this.onUpload});
   final bool canUpload;
   final bool canCreate;
   final VoidCallback onCreate;
@@ -1656,7 +2003,9 @@ class _EmptyState extends StatelessWidget {
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             const _FileGlyph(size: 52),
             const SizedBox(height: 12),
-            Text('Записей пока нет', style: AppTypography.sectionTitle(color: _WorkspacePlayerSectionBrowserState._text)),
+            Text('Записей пока нет',
+                style: AppTypography.sectionTitle(
+                    color: _WorkspacePlayerSectionBrowserState._text)),
             const SizedBox(height: 5),
             Text(
               canUpload
@@ -1665,19 +2014,27 @@ class _EmptyState extends StatelessWidget {
                       ? 'Создайте первый документ Sportoteka OS.'
                       : 'Когда в основном разделе появятся данные, они будут показаны здесь.',
               textAlign: TextAlign.center,
-              style: AppTypography.secondary(color: _WorkspacePlayerSectionBrowserState._muted),
+              style: AppTypography.secondary(
+                  color: _WorkspacePlayerSectionBrowserState._muted),
             ),
             if (canCreate) ...[
               const SizedBox(height: 12),
               FilledButton(
                 onPressed: onCreate,
-                style: FilledButton.styleFrom(backgroundColor: _WorkspacePlayerSectionBrowserState._green, elevation: 0),
-                child: Text('Создать документ', style: AppTypography.actionStrong(color: Colors.white)),
+                style: FilledButton.styleFrom(
+                    backgroundColor: _WorkspacePlayerSectionBrowserState._green,
+                    elevation: 0),
+                child: Text('Создать документ',
+                    style: AppTypography.actionStrong(color: Colors.white)),
               ),
             ],
             if (canUpload) ...[
               const SizedBox(height: 6),
-              TextButton(onPressed: onUpload, child: Text('Добавить файл', style: AppTypography.actionStrong(color: _WorkspacePlayerSectionBrowserState._green))),
+              TextButton(
+                  onPressed: onUpload,
+                  child: Text('Добавить файл',
+                      style: AppTypography.actionStrong(
+                          color: _WorkspacePlayerSectionBrowserState._green))),
             ],
           ]),
         ),
@@ -1688,7 +2045,9 @@ class _FileGlyph extends StatelessWidget {
   const _FileGlyph({required this.size});
   final double size;
   @override
-  Widget build(BuildContext context) => CustomPaint(size: Size.square(size), painter: _RecordGlyphPainter(_WorkspacePlayerSectionBrowserState._green));
+  Widget build(BuildContext context) => CustomPaint(
+      size: Size.square(size),
+      painter: _RecordGlyphPainter(_WorkspacePlayerSectionBrowserState._green));
 }
 
 class _RecordGlyph extends StatelessWidget {
@@ -1696,7 +2055,10 @@ class _RecordGlyph extends StatelessWidget {
   final WorkspacePlayerSection section;
   final double size;
   @override
-  Widget build(BuildContext context) => CustomPaint(size: Size.square(size), painter: _RecordGlyphPainter(_WorkspacePlayerSectionBrowserState._green, section: section));
+  Widget build(BuildContext context) => CustomPaint(
+      size: Size.square(size),
+      painter: _RecordGlyphPainter(_WorkspacePlayerSectionBrowserState._green,
+          section: section));
 }
 
 class _RecordGlyphPainter extends CustomPainter {
@@ -1705,24 +2067,43 @@ class _RecordGlyphPainter extends CustomPainter {
   final WorkspacePlayerSection? section;
   @override
   void paint(Canvas canvas, Size size) {
-    final p = Paint()..style = PaintingStyle.stroke..strokeWidth = 1.55..strokeCap = StrokeCap.round..strokeJoin = StrokeJoin.round..color = color;
-    final fill = Paint()..style = PaintingStyle.fill..color = color.withOpacity(.06);
-    final r = RRect.fromRectAndRadius(Rect.fromLTWH(size.width*.18, size.height*.08, size.width*.64, size.height*.82), Radius.circular(size.width*.08));
+    final p = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.55
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..color = color;
+    final fill = Paint()
+      ..style = PaintingStyle.fill
+      ..color = color.withOpacity(.06);
+    final r = RRect.fromRectAndRadius(
+        Rect.fromLTWH(size.width * .18, size.height * .08, size.width * .64,
+            size.height * .82),
+        Radius.circular(size.width * .08));
     canvas.drawRRect(r, fill);
     canvas.drawRRect(r, p);
-    final x = size.width*.60;
-    canvas.drawLine(Offset(x, size.height*.08), Offset(x, size.height*.28), p);
-    canvas.drawLine(Offset(x, size.height*.28), Offset(size.width*.82, size.height*.28), p);
-    canvas.drawLine(Offset(size.width*.31, size.height*.48), Offset(size.width*.69, size.height*.48), p);
-    canvas.drawLine(Offset(size.width*.31, size.height*.61), Offset(size.width*.64, size.height*.61), p);
+    final x = size.width * .60;
+    canvas.drawLine(
+        Offset(x, size.height * .08), Offset(x, size.height * .28), p);
+    canvas.drawLine(Offset(x, size.height * .28),
+        Offset(size.width * .82, size.height * .28), p);
+    canvas.drawLine(Offset(size.width * .31, size.height * .48),
+        Offset(size.width * .69, size.height * .48), p);
+    canvas.drawLine(Offset(size.width * .31, size.height * .61),
+        Offset(size.width * .64, size.height * .61), p);
     if (section == WorkspacePlayerSection.health) {
-      canvas.drawLine(Offset(size.width*.40, size.height*.75), Offset(size.width*.60, size.height*.75), p);
-      canvas.drawLine(Offset(size.width*.50, size.height*.65), Offset(size.width*.50, size.height*.84), p);
+      canvas.drawLine(Offset(size.width * .40, size.height * .75),
+          Offset(size.width * .60, size.height * .75), p);
+      canvas.drawLine(Offset(size.width * .50, size.height * .65),
+          Offset(size.width * .50, size.height * .84), p);
     }
   }
+
   @override
-  bool shouldRepaint(covariant _RecordGlyphPainter oldDelegate) => oldDelegate.color != color || oldDelegate.section != section;
+  bool shouldRepaint(covariant _RecordGlyphPainter oldDelegate) =>
+      oldDelegate.color != color || oldDelegate.section != section;
 }
 
 enum _SortMode { newest, oldest, title }
+
 enum _ContextAction { open, duplicate, properties, delete }

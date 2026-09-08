@@ -4,17 +4,30 @@ import 'dart:ui' show FontFeature;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:sportoteka/core/theme/app_typography.dart';
+import 'package:sportoteka/core/utils/pref_utils.dart';
+
+import 'training_lifecycle_api.dart';
 
 class TrainingAttendancePanel extends StatefulWidget {
   final String apiBase;
   final int teamId;
   final int eventId;
+  final int clubId;
+  final String eventTitle;
+  final VoidCallback? onOpenRatings;
+  final ValueChanged<TrainingLifecycleState>? onLifecycleChanged;
+  final ValueChanged<bool>? onChromeExpandedChanged;
 
   const TrainingAttendancePanel({
     super.key,
     required this.apiBase,
     required this.teamId,
     required this.eventId,
+    this.clubId = 0,
+    this.eventTitle = 'Тренировка',
+    this.onOpenRatings,
+    this.onLifecycleChanged,
+    this.onChromeExpandedChanged,
   });
 
   @override
@@ -22,10 +35,10 @@ class TrainingAttendancePanel extends StatefulWidget {
 }
 
 class _TrainingAttendancePanelState extends State<TrainingAttendancePanel> {
-  static const Color _green = Color(0xFF00A750);
-  static const Color _greenSoft = Color(0xFFF8FEFA);
-  static const Color _line = Color(0xFFE9ECEA);
-  static const Color _soft = Color(0xFFF7F8F7);
+  static const Color _green = Color(0xFF14915D);
+  static const Color _greenSoft = Color(0xFFF7FBF8);
+  static const Color _line = Color(0xFFE5ECE8);
+  static const Color _soft = Color(0xFFF8FAF9);
   static const Color _text = Color(0xFF0B0F14);
   static const Color _muted = Color(0xFF5F6670);
 
@@ -35,14 +48,22 @@ class _TrainingAttendancePanelState extends State<TrainingAttendancePanel> {
   List<Map<String, dynamic>> players = [];
   final Map<int, String> status = {};
   final Set<int> savingPlayers = {};
+  TrainingLifecycleState lifecycle = const TrainingLifecycleState();
+  bool lifecycleLoading = true;
+  bool lifecycleSaving = false;
+
+  // При прокрутке списка вниз служебная часть журнала сворачивается,
+  // чтобы игроки поднимались максимально высоко в рабочей области.
+  bool _chromeExpanded = true;
+  double _lastScrollPixels = 0;
 
   static const _statuses = <_AttendanceStatus>[
-    _AttendanceStatus('present', 'Присутствует', 'П', Color(0xFF22C55E)),
-    _AttendanceStatus('absent', 'Отсутствует', 'Н', Color(0xFFEF4444)),
-    _AttendanceStatus('late', 'Болен', 'Б', Color(0xFFF59E0B)),
-    _AttendanceStatus('injured', 'Травма', 'Т', Color(0xFF8B5CF6)),
-    _AttendanceStatus('individual', 'Индивидуально', 'И', Color(0xFF0EA5E9)),
-    _AttendanceStatus('dayoff', 'Выходной', 'В', Color(0xFF94A3B8)),
+    _AttendanceStatus('present', 'Присутствует', 'П', Color(0xFF2F8F62)),
+    _AttendanceStatus('absent', 'Отсутствует', 'Н', Color(0xFFB96D6D)),
+    _AttendanceStatus('late', 'Болен', 'Б', Color(0xFFB78B42)),
+    _AttendanceStatus('injured', 'Травма', 'Т', Color(0xFF7B73A8)),
+    _AttendanceStatus('individual', 'Индивидуально', 'И', Color(0xFF5D8FA7)),
+    _AttendanceStatus('dayoff', 'Выходной', 'В', Color(0xFF87939E)),
   ];
 
   TextStyle _style(double size, {FontWeight weight = FontWeight.w400, Color color = _text}) {
@@ -94,6 +115,54 @@ class _TrainingAttendancePanelState extends State<TrainingAttendancePanel> {
     return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
   }
 
+
+  Map<String, Map<String, dynamic>> _normalizeAttendanceItems(dynamic decoded) {
+    dynamic raw = decoded;
+    if (decoded is Map) {
+      raw = decoded['items'] ??
+          decoded['attendance'] ??
+          decoded['rows'] ??
+          decoded['records'] ??
+          decoded['data'] ??
+          const <dynamic>[];
+    }
+
+    final out = <String, Map<String, dynamic>>{};
+
+    if (raw is Map) {
+      raw.forEach((key, value) {
+        if (value is Map) {
+          final row = Map<String, dynamic>.from(value);
+          final id = _id(
+            row['player_id'] ?? row['playerId'] ?? row['id'] ?? key,
+          );
+          if (id > 0) out['$id'] = row;
+        } else {
+          final id = _id(key);
+          if (id > 0) out['$id'] = <String, dynamic>{'status': value};
+        }
+      });
+      return out;
+    }
+
+    if (raw is List) {
+      for (final value in raw) {
+        if (value is! Map) continue;
+        final row = Map<String, dynamic>.from(value);
+        final id = _id(
+          row['player_id'] ??
+              row['playerId'] ??
+              row['athlete_id'] ??
+              row['user_id'] ??
+              row['id'],
+        );
+        if (id > 0) out['$id'] = row;
+      }
+    }
+
+    return out;
+  }
+
   Future<void> _load() async {
     setState(() {
       loading = true;
@@ -105,27 +174,49 @@ class _TrainingAttendancePanelState extends State<TrainingAttendancePanel> {
         Uri.parse('${widget.apiBase}/get_players_by_team.php?team_id=${widget.teamId}'),
       );
       final playersData = jsonDecode(playersResponse.body);
-      final list = (playersData['players'] ?? playersData['data'] ?? []) as List;
-      players = list
+      final dynamic rawPlayers = playersData is Map
+          ? (playersData['players'] ?? playersData['data'] ?? playersData['items'] ?? const [])
+          : playersData;
+      final playerList = rawPlayers is List ? rawPlayers : const <dynamic>[];
+      players = playerList
+          .whereType<Map>()
           .map((item) => Map<String, dynamic>.from(item))
-          .where((player) => _id(player['id'] ?? player['player_id']) > 0)
+          .where((player) => _id(player['id'] ?? player['player_id'] ?? player['playerId']) > 0)
           .toList();
 
       final attendanceResponse = await http.get(
         Uri.parse('${widget.apiBase}/get_team_attendance.php?event_id=${widget.eventId}'),
       );
       final attendanceData = jsonDecode(attendanceResponse.body);
-      final items = (attendanceData['items'] as Map?) ?? {};
+      final items = _normalizeAttendanceItems(attendanceData);
 
       status.clear();
       for (final player in players) {
-        final playerId = _id(player['id'] ?? player['player_id']);
+        final playerId = _id(player['id'] ?? player['player_id'] ?? player['playerId']);
         final row = items['$playerId'];
-        final value = '${row is Map ? row['status'] : 'unset'}';
-        status[playerId] = value.isEmpty ? 'unset' : value;
+        final rawStatus = '${row?['status'] ?? 'unset'}'.trim();
+        status[playerId] = rawStatus.isEmpty || rawStatus == 'null' ? 'unset' : rawStatus;
       }
+
+      final lifecycleApi = TrainingLifecycleApi(
+        apiBase: widget.apiBase,
+        clubId: widget.clubId,
+        teamId: widget.teamId,
+        eventId: widget.eventId,
+      );
+      lifecycle = await lifecycleApi.load();
+      final currentUserId = await PrefUtils.getUserId() ?? 0;
+      if (currentUserId > 0) {
+        try {
+          lifecycle = await lifecycleApi.recordAttendanceOpened(
+            userId: currentUserId,
+          );
+        } catch (_) {}
+      }
+      lifecycleLoading = false;
     } catch (e) {
       error = '$e';
+      lifecycleLoading = false;
     }
 
     if (mounted) setState(() => loading = false);
@@ -157,6 +248,24 @@ class _TrainingAttendancePanelState extends State<TrainingAttendancePanel> {
       if (data is Map && data['success'] != true && data['status'] != 'success') {
         throw Exception(data['message'] ?? 'Ошибка сохранения');
       }
+
+      if (_count('unset') == 0 && players.isNotEmpty) {
+        final userId = await PrefUtils.getUserId() ?? 0;
+        if (userId > 0) {
+          try {
+            lifecycle = await TrainingLifecycleApi(
+              apiBase: widget.apiBase,
+              clubId: widget.clubId,
+              teamId: widget.teamId,
+              eventId: widget.eventId,
+            ).recordAttendanceReady(
+              userId: userId,
+              attendancePresent: _count('present'),
+              attendanceTotal: players.length,
+            );
+          } catch (_) {}
+        }
+      }
     } catch (e) {
       if (mounted) {
         setState(() => status[playerId] = previousStatus);
@@ -172,7 +281,141 @@ class _TrainingAttendancePanelState extends State<TrainingAttendancePanel> {
     }
   }
 
+  Future<void> _startTraining() async {
+    if (lifecycleSaving || lifecycle.started || lifecycle.finished) return;
+    final unset = _count('unset');
+    if (unset > 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Сначала отметьте посещаемость всех игроков. Не отмечено: $unset')),
+      );
+      return;
+    }
+    final userId = await PrefUtils.getUserId() ?? 0;
+    if (userId <= 0) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Не удалось определить тренера')),
+        );
+      }
+      return;
+    }
+    setState(() => lifecycleSaving = true);
+    try {
+      final next = await TrainingLifecycleApi(
+        apiBase: widget.apiBase,
+        clubId: widget.clubId,
+        teamId: widget.teamId,
+        eventId: widget.eventId,
+      ).start(
+        userId: userId,
+        attendancePresent: _count('present'),
+        attendanceTotal: players.length,
+      );
+      if (!mounted) return;
+      setState(() => lifecycle = next);
+      widget.onLifecycleChanged?.call(next);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Тренировка началась.')),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Не удалось начать тренировку: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => lifecycleSaving = false);
+    }
+  }
+
   int _count(String value) => status.values.where((item) => item == value).length;
+
+  void _setChromeExpanded(bool expanded) {
+    if (_chromeExpanded == expanded || !mounted) return;
+    setState(() => _chromeExpanded = expanded);
+    widget.onChromeExpandedChanged?.call(expanded);
+  }
+
+  bool _handleScrollNotification(ScrollNotification notification) {
+    if (notification.metrics.axis != Axis.vertical) return false;
+
+    final pixels = notification.metrics.pixels;
+    if (notification is ScrollStartNotification) {
+      _lastScrollPixels = pixels;
+      return false;
+    }
+
+    if (notification is ScrollUpdateNotification) {
+      final delta = notification.scrollDelta ?? (pixels - _lastScrollPixels);
+      _lastScrollPixels = pixels;
+
+      if (delta > 3.5 && pixels > 36) {
+        _setChromeExpanded(false);
+      }
+
+      // Аналогично мобильному журналу: движение вверх само по себе не должно
+      // сразу возвращать большую шапку. Раскрываем её возле первых 1–2 игроков.
+      if (delta < -3.0 && pixels <= 135) {
+        _setChromeExpanded(true);
+      }
+    }
+
+    if (pixels <= 4 && !_chromeExpanded) {
+      _setChromeExpanded(true);
+    }
+
+    return false;
+  }
+
+  Widget _buildCollapsedChrome() {
+    final present = _count('present');
+    final unset = _count('unset');
+    return Material(
+      color: Colors.white,
+      child: InkWell(
+        onTap: () => _setChromeExpanded(true),
+        child: SizedBox(
+          height: 42,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            child: Row(
+              children: [
+                const _AttendanceBrandDots(),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Журнал · присутствуют $present/${players.length}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.formLabel(color: _text),
+                  ),
+                ),
+                if (unset > 0) ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: _soft,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      'Не отмечено $unset',
+                      style: AppTypography.captionMedium(color: _muted),
+                    ),
+                  ),
+                  const SizedBox(width: 5),
+                ],
+                const Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  size: 17,
+                  color: _muted,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -189,10 +432,22 @@ class _TrainingAttendancePanelState extends State<TrainingAttendancePanel> {
 
     return Column(
       children: [
-        _buildSummary(),
-        const SizedBox(height: 8),
-        _buildLegend(),
-        const SizedBox(height: 8),
+        AnimatedSize(
+          duration: const Duration(milliseconds: 210),
+          curve: Curves.easeOutCubic,
+          alignment: Alignment.topCenter,
+          child: _chromeExpanded
+              ? Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildSummary(),
+                    const SizedBox(height: 8),
+                    _buildLegend(),
+                    const SizedBox(height: 8),
+                  ],
+                )
+              : _buildCollapsedChrome(),
+        ),
         Expanded(
           child: Container(
             clipBehavior: Clip.antiAlias,
@@ -200,10 +455,14 @@ class _TrainingAttendancePanelState extends State<TrainingAttendancePanel> {
               color: Colors.white,
               borderRadius: BorderRadius.circular(12),
             ),
-            child: ListView.builder(
-              padding: EdgeInsets.zero,
-              itemCount: players.length,
-              itemBuilder: (_, index) => _buildPlayerRow(players[index], index),
+            child: NotificationListener<ScrollNotification>(
+              onNotification: _handleScrollNotification,
+              child: ListView.builder(
+                padding: EdgeInsets.only(top: _chromeExpanded ? 0 : 2, bottom: 18),
+                keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                itemCount: players.length,
+                itemBuilder: (_, index) => _buildPlayerRow(players[index], index),
+              ),
             ),
           ),
         ),
@@ -211,27 +470,146 @@ class _TrainingAttendancePanelState extends State<TrainingAttendancePanel> {
     );
   }
 
-  Widget _buildSummary() {
+  String _timeOf(DateTime? value) {
+    if (value == null) return '—';
+    return '${value.hour.toString().padLeft(2, '0')}:${value.minute.toString().padLeft(2, '0')}';
+  }
+
+  Widget _buildLifecycleAction() {
+    final unset = _count('unset');
+    final finished = lifecycle.finished;
+    final started = lifecycle.started && !finished;
+    final enabled = !lifecycleLoading && !lifecycleSaving && !started && !finished && unset == 0 && players.isNotEmpty;
+
+    final title = finished
+        ? 'Тренировка окончена'
+        : started
+            ? 'Тренировка идёт'
+            : 'Готово к началу тренировки';
+    final subtitle = finished
+        ? '${lifecycle.finishedByLabel} завершил тренировку в ${_timeOf(lifecycle.finishedAt)}. Оценки: ${lifecycle.ratingsCount}.'
+        : started
+            ? '${lifecycle.startedByLabel} начал тренировку в ${_timeOf(lifecycle.startedAt)} · присутствуют ${lifecycle.attendancePresent}/${lifecycle.attendanceTotal}. После тренировки сохраните оценки.'
+            : (unset > 0
+                ? 'Отметьте всех игроков в журнале. Не отмечено: $unset.'
+                : 'Посещаемость заполнена. После старта push получит клубный администратор, участникам уйдёт уведомление «Тренировка началась».');
+
     return Container(
-      constraints: const BoxConstraints(minHeight: 58),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+      width: double.infinity,
+      padding: const EdgeInsets.all(11),
       decoration: BoxDecoration(
         color: _soft,
         borderRadius: BorderRadius.circular(12),
+              ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 520;
+          final info = Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  finished ? Icons.check_rounded : (started ? Icons.play_arrow_rounded : Icons.fact_check_outlined),
+                  color: _green,
+                  size: 19,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: AppTypography.itemTitle(color: _text)),
+                    const SizedBox(height: 3),
+                    Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: AppTypography.caption(color: _muted)),
+                  ],
+                ),
+              ),
+            ],
+          );
+          final button = SizedBox(
+            height: 42,
+            child: FilledButton.icon(
+              onPressed: finished
+                  ? null
+                  : started
+                      ? widget.onOpenRatings
+                      : (enabled ? _startTraining : null),
+              style: FilledButton.styleFrom(
+                backgroundColor: started ? const Color(0xFF315447) : _green,
+                disabledBackgroundColor: _line,
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              icon: lifecycleSaving
+                  ? const SizedBox(width: 15, height: 15, child: CircularProgressIndicator(strokeWidth: 1.8, color: Colors.white))
+                  : Icon(
+                      finished
+                          ? Icons.check_rounded
+                          : started
+                              ? Icons.arrow_forward_rounded
+                              : Icons.play_arrow_rounded,
+                      size: 17,
+                    ),
+              label: Text(
+                finished
+                    ? 'Окончена'
+                    : started
+                        ? 'Перейти к оценкам'
+                        : 'Начать тренировку',
+              ),
+            ),
+          );
+          if (compact) {
+            return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [info, const SizedBox(height: 9), button]);
+          }
+          return Row(children: [Expanded(child: info), const SizedBox(width: 12), button]);
+        },
       ),
-      child: Row(
+    );
+  }
+
+  Widget _buildSummary() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      decoration: BoxDecoration(
+        color: _soft,
+        borderRadius: BorderRadius.circular(14),
+              ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(child: _SummaryItem(title: 'Игроков', value: '${players.length}', style: _style)),
-          Container(width: 1, height: 30, color: _line),
-          const SizedBox(width: 12),
-          Expanded(child: _SummaryItem(title: 'Присутствуют', value: '${_count('present')}', style: _style)),
-          Container(width: 1, height: 30, color: _line),
-          const SizedBox(width: 12),
-          Expanded(child: _SummaryItem(title: 'Не отмечено', value: '${_count('unset')}', style: _style)),
-          if (saving) ...[
-            const SizedBox(width: 10),
-            const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: _green, strokeWidth: 1.8)),
-          ],
+          Row(
+            children: [
+              const _AttendanceBrandDots(),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Text(
+                  'Журнал посещаемости',
+                  style: AppTypography.subsectionTitle(color: _text),
+                ),
+              ),
+              if (saving)
+                const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: _green, strokeWidth: 1.8)),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(child: _SummaryItem(title: 'Игроков', value: '${players.length}', style: _style)),
+              Container(width: 1, height: 30, color: _line),
+              const SizedBox(width: 12),
+              Expanded(child: _SummaryItem(title: 'Присутствуют', value: '${_count('present')}', style: _style)),
+              Container(width: 1, height: 30, color: _line),
+              const SizedBox(width: 12),
+              Expanded(child: _SummaryItem(title: 'Не отмечено', value: '${_count('unset')}', style: _style)),
+            ],
+          ),
         ],
       ),
     );
@@ -249,9 +627,9 @@ class _TrainingAttendancePanelState extends State<TrainingAttendancePanel> {
           return Container(
             padding: const EdgeInsets.only(left: 4, right: 8),
             decoration: BoxDecoration(
-              color: item.color.withOpacity(.065),
-              borderRadius: BorderRadius.circular(9),
-            ),
+              color: Color.alphaBlend(item.color.withOpacity(.045), Colors.white),
+              borderRadius: BorderRadius.circular(10),
+                          ),
             child: Row(
               children: [
                 _StatusCircle(item: item, active: true, size: 25),
@@ -285,9 +663,10 @@ class _TrainingAttendancePanelState extends State<TrainingAttendancePanel> {
       constraints: const BoxConstraints(minHeight: 76),
       padding: const EdgeInsets.fromLTRB(10, 9, 10, 9),
       decoration: BoxDecoration(
-        color: currentStatus == 'unset' ? Colors.white : _greenSoft,
-        border: index == players.length - 1 ? null : const Border(bottom: BorderSide(color: _line, width: .65)),
-      ),
+        color: currentStatus == 'unset'
+            ? Colors.white
+            : Color.alphaBlend((activeStatus?.color ?? _green).withOpacity(.045), Colors.white),
+              ),
       child: LayoutBuilder(
         builder: (context, constraints) {
           final compact = constraints.maxWidth < 500;
@@ -400,6 +779,48 @@ class _TrainingAttendancePanelState extends State<TrainingAttendancePanel> {
   }
 }
 
+class _AttendanceBrandDot extends StatelessWidget {
+  final double size;
+  final double opacity;
+
+  const _AttendanceBrandDot({required this.size, required this.opacity});
+
+  @override
+  Widget build(BuildContext context) {
+    return Opacity(
+      opacity: opacity,
+      child: Container(
+        width: size,
+        height: size,
+        decoration: const BoxDecoration(
+          color: Color(0xFF14915D),
+          shape: BoxShape.circle,
+        ),
+      ),
+    );
+  }
+}
+
+class _AttendanceBrandDots extends StatelessWidget {
+  const _AttendanceBrandDots();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _AttendanceBrandDot(size: 3.5, opacity: .28),
+        SizedBox(width: 3),
+        _AttendanceBrandDot(size: 4.5, opacity: .48),
+        SizedBox(width: 3),
+        _AttendanceBrandDot(size: 5.5, opacity: .72),
+        SizedBox(width: 3),
+        _AttendanceBrandDot(size: 6.5, opacity: 1),
+      ],
+    );
+  }
+}
+
 class _AttendanceStatus {
   final String code;
   final String label;
@@ -422,7 +843,7 @@ class _StatusCircle extends StatelessWidget {
       height: size,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: active ? item.color.withOpacity(.14) : const Color(0xFFF2F4F2),
+        color: active ? item.color.withOpacity(.105) : const Color(0xFFF2F5F3),
         shape: BoxShape.circle,
       ),
       child: Text(
