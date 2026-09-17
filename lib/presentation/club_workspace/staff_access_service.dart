@@ -120,7 +120,6 @@ class StaffAccessService {
     required int staffUserId,
     required int actorUserId,
     String? profile,
-    List<int>? teamIds,
   }) {
     return _post('manage.php', <String, dynamic>{
       'action': action,
@@ -128,7 +127,6 @@ class StaffAccessService {
       'user_id': staffUserId,
       'actor_user_id': actorUserId,
       if (profile != null) 'profile': profile,
-      if (teamIds != null) 'team_ids': teamIds,
     });
   }
 

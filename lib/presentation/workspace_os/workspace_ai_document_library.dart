@@ -5,9 +5,9 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
-import 'package:url_launcher/url_launcher.dart';
 import 'package:sportoteka/core/theme/app_typography.dart';
 import 'package:sportoteka/presentation/workspace_os/sportoteka_workspace_icons.dart';
+import 'package:sportoteka/presentation/workspace_os/workspace_attachment_preview.dart';
 import 'package:sportoteka/presentation/workspace_os/workspace_document_editor.dart';
 
 class WorkspaceAiDocumentLibrary extends StatefulWidget {
@@ -64,10 +64,14 @@ class _WorkspaceAiDocumentLibraryState
   bool _historyLoading = false;
   bool _aiOpen = true;
   bool _uploading = false;
+  double _uploadProgress = 0;
+  String _uploadStage = 'Загрузка файла';
   bool _asking = false;
   bool _analyzing = false;
   bool _editorOpen = false;
   String? _error;
+  String? _noticeText;
+  Timer? _noticeTimer;
 
   @override
   void initState() {
@@ -83,6 +87,7 @@ class _WorkspaceAiDocumentLibraryState
       ..dispose();
     _question.dispose();
     _detailScroll.dispose();
+    _noticeTimer?.cancel();
     super.dispose();
   }
 
@@ -93,6 +98,158 @@ class _WorkspaceAiDocumentLibraryState
   dynamic _decode(http.Response response) {
     final raw = utf8.decode(response.bodyBytes);
     return jsonDecode(raw);
+  }
+
+  void _showNotice(String text) {
+    _noticeTimer?.cancel();
+    if (mounted) setState(() => _noticeText = text);
+    _noticeTimer = Timer(const Duration(seconds: 3), () {
+      if (mounted) setState(() => _noticeText = null);
+    });
+  }
+
+  String _firstText(Iterable<dynamic> values) {
+    for (final value in values) {
+      final text = '$value'.trim();
+      if (value != null && text.isNotEmpty && text != 'null') return text;
+    }
+    return '';
+  }
+
+  String _pageText(dynamic page) {
+    if (page is String) return page.trim();
+    if (page is! Map) return '';
+    final direct = _firstText(<dynamic>[
+      page['text'],
+      page['content'],
+      page['body'],
+      page['ocr_text'],
+      page['extracted_text'],
+      page['plain_text'],
+      page['chunk_text'],
+    ]);
+    if (direct.isNotEmpty) return direct;
+
+    for (final key in const <String>[
+      'lines',
+      'blocks',
+      'paragraphs',
+      'items',
+    ]) {
+      final values = page[key];
+      if (values is! List) continue;
+      final parts = values
+          .map(_pageText)
+          .where((text) => text.trim().isNotEmpty)
+          .toList(growable: false);
+      if (parts.isNotEmpty) return parts.join('\n');
+    }
+    return '';
+  }
+
+  List<dynamic> _documentPages(Map<String, dynamic> data,
+      Map<String, dynamic> document) {
+    dynamic extraction = document['extraction'];
+    if (extraction is Map && extraction['pages'] is List) {
+      return List<dynamic>.from(extraction['pages'] as List);
+    }
+    final dataExtraction = data['extraction'];
+    if (dataExtraction is Map && dataExtraction['pages'] is List) {
+      return List<dynamic>.from(dataExtraction['pages'] as List);
+    }
+    for (final candidate in <dynamic>[
+      data['pages'],
+      document['pages'],
+      data['page_texts'],
+      document['page_texts'],
+    ]) {
+      if (candidate is List) return List<dynamic>.from(candidate);
+    }
+    return const <dynamic>[];
+  }
+
+  String _fullDocumentText(
+    Map<String, dynamic> data,
+    Map<String, dynamic> document,
+  ) {
+    // Prefer explicitly complete extraction fields. Generic `text` fields may
+    // themselves be previews on older API builds, so page/chunk data is used
+    // before falling back to them.
+    final explicitFull = _firstText(<dynamic>[
+      data['full_text'],
+      data['extracted_text'],
+      document['full_text'],
+      document['extracted_text'],
+      if (data['extraction'] is Map)
+        (data['extraction'] as Map)['full_text'],
+      if (document['extraction'] is Map)
+        (document['extraction'] as Map)['full_text'],
+    ]);
+    if (explicitFull.isNotEmpty) return explicitFull;
+
+    final pages = _documentPages(data, document);
+    final pageParts = <String>[];
+    for (var index = 0; index < pages.length; index++) {
+      final text = _pageText(pages[index]);
+      if (text.isEmpty) continue;
+      var pageNumber = index + 1;
+      final raw = pages[index];
+      if (raw is Map) {
+        pageNumber = int.tryParse(
+              '${raw['page'] ?? raw['page_number'] ?? raw['number'] ?? pageNumber}',
+            ) ??
+            pageNumber;
+      }
+      pageParts.add('Страница $pageNumber\n\n$text');
+    }
+    if (pageParts.isNotEmpty) {
+      return pageParts.join('\n\n────────────\n\n');
+    }
+
+    dynamic chunks = data['chunks'] ?? document['chunks'];
+    if (chunks == null && document['extraction'] is Map) {
+      chunks = (document['extraction'] as Map)['chunks'];
+    }
+    if (chunks is List) {
+      final parts = <String>[];
+      for (final chunk in chunks) {
+        final text = _pageText(chunk);
+        if (text.isNotEmpty) parts.add(text);
+      }
+      if (parts.isNotEmpty) return parts.join('\n\n');
+    }
+
+    final generic = _firstText(<dynamic>[
+      data['text'],
+      data['content'],
+      document['text'],
+      document['content'],
+      if (document['extraction'] is Map)
+        (document['extraction'] as Map)['text'],
+    ]);
+    if (generic.isNotEmpty) return generic;
+
+    return '${data['text_preview'] ?? document['text_preview'] ?? ''}'.trim();
+  }
+
+  int _documentPageCount(Map<String, dynamic> document) {
+    final extraction = document['extraction'];
+    if (extraction is Map) {
+      final pages = extraction['pages'];
+      if (pages is List) return pages.length;
+      final count = int.tryParse('${extraction['page_count'] ?? extraction['pages_count'] ?? pages ?? ''}');
+      if (count != null && count > 0) return count;
+    }
+    for (final raw in <dynamic>[
+      document['page_count'],
+      document['pages_count'],
+      document['pages'],
+    ]) {
+      if (raw is List) return raw.length;
+      final count = int.tryParse('$raw');
+      if (count != null && count > 0) return count;
+    }
+    return 0;
   }
 
   String _absoluteUrl(String raw) {
@@ -205,6 +362,11 @@ class _WorkspaceAiDocumentLibraryState
         queryParameters: <String, String>{
           'club_id': '${widget.clubId}',
           'document_id': id,
+          // Newer document API versions return complete text/pages for these
+          // flags. Older versions simply ignore the extra query parameters.
+          'full_text': '1',
+          'include_pages': '1',
+          'include_chunks': '1',
         },
       );
       final response = await http.get(uri).timeout(const Duration(seconds: 30));
@@ -228,7 +390,10 @@ class _WorkspaceAiDocumentLibraryState
       if (!mounted) return;
       setState(() {
         _selected = document;
-        _textPreview = '${data['text_preview'] ?? ''}';
+        _textPreview = _fullDocumentText(
+          Map<String, dynamic>.from(data),
+          document,
+        );
       });
       await _loadHistory(id);
     } catch (e) {
@@ -254,7 +419,7 @@ class _WorkspaceAiDocumentLibraryState
       await opener(
         documentId,
         title,
-        (closeWindow) => _buildDocumentEditor(
+        (closeWindow) => _buildDocumentWindow(
           sourceDocument: document,
           sourceBody: body,
           externalClose: closeWindow,
@@ -398,6 +563,7 @@ class _WorkspaceAiDocumentLibraryState
     Map<String, dynamic>? sourceDocument,
     String? sourceBody,
     VoidCallback? externalClose,
+    int revision = 0,
   }) {
     final selected = sourceDocument ?? _selected!;
     final documentId = '${selected['document_id'] ?? ''}'.trim();
@@ -406,7 +572,7 @@ class _WorkspaceAiDocumentLibraryState
 
     return WorkspaceDocumentEditor(
       key: ValueKey<String>(
-        'document-ai-editor:$documentId:${selected['updated_at'] ?? ''}',
+        'document-ai-editor:$documentId:${selected['updated_at'] ?? ''}:$revision',
       ),
       initialTitle: title,
       initialBody: sourceBody ?? _textPreview,
@@ -452,6 +618,52 @@ class _WorkspaceAiDocumentLibraryState
     );
   }
 
+  Widget _buildDocumentWindow({
+    Map<String, dynamic>? sourceDocument,
+    String? sourceBody,
+    VoidCallback? externalClose,
+  }) {
+    final selected = sourceDocument ?? _selected!;
+    final extension = '${selected['extension'] ?? ''}'
+        .replaceFirst('.', '')
+        .trim()
+        .toLowerCase();
+    final rawUrl = '${selected['file_url'] ?? ''}'.trim();
+    final filename = '${selected['filename'] ?? selected['title'] ?? ''}'
+        .trim()
+        .toLowerCase();
+    final isPdf = extension == 'pdf' || filename.endsWith('.pdf');
+
+    if (!isPdf || rawUrl.isEmpty) {
+      return _buildDocumentEditor(
+        sourceDocument: selected,
+        sourceBody: sourceBody,
+        externalClose: externalClose,
+      );
+    }
+
+    final documentId = '${selected['document_id'] ?? ''}'.trim();
+    final title = '${selected['title'] ?? selected['filename'] ?? 'Документ'}';
+    return _WorkspaceAiPdfDocumentWindow(
+      title: title,
+      fileUrl: _absoluteUrl(rawUrl),
+      initialBody: sourceBody ?? _textPreview,
+      initialPageCount: _documentPageCount(selected),
+      onRecognize: () => _recognizeDocument(documentId),
+      editorBuilder: (body, revision) {
+        final current = '${_selected?['document_id'] ?? ''}' == documentId
+            ? _selected
+            : selected;
+        return _buildDocumentEditor(
+          sourceDocument: current,
+          sourceBody: body,
+          externalClose: externalClose,
+          revision: revision,
+        );
+      },
+    );
+  }
+
   Future<void> _upload() async {
     if (_uploading) return;
 
@@ -493,13 +705,25 @@ class _WorkspaceAiDocumentLibraryState
 
     setState(() {
       _uploading = true;
+      _uploadProgress = 0;
+      _uploadStage = 'Загрузка файла';
       _error = null;
     });
 
     try {
-      final request = http.MultipartRequest(
+      final request = _ProgressMultipartRequest(
         'POST',
         Uri.parse('$_base/upload'),
+        onProgress: (sent, total) {
+          if (!mounted || total <= 0) return;
+          final value = (sent / total).clamp(0.0, 1.0).toDouble();
+          setState(() {
+            _uploadProgress = value;
+            _uploadStage = value >= .999
+                ? 'Обработка документа'
+                : 'Загрузка файла';
+          });
+        },
       );
       request.fields['club_id'] = '${widget.clubId}';
       request.fields['user_id'] = '${widget.userId}';
@@ -551,11 +775,18 @@ class _WorkspaceAiDocumentLibraryState
           await _loadItem(found);
         }
       }
+      _showNotice('Документ добавлен');
     } catch (e) {
       if (!mounted) return;
       setState(() => _error = '$e');
     } finally {
-      if (mounted) setState(() => _uploading = false);
+      if (mounted) {
+        setState(() {
+          _uploading = false;
+          _uploadProgress = 0;
+          _uploadStage = 'Загрузка файла';
+        });
+      }
     }
   }
 
@@ -721,34 +952,56 @@ class _WorkspaceAiDocumentLibraryState
     );
   }
 
-  Future<void> _reanalyze() async {
-    final selected = _selected;
-    if (selected == null || _analyzing) return;
-    final id = '${selected['document_id'] ?? ''}'.trim();
-    if (id.isEmpty) return;
+  Future<_DocumentRecognitionResult> _recognizeDocument(
+    String documentId,
+  ) async {
+    if (documentId.trim().isEmpty) {
+      return const _DocumentRecognitionResult(text: '', pageCount: 0);
+    }
 
-    setState(() {
-      _analyzing = true;
-      _error = null;
-    });
+    if (mounted) {
+      setState(() {
+        _analyzing = true;
+        _error = null;
+      });
+    }
 
     try {
-      final response = await http
-          .post(
-            Uri.parse('$_base/analyze'),
-            headers: const <String, String>{
-              'Content-Type': 'application/json; charset=utf-8',
-            },
-            body: jsonEncode(
-              <String, dynamic>{
-                'club_id': widget.clubId,
-                'user_id': widget.userId,
-                'document_id': id,
-                'focus': '',
+      Future<http.Response> sendAnalyze(Map<String, dynamic> payload) {
+        return http
+            .post(
+              Uri.parse('$_base/analyze'),
+              headers: const <String, String>{
+                'Content-Type': 'application/json; charset=utf-8',
               },
-            ),
-          )
-          .timeout(const Duration(minutes: 4));
+              body: jsonEncode(payload),
+            )
+            .timeout(const Duration(minutes: 5));
+      }
+
+      final enhancedPayload = <String, dynamic>{
+        'club_id': widget.clubId,
+        'user_id': widget.userId,
+        'document_id': documentId,
+        'focus': 'Распознать весь документ, все страницы, без сокращения текста.',
+        // Supported by current SPORTOTEKA AI builds. If an older server
+        // rejects extra fields we automatically retry with the legacy body.
+        'ocr': true,
+        'force_ocr': true,
+        'all_pages': true,
+        'full_text': true,
+        'include_pages': true,
+      };
+
+      var response = await sendAnalyze(enhancedPayload);
+      if (response.statusCode == 400 || response.statusCode == 422) {
+        response = await sendAnalyze(<String, dynamic>{
+          'club_id': widget.clubId,
+          'user_id': widget.userId,
+          'document_id': documentId,
+          'focus': 'Распознать весь документ, все страницы, без сокращения текста.',
+        });
+      }
 
       final data = _decode(response);
       if (response.statusCode < 200 ||
@@ -757,21 +1010,68 @@ class _WorkspaceAiDocumentLibraryState
           data['success'] != true) {
         throw Exception(
           data is Map
-              ? (data['detail'] ?? data['message'] ?? 'Ошибка анализа')
+              ? (data['detail'] ?? data['message'] ?? 'Ошибка распознавания')
               : 'HTTP ${response.statusCode}',
         );
       }
 
-      if (data['document'] is Map) {
-        await _loadItem(
-          Map<String, dynamic>.from(data['document'] as Map),
+      Map<String, dynamic> document = data['document'] is Map
+          ? Map<String, dynamic>.from(data['document'] as Map)
+          : <String, dynamic>{
+              'document_id': documentId,
+            };
+      final analyzeText = _fullDocumentText(
+        Map<String, dynamic>.from(data),
+        document,
+      );
+      final analyzePages = _documentPages(
+        Map<String, dynamic>.from(data),
+        document,
+      );
+
+      await _loadItem(document);
+      if (!mounted) {
+        return _DocumentRecognitionResult(
+          text: analyzeText,
+          pageCount: analyzePages.isNotEmpty
+              ? analyzePages.length
+              : _documentPageCount(document),
         );
       }
+
+      document = Map<String, dynamic>.from(_selected ?? document);
+      if (analyzeText.length > _textPreview.length) {
+        setState(() => _textPreview = analyzeText);
+      }
+      final result = _DocumentRecognitionResult(
+        text: _textPreview,
+        pageCount: analyzePages.isNotEmpty
+            ? analyzePages.length
+            : _documentPageCount(document),
+      );
+      _showNotice(
+        result.pageCount > 0
+            ? 'Распознано страниц: ${result.pageCount}'
+            : 'Документ распознан',
+      );
+      return result;
     } catch (e) {
-      if (!mounted) return;
-      setState(() => _error = '$e');
+      if (mounted) setState(() => _error = '$e');
+      rethrow;
     } finally {
       if (mounted) setState(() => _analyzing = false);
+    }
+  }
+
+  Future<void> _reanalyze() async {
+    final selected = _selected;
+    if (selected == null || _analyzing) return;
+    final id = '${selected['document_id'] ?? ''}'.trim();
+    if (id.isEmpty) return;
+    try {
+      await _recognizeDocument(id);
+    } catch (_) {
+      // Error is already displayed by _recognizeDocument.
     }
   }
 
@@ -843,11 +1143,17 @@ class _WorkspaceAiDocumentLibraryState
   }
 
   Future<void> _openOriginal() async {
-    final raw = '${_selected?['file_url'] ?? ''}'.trim();
-    if (raw.isEmpty) return;
-    final uri = Uri.tryParse(_absoluteUrl(raw));
-    if (uri == null) return;
-    await launchUrl(uri, mode: LaunchMode.externalApplication);
+    final selected = _selected;
+    final raw = '${selected?['file_url'] ?? ''}'.trim();
+    if (selected == null || raw.isEmpty) return;
+    await openWorkspaceAttachmentPreview(
+      context,
+      title: '${selected['title'] ?? selected['filename'] ?? 'Документ'}',
+      fileUrl: raw,
+      mimeType: '${selected['extension'] ?? ''}'.toLowerCase().contains('pdf')
+          ? 'application/pdf'
+          : '',
+    );
   }
 
   String _sizeLabel(dynamic raw) {
@@ -1639,7 +1945,9 @@ class _WorkspaceAiDocumentLibraryState
             ),
           ),
           const SizedBox(width: 8),
-          if (!_uploading)
+          if (_noticeText != null)
+            _WorkspaceNotice(text: _noticeText!)
+          else if (!_uploading)
             InkWell(
               borderRadius: BorderRadius.circular(10),
               onTap: _upload,
@@ -1667,12 +1975,10 @@ class _WorkspaceAiDocumentLibraryState
               ),
             )
           else
-            const SizedBox.square(
-              dimension: 26,
-              child: Padding(
-                padding: EdgeInsets.all(4),
-                child: CircularProgressIndicator(strokeWidth: 2, color: _green),
-              ),
+            _UploadProgressChip(
+              progress: _uploadProgress,
+              stage: _uploadStage,
+              compact: compact,
             ),
           const SizedBox(width: 6),
           IconButton(
@@ -1945,6 +2251,11 @@ class _WorkspaceAiDocumentLibraryState
                   _inspectorValue(
                       'Формат', extension.isEmpty ? 'Документ' : extension),
                   _inspectorValue('Размер', _sizeLabel(row['file_size'])),
+                  if (_documentPageCount(row) > 0)
+                    _inspectorValue(
+                      'Страниц',
+                      '${_documentPageCount(row)}',
+                    ),
                   _inspectorValue('Статус', status),
                   if ('${row['created_at'] ?? ''}'.trim().isNotEmpty)
                     _inspectorValue('Добавлен', _dateLabel(row['created_at'])),
@@ -2013,44 +2324,462 @@ class _WorkspaceAiDocumentLibraryState
   @override
   Widget build(BuildContext context) {
     if (_editorOpen && _selected != null) {
-      return _buildDocumentEditor();
+      return _buildDocumentWindow();
     }
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final compact = constraints.maxWidth < 760;
-        return Column(
-          children: <Widget>[
-            _finderTopBar(compact: compact),
-            _finderBreadcrumb(),
-            const Divider(height: 1, color: _line),
-            Expanded(
-              child: compact
-                  ? _finderDocumentList(compact: true)
-                  : Row(
-                      children: <Widget>[
-                        Expanded(child: _finderDocumentList(compact: false)),
-                        const VerticalDivider(
-                            width: 1, thickness: 1, color: _line),
-                        SizedBox(width: 340, child: _finderInspector()),
-                      ],
+    return Stack(
+      children: <Widget>[
+        Positioned.fill(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final compact = constraints.maxWidth < 760;
+              return Column(
+                children: <Widget>[
+                  _finderTopBar(compact: compact),
+                  _finderBreadcrumb(),
+                  const Divider(height: 1, color: _line),
+                  Expanded(
+                    child: compact
+                        ? _finderDocumentList(compact: true)
+                        : Row(
+                            children: <Widget>[
+                              Expanded(
+                                child: _finderDocumentList(compact: false),
+                              ),
+                              const VerticalDivider(
+                                width: 1,
+                                thickness: 1,
+                                color: _line,
+                              ),
+                              SizedBox(width: 340, child: _finderInspector()),
+                            ],
+                          ),
+                  ),
+                  if (_error != null)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 9,
+                      ),
+                      color: const Color(0xFFFFF4E5),
+                      child: Text(
+                        _error!,
+                        style: const TextStyle(
+                          color: Color(0xFFB54708),
+                          fontSize: 11.5,
+                        ),
+                      ),
                     ),
+                ],
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _DocumentRecognitionResult {
+  const _DocumentRecognitionResult({
+    required this.text,
+    required this.pageCount,
+  });
+
+  final String text;
+  final int pageCount;
+}
+
+class _ProgressMultipartRequest extends http.MultipartRequest {
+  _ProgressMultipartRequest(
+    String method,
+    Uri url, {
+    required this.onProgress,
+  }) : super(method, url);
+
+  final void Function(int sent, int total) onProgress;
+
+  @override
+  http.ByteStream finalize() {
+    final total = contentLength;
+    var sent = 0;
+    final source = super.finalize();
+    final transformed = source.transform(
+      StreamTransformer<List<int>, List<int>>.fromHandlers(
+        handleData: (data, sink) {
+          sent += data.length;
+          onProgress(sent, total);
+          sink.add(data);
+        },
+      ),
+    );
+    return http.ByteStream(transformed);
+  }
+}
+
+class _UploadProgressChip extends StatelessWidget {
+  const _UploadProgressChip({
+    required this.progress,
+    required this.stage,
+    required this.compact,
+  });
+
+  final double progress;
+  final String stage;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final safeProgress = progress.clamp(0.0, 1.0).toDouble();
+    final percent = (safeProgress * 100).round();
+    return Container(
+      height: 36,
+      constraints: BoxConstraints(maxWidth: compact ? 86 : 190),
+      padding: EdgeInsets.symmetric(horizontal: compact ? 9 : 11),
+      decoration: BoxDecoration(
+        color: const Color(0xFF079455).withOpacity(.08),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: const Color(0xFFD8EDE2)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          SizedBox.square(
+            dimension: 16,
+            child: CircularProgressIndicator(
+              value: progress > 0 ? safeProgress : null,
+              strokeWidth: 2,
+              color: const Color(0xFF079455),
+              backgroundColor: const Color(0xFFDCEAE3),
             ),
-            if (_error != null)
-              Container(
-                width: double.infinity,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-                color: const Color(0xFFFFF4E5),
-                child: Text(
-                  _error!,
-                  style:
-                      const TextStyle(color: Color(0xFFB54708), fontSize: 11.5),
+          ),
+          const SizedBox(width: 7),
+          Flexible(
+            child: Text(
+              compact ? '$percent%' : '$stage · $percent%',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.captionMedium(
+                color: const Color(0xFF087443),
+              ).copyWith(fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _WorkspaceNotice extends StatelessWidget {
+  const _WorkspaceNotice({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: Material(
+        color: Colors.transparent,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
+          decoration: BoxDecoration(
+            color: const Color(0xFFEAF7F0),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: const Color(0xFFD6EDE1)),
+            boxShadow: const <BoxShadow>[
+              BoxShadow(
+                color: Color(0x0A000000),
+                blurRadius: 8,
+                offset: Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              const Icon(
+                Icons.check_circle_rounded,
+                size: 15,
+                color: Color(0xFF079455),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                text,
+                style: AppTypography.captionMedium(
+                  color: const Color(0xFF087443),
+                ).copyWith(fontWeight: FontWeight.w700),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+enum _PdfDocumentMode { original, editor }
+
+class _WorkspaceAiPdfDocumentWindow extends StatefulWidget {
+  const _WorkspaceAiPdfDocumentWindow({
+    required this.title,
+    required this.fileUrl,
+    required this.initialBody,
+    required this.initialPageCount,
+    required this.onRecognize,
+    required this.editorBuilder,
+  });
+
+  final String title;
+  final String fileUrl;
+  final String initialBody;
+  final int initialPageCount;
+  final Future<_DocumentRecognitionResult> Function() onRecognize;
+  final Widget Function(String body, int revision) editorBuilder;
+
+  @override
+  State<_WorkspaceAiPdfDocumentWindow> createState() =>
+      _WorkspaceAiPdfDocumentWindowState();
+}
+
+class _WorkspaceAiPdfDocumentWindowState
+    extends State<_WorkspaceAiPdfDocumentWindow> {
+  static const _green = Color(0xFF079455);
+  static const _greenDark = Color(0xFF087443);
+  static const _line = Color(0xFFE4E9E6);
+  static const _muted = Color(0xFF66736B);
+  static const _text = Color(0xFF17201B);
+
+  _PdfDocumentMode _mode = _PdfDocumentMode.original;
+  late String _body;
+  late int _pageCount;
+  int _revision = 0;
+  bool _editorCreated = false;
+  bool _recognizing = false;
+  String? _message;
+  bool _messageIsError = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _body = widget.initialBody;
+    _pageCount = widget.initialPageCount;
+  }
+
+  Future<void> _recognize() async {
+    if (_recognizing) return;
+    setState(() {
+      _recognizing = true;
+      _message = null;
+      _messageIsError = false;
+    });
+    try {
+      final result = await widget.onRecognize();
+      if (!mounted) return;
+      setState(() {
+        if (result.text.trim().isNotEmpty) _body = result.text;
+        if (result.pageCount > 0) _pageCount = result.pageCount;
+        _revision += 1;
+        _editorCreated = true;
+        _mode = _PdfDocumentMode.editor;
+        _message = _pageCount > 0
+            ? 'Распознано страниц: $_pageCount'
+            : 'Документ распознан';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _messageIsError = true;
+        _message = 'Не удалось распознать документ: $e';
+      });
+    } finally {
+      if (mounted) setState(() => _recognizing = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ColoredBox(
+      color: Colors.white,
+      child: Column(
+        children: <Widget>[
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final compact = constraints.maxWidth < 680;
+              return Container(
+                height: 50,
+                padding: EdgeInsets.symmetric(horizontal: compact ? 8 : 12),
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  border: Border(bottom: BorderSide(color: _line)),
+                ),
+                child: Row(
+                  children: <Widget>[
+                    _PdfModeButton(
+                      icon: Icons.picture_as_pdf_outlined,
+                      label: 'Оригинал',
+                      active: _mode == _PdfDocumentMode.original,
+                      onTap: () => setState(
+                        () => _mode = _PdfDocumentMode.original,
+                      ),
+                    ),
+                    const SizedBox(width: 5),
+                    _PdfModeButton(
+                      icon: Icons.edit_note_rounded,
+                      label: 'Редактор',
+                      active: _mode == _PdfDocumentMode.editor,
+                      onTap: () => setState(() {
+                        _editorCreated = true;
+                        _mode = _PdfDocumentMode.editor;
+                      }),
+                    ),
+                    const Spacer(),
+                    if (!compact && _pageCount > 0) ...<Widget>[
+                      Text(
+                        '$_pageCount стр.',
+                        style: AppTypography.captionMedium(color: _muted),
+                      ),
+                      const SizedBox(width: 10),
+                    ],
+                    Tooltip(
+                      message: _recognizing
+                          ? 'Распознавание документа…'
+                          : 'Распознать все страницы',
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(9),
+                          onTap: _recognizing ? null : _recognize,
+                          child: Container(
+                            height: 34,
+                            padding: EdgeInsets.symmetric(
+                              horizontal: compact ? 8 : 10,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF2F8F4),
+                              borderRadius: BorderRadius.circular(9),
+                              border: Border.all(
+                                color: const Color(0xFFDCEAE2),
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: <Widget>[
+                                if (_recognizing)
+                                  const SizedBox.square(
+                                    dimension: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: _green,
+                                    ),
+                                  )
+                                else
+                                  const Icon(
+                                    Icons.document_scanner_outlined,
+                                    size: 18,
+                                    color: _greenDark,
+                                  ),
+                                if (!compact) ...<Widget>[
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    _recognizing
+                                        ? 'Распознаю…'
+                                        : 'Распознать',
+                                    style: AppTypography.captionMedium(
+                                      color: _greenDark,
+                                    ).copyWith(fontWeight: FontWeight.w700),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+          if (_message != null)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+              color: _messageIsError
+                  ? const Color(0xFFFFF4E5)
+                  : const Color(0xFFF0F8F3),
+              child: Text(
+                _message!,
+                style: AppTypography.captionMedium(
+                  color: _messageIsError
+                      ? const Color(0xFFB54708)
+                      : _greenDark,
                 ),
               ),
-          ],
-        );
-      },
+            ),
+          Expanded(
+            child: IndexedStack(
+              index: _mode == _PdfDocumentMode.original ? 0 : 1,
+              children: <Widget>[
+                WorkspacePdfInlinePreview(
+                  title: widget.title,
+                  url: widget.fileUrl,
+                ),
+                _editorCreated
+                    ? widget.editorBuilder(_body, _revision)
+                    : const SizedBox.shrink(),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PdfModeButton extends StatelessWidget {
+  const _PdfModeButton({
+    required this.icon,
+    required this.label,
+    required this.active,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = active ? const Color(0xFF087443) : const Color(0xFF66736B);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(9),
+        onTap: onTap,
+        child: Container(
+          height: 34,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          decoration: BoxDecoration(
+            color: active ? const Color(0xFFEAF5EF) : Colors.transparent,
+            borderRadius: BorderRadius.circular(9),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Icon(icon, size: 17, color: color),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: AppTypography.captionMedium(color: color).copyWith(
+                  fontWeight: active ? FontWeight.w800 : FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

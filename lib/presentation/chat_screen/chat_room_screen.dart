@@ -20,7 +20,7 @@ import 'package:video_player/video_player.dart';
 import 'package:sportoteka/core/theme/app_typography.dart';
 import 'package:sportoteka/presentation/my_profile_screen/my_profile_screen.dart';
 import 'package:sportoteka/presentation/chat_screen/edit_group_chat_screen.dart';
-import 'package:sportoteka/call/audio_call_screen.dart';
+import 'package:sportoteka/presentation/chat_screen/outgoing_call_screen.dart';
 
 class _WinChatColors {
   static const Color bg = Colors.white;
@@ -227,6 +227,8 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
   // Сообщения/участники
   List<Map<String, dynamic>> messages = [];
   List<Map<String, dynamic>> members = [];
+  bool _callOpening = false;
+  bool _resolvingCall = false;
 
   // Индексы и состояния
   bool isLoading = true;
@@ -724,7 +726,8 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
     try {
       final uri = Uri.parse(
           'https://sportotekaapp.ru/api/get_chat_members.php?chat_id=${widget.chatId}');
-      final res = await http.get(uri, headers: {'Accept': 'application/json'});
+      final res = await http.get(uri, headers: {'Accept': 'application/json'})
+          .timeout(const Duration(seconds: 8));
       if (res.statusCode == 200) {
         final body = res.body.trimLeft();
         final decoded = json
@@ -1178,122 +1181,92 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
         0;
   }
 
-  Future<int?> _createCallOnServer({
-    required int calleeId,
-    required String channelId,
-  }) async {
-    try {
-      final resp = await http.post(
-        Uri.parse('https://sportotekaapp.ru/api/calls/create.php'),
-        body: {
-          'caller_id': widget.userId.toString(),
-          'callee_id': calleeId.toString(),
-          'channel_id': channelId,
-        },
-      );
-
-      Map<String, dynamic> data = const {};
-      try {
-        final decoded = jsonDecode(resp.body);
-        if (decoded is Map) data = Map<String, dynamic>.from(decoded);
-      } catch (_) {}
-
-      if (resp.statusCode == 200 && data['status'] == 'ok') {
-        return int.tryParse('${data['call_id']}');
-      }
-
-      final error = (data['error'] ?? 'HTTP ${resp.statusCode}').toString();
-      _showError('Не удалось инициировать вызов: $error');
-    } catch (e) {
-      _showError('Сеть: не удалось инициировать вызов');
-    }
-    return null;
-  }
-
   Future<void> _startAudioCallTo(int calleeId, {String? peerName}) async {
+    if (_callOpening) return;
     if (calleeId <= 0 || calleeId == widget.userId) {
       _showError('Некорректный получатель звонка');
       return;
     }
-
-    final channelId = 'chat_${widget.chatId}_${widget.userId}_$calleeId';
-    final callId = await _createCallOnServer(
-      calleeId: calleeId,
-      channelId: channelId,
-    );
-
-    if (callId == null || !mounted) return;
-
-    await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => AudioCallScreen(
-          callId: callId,
-          userId: widget.userId,
-          isCaller: true,
-          peerName: peerName,
+    _callOpening = true;
+    try {
+      await Navigator.push<void>(
+        context,
+        MaterialPageRoute<void>(
+          builder: (_) => OutgoingCallScreen(
+            userId: widget.userId,
+            calleeId: calleeId,
+            channelId: 'chat_${widget.chatId}_${widget.userId}_'
+                '${calleeId}_${DateTime.now().microsecondsSinceEpoch}',
+            peerName: peerName ?? '',
+          ),
         ),
-      ),
-    );
+      );
+    } finally {
+      _callOpening = false;
+    }
   }
 
   Future<void> _startAudioCall() async {
-    if (members.isEmpty) {
-      await _loadMembers();
-    }
+    if (_resolvingCall || _callOpening) return;
+    _resolvingCall = true;
+    try {
+      if (members.isEmpty) await _loadMembers();
+      if (!mounted) return;
 
-    final others = members.where((member) {
-      final id = _memberUserId(member);
-      return id > 0 && id != widget.userId;
-    }).toList();
+      final others = members.where((member) {
+        final id = _memberUserId(member);
+        return id > 0 && id != widget.userId;
+      }).toList();
 
-    if (others.isEmpty) {
-      _showError('В чате нет другого участника для звонка');
-      return;
-    }
+      if (others.isEmpty) {
+        _showError('В чате нет другого участника для звонка');
+        return;
+      }
 
-    if (others.length == 1) {
-      final member = others.first;
+      if (others.length == 1) {
+        final member = others.first;
+        await _startAudioCallTo(
+          _memberUserId(member),
+          peerName: _memberDisplayName(member),
+        );
+        return;
+      }
+
+      final selectedId = await showModalBottomSheet<int>(
+        context: context,
+        showDragHandle: true,
+        builder: (sheetContext) {
+          return SafeArea(
+            child: ListView.separated(
+              shrinkWrap: true,
+              padding: const EdgeInsets.fromLTRB(12, 4, 12, 20),
+              itemCount: others.length,
+              separatorBuilder: (_, __) => const Divider(height: 1),
+              itemBuilder: (_, index) {
+                final member = others[index];
+                final id = _memberUserId(member);
+                final name = _memberDisplayName(member);
+                return ListTile(
+                  leading: const CircleAvatar(child: Icon(Icons.person_rounded)),
+                  title: Text(name.isEmpty ? 'Участник $id' : name),
+                  trailing: const Icon(Icons.call_rounded),
+                  onTap: () => Navigator.pop(sheetContext, id),
+                );
+              },
+            ),
+          );
+        },
+      );
+
+      if (selectedId == null || !mounted) return;
+      final member = others.firstWhere((m) => _memberUserId(m) == selectedId);
       await _startAudioCallTo(
-        _memberUserId(member),
+        selectedId,
         peerName: _memberDisplayName(member),
       );
-      return;
+    } finally {
+      _resolvingCall = false;
     }
-
-    if (!mounted) return;
-    final selectedId = await showModalBottomSheet<int>(
-      context: context,
-      showDragHandle: true,
-      builder: (sheetContext) {
-        return SafeArea(
-          child: ListView.separated(
-            shrinkWrap: true,
-            padding: const EdgeInsets.fromLTRB(12, 4, 12, 20),
-            itemCount: others.length,
-            separatorBuilder: (_, __) => const Divider(height: 1),
-            itemBuilder: (_, index) {
-              final member = others[index];
-              final id = _memberUserId(member);
-              final name = _memberDisplayName(member);
-              return ListTile(
-                leading: const CircleAvatar(child: Icon(Icons.person_rounded)),
-                title: Text(name.isEmpty ? 'Участник $id' : name),
-                trailing: const Icon(Icons.call_rounded),
-                onTap: () => Navigator.pop(sheetContext, id),
-              );
-            },
-          ),
-        );
-      },
-    );
-
-    if (selectedId == null) return;
-    final member = others.firstWhere((m) => _memberUserId(m) == selectedId);
-    await _startAudioCallTo(
-      selectedId,
-      peerName: _memberDisplayName(member),
-    );
   }
 
   // ====================== SEARCH ======================
@@ -2092,7 +2065,11 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
               scrolledUnderElevation: 0,
               backgroundColor: Colors.white,
               surfaceTintColor: Colors.transparent,
-              systemOverlayStyle: SystemUiOverlayStyle.dark,
+              systemOverlayStyle: SystemUiOverlayStyle.dark.copyWith(
+                statusBarColor: Colors.white,
+                statusBarIconBrightness: Brightness.dark,
+                statusBarBrightness: Brightness.light,
+              ),
               leadingWidth: 46,
               leading: Center(
                 child: Material(
@@ -2509,10 +2486,24 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
     );
 
     if (widget.embedded) return scaffold;
-    return SafeArea(
-      top: true,
-      bottom: false,
-      child: scaffold,
+
+    // iOS: SafeArea itself does not paint the status-bar inset.
+    // Without a background the top inset can become black while the
+    // status-bar icons stay dark, making time/signal/battery invisible.
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.dark.copyWith(
+        statusBarColor: Colors.white,
+        statusBarIconBrightness: Brightness.dark,
+        statusBarBrightness: Brightness.light,
+      ),
+      child: ColoredBox(
+        color: Colors.white,
+        child: SafeArea(
+          top: true,
+          bottom: false,
+          child: scaffold,
+        ),
+      ),
     );
   }
 

@@ -5,7 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
-import 'package:sportoteka/call/audio_call_screen.dart';
+import 'package:sportoteka/presentation/chat_screen/outgoing_call_screen.dart';
 import 'package:sportoteka/core/theme/app_typography.dart';
 import 'package:sportoteka/presentation/chat_screen/chat_room_screen.dart';
 
@@ -24,7 +24,6 @@ class CallHistoryPanel extends StatefulWidget {
 class _CallHistoryPanelState extends State<CallHistoryPanel> {
   static const String _apiBase = 'https://sportotekaapp.ru/api';
   static const String _listUrl = '$_apiBase/calls/list.php';
-  static const String _createCallUrl = '$_apiBase/calls/create.php';
   static const String _createChatUrl = '$_apiBase/create_chat.php';
 
   List<Map<String, dynamic>> _calls = <Map<String, dynamic>>[];
@@ -377,37 +376,15 @@ class _CallHistoryPanelState extends State<CallHistoryPanel> {
     try {
       final channelId =
           'history_${widget.userId}_${peerId}_${DateTime.now().millisecondsSinceEpoch}';
-
-      final response = await http.post(
-        Uri.parse(_createCallUrl),
-        body: {
-          'caller_id': widget.userId.toString(),
-          'callee_id': peerId.toString(),
-          'channel_id': channelId,
-        },
-      ).timeout(const Duration(seconds: 12));
-
-      final data = _decode(response.body);
-      final callId = data is Map ? _asInt(data['call_id']) : 0;
-      final ok = response.statusCode == 200 &&
-          data is Map &&
-          data['status'] == 'ok' &&
-          callId > 0;
-
-      if (!ok) {
-        _toast('Не удалось начать звонок');
-        return;
-      }
-
-      if (!mounted) return;
-      Navigator.of(context).pop();
-
-      await Navigator.of(context).push(
+      // The dialog closes first; create.php runs after the call UI is visible.
+      final navigator = Navigator.of(context, rootNavigator: true);
+      navigator.pop();
+      await navigator.push<void>(
         MaterialPageRoute<void>(
-          builder: (_) => AudioCallScreen(
-            callId: callId,
+          builder: (_) => OutgoingCallScreen(
             userId: widget.userId,
-            isCaller: true,
+            calleeId: peerId,
+            channelId: channelId,
             peerName: _peerName(call),
           ),
         ),

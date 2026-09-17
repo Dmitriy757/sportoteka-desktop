@@ -1,5 +1,6 @@
 // lib/presentation/club_workspace/cmr_club_teams_panel.dart
 // Typography uses the centralized Sportoteka AppTypography / Inter system.
+// UI unified with CmrClubTrainersPanel: dots, surfaces, list density and right inspector.
 import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:typed_data';
@@ -22,12 +23,13 @@ import '../testing/cmr_testing_panel.dart';
 class _CmrColors {
   static const Color bg = Colors.white;
   static const Color panel = Colors.white;
-  static const Color soft = Color(0xFFF7F8F7);
-  static const Color soft2 = Color(0xFFF2F4F2);
+  // Те же нейтральные поверхности, что и в панели «Тренеры».
+  static const Color soft = Color(0xFFFAFBFA);
+  static const Color soft2 = Color(0xFFF4F6F4);
   static const Color text = Color(0xFF0B0F14);
   static const Color muted = Color(0xFF374151);
-  static const Color secondary = Color(0xFF5F6670);
-  static const Color subtle = Color(0xFF8A9099);
+  static const Color secondary = Color(0xFF6B7280);
+  static const Color subtle = Color(0xFF6B7280);
   static const Color divider = Color(0xFFE9ECEA);
   static const Color graphite = Color(0xFF111827);
   static const Color graphite2 = Color(0xFF1F2937);
@@ -183,9 +185,9 @@ class _CmrDecor {
   // рабочие панели — 0 px; интерактивные элементы — 8 px;
   // крупные мобильные элементы — 10 px; окно — 14 px;
   // диалоги — 16 px; bottom sheet — 18 px.
-  static const double mobilePagePadding = 6.0;
+  static const double mobilePagePadding = 2.0;
   static const double mobileWindowRadius = 18.0;
-  static const double tabletWindowRadius = 18.0;
+  static const double tabletWindowRadius = 16.0;
   static const double mobileCardRadius = 18.0;
   static const double tabletCardRadius = 16.0;
   static const double mobileInnerRadius = 12.0;
@@ -258,14 +260,83 @@ class _CmrDecor {
     Color accent = _CmrColors.green,
     bool active = false,
     bool compact = false,
-  }) {
-    return BoxDecoration(
-      color: active ? _CmrColors.greenSoft : _CmrColors.panel,
-      borderRadius: BorderRadius.circular(radius),
-      border: Border.all(
-        color: active ? _CmrColors.greenBorder : _CmrColors.divider.withOpacity(.65),
-        width: .8,
+  }) =>
+      BoxDecoration(
+        color: active ? _CmrColors.greenSoft : _CmrColors.panel,
+        borderRadius: BorderRadius.circular(radius),
+        border: Border.all(
+          color: active
+              ? accent.withOpacity(.22)
+              : _CmrColors.divider.withOpacity(.78),
+          width: .85,
+        ),
+      );
+}
+
+/// Фирменные «точки» — те же, что используются в панели «Тренеры».
+class _CmrGlowDot extends StatelessWidget {
+  final Color color;
+  final double size;
+  final double opacity;
+  final bool halo;
+
+  const _CmrGlowDot({
+    super.key,
+    required this.color,
+    this.size = 6,
+    this.opacity = 1,
+    this.halo = true,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Opacity(
+      opacity: opacity,
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          color: color,
+          shape: BoxShape.circle,
+          boxShadow: halo
+              ? <BoxShadow>[
+                  BoxShadow(
+                    color: color.withOpacity(.16),
+                    blurRadius: size * 1.7,
+                    spreadRadius: .15,
+                  ),
+                  BoxShadow(
+                    color: color.withOpacity(.055),
+                    blurRadius: size * 2.8,
+                    spreadRadius: .35,
+                  ),
+                ]
+              : null,
+        ),
       ),
+    );
+  }
+}
+
+class _CmrDotCluster extends StatelessWidget {
+  final Color color;
+
+  const _CmrDotCluster({
+    super.key,
+    this.color = _CmrColors.green,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _CmrGlowDot(color: color, size: 3.5, opacity: .28, halo: false),
+        const SizedBox(width: 3),
+        _CmrGlowDot(color: color, size: 4.5, opacity: .58, halo: false),
+        const SizedBox(width: 3),
+        _CmrGlowDot(color: color, size: 6),
+      ],
     );
   }
 }
@@ -3082,7 +3153,7 @@ class _TeamsList extends StatelessWidget {
                         6,
                         10,
                         mobile
-                            ? 104 + MediaQuery.paddingOf(context).bottom
+                            ? 132 + MediaQuery.paddingOf(context).bottom
                             : 12,
                       ),
                       physics: const AlwaysScrollableScrollPhysics(),
@@ -3131,6 +3202,8 @@ class _TeamsListHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
+        const _CmrDotCluster(),
+        const SizedBox(width: 10),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -3226,25 +3299,25 @@ class _TeamsIconButton extends StatelessWidget {
       message: tooltip,
       child: Material(
         color: Colors.transparent,
-        borderRadius: BorderRadius.circular(10),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
-          child: Container(
-            width: compact ? 34 : 36,
-            height: compact ? 34 : 36,
-            decoration: BoxDecoration(
-              color: emphasized ? _CmrColors.greenSoft : _CmrColors.panel,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color: emphasized ? _CmrColors.greenBorder : _CmrColors.divider.withOpacity(.65),
-                width: .8,
+        borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
+        child: Ink(
+          decoration: _CmrDecor.fluentSurface(
+            radius: 10,
+            accent: _CmrColors.green,
+            active: emphasized,
+            compact: true,
+          ),
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(_CmrDecor.mobileInnerRadius),
+            child: SizedBox(
+              width: compact ? 34 : 38,
+              height: compact ? 34 : 38,
+              child: Icon(
+                icon,
+                color: emphasized ? _CmrColors.green : _CmrColors.text,
+                size: compact ? 15 : 16,
               ),
-            ),
-            child: Icon(
-              icon,
-              color: emphasized ? _CmrColors.green : _CmrColors.text,
-              size: compact ? 15 : 16,
             ),
           ),
         ),
@@ -3301,24 +3374,11 @@ class _TeamTile extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Container(
-                width: active ? 6.4 : 4.8,
-                height: active ? 6.4 : 4.8,
-                decoration: BoxDecoration(
-                  color: active
-                      ? _CmrColors.green
-                      : _CmrColors.secondary.withOpacity(.48),
-                  shape: BoxShape.circle,
-                  boxShadow: active
-                      ? [
-                          BoxShadow(
-                            color: _CmrColors.green.withOpacity(.16),
-                            blurRadius: 11,
-                            spreadRadius: .2,
-                          ),
-                        ]
-                      : null,
-                ),
+              _CmrGlowDot(
+                color: active ? _CmrColors.green : _CmrColors.secondary,
+                size: active ? 6.4 : 4.8,
+                opacity: active ? 1 : .48,
+                halo: active,
               ),
               const SizedBox(width: 9),
               _TeamLogo(
@@ -3337,14 +3397,18 @@ class _TeamTile extends StatelessWidget {
                       name,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: _CmrText.navLabel(active: active),
+                      style: _CmrText.navLabel(active: active).copyWith(
+                        fontSize: mobile ? 12.0 : 11.0,
+                      ),
                     ),
                     const SizedBox(height: 3),
                     Text(
                       subtitleParts.join(' · '),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: _CmrText.navSubtitle(active: active),
+                      style: _CmrText.navSubtitle(active: active).copyWith(
+                        fontSize: mobile ? 11.2 : 10.2,
+                      ),
                     ),
                   ],
                 ),
@@ -3695,9 +3759,11 @@ class _TeamDetails extends StatelessWidget {
                     active: active,
                     compact: compact,
                   ),
+                  const SizedBox(height: 12),
+                  _TeamOpenWorkProfileButton(onTap: onOpenTeam),
                   const SizedBox(height: 14),
                   _safeActions(compact: compact),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 18),
                   _safeKpiGrid(
                     context,
                     compact: compact,
@@ -3812,11 +3878,14 @@ class _TeamDetails extends StatelessWidget {
     required bool active,
     required bool compact,
   }) {
-    final meta = [
-      if (sport.trim().isNotEmpty) sport.trim(),
-      if (subtitle.trim().isNotEmpty) subtitle.trim(),
-      clubName.trim(),
-    ].where((e) => e.isNotEmpty).join('  ·  ');
+    final metaParts = <String>[];
+    for (final value in <String>[sport.trim(), subtitle.trim(), clubName.trim()]) {
+      if (value.isEmpty) continue;
+      if (!metaParts.any((item) => item.toLowerCase() == value.toLowerCase())) {
+        metaParts.add(value);
+      }
+    }
+    final meta = metaParts.join('  ·  ');
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(2, 4, 2, 4),
@@ -3826,51 +3895,50 @@ class _TeamDetails extends StatelessWidget {
           _TeamLogo(
             url: logo,
             name: name,
-            size: compact ? 78 : 94,
+            size: compact ? 82 : 96,
             active: active,
           ),
-          SizedBox(width: compact ? 14 : 18),
+          SizedBox(width: compact ? 14 : 16),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (active) ...[
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: 6,
-                        height: 6,
-                        decoration: const BoxDecoration(
+                if (active)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 7),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const _CmrGlowDot(
                           color: _CmrColors.green,
-                          shape: BoxShape.circle,
+                          size: 6,
                         ),
-                      ),
-                      const SizedBox(width: 7),
-                      Text(
-                        'Активная команда',
-                        style: _CmrText.chip(
-                          size: 10.8,
-                          color: _CmrColors.greenDark,
+                        const SizedBox(width: 7),
+                        Text(
+                          'Активная команда',
+                          style: _CmrText.muted(11).copyWith(
+                            color: _CmrColors.greenDark,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: 7),
-                ],
                 Text(
                   name,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: _CmrText.title(compact ? 22.0 : 27.0),
+                  style: _CmrText.title(compact ? 22 : 24),
                 ),
                 const SizedBox(height: 7),
                 Text(
                   meta,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: _CmrText.muted(compact ? 12.2 : 12.5),
+                  style: _CmrText.muted(compact ? 11.5 : 11.8),
                 ),
+                const SizedBox(height: 9),
+                const _CmrDotCluster(color: _CmrColors.greenDark),
               ],
             ),
           ),
@@ -3880,37 +3948,38 @@ class _TeamDetails extends StatelessWidget {
   }
 
   Widget _safeActions({required bool compact}) {
-    final actions = <_SafeActionData>[
-      _SafeActionData(Icons.space_dashboard_outlined, 'Обзор команды', onOpenTeam),
-      _SafeActionData(Icons.groups_2_outlined, 'Состав команды', onOpenRoster),
-      _SafeActionData(Icons.badge_outlined, 'Тренеры', onOpenTrainers),
-      _SafeActionData(Icons.calendar_month_outlined, 'Календарь', onOpenCalendar),
-    ];
-
-    return Container(
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: _CmrColors.soft,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        children: [
-          for (var i = 0; i < actions.length; i++) ...[
-            _TeamInspectorAction(
-              icon: actions[i].icon,
-              title: actions[i].title,
-              onTap: actions[i].onTap,
-              compact: compact,
-            ),
-            if (i != actions.length - 1)
-              Container(
-                height: .6,
-                margin: const EdgeInsets.only(left: 50),
-                color: _CmrColors.divider.withOpacity(.72),
-              ),
-          ],
-        ],
-      ),
+    return Column(
+      children: [
+        _TeamInspectorAction(
+          icon: Icons.edit_outlined,
+          title: 'Редактировать команду',
+          subtitle: 'Название, логотип, паспорт и описание',
+          onTap: onEditTeam,
+          compact: compact,
+          accent: true,
+        ),
+        _TeamInspectorAction(
+          icon: Icons.groups_2_outlined,
+          title: 'Состав команды',
+          subtitle: 'Игроки, номера и роли команды',
+          onTap: onOpenRoster,
+          compact: compact,
+        ),
+        _TeamInspectorAction(
+          icon: Icons.badge_outlined,
+          title: 'Тренеры',
+          subtitle: 'Штаб команды и назначения',
+          onTap: onOpenTrainers,
+          compact: compact,
+        ),
+        _TeamInspectorAction(
+          icon: Icons.calendar_month_outlined,
+          title: 'Календарь',
+          subtitle: 'Матчи, тренировки и события',
+          onTap: onOpenCalendar,
+          compact: compact,
+        ),
+      ],
     );
   }
 
@@ -5006,56 +5075,132 @@ class _TeamDocumentsBlockState extends State<_TeamDocumentsBlock> {
   }
 }
 
+class _TeamOpenWorkProfileButton extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _TeamOpenWorkProfileButton({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: _CmrColors.greenSoft,
+      borderRadius: BorderRadius.circular(9),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(9),
+        child: Container(
+          height: 42,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Row(
+            children: [
+              const _CmrDotCluster(color: _CmrColors.green),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Открыть рабочую область команды',
+                      style: _CmrText.value(11.8).copyWith(
+                        color: _CmrColors.greenDark,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Обзор · Состав · Тренеры · Календарь · Планы',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: _CmrText.muted(9.3),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(
+                Icons.chevron_right_rounded,
+                size: 17,
+                color: _CmrColors.greenDark,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _TeamInspectorAction extends StatelessWidget {
   final IconData icon;
   final String title;
+  final String subtitle;
   final VoidCallback? onTap;
   final bool compact;
+  final bool accent;
 
   const _TeamInspectorAction({
     required this.icon,
     required this.title,
+    required this.subtitle,
     required this.onTap,
     required this.compact,
+    this.accent = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    final enabled = onTap != null;
+    final accentColor = accent ? _CmrColors.green : _CmrColors.secondary;
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
         child: Opacity(
-          opacity: enabled ? 1 : .45,
+          opacity: onTap == null ? .45 : 1,
           child: Container(
-            constraints: BoxConstraints(minHeight: compact ? 48 : 46),
-            padding: const EdgeInsets.symmetric(horizontal: 12),
+            constraints: const BoxConstraints(minHeight: 58),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+            decoration: const BoxDecoration(
+              border: Border(
+                bottom: BorderSide(
+                  color: _CmrColors.divider,
+                  width: .55,
+                ),
+              ),
+            ),
             child: Row(
               children: [
                 Container(
                   width: 3,
-                  height: 22,
+                  height: 28,
                   decoration: BoxDecoration(
-                    color: enabled
-                        ? _CmrColors.green
-                        : _CmrColors.divider,
+                    color: accentColor.withOpacity(accent ? .92 : .48),
                     borderRadius: BorderRadius.circular(99),
                   ),
                 ),
                 const SizedBox(width: 11),
                 Expanded(
-                  child: Text(
-                    title,
-                    style: _CmrText.action().copyWith(
-                      fontSize: compact ? 12.6 : 12.2,
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: _CmrText.value(compact ? 12.6 : 12.4),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: _CmrText.muted(compact ? 10.8 : 10.6),
+                      ),
+                    ],
                   ),
                 ),
-                Icon(
-                  enabled ? Icons.chevron_right_rounded : Icons.lock_outline_rounded,
+                const SizedBox(width: 8),
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  size: 18,
                   color: _CmrColors.subtle,
-                  size: 15,
                 ),
               ],
             ),
@@ -7884,15 +8029,6 @@ class _FilterChip extends StatelessWidget {
               color: selected ? _CmrColors.greenBorder : Colors.transparent,
               width: .8,
             ),
-            boxShadow: selected
-                ? [
-                    BoxShadow(
-                      color: _CmrColors.green.withOpacity(.055),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ]
-                : null,
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,

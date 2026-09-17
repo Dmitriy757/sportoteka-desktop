@@ -10,11 +10,11 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:share_plus/share_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:sportoteka/core/theme/app_typography.dart';
 import 'package:sportoteka/core/utils/pref_utils.dart';
 import 'package:sportoteka/presentation/club_workspace/cmr_context_ai_layer.dart';
 import 'package:sportoteka/presentation/workspace_os/sportoteka_workspace_icons.dart';
+import 'package:sportoteka/presentation/workspace_os/workspace_attachment_preview.dart';
 import 'package:sportoteka/presentation/workspace_os/workspace_live_blocks.dart';
 import 'package:sportoteka/presentation/plans/plan_folders_screen.dart';
 import 'package:sportoteka/presentation/plans/api/training_graphics_api.dart';
@@ -4768,23 +4768,9 @@ ${_trainingPlanExerciseTemplate(1)}
     return '${(bytes / 1024 / 1024).toStringAsFixed(1)} МБ';
   }
 
-  String _absoluteSourceUrl(String raw) {
-    final value = raw.trim();
-    if (value.isEmpty) return '';
-    if (value.startsWith('https://') || value.startsWith('http://')) {
-      return value;
-    }
-    if (value.startsWith('/')) {
-      return 'https://sportotekaapp.ru$value';
-    }
-    return 'https://sportotekaapp.ru/$value';
-  }
-
   Future<void> _openOriginalSourceDocument() async {
     final raw = _sourceDocumentUrl;
-    final absolute = _absoluteSourceUrl(raw);
-    final uri = Uri.tryParse(absolute);
-    if (uri == null || absolute.isEmpty) {
+    if (raw.trim().isEmpty) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -4793,7 +4779,14 @@ ${_trainingPlanExerciseTemplate(1)}
       );
       return;
     }
-    await launchUrl(uri, mode: LaunchMode.externalApplication);
+
+    await openWorkspaceAttachmentPreview(
+      context,
+      title: _sourceDocumentName,
+      fileUrl: raw,
+      mimeType:
+          _sourceDocumentExtension == 'PDF' ? 'application/pdf' : '',
+    );
   }
 
   void _openAiAnalysis() {

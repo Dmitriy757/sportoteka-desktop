@@ -751,12 +751,22 @@ class DetectedPlayerBox {
   final int? classId;
   final String? label;
 
+  /// Команда, которую определил Sportoteka AI: home / away / referee / unknown.
+  final String? teamTag;
+  final int? jerseyNumber;
+  final int? playerId;
+  final String? playerName;
+
   const DetectedPlayerBox({
     required this.id,
     required this.rect,
     this.confidence = 0,
     this.classId,
     this.label,
+    this.teamTag,
+    this.jerseyNumber,
+    this.playerId,
+    this.playerName,
   });
 
   Offset get center => rect.center;
@@ -771,27 +781,56 @@ class DetectedPlayerBox {
       'confidence': confidence,
       'classId': classId,
       'label': label,
+      'team': teamTag,
+      'jersey_number': jerseyNumber,
+      'player_id': playerId,
+      'player_name': playerName,
     };
   }
 
   factory DetectedPlayerBox.fromJson(Map<String, dynamic> json) {
-    final left = (json['left'] ?? json['x'] ?? 0).toDouble();
-    final top = (json['top'] ?? json['y'] ?? 0).toDouble();
+    double asDouble(dynamic value) => value is num
+        ? value.toDouble()
+        : double.tryParse('${value ?? ''}') ?? 0.0;
+    int? asNullableInt(dynamic value) {
+      if (value == null) return null;
+      if (value is int) return value;
+      if (value is num) return value.toInt();
+      return int.tryParse('$value');
+    }
 
-    final right = json['right'] != null
-        ? (json['right']).toDouble()
-        : left + (json['width'] ?? 0).toDouble();
+    final left = asDouble(json['left'] ?? json['x'] ?? json['x1']);
+    final top = asDouble(json['top'] ?? json['y'] ?? json['y1']);
 
-    final bottom = json['bottom'] != null
-        ? (json['bottom']).toDouble()
-        : top + (json['height'] ?? 0).toDouble();
+    final right = json['right'] != null || json['x2'] != null
+        ? asDouble(json['right'] ?? json['x2'])
+        : left + asDouble(json['width'] ?? json['w']);
+
+    final bottom = json['bottom'] != null || json['y2'] != null
+        ? asDouble(json['bottom'] ?? json['y2'])
+        : top + asDouble(json['height'] ?? json['h']);
+
+    final rawTeam = (json['team'] ??
+            json['team_tag'] ??
+            json['team_key'] ??
+            json['side'] ??
+            json['teamTag'])
+        ?.toString()
+        .trim()
+        .toLowerCase();
 
     return DetectedPlayerBox(
-      id: (json['id'] ?? 0) as int,
+      id: asNullableInt(json['id'] ?? json['track_id'] ?? json['trackId']) ?? 0,
       rect: Rect.fromLTRB(left, top, right, bottom),
-      confidence: (json['confidence'] ?? 0).toDouble(),
-      classId: json['classId'] as int?,
-      label: json['label']?.toString(),
+      confidence: asDouble(json['confidence'] ?? json['conf'] ?? json['score']),
+      classId: asNullableInt(json['classId'] ?? json['class_id']),
+      label: (json['label'] ?? json['class_name'] ?? json['name'])?.toString(),
+      teamTag: rawTeam,
+      jerseyNumber: asNullableInt(
+        json['jersey_number'] ?? json['jersey'] ?? json['number'],
+      ),
+      playerId: asNullableInt(json['player_id'] ?? json['playerId']),
+      playerName: (json['player_name'] ?? json['playerName'])?.toString(),
     );
   }
 }
@@ -1813,9 +1852,9 @@ List<PlayerTrack> mapServerTracksToPlayerTracks(List<AiTrackPacket> tracks) {
       boundPlayerId: t.playerId,
       boundPlayerName: t.playerName,
       color: t.teamTag == 'home'
-          ? const Color(0xFF2563EB)
+          ? const Color(0xFF00A750)
           : t.teamTag == 'away'
-              ? const Color(0xFFDC2626)
+              ? const Color(0xFF2563EB)
               : Colors.redAccent,
       points: [
         TrackPoint(
@@ -1875,7 +1914,7 @@ class AiTrackingApiService {
 
     final data = jsonDecode(response.body) as Map<String, dynamic>;
 
-    if (data['success'] != true) {
+    if (data['success'] == false) {
       throw Exception(data['error']?.toString() ?? 'Unknown AI error');
     }
 
@@ -4348,6 +4387,8 @@ class PythonTrackingService {
   Future<PythonTrackingResult> detectFrame({
     required File frameFile,
     required int timeMs,
+    String? homeColorHex,
+    String? awayColorHex,
   }) async {
     try {
       final url = '$baseUrl/analyze_frame';
@@ -4361,6 +4402,13 @@ class PythonTrackingService {
       );
 
       request.fields['timeMs'] = timeMs.toString();
+      request.fields['time_ms'] = timeMs.toString();
+      if (homeColorHex != null && homeColorHex.isNotEmpty) {
+        request.fields['home_color'] = homeColorHex;
+      }
+      if (awayColorHex != null && awayColorHex.isNotEmpty) {
+        request.fields['away_color'] = awayColorHex;
+      }
       request.files.add(
         await http.MultipartFile.fromPath(
           'frame',
@@ -4385,9 +4433,11 @@ class PythonTrackingService {
 
       final data = jsonDecode(response.body) as Map<String, dynamic>;
 
-      if (data['success'] != true) {
-        debugPrint('❌ PYTHON success=false: ${data['error']}');
-        return PythonTrackingResult.empty();
+      if (data['success'] == false) {
+        debugPrint('❌ SPORTOTEKA AI success=false: ${data['error']}');
+        return PythonTrackingResult.empty(
+          (data['error'] ?? data['message'] ?? 'success=false').toString(),
+        );
       }
 
       return _parseTrackingResult(data);
@@ -4400,6 +4450,8 @@ class PythonTrackingService {
   Future<PythonTrackingResult> detectFrameFromUrl({
     required String videoUrl,
     required int timeMs,
+    String? homeColorHex,
+    String? awayColorHex,
   }) async {
     try {
       final url = '$baseUrl/analyze_frame_from_url';
@@ -4415,6 +4467,10 @@ class PythonTrackingService {
               'video_url': videoUrl,
               'timeMs': timeMs,
               'time_ms': timeMs,
+              if (homeColorHex != null && homeColorHex.isNotEmpty)
+                'home_color': homeColorHex,
+              if (awayColorHex != null && awayColorHex.isNotEmpty)
+                'away_color': awayColorHex,
             }),
           )
           .timeout(const Duration(seconds: 12));
@@ -4450,13 +4506,15 @@ class PythonTrackingService {
 
   PythonTrackingResult _parseTrackingResult(Map<String, dynamic> root) {
     Map<String, dynamic> data = root;
-    final nested = root['data'];
-    if (nested is Map) {
-      data = <String, dynamic>{...root, ...Map<String, dynamic>.from(nested)};
+    for (final key in const ['data', 'result', 'output', 'analysis']) {
+      final nested = root[key];
+      if (nested is Map) {
+        data = <String, dynamic>{...data, ...Map<String, dynamic>.from(nested)};
+      }
     }
 
     List<dynamic> rawItems = const [];
-    for (final key in const ['detections', 'players', 'tracks', 'objects']) {
+    for (final key in const ['detections', 'players', 'tracks', 'objects', 'items']) {
       final value = data[key];
       if (value is List && value.isNotEmpty) {
         rawItems = value;
@@ -4468,8 +4526,41 @@ class PythonTrackingService {
     Rect? ballRect;
     double? ballConfidence;
 
+    int? _parseNullableInt(dynamic value) {
+      if (value == null) return null;
+      if (value is int) return value;
+      if (value is num) return value.toInt();
+      return int.tryParse('$value');
+    }
+
     Rect? rectFromMap(Map<String, dynamic> item) {
-      final bbox = item['bbox'] ?? item['box'];
+      final bbox = item['bbox'] ?? item['box'] ?? item['bounding_box'] ?? item['boundingBox'];
+      if (bbox is Map) {
+        final b = Map<String, dynamic>.from(bbox);
+        final x1 = b['left'] ?? b['x1'] ?? b['x'];
+        final y1 = b['top'] ?? b['y1'] ?? b['y'];
+        final x2 = b['right'] ?? b['x2'];
+        final y2 = b['bottom'] ?? b['y2'];
+        final w = b['width'] ?? b['w'];
+        final h = b['height'] ?? b['h'];
+        final l = x1 is num ? x1.toDouble() : double.tryParse('$x1') ?? 0.0;
+        final t = y1 is num ? y1.toDouble() : double.tryParse('$y1') ?? 0.0;
+        final r = x2 is num
+            ? x2.toDouble()
+            : x2 != null
+                ? double.tryParse('$x2')
+                : null;
+        final bb = y2 is num
+            ? y2.toDouble()
+            : y2 != null
+                ? double.tryParse('$y2')
+                : null;
+        final ww = w is num ? w.toDouble() : w != null ? double.tryParse('$w') : null;
+        final hh = h is num ? h.toDouble() : h != null ? double.tryParse('$h') : null;
+        final rr = r ?? (ww != null ? l + ww : l);
+        final bottom = bb ?? (hh != null ? t + hh : t);
+        if (rr > l && bottom > t) return Rect.fromLTRB(l, t, rr, bottom);
+      }
       if (bbox is List && bbox.length >= 4) {
         final a = (bbox[0] as num?)?.toDouble() ?? 0;
         final b = (bbox[1] as num?)?.toDouble() ?? 0;
@@ -4557,6 +4648,13 @@ class PythonTrackingService {
           confidence: confidence,
           classId: classId,
           label: label,
+          teamTag: (item['team'] ?? item['team_tag'] ?? item['team_key'] ?? item['side'])
+              ?.toString()
+              .trim()
+              .toLowerCase(),
+          jerseyNumber: _parseNullableInt(item['jersey_number'] ?? item['jersey'] ?? item['number']),
+          playerId: _parseNullableInt(item['player_id'] ?? item['playerId']),
+          playerName: (item['player_name'] ?? item['playerName'])?.toString(),
         ),
       );
     }
@@ -5132,13 +5230,31 @@ class PlayerTrackingPainter extends CustomPainter {
       if (duplicate) continue;
 
       final label = (detection.label ?? 'player').toLowerCase();
+      final team = (detection.teamTag ?? '').trim().toLowerCase();
       final isKeeper = label.contains('keeper') || label.contains('goalkeeper') || label.contains('врат');
-      final isReferee = label.contains('ref') || label.contains('суд');
-      final color = isKeeper
-          ? const Color(0xFFF59E0B)
-          : isReferee
-              ? const Color(0xFF64748B)
-              : const Color(0xFF00A750);
+      final isReferee = label.contains('ref') ||
+          label.contains('суд') ||
+          team == 'referee' ||
+          team == 'ref';
+      final isAway = team == 'away' ||
+          team == 'guest' ||
+          team == 'opponent' ||
+          team == 'blue';
+      final isHome = team == 'home' ||
+          team == 'own' ||
+          team == 'team1' ||
+          team == 'green';
+
+      // Цвета как в инструкции Спортотеки: наша команда — зелёная,
+      // соперник — синяя, судья — серый. Если команда ещё не определена,
+      // игрок остаётся зелёным, чтобы bbox был хорошо виден на поле.
+      final color = isReferee
+          ? const Color(0xFF64748B)
+          : isAway
+              ? const Color(0xFF2563EB)
+              : isKeeper && !isHome
+                  ? const Color(0xFFF59E0B)
+                  : const Color(0xFF00A750);
 
       final paint = Paint()
         ..color = color
@@ -5153,9 +5269,17 @@ class PlayerTrackingPainter extends CustomPainter {
         final confidence = detection.confidence > 0
             ? ' ${(detection.confidence * 100).clamp(0, 100).round()}%'
             : '';
-        final text = label == 'player' || label.isEmpty
-            ? 'Игрок ${detection.id}$confidence'
-            : '${detection.label} ${detection.id}$confidence';
+        final playerName = detection.playerName?.trim();
+        final number = detection.jerseyNumber;
+        final identity = number != null
+            ? '#$number'
+            : (playerName != null && playerName.isNotEmpty
+                ? playerName
+                : '${detection.id}');
+        final rolePrefix = isReferee
+            ? 'REF'
+            : (label == 'player' || label.isEmpty ? '' : '${detection.label} ');
+        final text = '$rolePrefix$identity$confidence';
         final tp = TextPainter(
           text: TextSpan(
             text: text,
@@ -28430,8 +28554,8 @@ int _aiSafeCount(dynamic value) {
 void _onVideoPositionChanged() {
   if (!mounted) return;
   if (!_useServerAi) return;
-  // Пока работает локальный YOLO-overlay, не подменяем его редкими server
-  // frame-packets: сервер отвечает за события/TTD, YOLO — за живые рамки.
+  // Пока работает live-overlay Sportoteka AI, не подменяем его редкими server
+  // frame-packets: тяжёлый анализ отвечает за события/TTD, live-детектор — за рамки.
   if (_aiTracking.isRunning) return;
   if (!_aiServerController.hasJob) return;
   if (!_controller.value.isInitialized) return;
@@ -34019,6 +34143,10 @@ Future<void> _warmupDetections() async {
       confidence: d.confidence,
       classId: d.classId,
       label: d.label,
+      teamTag: d.teamTag,
+      jerseyNumber: d.jerseyNumber,
+      playerId: d.playerId,
+      playerName: d.playerName,
     );
   }).toList();
 }
@@ -34375,6 +34503,55 @@ Future<void> _warmupDetections() async {
     setState(() => _episodesCollapsed = !_episodesCollapsed);
   }
 
+String _aiColorHex(Color color) {
+  final rgb = color.value & 0x00FFFFFF;
+  return '#${rgb.toRadixString(16).padLeft(6, '0').toUpperCase()}';
+}
+
+Future<PythonTrackingResult> _detectWithSportotekaAi(int timeMs) async {
+  final homeColor = _aiColorHex(_myTeamConfig.primaryColor);
+  final awayColor = _aiColorHex(_opponentTeamConfig.primaryColor);
+
+  // 1) Быстрый путь: AI-сервис сам забирает нужный кадр из video_url.
+  var result = await _pythonTrackingService.detectFrameFromUrl(
+    videoUrl: widget.videoUrl,
+    timeMs: timeMs,
+    homeColorHex: homeColor,
+    awayColorHex: awayColor,
+  );
+
+  if (!result.hasError && result.detections.isNotEmpty) {
+    return result;
+  }
+
+  // 2) Надёжный fallback. Некоторые nginx/ffmpeg конфигурации не позволяют
+  // сервису открыть удалённое видео по URL. Тогда кадр извлекается на клиенте
+  // и отправляется в /analyze_frame как обычный JPEG. Именно этот путь не даёт
+  // оверлею остаться без прямоугольников при рабочем Sportoteka AI.
+  final frame = await VideoThumbnailHelper.generateSnapshotFile(
+    videoPath: widget.videoUrl,
+    timeMs: timeMs,
+    quality: 82,
+    maxWidth: 960,
+  );
+
+  if (frame == null) return result;
+
+  final uploaded = await _pythonTrackingService.detectFrame(
+    frameFile: frame,
+    timeMs: timeMs,
+    homeColorHex: homeColor,
+    awayColorHex: awayColor,
+  );
+
+  if (!uploaded.hasError &&
+      (uploaded.detections.isNotEmpty || uploaded.ballRect != null)) {
+    return uploaded;
+  }
+
+  return result.hasError ? uploaded : result;
+}
+
 Future<List<DetectedPlayerBox>> _detectPlayersForFrame(
   int timeMs, {
   Size? overlaySize,
@@ -34393,10 +34570,7 @@ Future<List<DetectedPlayerBox>> _detectPlayersForFrame(
       _notifyPlaybackBridge();
     }
 
-    final result = await _pythonTrackingService.detectFrameFromUrl(
-      videoUrl: widget.videoUrl,
-      timeMs: timeMs,
-    );
+    final result = await _detectWithSportotekaAi(timeMs);
 
     if (result.hasError) {
       if (mounted) {
@@ -34408,14 +34582,31 @@ Future<List<DetectedPlayerBox>> _detectPlayersForFrame(
 
     var detections = result.detections;
 
-    // Если Python прислал bbox в размере исходного кадра, переводим их в
-    // analysis-space клиента (обычно 640px по ширине), чтобы painter не сдвигал рамки.
+    // Приводим любой контракт AI (normalized 0..1, исходный размер видео,
+    // analysis-space) к единому пространству 640 x aspect. Это критично:
+    // иначе корректные bbox могут рисоваться микроскопическими или за пределами видео.
+    final target = _analysisFrameSize();
     final fw = result.frameWidth;
     final fh = result.frameHeight;
-    if (fw != null && fh != null && fw > 0 && fh > 0) {
-      final target = _analysisFrameSize();
-      final sx = target.width / fw;
-      final sy = target.height / fh;
+
+    final detectionsAreNormalized = detections.isNotEmpty &&
+        detections.every((d) =>
+            d.rect.left >= -0.05 &&
+            d.rect.top >= -0.05 &&
+            d.rect.right <= 1.5 &&
+            d.rect.bottom <= 1.5);
+
+    double sx = 1.0;
+    double sy = 1.0;
+    if (detectionsAreNormalized) {
+      sx = target.width;
+      sy = target.height;
+    } else if (fw != null && fh != null && fw > 0 && fh > 0) {
+      sx = target.width / fw;
+      sy = target.height / fh;
+    }
+
+    if (sx != 1.0 || sy != 1.0) {
       detections = detections
           .map((d) => DetectedPlayerBox(
                 id: d.id,
@@ -34428,20 +34619,34 @@ Future<List<DetectedPlayerBox>> _detectPlayersForFrame(
                 confidence: d.confidence,
                 classId: d.classId,
                 label: d.label,
+                teamTag: d.teamTag,
+                jerseyNumber: d.jerseyNumber,
+                playerId: d.playerId,
+                playerName: d.playerName,
               ))
+          .where((d) => d.rect.width > 1 && d.rect.height > 2)
           .toList();
+    }
 
-      if (result.ballRect != null) {
-        final b = result.ballRect!;
-        _aiTracking.updateBall(
-          rect: Rect.fromLTRB(b.left * sx, b.top * sy, b.right * sx, b.bottom * sy),
-          timeMs: timeMs,
-          confidence: result.ballConfidence ?? 1.0,
-        );
-      }
-    } else if (result.ballRect != null) {
+    final ball = result.ballRect;
+    if (ball != null) {
+      final ballIsNormalized = ball.left >= -0.05 &&
+          ball.top >= -0.05 &&
+          ball.right <= 1.5 &&
+          ball.bottom <= 1.5;
+      final ballSx = ballIsNormalized
+          ? target.width
+          : (fw != null && fw > 0 ? target.width / fw : 1.0);
+      final ballSy = ballIsNormalized
+          ? target.height
+          : (fh != null && fh > 0 ? target.height / fh : 1.0);
       _aiTracking.updateBall(
-        rect: result.ballRect!,
+        rect: Rect.fromLTRB(
+          ball.left * ballSx,
+          ball.top * ballSy,
+          ball.right * ballSx,
+          ball.bottom * ballSy,
+        ),
         timeMs: timeMs,
         confidence: result.ballConfidence ?? 1.0,
       );
@@ -34485,7 +34690,7 @@ Future<void> _ensureYoloOverlayRunning() async {
   final overlaySize = _lastAiOverlaySize;
   if (overlaySize == null || overlaySize.width <= 0 || overlaySize.height <= 0) {
     if (mounted) {
-      setState(() => _aiStatusText = 'YOLO: подготовка видеосцены...');
+      setState(() => _aiStatusText = 'Спортотека AI: подготовка видеосцены...');
       _notifyPlaybackBridge();
     }
     return;
@@ -35987,7 +36192,7 @@ Widget _buildVideoSection() {
               constraints.maxWidth,
               constraints.maxHeight,
             );
-            // Сохраняем реальную геометрию видеосцены. Она нужна YOLO для
+            // Сохраняем реальную геометрию видеосцены. Она нужна Sportoteka AI для
             // немедленного старта без предварительного тапа по игроку.
             _lastAiOverlaySize = overlaySize;
             _lastAiOverlayFit = BoxFit.contain;

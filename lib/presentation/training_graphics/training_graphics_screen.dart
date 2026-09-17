@@ -7,7 +7,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
-import 'package:get/get.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:file_picker/file_picker.dart';
 
@@ -17,12 +17,15 @@ import 'widgets/tg_left_toolbar.dart';
 
 
 import 'package:sportoteka/core/utils/pref_utils.dart';
-import 'package:sportoteka/presentation/plans/plan_folders_screen.dart';
 import 'package:sportoteka/presentation/plans/api/training_graphics_api.dart';
 import 'package:sportoteka/presentation/training_graphics/widgets/tg_right_panel.dart';
 import 'package:sportoteka/presentation/training_graphics/tg_models.dart';
 import 'package:sportoteka/presentation/sportoteka_3d_pro/sportoteka_3d_pro_launcher.dart';
+import 'package:sportoteka/presentation/workspace_os/workspace_plan_folder_picker.dart';
+import 'package:sportoteka/presentation/workspace_os/workspace_window_manager.dart';
+import 'package:sportoteka/presentation/workspace_os/sportoteka_workspace_icons.dart';
 import 'tg_export_saver.dart';
+import 'tg_scene_export.dart';
 import 'package:sportoteka/core/theme/app_typography.dart';
 
 /// ================== ЦВЕТОВАЯ ПАЛИТРА ==================
@@ -374,6 +377,155 @@ class TrainingGraphicsScreen extends StatefulWidget {
 
 
 
+// Compact decisions shared by draft restore and unsaved-exit flows.
+// The primary action takes its own row, so lengthy Russian labels never
+// compete for width with the secondary actions.
+class _TgEditorDecisionDialog extends StatelessWidget {
+  const _TgEditorDecisionDialog({
+    required this.title,
+    required this.message,
+    required this.icon,
+    required this.primaryLabel,
+    required this.onPrimary,
+    required this.cancelLabel,
+    required this.onCancel,
+    this.discardLabel,
+    this.onDiscard,
+  });
+
+  final String title;
+  final String message;
+  final IconData icon;
+  final String primaryLabel;
+  final VoidCallback onPrimary;
+  final String cancelLabel;
+  final VoidCallback onCancel;
+  final String? discardLabel;
+  final VoidCallback? onDiscard;
+
+  @override
+  Widget build(BuildContext context) {
+    final compact = MediaQuery.of(context).size.width < 500;
+    final baseText = TextStyle(
+      fontFamily: AppTypography.fontFamily,
+      fontSize: 13,
+      fontWeight: FontWeight.w700,
+    );
+    Widget button(Widget child) => SizedBox(
+          height: 42,
+          width: double.infinity,
+          child: child,
+        );
+
+    final cancel = button(OutlinedButton(
+      onPressed: onCancel,
+      style: OutlinedButton.styleFrom(
+        foregroundColor: TgScreenPalette.textSecondary,
+        side: const BorderSide(color: TgScreenPalette.borderLight),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        textStyle: baseText,
+      ),
+      child: Text(cancelLabel, textAlign: TextAlign.center),
+    ));
+    final discard = onDiscard == null
+        ? null
+        : button(TextButton(
+            onPressed: onDiscard,
+            style: TextButton.styleFrom(
+              foregroundColor: TgScreenPalette.error,
+              textStyle: baseText,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            child: Text(discardLabel!, textAlign: TextAlign.center),
+          ));
+
+    return Dialog(
+      backgroundColor: TgScreenPalette.surface,
+      surfaceTintColor: Colors.transparent,
+      elevation: 10,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: const BorderSide(color: TgScreenPalette.borderLight),
+      ),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 430),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: TgScreenPalette.lightGreen,
+                      borderRadius: BorderRadius.circular(11),
+                    ),
+                    child: Icon(icon, size: 20, color: TgScreenPalette.primaryGreenDark),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: const TextStyle(
+                        fontFamily: AppTypography.fontFamily,
+                        color: TgScreenPalette.textPrimary,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                message,
+                style: const TextStyle(
+                  fontFamily: AppTypography.fontFamily,
+                  color: TgScreenPalette.textSecondary,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 20),
+              if (discard == null)
+                cancel
+              else if (compact) ...[
+                cancel,
+                const SizedBox(height: 6),
+                discard,
+              ] else
+                Row(
+                  children: [
+                    Expanded(child: cancel),
+                    const SizedBox(width: 8),
+                    Expanded(child: discard),
+                  ],
+                ),
+              const SizedBox(height: 9),
+              button(FilledButton(
+                onPressed: onPrimary,
+                style: FilledButton.styleFrom(
+                  backgroundColor: TgScreenPalette.primaryGreen,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  textStyle: baseText,
+                ),
+                child: Text(primaryLabel, textAlign: TextAlign.center),
+              )),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 enum _ExitAction { cancel, exitWithoutSaving, saveAndExit }
 
 class _TrainingGraphicsScreenState extends State<TrainingGraphicsScreen>
@@ -409,16 +561,18 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
   double _playbackProgress = 0.0;
   int _currentPlaybackStep = 0;
   final List<String> _playbackSteps = <String>['Шаг 1', 'Шаг 2', 'Шаг 3', 'Шаг 4'];
+  final List<int> _playbackStepDurationsMs = <int>[1800, 1800, 1800, 1800];
   final Map<String, int> _playbackRouteStepById = <String, int>{};
   final Map<String, String> _playbackRouteSubjectById = <String, String>{};
   String? _pendingPlaybackSubjectId;
   static const Duration _playbackTick = Duration(milliseconds: 60);
-  static const Duration _playbackStepDuration = Duration(milliseconds: 1800);
+  static const int _defaultPlaybackStepDurationMs = 1800;
 
   // ===== State =====
   bool saving = false;
   int? folderId;
   String folderTitle = "Без папки";
+  bool _folderChosenForSave = false;
   int? _cmrSavedPlanId;
   DateTime? _cmrPlanSavedAt;
   int? graphicId;
@@ -476,7 +630,8 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
   // Animation controls are opened on demand in a separate right-side window.
   // This keeps the pitch clear and prevents the timeline from covering the map.
   bool _animationPanelOpen = false;
-  TgPanel _legacyPanelInitial = TgPanel.objects;
+  TgPanel _legacyPanelInitial = TgPanel.none;
+  int _legacyPanelRevision = 0;
 
   // ===== Draft / Unsaved changes =====
   bool _dirty = false;
@@ -641,37 +796,14 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
       if ((graphicId ?? 0) > 0) {
         final useDraft = await showDialog<bool>(
           context: context,
-          builder: (ctx) => AlertDialog(
-            backgroundColor: TgScreenPalette.surface,
-            surfaceTintColor: Colors.transparent,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            title: const Text(
-              "Найден черновик",
-              style: TextStyle(
-                fontFamily: AppTypography.fontFamily,
-                color: TgScreenPalette.textPrimary,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-            content: const Text(
-              "Восстановить последнюю несохранённую версию схемы?",
-              style: TextStyle(
-                fontFamily: AppTypography.fontFamily,
-                color: TgScreenPalette.textSecondary,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(ctx).pop(false),
-                child: const Text("Нет"),
-              ),
-              ElevatedButton(
-                onPressed: () => Navigator.of(ctx).pop(true),
-                child: const Text("Да"),
-              ),
-            ],
+          builder: (ctx) => _TgEditorDecisionDialog(
+            title: 'Найден черновик',
+            message: 'Восстановить последнюю несохранённую версию схемы?',
+            icon: Icons.restore_rounded,
+            cancelLabel: 'Открыть сохранённую',
+            onCancel: () => Navigator.of(ctx).pop(false),
+            primaryLabel: 'Восстановить черновик',
+            onPrimary: () => Navigator.of(ctx).pop(true),
           ),
         );
         if (useDraft != true) return;
@@ -704,48 +836,18 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
     final action = await showDialog<_ExitAction>(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: TgScreenPalette.surface,
-        surfaceTintColor: Colors.transparent,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        title: const Text(
-          "Схема не сохранена",
-          style: TextStyle(
-            fontFamily: AppTypography.fontFamily,
-            color: TgScreenPalette.textPrimary,
-            fontWeight: FontWeight.w900,
-          ),
-        ),
-        content: const Text(
-          "Сохранить изменения перед выходом?",
-          style: TextStyle(
-            fontFamily: AppTypography.fontFamily,
-            color: TgScreenPalette.textSecondary,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(_ExitAction.cancel),
-            child: const Text("Остаться"),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(_ExitAction.exitWithoutSaving),
-            style: TextButton.styleFrom(foregroundColor: TgScreenPalette.error),
-            child: const Text("Выйти без сохранения"),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.of(ctx).pop(_ExitAction.saveAndExit),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: TgScreenPalette.primaryGreen,
-              foregroundColor: Colors.white,
-              elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-            child: const Text("Сохранить и выйти"),
-          ),
-        ],
+      builder: (ctx) => _TgEditorDecisionDialog(
+        title: 'Сохранить изменения?',
+        message: _folderChosenForSave
+            ? 'В схеме есть несохранённые изменения. Сохранить их перед выходом?'
+            : 'В схеме есть несохранённые изменения. При сохранении откроется Спортотека OS, где можно выбрать или создать папку.',
+        icon: Icons.edit_note_rounded,
+        cancelLabel: 'Остаться',
+        onCancel: () => Navigator.of(ctx).pop(_ExitAction.cancel),
+        discardLabel: 'Выйти без сохранения',
+        onDiscard: () => Navigator.of(ctx).pop(_ExitAction.exitWithoutSaving),
+        primaryLabel: 'Сохранить и выйти',
+        onPrimary: () => Navigator.of(ctx).pop(_ExitAction.saveAndExit),
       ),
     );
 
@@ -753,8 +855,8 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
 
     switch (action) {
       case _ExitAction.saveAndExit:
-        await _saveGraphic();
-        if (mounted) Navigator.of(context).pop();
+        final saved = await _saveGraphicInternal();
+        if (mounted && saved) Navigator.of(context).pop();
         break;
 
       case _ExitAction.exitWithoutSaving:
@@ -772,15 +874,22 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
   // Panel moved
   // ==========================
   void _onPanelMoved() {
-    if (!mounted) return;
+    if (!mounted || !_panelController.isAttached) return;
     final size = _panelController.size;
-    final minSize = _isPhone ? 0.10 : 0.08;
-    final maxSize = _isPhone ? 0.62 : 0.52;
-
-    setState(() {
-      _isPanelExpanded = (size - maxSize).abs() < 0.01;
-      _isPanelCollapsed = (size - minSize).abs() < 0.01;
-    });
+    final minSize = _isPhone && MediaQuery.of(context).size.width >= 760
+        ? 0.24
+        : _panelMinFrac;
+    // A sheet between its initial and maximum heights is still an open panel.
+    // Dropping the "expanded" flag mid-drag detached the sheet and kept its
+    // canvas reservation out of sync with what was visible.
+    if (size <= minSize + 0.01) {
+      _closeLegacyPanel();
+    } else if (!_isPanelExpanded || _isPanelCollapsed) {
+      setState(() {
+        _isPanelExpanded = true;
+        _isPanelCollapsed = false;
+      });
+    }
   }
 
   void _initializeState() {
@@ -792,6 +901,9 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
   folderTitle = (widget.initialFolderTitle ?? "").trim().isNotEmpty
       ? widget.initialFolderTitle!.trim()
       : "Без папки";
+  _folderChosenForSave = (graphicId ?? 0) > 0 ||
+      widget.initialFolderId != null ||
+      (widget.initialFolderTitle ?? '').trim().isNotEmpty;
 
   // По умолчанию Training Graphics открывается в том же 3D PRO ракурсе,
   // что и карта Tracker. Сохранённая схема ниже всё равно переопределит
@@ -941,6 +1053,7 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
   Map<String, dynamic> _buildPlaybackPayload() {
     return {
       'steps': List<String>.from(_playbackSteps),
+      'stepDurationsMs': List<int>.from(_playbackStepDurationsMs),
       'currentStep': _currentPlaybackStep,
       'routeSteps': Map<String, int>.from(_playbackRouteStepById),
       'routeSubjects': Map<String, String>.from(_playbackRouteSubjectById),
@@ -963,6 +1076,19 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
       _playbackSteps
         ..clear()
         ..addAll(steps.isEmpty ? const ['Шаг 1', 'Шаг 2', 'Шаг 3', 'Шаг 4'] : steps);
+
+      final durationItems = map['stepDurationsMs'];
+      _playbackStepDurationsMs
+        ..clear()
+        ..addAll(List<int>.generate(_playbackSteps.length, (index) {
+          final rawDuration = durationItems is List && index < durationItems.length
+              ? durationItems[index]
+              : _defaultPlaybackStepDurationMs;
+          final parsed = rawDuration is num
+              ? rawDuration.toInt()
+              : int.tryParse(rawDuration.toString()) ?? _defaultPlaybackStepDurationMs;
+          return parsed.clamp(500, 5000).toInt();
+        }));
 
       _playbackRouteStepById
         ..clear()
@@ -996,7 +1122,7 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
   void _startPlayback() {
     final routes = _collectPlaybackRoutes();
     if (routes.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      _showEditorSnackBar(
         const SnackBar(content: Text('Для анимации нужны маршруты: линия, кривая или волна.')),
       );
       return;
@@ -1007,8 +1133,9 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
     });
     _playbackTimer = Timer.periodic(_playbackTick, (_) {
       if (!mounted) return;
-      final inc = _playbackTick.inMilliseconds / _playbackStepDuration.inMilliseconds;
       setState(() {
+        final duration = _playbackStepDurationsMs[_currentPlaybackStep];
+        final inc = _playbackTick.inMilliseconds / duration;
         _playbackProgress += inc;
         if (_playbackProgress >= 1.0) {
           _playbackProgress = 0.0;
@@ -1037,32 +1164,44 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
   void _addPlaybackStep() {
     setState(() {
       _playbackSteps.add('Шаг ${_playbackSteps.length + 1}');
+      _playbackStepDurationsMs.add(_defaultPlaybackStepDurationMs);
       _currentPlaybackStep = _playbackSteps.length - 1;
       _playbackProgress = 0.0;
     });
+    _markPlaybackDirty();
   }
 
   void _duplicatePlaybackStep() {
     final safeIndex = _currentPlaybackStep.clamp(0, _playbackSteps.length - 1) as int;
     final source = _playbackSteps[safeIndex];
+    final routesBeforeCopy = _collectPlaybackRoutes();
+    final routesInStep = routesBeforeCopy.where((route) => route.stepIndex == safeIndex).toList();
+    final copies = state.duplicateAnimationRoutes(routesInStep.map((route) => route.routeId));
     setState(() {
       final insertIndex = _currentPlaybackStep + 1;
       _playbackSteps.insert(insertIndex, '$source копия');
+      _playbackStepDurationsMs.insert(insertIndex, _playbackStepDurationsMs[safeIndex]);
       final updated = <String, int>{};
       for (final entry in _playbackRouteStepById.entries) {
         final v = entry.value;
         updated[entry.key] = v >= insertIndex ? v + 1 : v;
       }
-      final clones = _playbackRouteStepById.entries.where((e) => e.value == safeIndex).map((e) => e.key).toList();
+      for (final route in routesBeforeCopy) {
+        final v = route.stepIndex;
+        updated[route.routeId] = v >= insertIndex ? v + 1 : v;
+      }
+      for (final entry in copies.entries) {
+        updated[entry.value] = insertIndex;
+        final subjectId = _playbackRouteSubjectById[entry.key];
+        if (subjectId != null) _playbackRouteSubjectById[entry.value] = subjectId;
+      }
       _playbackRouteStepById
         ..clear()
         ..addAll(updated);
-      for (final routeId in clones) {
-        _playbackRouteStepById[routeId] = insertIndex;
-      }
       _currentPlaybackStep = insertIndex;
       _playbackProgress = 0.0;
     });
+    _markPlaybackDirty();
   }
 
   void _removePlaybackStep() {
@@ -1070,6 +1209,7 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
     setState(() {
       final removedIndex = _currentPlaybackStep;
       _playbackSteps.removeAt(removedIndex);
+      _playbackStepDurationsMs.removeAt(removedIndex);
       final updated = <String, int>{};
       for (final entry in _playbackRouteStepById.entries) {
         final v = entry.value;
@@ -1087,6 +1227,19 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
       _currentPlaybackStep = _currentPlaybackStep.clamp(0, _playbackSteps.length - 1) as int;
       _playbackProgress = 0.0;
     });
+    _markPlaybackDirty();
+  }
+
+  void _setCurrentPlaybackDurationMs(int value) {
+    if (_currentPlaybackStep < 0 || _currentPlaybackStep >= _playbackStepDurationsMs.length) return;
+    setState(() => _playbackStepDurationsMs[_currentPlaybackStep] = value.clamp(500, 5000).toInt());
+    _markPlaybackDirty();
+  }
+
+  void _markPlaybackDirty() {
+    if (_restoringDraft) return;
+    _dirty = true;
+    _scheduleDraftSave();
   }
 
   Future<void> _renamePlaybackStep() async {
@@ -1112,6 +1265,7 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
     setState(() {
       _playbackSteps[_currentPlaybackStep] = clean;
     });
+    _markPlaybackDirty();
   }
 
   bool _isPlaybackRouteElement(TgElement? e) => e is TgLine || e is TgCurve || e is TgWavy;
@@ -1140,7 +1294,7 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
   void _capturePlaybackSubject() {
     final selected = state.selected;
     if (selected is! TgStamp) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      _showEditorSnackBar(
         const SnackBar(content: Text('Сначала выберите игрока или мяч на поле.')),
       );
       return;
@@ -1148,7 +1302,7 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
     setState(() {
       _pendingPlaybackSubjectId = selected.id;
     });
-    ScaffoldMessenger.of(context).showSnackBar(
+    _showEditorSnackBar(
       SnackBar(content: Text('Для анимации выбран: ${_playbackSubjectLabel()}')),
     );
   }
@@ -1156,13 +1310,13 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
   void _bindSelectedRouteToCurrentStep() {
     final selected = state.selected;
     if (!_isPlaybackRouteElement(selected)) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      _showEditorSnackBar(
         const SnackBar(content: Text('Выберите линию, кривую или волну для привязки шага.')),
       );
       return;
     }
     if (_pendingPlaybackSubjectId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      _showEditorSnackBar(
         const SnackBar(content: Text('Сначала выберите игрока или мяч и нажмите «Взять объект».')),
       );
       return;
@@ -1172,7 +1326,8 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
       _playbackRouteSubjectById[selected.id] = _pendingPlaybackSubjectId!;
       _playbackProgress = 0.0;
     });
-    ScaffoldMessenger.of(context).showSnackBar(
+    _markPlaybackDirty();
+    _showEditorSnackBar(
       SnackBar(content: Text('Маршрут привязан к ${_playbackStepLabel(_currentPlaybackStep).toLowerCase()} для ${_playbackSubjectLabel()}')),
     );
   }
@@ -1180,7 +1335,7 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
   void _clearSelectedRouteBinding() {
     final selected = state.selected;
     if (!_isPlaybackRouteElement(selected)) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      _showEditorSnackBar(
         const SnackBar(content: Text('Выберите маршрут, чтобы очистить привязку.')),
       );
       return;
@@ -1190,6 +1345,7 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
       _playbackRouteSubjectById.remove(selected.id);
       _playbackProgress = 0.0;
     });
+    _markPlaybackDirty();
   }
 
   void _selectPlaybackBinding(String routeId) {
@@ -1205,6 +1361,7 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
       _playbackRouteSubjectById.remove(routeId);
       _playbackProgress = 0.0;
     });
+    _markPlaybackDirty();
   }
 
   List<_TgStepBindingInfo> _playbackBindingsForCurrentStep() {
@@ -1440,14 +1597,15 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
   // ==========================
   // Panel fractions
   // ==========================
-  double get _panelMinFrac => _isPhone ? 0.10 : 0.08;
-  double get _panelInitialFrac => _isPhone ? 0.26 : 0.20;
-  double get _panelMaxFrac => _isPhone ? 0.62 : 0.52;
+  double get _panelMinFrac => 0.18;
+  double get _panelInitialFrac => _isPhone ? 0.30 : 0.26;
+  double get _panelMaxFrac => _isPhone ? 0.46 : 0.44;
 
   // ==========================
   // Panel control methods
   // ==========================
   void _expandPanel() {
+    if (!_panelController.isAttached) return;
     _panelController.animateTo(
       _panelMaxFrac,
       duration: const Duration(milliseconds: 300),
@@ -1456,6 +1614,7 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
   }
 
   void _collapsePanel() {
+    if (!_panelController.isAttached) return;
     _panelController.animateTo(
       _panelMinFrac,
       duration: const Duration(milliseconds: 300),
@@ -1463,29 +1622,18 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
     );
   }
 
- void _togglePanel() {
-  setState(() {
-    _isPanelExpanded = !_isPanelExpanded;
-    _isPanelCollapsed = !_isPanelExpanded;
-    if (_isPanelExpanded) _animationPanelOpen = false;
-  });
-
-  if (_isPanelExpanded) {
-    _panelController.animateTo(
-      _panelMaxFrac,
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeInOut,
-    );
+  void _togglePanel() {
+    if (_isPanelExpanded && !_isPanelCollapsed) {
+      _closeLegacyPanel();
+    } else {
+      _openLegacyPanel(TgPanel.objects);
+    }
   }
-
-  WidgetsBinding.instance.addPostFrameCallback((_) {
-    if (mounted) _fitField();
-  });
-}
 
   void _openLegacyPanel(TgPanel panel) {
     setState(() {
       _legacyPanelInitial = panel;
+      _legacyPanelRevision++;
       _isPanelExpanded = true;
       _isPanelCollapsed = false;
       _animationPanelOpen = false;
@@ -1494,13 +1642,28 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       try {
-        _panelController.animateTo(
-          _panelMaxFrac,
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeOutCubic,
-        );
+        if (_panelController.isAttached) {
+          _panelController.animateTo(
+            _panelMaxFrac,
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOutCubic,
+          );
+        }
       } catch (_) {}
       _fitField();
+    });
+  }
+
+  void _closeLegacyPanel() {
+    if (!_isPanelExpanded && _isPanelCollapsed) return;
+    setState(() {
+      _legacyPanelInitial = TgPanel.none;
+      _legacyPanelRevision++;
+      _isPanelExpanded = false;
+      _isPanelCollapsed = true;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _fitField();
     });
   }
 
@@ -1508,6 +1671,8 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
     if (_animationPanelOpen) return;
     setState(() {
       _animationPanelOpen = true;
+      _legacyPanelInitial = TgPanel.none;
+      _legacyPanelRevision++;
       _isPanelExpanded = false;
       _isPanelCollapsed = true;
     });
@@ -1553,7 +1718,10 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
               border: Border.all(color: TgScreenPalette.borderLight),
               boxShadow: TgScreenPalette.windowShadow,
             ),
-            child: Column(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * .86),
+              child: SingleChildScrollView(
+                child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -1573,7 +1741,7 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('TacticalPad функции', style: TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textPrimary, fontSize: AppTypography.screenTitleSize, fontWeight: FontWeight.w900)),
+                          Text('Расстановки и тактика', style: TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textPrimary, fontSize: AppTypography.screenTitleSize, fontWeight: FontWeight.w900)),
                           SizedBox(height: 2),
                           Text('Пресеты добавляются на поле и попадают в слои', style: TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textMuted, fontSize: AppTypography.badgeSize, fontWeight: FontWeight.w600)),
                         ],
@@ -1606,15 +1774,17 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                     _tacticalPresetButton(ctx, 'Штрафной', 'Стандарт', Icons.sports_rounded, 'free_kick'),
                     _tacticalPresetButton(ctx, 'Атака 1–4', 'Шаги', Icons.play_circle_outline_rounded, 'animation_attack'),
                     _tacticalPresetButton(ctx, 'Полный пакет', 'всё сразу', Icons.auto_awesome_rounded, 'full_pack'),
-                    _tacticalPresetButton(ctx, 'Очистить', 'Tactical слой', Icons.cleaning_services_rounded, 'clear_tactical'),
+                    _tacticalPresetButton(ctx, 'Очистить', 'слой схемы', Icons.cleaning_services_rounded, 'clear_tactical'),
                   ],
                 ),
                 const SizedBox(height: 12),
                 const Text(
-                  'Каждый пресет создаёт собственную tactical-группу. Откройте «Слои» для выбора/скрытия/блокировки группы или «Свойства» для редактирования объекта.',
+                  'Шаблон создаёт группу объектов. В «Слоях» можно скрыть или заблокировать группу, в «Свойствах» — изменить отдельный объект.',
                   style: TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textMuted, fontSize: AppTypography.secondarySize, height: 1.35, fontWeight: FontWeight.w600),
                 ),
               ],
+                ),
+              ),
             ),
           ),
         );
@@ -1637,7 +1807,7 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (mounted) _fitField();
             });
-            ScaffoldMessenger.of(context).showSnackBar(
+            _showEditorSnackBar(
               SnackBar(content: Text('Добавлен тактический пресет: $title')),
             );
           },
@@ -1674,7 +1844,11 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
     // обрезается плавающими контролами.
     final canvasRb = _canvasKey.currentContext?.findRenderObject();
     if (canvasRb is RenderBox && canvasRb.hasSize && canvasRb.size.width > 0 && canvasRb.size.height > 0) {
-      _canvasKey.currentState?.fitFieldToViewport(canvasRb.size);
+      if (state.is3DMode) {
+        _canvasKey.currentState?.fitFieldToViewport3D(canvasRb.size);
+      } else {
+        _canvasKey.currentState?.fitFieldToViewport(canvasRb.size);
+      }
       return;
     }
 
@@ -1684,7 +1858,12 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
     final viewportH = (full.height - _topBarH - safeBottom - (120.0)).clamp(1.0, 200000.0);
     final viewportW = (full.width - 32.0).clamp(1.0, 200000.0);
 
-    _canvasKey.currentState?.fitFieldToViewport(Size(viewportW, viewportH));
+    final viewport = Size(viewportW, viewportH);
+    if (state.is3DMode) {
+      _canvasKey.currentState?.fitFieldToViewport3D(viewport);
+    } else {
+      _canvasKey.currentState?.fitFieldToViewport(viewport);
+    }
   }
 
   // ==========================
@@ -1825,12 +2004,12 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
     final png = await _captureCleanExportPng(step: _currentPlaybackStep, progress: _playbackProgress, includeAnimation: true);
     if (!mounted) return;
     if (png == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Не удалось собрать PNG')));
+      _showEditorSnackBar(const SnackBar(content: Text('Не удалось собрать PNG')), isError: true);
       return;
     }
     final saved = await saveTgExportFile('current_frame.png', png, mimeType: 'image/png', folderName: folder);
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('PNG экспортирован: $saved')));
+    _showEditorSnackBar(SnackBar(content: Text('PNG экспортирован: $saved')));
   }
 
   Future<void> _exportStepPngs() async {
@@ -1843,7 +2022,7 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
       exported++;
     }
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Экспортировано шагов: $exported')));
+    _showEditorSnackBar(SnackBar(content: Text('Экспортировано шагов: $exported')));
   }
 
   Future<void> _exportAnimationFrames() async {
@@ -1872,7 +2051,35 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
     });
     await saveTgExportFile('scheme.json', Uint8List.fromList(utf8.encode(manifest)), mimeType: 'application/json', folderName: folder);
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Экспортировано кадров: $exported')));
+    _showEditorSnackBar(SnackBar(content: Text('Экспортировано кадров: $exported')));
+  }
+
+  Future<void> _exportSceneJson() async {
+    try {
+      final saved = await TgSceneExport.save(state);
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('JSON сцены сохранён'),
+          content: SelectableText(saved),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: saved));
+                Navigator.of(dialogContext).pop();
+              },
+              child: const Text('Копировать путь'),
+            ),
+            TextButton(onPressed: () => Navigator.of(dialogContext).pop(), child: const Text('Готово')),
+          ],
+        ),
+      );
+    } catch (error) {
+      if (mounted) {
+        _showEditorSnackBar(SnackBar(content: Text('JSON: $error')), isError: true);
+      }
+    }
   }
 
   Future<void> _showProExportCenter() async {
@@ -1894,7 +2101,10 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
               border: Border.all(color: TgScreenPalette.border),
               boxShadow: TgScreenPalette.windowShadow,
             ),
-            child: Column(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * .82),
+              child: SingleChildScrollView(
+                child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -1914,9 +2124,9 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Экспорт FIFA / TV графики', style: TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textPrimary, fontSize: AppTypography.sectionTitleSize, fontWeight: FontWeight.w900)),
+                          Text('Экспорт схемы', style: TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textPrimary, fontSize: AppTypography.sectionTitleSize, fontWeight: FontWeight.w900)),
                           SizedBox(height: 2),
-                          Text('PNG собирается из текущего кадра. Для Unity/3D нужен экспорт сцены в JSON/GLB pipeline.', style: TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textMuted, fontSize: AppTypography.secondarySize, height: 1.25, fontWeight: FontWeight.w500)),
+                          Text('Кадры можно сохранить как PNG, данные сцены — как JSON. GLB потребует отдельного подключения моделей.', style: TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textMuted, fontSize: AppTypography.secondarySize, height: 1.25, fontWeight: FontWeight.w500)),
                         ],
                       ),
                     ),
@@ -1962,12 +2172,25 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                   },
                 ),
                 const SizedBox(height: 8),
+                _ExportOptionTile(
+                  icon: Icons.memory_rounded,
+                  title: 'JSON сцены',
+                  subtitle: 'Координаты поля, объектов, камеры и слоёв для 3D-модуля.',
+                  active: true,
+                  onTap: () async {
+                    Navigator.of(ctx).pop();
+                    await _exportSceneJson();
+                  },
+                ),
+                const SizedBox(height: 8),
                 const _ExportOptionTile(
                   icon: Icons.picture_as_pdf_rounded,
                   title: 'PDF / GIF / видео',
                   subtitle: 'Следующий этап: сборка PDF и GIF/MP4 из экспортированных кадров.',
                 ),
               ],
+                ),
+              ),
             ),
           ),
         );
@@ -2099,7 +2322,7 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
     setState(() => _userTrainingTemplates.insert(0, template));
     await _persistUserTrainingTemplates();
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
+    _showEditorSnackBar(
       SnackBar(content: Text('Шаблон сохранён: ${template.title}')),
     );
   }
@@ -2132,6 +2355,9 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
         _playbackSteps
           ..clear()
           ..addAll(const ['Шаг 1', 'Шаг 2', 'Шаг 3', 'Шаг 4']);
+        _playbackStepDurationsMs
+          ..clear()
+          ..addAll(const [1800, 1800, 1800, 1800]);
         _playbackRouteStepById.clear();
         _playbackRouteSubjectById.clear();
         _pendingPlaybackSubjectId = null;
@@ -2149,7 +2375,7 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _fitField();
     });
-    ScaffoldMessenger.of(context).showSnackBar(
+    _showEditorSnackBar(
       SnackBar(content: Text('Открыт шаблон: ${template.title}')),
     );
   }
@@ -2162,7 +2388,7 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
     setState(() => _userTrainingTemplates.insert(0, copy));
     await _persistUserTrainingTemplates();
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
+    _showEditorSnackBar(
       SnackBar(content: Text('Шаблон дублирован: ${copy.title}')),
     );
   }
@@ -2172,7 +2398,7 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
     setState(() => _userTrainingTemplates.removeWhere((e) => e.id == template.id));
     await _persistUserTrainingTemplates();
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
+    _showEditorSnackBar(
       SnackBar(content: Text('Шаблон удалён: ${template.title}')),
     );
   }
@@ -2191,7 +2417,7 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
       folderName: 'sportoteka_templates',
     );
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
+    _showEditorSnackBar(
       SnackBar(content: Text('Шаблон экспортирован: $saved')),
     );
   }
@@ -2595,7 +2821,7 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
     setState(() => _trainingPlanExercises.add(exercise));
     await _persistTrainingPlan();
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Добавлено в план: ${exercise.title}')));
+    _showEditorSnackBar(SnackBar(content: Text('Добавлено в план: ${exercise.title}')));
   }
 
   Future<void> _addTemplateToTrainingPlan(_TrainingTemplate template) async {
@@ -2625,7 +2851,7 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
     setState(() => _trainingPlanExercises.add(exercise));
     await _persistTrainingPlan();
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Шаблон добавлен в план: ${exercise.title}')));
+    _showEditorSnackBar(SnackBar(content: Text('Шаблон добавлен в план: ${exercise.title}')));
   }
 
   String _blockForTemplateCategory(String category) {
@@ -2656,6 +2882,9 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
         _playbackSteps
           ..clear()
           ..addAll(const ['Шаг 1', 'Шаг 2', 'Шаг 3', 'Шаг 4']);
+        _playbackStepDurationsMs
+          ..clear()
+          ..addAll(const [1800, 1800, 1800, 1800]);
         _playbackRouteStepById.clear();
         _playbackRouteSubjectById.clear();
         _pendingPlaybackSubjectId = null;
@@ -2672,7 +2901,7 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _fitField();
     });
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Открыто упражнение: ${exercise.title}')));
+    _showEditorSnackBar(SnackBar(content: Text('Открыто упражнение: ${exercise.title}')));
   }
 
   Future<void> _duplicateTrainingPlanExercise(_TrainingPlanExercise exercise) async {
@@ -2711,7 +2940,7 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
       folderName: _exportFolderName(),
     );
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('План экспортирован: $saved')));
+    _showEditorSnackBar(SnackBar(content: Text('План экспортирован: $saved')));
   }
 
 
@@ -2974,7 +3203,7 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
       final data = _decodeWorkflowMap(raw);
       if (data['success'] == true || data['status'] == 'success') {
         final msg = 'План, шаблоны, календарь, посещаемость, отчёт и трекер синхронизированы с CMR';
-        if (!silent && mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+        if (!silent && mounted) _showEditorSnackBar(SnackBar(content: Text(msg)));
         return msg;
       } else {
         throw (data['message'] ?? 'Ошибка синхронизации').toString();
@@ -2988,7 +3217,7 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
         folderName: _exportFolderName(),
       );
       final msg = 'Серверная синхронизация недоступна, создан offline-файл: $saved';
-      if (!silent && mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+      if (!silent && mounted) _showEditorSnackBar(SnackBar(content: Text(msg)), isWarning: true);
       return msg;
     } finally {
       if (mounted) setState(() => _workflowSyncing = false);
@@ -3070,7 +3299,7 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
     setState(() => _trainingCalendarMeta = res);
     await _persistTrainingWorkflowMeta();
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('План связан с календарём CMR')));
+    _showEditorSnackBar(const SnackBar(content: Text('План связан с календарём CMR')));
   }
 
   Future<void> _showAttendanceFactDialog() async {
@@ -3220,7 +3449,7 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
     });
     await _persistTrainingWorkflowMeta();
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Факт тренировки сохранён')));
+    _showEditorSnackBar(const SnackBar(content: Text('Факт тренировки сохранён')));
   }
 
   Future<void> _showTrackerLinkDialog() async {
@@ -3325,7 +3554,7 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
     setState(() => _trainingTrackerMeta = res);
     await _persistTrainingWorkflowMeta();
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Трекер привязан к тренировке')));
+    _showEditorSnackBar(const SnackBar(content: Text('Трекер привязан к тренировке')));
   }
 
   Future<void> _exportCoachTrainingReport() async {
@@ -3347,7 +3576,7 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
       folderName: _exportFolderName(),
     );
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Отчёт создан: $jsonSaved / $htmlSaved')));
+    _showEditorSnackBar(SnackBar(content: Text('Отчёт создан: $jsonSaved / $htmlSaved')));
   }
 
   String _buildTrainingReportHtml(Map<String, dynamic> payload) {
@@ -3411,11 +3640,12 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                   text: 'Папка сохранения CMR Plans. Можно выбрать другую, не выходя из редактора.',
                   action: OutlinedButton.icon(
                     onPressed: () async {
-                      final picked = await _showCmrFolderPickerPanel(title: 'Папка для плана');
+                      final picked = await _openWorkspaceFolderPicker(title: 'Папка для плана');
                       if (picked == null) return;
                       setState(() {
                         folderId = _asInt(picked['id']);
                         folderTitle = _asStr(picked['title']).isNotEmpty ? _asStr(picked['title']) : 'Все материалы';
+                        _folderChosenForSave = true;
                       });
                       setPanelState(() {});
                     },
@@ -3591,9 +3821,9 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
       }
       await _persistTrainingPlan();
       await _clearDraft();
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('План сохранён в CMR: ${folderTitle.isEmpty ? 'Все материалы' : folderTitle}')));
+      _showEditorSnackBar(SnackBar(content: Text('План сохранён в CMR: ${folderTitle.isEmpty ? 'Все материалы' : folderTitle}')));
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Не удалось сохранить в CMR: $e')));
+      _showEditorSnackBar(SnackBar(content: Text('Не удалось сохранить в CMR: $e')), isError: true);
     } finally {
       if (mounted) setState(() => saving = false);
     }
@@ -3787,172 +4017,85 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
   }
 
   // ==========================
-  // Pick folder
+  // Pick folder · Sportoteka OS
   // ==========================
-  Future<List<Map<String, dynamic>>> _loadCmrFoldersFlat() async {
-    final resp = await PlanFoldersApi.list(clubId: widget.resolvedClubId);
-    if (resp['success'] != true) {
-      throw resp['message'] ?? 'Не удалось загрузить папки CMR';
-    }
-
-    final tree = (resp['tree'] as List?) ??
-        (resp['folders'] as List?) ??
-        (resp['data'] as List?) ??
-        (resp['items'] as List?) ??
-        const [];
-
-    final flat = <Map<String, dynamic>>[];
-    void walk(List list, [int level = 0, int? parentId]) {
-      for (final item in list) {
-        if (item is! Map) continue;
-        final map = Map<String, dynamic>.from(item);
-        map['_level'] = level;
-        if (_asInt(map['parent_id']) == 0 && parentId != null) {
-          map['parent_id'] = parentId;
-        }
-        final folderTeamId = _asInt(map['team_id']);
-        final isGlobal = folderTeamId == 0;
-        final isTeam = widget.resolvedTeamId <= 0 || folderTeamId == widget.resolvedTeamId;
-        if (isGlobal || isTeam) flat.add(map);
-        final children = (map['children'] as List?) ?? const [];
-        if (children.isNotEmpty) walk(children, level + 1, _asInt(map['id']));
-      }
-    }
-
-    walk(tree);
-    return flat;
-  }
-
-  Future<Map<String, dynamic>?> _showCmrFolderPickerPanel({String title = 'Папка CMR'}) async {
-    List<Map<String, dynamic>> folders = <Map<String, dynamic>>[];
-    String? error;
-    try {
-      folders = await _loadCmrFoldersFlat();
-    } catch (e) {
-      error = '$e';
-    }
+  Future<Map<String, dynamic>?> _openWorkspaceFolderPicker({
+    String title = 'Сохранение схемы',
+  }) async {
     if (!mounted) return null;
 
-    String q = '';
-    return _showWorkflowPanel<Map<String, dynamic>>(
-      title: title,
-      subtitle: 'Выберите папку CMR Plans без перехода в старое окно',
-      icon: Icons.folder_open_rounded,
-      maxWidth: 520,
-      builder: (panelContext) {
-        return StatefulBuilder(
-          builder: (panelContext, setPanelState) {
-            final query = q.trim().toLowerCase();
-            final visible = folders.where((f) {
-              if (query.isEmpty) return true;
-              return _asStr(f['title']).toLowerCase().contains(query) ||
-                  _asStr(f['name']).toLowerCase().contains(query);
-            }).toList();
+    final width = MediaQuery.sizeOf(context).width;
 
-            Widget folderTile(Map<String, dynamic>? folder) {
-              final isAll = folder == null;
-              final id = isAll ? 0 : _asInt(folder['id']);
-              final level = isAll ? 0 : _asInt(folder['_level']);
-              final active = (folderId ?? 0) == id;
-              final title = isAll
-                  ? 'Все материалы'
-                  : (_asStr(folder['title']).isNotEmpty ? _asStr(folder['title']) : 'Папка');
-              final hint = isAll
-                  ? 'Корневая папка CMR Plans'
-                  : [
-                      if (_asInt(folder['plans_count']) > 0) '${_asInt(folder['plans_count'])} планов',
-                      if (_asInt(folder['schemes_count']) > 0) '${_asInt(folder['schemes_count'])} схем',
-                      if (_asInt(folder['files_count']) > 0) '${_asInt(folder['files_count'])} файлов',
-                    ].join(' · ');
+    // На телефоне оставляем обычный полноэкранный маршрут. На macOS/iPad
+    // используем тот же оконный менеджер, что и в Спортотека OS: одинаковая
+    // шапка, кнопки окна, тень, радиусы и поведение minimize/maximize.
+    if (width < 760) {
+      return Navigator.of(context).push<Map<String, dynamic>>(
+        MaterialPageRoute<Map<String, dynamic>>(
+          fullscreenDialog: true,
+          builder: (_) => WorkspacePlanFolderPickerScreen(
+            clubId: widget.resolvedClubId,
+            clubName: widget.resolvedClubName,
+            teamId: widget.resolvedTeamId,
+            teamName: widget.resolvedTeamName,
+            initialFolderId: folderId ?? 0,
+            initialFolderTitle: folderTitle,
+            title: title,
+          ),
+        ),
+      );
+    }
 
-              return Padding(
-                padding: EdgeInsets.only(left: isAll ? 0 : math.min(24.0, level * 12.0), bottom: 7),
-                child: InkWell(
-                  onTap: () => Navigator.of(panelContext).pop(<String, dynamic>{
-                    'id': id,
-                    'title': title,
-                  }),
-                  borderRadius: BorderRadius.circular(14),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: active ? TgScreenPalette.lightGreen : TgScreenPalette.surfaceLight,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: active ? TgScreenPalette.primaryGreen : TgScreenPalette.borderLight),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 32,
-                          height: 32,
-                          decoration: BoxDecoration(
-                            color: active ? Colors.white : Colors.white,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Icon(isAll ? Icons.inventory_2_rounded : Icons.folder_rounded, color: active ? TgScreenPalette.primaryGreen : TgScreenPalette.textMuted, size: 18),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textPrimary, fontWeight: FontWeight.w900, fontSize: AppTypography.bodySize)),
-                              const SizedBox(height: 2),
-                              Text(hint.isEmpty ? 'CMR Plans' : hint, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textMuted, fontWeight: FontWeight.w700, fontSize: AppTypography.captionSize)),
-                            ],
-                          ),
-                        ),
-                        const Icon(Icons.chevron_right_rounded, color: TgScreenPalette.textLight),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            }
-
-            return ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 560),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    decoration: _workflowInputDecoration('Поиск папки', hint: 'Например: U13 / недельный цикл', icon: Icons.search_rounded),
-                    onChanged: (v) => setPanelState(() => q = v),
-                  ),
-                  const SizedBox(height: 10),
-                  if (error != null)
-                    _WorkflowInfoBox(icon: Icons.error_outline_rounded, title: 'Не удалось загрузить папки', text: error!)
-                  else
-                    Flexible(
-                      child: ListView(
-                        shrinkWrap: true,
-                        children: [
-                          folderTile(null),
-                          for (final f in visible) folderTile(f),
-                        ],
-                      ),
-                    ),
-                ],
-              ),
-            );
-          },
-        );
-      },
+    Map<String, dynamic>? picked;
+    await showWorkspaceManagedWindow(
+      context,
+      id: 'training-graphics-folder-picker-${widget.resolvedClubId}',
+      title: 'Спортотека OS',
+      subtitle: widget.resolvedTeamName.trim().isEmpty
+          ? widget.resolvedClubName
+          : '${widget.resolvedClubName} · ${widget.resolvedTeamName}',
+      iconKind: SportotekaWorkspaceIconKind.plans,
+      preferredSize: const Size(1280, 790),
+      builder: (closeWindow) => WorkspacePlanFolderPickerScreen(
+        clubId: widget.resolvedClubId,
+        clubName: widget.resolvedClubName,
+        teamId: widget.resolvedTeamId,
+        teamName: widget.resolvedTeamName,
+        initialFolderId: folderId ?? 0,
+        initialFolderTitle: folderTitle,
+        title: title,
+        embedded: true,
+        onFolderSelected: (value) {
+          picked = value;
+          closeWindow();
+        },
+        onCancel: closeWindow,
+      ),
     );
+
+    return picked;
+  }
+
+  Future<bool> _applyWorkspaceFolderPicker({
+    String title = 'Сохранение схемы',
+  }) async {
+    final result = await _openWorkspaceFolderPicker(title: title);
+    if (result == null || !mounted) return false;
+
+    setState(() {
+      folderId = _asInt(result['id']);
+      folderTitle = _asStr(result['title']).isNotEmpty
+          ? _asStr(result['title'])
+          : 'Все материалы';
+      _folderChosenForSave = true;
+    });
+
+    if (widget.selectMode) await _loadList();
+    return true;
   }
 
   Future<void> _pickFolder() async {
-    final res = await _showCmrFolderPickerPanel(title: 'Сохранение в папку');
-    if (res == null) return;
-
-    setState(() {
-      folderId = _asInt(res['id']);
-      folderTitle = _asStr(res['title']).isNotEmpty ? _asStr(res['title']) : 'Все материалы';
-    });
-
-    if (widget.selectMode) {
-      await _loadList();
-    }
+    await _applyWorkspaceFolderPicker(title: 'Выбор папки');
   }
 
   // ==========================
@@ -4011,22 +4154,86 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
   // ==========================
   // Save graphic
   // ==========================
+  void _showEditorSnackBar(SnackBar notice, {bool isError = false, bool isWarning = false}) {
+    if (!mounted) return;
+    final accent = isError
+        ? TgScreenPalette.error
+        : (isWarning ? TgScreenPalette.warning : TgScreenPalette.primaryGreen);
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(SnackBar(
+      behavior: SnackBarBehavior.floating,
+      width: math.min(440.0, MediaQuery.of(context).size.width - 24.0),
+      backgroundColor: TgScreenPalette.surface,
+      elevation: 5,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: const BorderSide(color: TgScreenPalette.borderLight),
+      ),
+      duration: notice.duration,
+      content: Row(
+        children: [
+          Icon(
+            isError
+                ? Icons.error_outline_rounded
+                : (isWarning ? Icons.warning_amber_rounded : Icons.info_outline_rounded),
+            color: accent,
+            size: 21,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: DefaultTextStyle(
+              style: const TextStyle(
+                fontFamily: AppTypography.fontFamily,
+                color: TgScreenPalette.textSecondary,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+              child: notice.content,
+            ),
+          ),
+        ],
+      ),
+    ));
+  }
+
+  void _showEditorNotice(String title, String message, {bool isError = false}) {
+    _showEditorSnackBar(SnackBar(
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: const TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textPrimary, fontSize: 13, fontWeight: FontWeight.w800)),
+          Text(message, maxLines: 3, overflow: TextOverflow.ellipsis, style: const TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textSecondary, fontSize: 12)),
+        ],
+      ),
+    ), isError: isError);
+  }
+
   Future<void> _saveGraphic() async {
-    if (saving) return;
+    await _saveGraphicInternal();
+  }
+
+  Future<bool> _saveGraphicInternal() async {
+    if (saving) return false;
+
+    // Новая схема без явного места сохранения сначала открывает Sportoteka OS.
+    // Там можно перейти в нужную папку или создать новую. Отмена не закрывает
+    // редактор и не сбрасывает dirty-state.
+    if (!_folderChosenForSave) {
+      final selected = await _applyWorkspaceFolderPicker(
+        title: 'Куда сохранить схему',
+      );
+      if (!selected) return false;
+    }
 
     final createdBy = await PrefUtils.getUserId() ?? 0;
     if (createdBy <= 0) {
-      Get.snackbar(
-        "Ошибка",
-        "Не найден user_id (нужно войти в аккаунт)",
-        backgroundColor: TgScreenPalette.error,
-        colorText: Colors.white,
-        snackPosition: SnackPosition.BOTTOM,
-        margin: const EdgeInsets.all(12),
-        borderRadius: 12,
-      );
-      return;
+      _showEditorNotice('Нужен вход', 'Не найден user_id. Войдите в аккаунт.', isError: true);
+      return false;
     }
+
+    if (!mounted) return false;
 
     setState(() => saving = true);
 
@@ -4050,6 +4257,8 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
         graphicId: graphicId,
       );
 
+      if (!mounted) return false;
+
       if (r["success"] == true) {
         final newId = r["id"];
         if (newId != null) {
@@ -4061,36 +4270,22 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
         _dirty = false;
         await _clearDraft();
 
-        Get.snackbar(
-          "Готово",
-          "Схема сохранена",
-          backgroundColor: TgScreenPalette.success,
-          colorText: Colors.white,
-          snackPosition: SnackPosition.BOTTOM,
-          margin: const EdgeInsets.all(12),
-          borderRadius: 12,
+        _showEditorNotice(
+          'Схема сохранена',
+          'Папка: ${folderTitle.trim().isEmpty ? 'Все материалы' : folderTitle}',
         );
-      } else {
-        Get.snackbar(
-          "Ошибка",
-          (r["message"] ?? "Не удалось сохранить").toString(),
-          backgroundColor: TgScreenPalette.error,
-          colorText: Colors.white,
-          snackPosition: SnackPosition.BOTTOM,
-          margin: const EdgeInsets.all(12),
-          borderRadius: 12,
-        );
+        return true;
       }
-    } catch (e) {
-      Get.snackbar(
-        "Сеть",
-        "Ошибка: $e",
-        backgroundColor: TgScreenPalette.error,
-        colorText: Colors.white,
-        snackPosition: SnackPosition.BOTTOM,
-        margin: const EdgeInsets.all(12),
-        borderRadius: 12,
+
+      _showEditorNotice(
+        'Не удалось сохранить',
+        (r['message'] ?? 'Ошибка сохранения').toString(),
+        isError: true,
       );
+      return false;
+    } catch (e) {
+      _showEditorNotice('Ошибка сети', '$e', isError: true);
+      return false;
     } finally {
       if (mounted) setState(() => saving = false);
     }
@@ -4168,15 +4363,7 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
         'number': goalkeeper ? '1' : '7',
       };
       state.setActiveStamp(_playerAvatarAsset(demo, index: goalkeeper ? 0 : 6, goalkeeper: goalkeeper, opponent: false));
-      Get.snackbar(
-        'Игрок выбран',
-        'Нажмите на поле, чтобы поставить круг с аватаром.',
-        backgroundColor: TgScreenPalette.primaryGreen,
-        colorText: Colors.white,
-        snackPosition: SnackPosition.BOTTOM,
-        margin: const EdgeInsets.all(12),
-        borderRadius: 12,
-      );
+      _showEditorNotice('Игрок выбран', 'Нажмите на поле, чтобы поставить круг с аватаром.');
       return;
     }
 
@@ -4382,8 +4569,9 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
       final int fileSize = pickedFile.size;
       if (fileSize > 4 * 1024 * 1024) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
+        _showEditorSnackBar(
           const SnackBar(content: Text('Текстура слишком большая. Используйте изображение до 4 МБ.')),
+          isWarning: true,
         );
         return;
       }
@@ -4391,8 +4579,9 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
       final Uint8List bytes = pickedFile.bytes ?? await pickedFile.xFile.readAsBytes();
       if (bytes.isEmpty) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
+        _showEditorSnackBar(
           const SnackBar(content: Text('Не удалось прочитать изображение текстуры.')),
+          isError: true,
         );
         return;
       }
@@ -4405,8 +4594,9 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      _showEditorSnackBar(
         SnackBar(content: Text('Текстура поля: $e')),
+        isError: true,
       );
     }
   }
@@ -4712,6 +4902,19 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
               root.maxWidth - (microUi ? 10.0 : 18.0),
               sidePanelContentWidth + sidePanelDockReserve,
             ).clamp(232.0, 460.0) as double;
+            final editorPaneWidth = root.maxWidth -
+                TgLeftToolbar.widthForWorkspace(root.maxWidth);
+            // The quick-action dock remains visible after closing the window.
+            // Put contextual controls beside it, using the same side/bottom
+            // breakpoint and dock dimensions as _TgDraggablePanel.
+            final dockAsSide = !_isPhone && editorPaneWidth >= 700 &&
+                editorPaneWidth >= root.maxHeight * .78;
+            final dockMicroUi = editorPaneWidth < 760 || root.maxHeight < 560;
+            final dockCompactUi = editorPaneWidth < 1280 || root.maxHeight < 820;
+            final dockControlRightInset = dockAsSide
+                ? (dockMicroUi ? 62.0 : (dockCompactUi ? 72.0 : 88.0)) +
+                    (dockMicroUi ? 4.0 : (dockCompactUi ? 8.0 : 12.0)) + 8.0
+                : (tightUi ? 10.0 : (desktop ? 12.0 : 10.0));
             // Панель может быть боковой и раскрытой, но нижняя панель инструментов
             // всё равно должна оставаться доступной слева от неё.
             final showBottomToolbars = !_exportCleanMode && (!panelOpen || panelAsSide);
@@ -4914,7 +5117,7 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                                   ? animationPanelShellWidth + 18
                                   : (panelOpen && panelAsSide
                                       ? sidePanelShellWidth + 18
-                                      : (tightUi ? 12 : 16)),
+                                      : (dockAsSide ? dockControlRightInset : (tightUi ? 12 : 16))),
                               bottom: showBottomDrawingToolbar ? 58 : 14,
                               child: _TgTrackerCameraControl(
                                 onOrbitDelta: (delta) => _canvasKey.currentState?.orbit3D(delta),
@@ -4926,12 +5129,15 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                           if (!_exportCleanMode && !_animationPanelOpen && state.selected != null && (!_isPanelExpanded || _isPanelCollapsed))
                             Positioned(
                               top: desktop ? 66 : 60,
-                              right: tightUi ? 10 : (desktop ? 12 : 10),
-                              child: _ReferenceStylePanel(state: state, onOpenProperties: _openPropertiesPanel),
+                              right: dockControlRightInset,
+                              child: _ReferenceStylePanel(
+                                state: state,
+                                onOpenProperties: _openPropertiesPanel,
+                              ),
                             ),
                           if (!_exportCleanMode && !_animationPanelOpen && !state.is3DMode && (!_isPanelExpanded || _isPanelCollapsed))
                             Positioned(
-                            right: tightUi ? 10 : (desktop ? 12 : 10),
+                            right: dockControlRightInset,
                             bottom: tightUi ? 58 : (desktop ? 70 : 88),
                             child: _ReferenceMiniMap(state: state),
                           ),
@@ -4952,6 +5158,7 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                               width: animationAsSide ? animationPanelShellWidth : null,
                               child: _TgPlaybackWindow(
                                 stepLabels: _playbackSteps,
+                                stepDurationsMs: _playbackStepDurationsMs,
                                 currentStep: _currentPlaybackStep,
                                 playing: _playbackRunning,
                                 progress: _playbackProgress,
@@ -4964,6 +5171,7 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                                 onDuplicateStep: _duplicatePlaybackStep,
                                 onDeleteStep: _removePlaybackStep,
                                 onRenameStep: _renamePlaybackStep,
+                                onStepDurationChanged: _setCurrentPlaybackDurationMs,
                                 onCaptureSubject: _capturePlaybackSubject,
                                 onBindRoute: _bindSelectedRouteToCurrentStep,
                                 onClearBinding: _clearSelectedRouteBinding,
@@ -4971,7 +5179,7 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                                 onDeleteBinding: _deletePlaybackBinding,
                               ),
                             ),
-                          if (!_exportCleanMode && _isPanelExpanded)
+                          if (!_exportCleanMode)
                             Positioned.fill(
                               child: _TgDraggablePanel(
                                 state: state,
@@ -4988,6 +5196,9 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                                 teamPlayersLoading: _teamPlayersLoading,
                                 teamPlayersError: _teamPlayersError,
                                 initialPanel: _legacyPanelInitial,
+                                panelOpenRevision: _legacyPanelRevision,
+                                onPanelOpened: _openLegacyPanel,
+                                onPanelClosed: _closeLegacyPanel,
                               ),
                             ),
                         ],
@@ -5165,6 +5376,13 @@ class _ReferenceStylePanel extends StatelessWidget {
         final selected = state.selected;
         final title = _selectedTitle(selected);
         final currentWidth = _lineWidth(selected);
+        final canAdjustLineWidth = selected is TgLine || selected is TgCurve ||
+            selected is TgWavy || selected is TgZigzag ||
+            selected is TgSpring || selected is TgRect || selected is TgCircle;
+        final canAdjustLineStyle = selected is TgLine || selected is TgCurve ||
+            selected is TgWavy;
+        final canAdjustColor = canAdjustLineWidth || selected is TgText ||
+            (selected is TgStamp && selected.playerColors != null);
         return IgnorePointer(
           ignoring: false,
           child: Container(
@@ -5202,11 +5420,23 @@ class _ReferenceStylePanel extends StatelessWidget {
                         ),
                       ),
                     ),
-                    const Icon(Icons.close_rounded, size: 18.0, color: TgScreenPalette.textMuted),
+                    IconButton(
+                      tooltip: 'Закрыть настройки',
+                      onPressed: state.clearSelection,
+                      icon: const Icon(Icons.close_rounded, size: 18.0, color: TgScreenPalette.textMuted),
+                      constraints: const BoxConstraints.tightFor(width: 28, height: 28),
+                      padding: EdgeInsets.zero,
+                    ),
                   ],
                 ),
-                const SizedBox(height: 6),
-                SingleChildScrollView(
+                if (canAdjustColor) ...[
+                  const SizedBox(height: 6),
+                  if (selected is TgStamp)
+                    const Text(
+                      'Цвет формы',
+                      style: TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textMuted, fontWeight: FontWeight.w700, fontSize: AppTypography.captionSize),
+                    ),
+                  SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: Row(
                     children: [
@@ -5220,6 +5450,8 @@ class _ReferenceStylePanel extends StatelessWidget {
                     ],
                   ),
                 ),
+                ],
+                if (canAdjustLineWidth) ...[
                 const SizedBox(height: 6),
                 const Text(
                   'Толщина линии',
@@ -5246,6 +5478,7 @@ class _ReferenceStylePanel extends StatelessWidget {
                     Text('${currentWidth.round()} px', style: const TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textMuted, fontWeight: FontWeight.w800, fontSize: AppTypography.captionSize)),
                   ],
                 ),
+                ],
                 if (selected is TgStamp) ...[
                   const SizedBox(height: 6),
                   const Text(
@@ -5299,8 +5532,9 @@ class _ReferenceStylePanel extends StatelessWidget {
                     ],
                   ),
                 ],
-                const SizedBox(height: 6),
-                const Text(
+                if (canAdjustLineStyle) ...[
+                  const SizedBox(height: 6),
+                  const Text(
                   'Стиль линии',
                   style: TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textMuted, fontWeight: FontWeight.w700, fontSize: AppTypography.captionSize),
                 ),
@@ -5322,6 +5556,7 @@ class _ReferenceStylePanel extends StatelessWidget {
                     ],
                   ),
                 ),
+                ],
                 if (_canEditPoints(selected)) ...[
                   const SizedBox(height: 8),
                   Row(
@@ -5347,14 +5582,17 @@ class _ReferenceStylePanel extends StatelessWidget {
                   ),
                 ],
                 const SizedBox(height: 6),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
+                Row(
                   children: [
-                    _panelAction(Icons.delete_outline_rounded, 'Удалить', const Color(0xFFE11D48), state.deleteSelected),
-                    _panelAction(Icons.copy_rounded, 'Копия', TgScreenPalette.textSecondary, state.duplicateSelected),
-                    _panelAction(Icons.tune_rounded, 'Свойства', TgScreenPalette.primaryGreen, onOpenProperties),
+                    Expanded(child: _panelAction(Icons.delete_outline_rounded, 'Удалить', const Color(0xFFE11D48), state.deleteSelected)),
+                    const SizedBox(width: 6),
+                    Expanded(child: _panelAction(Icons.copy_rounded, 'Копия', TgScreenPalette.textSecondary, state.duplicateSelected)),
                   ],
+                ),
+                const SizedBox(height: 6),
+                SizedBox(
+                  width: double.infinity,
+                  child: _panelAction(Icons.tune_rounded, 'Свойства', TgScreenPalette.primaryGreen, onOpenProperties),
                 ),
                 ],
               ),
@@ -5425,6 +5663,9 @@ class _ReferenceStylePanel extends StatelessWidget {
     if (e is TgSpring) state.updateSelectedSpring(color: color);
     if (e is TgRect || e is TgCircle) state.updateSelectedShape(border: color, fill: color.withOpacity(.10));
     if (e is TgText) state.updateSelectedText(color: color);
+    if (e is TgStamp && e.playerColors != null) {
+      state.updateSelectedStamp(playerColors: e.playerColors!.copyWith(jersey: color));
+    }
   }
 
   void _setWidth(TgElement? e, double width) {
@@ -5486,9 +5727,9 @@ class _ReferenceStylePanel extends StatelessWidget {
           if (selected is TgLine) {
             state.updateSelectedLine(end: active ? LineEnd.none : LineEnd.arrow);
           } else if (selected is TgCurve) {
-            state.updateSelectedCurve(end: LineEnd.arrow);
+            state.updateSelectedCurve(end: active ? LineEnd.none : LineEnd.arrow);
           } else if (selected is TgWavy) {
-            state.updateSelectedWavy(lineEnd: LineEnd.arrow);
+            state.updateSelectedWavy(lineEnd: active ? LineEnd.none : LineEnd.arrow);
           }
         },
         borderRadius: BorderRadius.circular(10),
@@ -5521,9 +5762,7 @@ class _ReferenceStylePanel extends StatelessWidget {
   }
 
   Widget _panelAction(IconData icon, String text, Color color, VoidCallback onTap) {
-    return SizedBox(
-      width: 54,
-      child: Material(
+    return Material(
         color: Colors.white,
         borderRadius: BorderRadius.circular(4),
         child: InkWell(
@@ -5553,7 +5792,6 @@ class _ReferenceStylePanel extends StatelessWidget {
             ),
           ),
         ),
-      ),
     );
   }
 
@@ -7338,6 +7576,9 @@ class _TgDraggablePanel extends StatelessWidget {
   final String? teamPlayersError;
   final VoidCallback? onOpen3DPro;
   final TgPanel initialPanel;
+  final int panelOpenRevision;
+  final ValueChanged<TgPanel> onPanelOpened;
+  final VoidCallback onPanelClosed;
 
   const _TgDraggablePanel({
     required this.state,
@@ -7355,6 +7596,9 @@ class _TgDraggablePanel extends StatelessWidget {
     this.teamPlayersError,
     this.onOpen3DPro,
     this.initialPanel = TgPanel.objects,
+    this.panelOpenRevision = 0,
+    required this.onPanelOpened,
+    required this.onPanelClosed,
   });
 
   @override
@@ -7384,30 +7628,22 @@ class _TgDraggablePanel extends StatelessWidget {
                 top: panelTop,
                 right: panelRight,
                 bottom: panelBottom,
-                width: isPanelCollapsed ? (compactSide ? 54 : 70) : sideShellWidth,
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 180),
-                  child: isPanelCollapsed
-                      ? Align(
-                          alignment: Alignment.topRight,
-                          child: _PanelToggleButton(
-                            isExpanded: false,
-                            onTap: onTogglePanel,
-                          ),
-                        )
-                      : TgRightPanel(
-                          state: state,
-                          stamps: stamps,
-                          onRefreshSvg: onRefreshSvg,
-                          canvasKey: canvasKey,
-                          onExportPng: onExportPng,
-                          teamName: teamName,
-                          teamPlayers: teamPlayers,
-                          teamPlayersLoading: teamPlayersLoading,
-                          teamPlayersError: teamPlayersError,
-                          onOpen3DPro: onOpen3DPro,
-                          initialPanel: initialPanel,
-                        ),
+                width: isPanelCollapsed ? dockReserve : sideShellWidth,
+                child: TgRightPanel(
+                  state: state,
+                  stamps: stamps,
+                  onRefreshSvg: onRefreshSvg,
+                  canvasKey: canvasKey,
+                  onExportPng: onExportPng,
+                  teamName: teamName,
+                  teamPlayers: teamPlayers,
+                  teamPlayersLoading: teamPlayersLoading,
+                  teamPlayersError: teamPlayersError,
+                  onOpen3DPro: onOpen3DPro,
+                  initialPanel: initialPanel,
+                  panelOpenRevision: panelOpenRevision,
+                  onPanelOpened: onPanelOpened,
+                  onPanelClosed: onPanelClosed,
                 ),
               ),
             ],
@@ -7444,6 +7680,7 @@ class _TgDraggablePanel extends StatelessWidget {
                         borderRadius: BorderRadius.circular(micro ? 14 : 22),
                         child: TgRightPanel(
                           state: state,
+                          sheetScrollController: scrollController,
                           stamps: stamps,
                           onRefreshSvg: onRefreshSvg,
                           canvasKey: canvasKey,
@@ -7454,6 +7691,9 @@ class _TgDraggablePanel extends StatelessWidget {
                           teamPlayersError: teamPlayersError,
                           onOpen3DPro: onOpen3DPro,
                           initialPanel: initialPanel,
+                          panelOpenRevision: panelOpenRevision,
+                          onPanelOpened: onPanelOpened,
+                          onPanelClosed: onPanelClosed,
                         ),
                       ),
                     );
@@ -7695,6 +7935,7 @@ class _TgPlaybackRoute {
 class _TgPlaybackWindow extends StatelessWidget {
   const _TgPlaybackWindow({
     required this.stepLabels,
+    required this.stepDurationsMs,
     required this.currentStep,
     required this.playing,
     required this.progress,
@@ -7707,6 +7948,7 @@ class _TgPlaybackWindow extends StatelessWidget {
     required this.onDuplicateStep,
     required this.onDeleteStep,
     required this.onRenameStep,
+    required this.onStepDurationChanged,
     required this.onCaptureSubject,
     required this.onBindRoute,
     required this.onClearBinding,
@@ -7715,6 +7957,7 @@ class _TgPlaybackWindow extends StatelessWidget {
   });
 
   final List<String> stepLabels;
+  final List<int> stepDurationsMs;
   final int currentStep;
   final bool playing;
   final double progress;
@@ -7727,6 +7970,7 @@ class _TgPlaybackWindow extends StatelessWidget {
   final VoidCallback onDuplicateStep;
   final VoidCallback onDeleteStep;
   final VoidCallback onRenameStep;
+  final ValueChanged<int> onStepDurationChanged;
   final VoidCallback onCaptureSubject;
   final VoidCallback onBindRoute;
   final VoidCallback onClearBinding;
@@ -7884,6 +8128,31 @@ class _TgPlaybackWindow extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 14),
+                    const _PlaybackWindowSectionLabel('ДЛИТЕЛЬНОСТЬ ШАГА'),
+                    Row(
+                      children: [
+                        const Text('0,5 с', style: TextStyle(fontFamily: TgScreenPalette.fontFamily, color: TgScreenPalette.textMuted, fontSize: AppTypography.badgeSize)),
+                        Expanded(
+                          child: Slider(
+                            value: stepDurationsMs[safeStep].clamp(500, 5000).toDouble(),
+                            min: 500,
+                            max: 5000,
+                            divisions: 45,
+                            activeColor: TgScreenPalette.primaryGreen,
+                            onChanged: (value) => onStepDurationChanged(value.round()),
+                          ),
+                        ),
+                        SizedBox(
+                          width: 48,
+                          child: Text(
+                            '${(stepDurationsMs[safeStep] / 1000).toStringAsFixed(1)} с',
+                            textAlign: TextAlign.right,
+                            style: const TextStyle(fontFamily: TgScreenPalette.fontFamily, color: TgScreenPalette.textPrimary, fontSize: AppTypography.captionSize, fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
                     const _PlaybackWindowSectionLabel('ШАГИ'),
                     const SizedBox(height: 7),
                     Row(
@@ -7977,6 +8246,10 @@ class _TgPlaybackWindow extends StatelessWidget {
                                         color: active ? TgScreenPalette.primaryGreenDark : TgScreenPalette.textPrimary,
                                       ),
                                     ),
+                                  ),
+                                  Text(
+                                    '${(stepDurationsMs[index] / 1000).toStringAsFixed(1)} с',
+                                    style: const TextStyle(fontFamily: TgScreenPalette.fontFamily, color: TgScreenPalette.textMuted, fontSize: AppTypography.badgeSize),
                                   ),
                                   if (active)
                                     const Icon(Icons.chevron_right_rounded, size: 16, color: TgScreenPalette.primaryGreen),

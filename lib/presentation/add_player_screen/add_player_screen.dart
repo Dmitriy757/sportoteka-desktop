@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
@@ -158,6 +159,59 @@ class _AddPlayerScreenState extends State<AddPlayerScreen> {
     throw Exception(jsonResp['message'] ?? 'Не удалось загрузить фото');
   }
 
+  Future<void> _showCreatedPlayerCredentials({
+    required String email,
+    required String password,
+    required bool mailSent,
+  }) async {
+    if (!mounted || password.trim().isEmpty) return;
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Аккаунт игрока создан'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(email),
+            const SizedBox(height: 12),
+            const Text('Временный пароль:'),
+            const SizedBox(height: 6),
+            SelectableText(
+              password,
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.1,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              mailSent
+                  ? 'Пароль уже отправлен игроку на email.'
+                  : 'Письмо не отправлено. Скопируйте пароль и передайте игроку вручную.',
+            ),
+          ],
+        ),
+        actions: [
+          TextButton.icon(
+            onPressed: () async {
+              await Clipboard.setData(ClipboardData(text: password));
+            },
+            icon: const Icon(Icons.copy_rounded),
+            label: const Text('Копировать'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Готово'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _submitPlayer() async {
     final firstName = firstNameController.text.trim();
     final lastName = lastNameController.text.trim();
@@ -208,19 +262,40 @@ class _AddPlayerScreenState extends State<AddPlayerScreen> {
         }),
       );
 
-      if (response.statusCode == 200 && response.body.isNotEmpty) {
-        final data = jsonDecode(response.body);
+      if (response.body.isEmpty) {
+        throw Exception('Пустой ответ от сервера');
+      }
 
-        if (data['status'] == 'success') {
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode >= 200 &&
+          response.statusCode < 300 &&
+          data['status'] == 'success') {
+          final accountCreated = data['account_created'] == true;
+          final temporaryPassword =
+              (data['temporary_password'] ?? '').toString().trim();
+          final mailSent = data['mail_sent'] == true;
+
           Get.snackbar(
             'Успех',
-            'Игрок успешно добавлен в команду «${widget.teamName}»',
+            accountCreated
+                ? 'Игрок добавлен. Для него создан аккаунт SPORTOTEKA.'
+                : 'Игрок добавлен. Используется существующий аккаунт SPORTOTEKA — пароль не изменён.',
             snackPosition: SnackPosition.BOTTOM,
             margin: const EdgeInsets.all(16),
             borderRadius: 14,
             colorText: Colors.white,
             backgroundColor: _C.primaryGreen,
           );
+
+          if (accountCreated && temporaryPassword.isNotEmpty) {
+            await _showCreatedPlayerCredentials(
+              email: email,
+              password: temporaryPassword,
+              mailSent: mailSent,
+            );
+          }
+
           final rawPlayer = data['player'] ?? data['data'];
           final createdPlayer = <String, dynamic>{
             if (rawPlayer is Map) ...Map<String, dynamic>.from(rawPlayer),
@@ -230,6 +305,9 @@ class _AddPlayerScreenState extends State<AddPlayerScreen> {
             'player_id': (rawPlayer is Map ? rawPlayer['player_id'] : null) ??
                 data['player_id'] ??
                 data['id'],
+            'user_id': (rawPlayer is Map ? rawPlayer['user_id'] : null) ??
+                data['user_id'],
+            'account_created': data['account_created'] == true,
             'first_name': firstName,
             'last_name': lastName,
             'email': email,
@@ -252,11 +330,8 @@ class _AddPlayerScreenState extends State<AddPlayerScreen> {
           } else if (mounted) {
             Navigator.pop(context, true);
           }
-        } else {
-          throw Exception(data['message'] ?? 'Не удалось добавить игрока');
-        }
       } else {
-        throw Exception('Пустой ответ от сервера');
+        throw Exception(data['message'] ?? 'Не удалось добавить игрока');
       }
     } catch (e) {
       Get.snackbar(
@@ -616,7 +691,7 @@ class _AddPlayerScreenState extends State<AddPlayerScreen> {
           _InfoTile(
             icon: Icons.person_add_alt_1_rounded,
             title: 'Создание аккаунта',
-            value: 'Игрок будет добавлен через API',
+            value: 'Пароль создаётся автоматически и отправляется на email',
             color: _C.primaryGreen,
           ),
           const SizedBox(height: 10),

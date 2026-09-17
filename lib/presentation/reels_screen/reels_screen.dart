@@ -28,11 +28,13 @@ import 'package:sportoteka/presentation/my_profile_screen/my_profile_screen.dart
 class ReelsScreen extends StatefulWidget {
   final int? initialReelId;
   final int initialIndex;
+  final bool openCommentsOnStart;
 
   const ReelsScreen({
     super.key,
     this.initialReelId,
     this.initialIndex = 0,
+    this.openCommentsOnStart = false,
   });
 
   @override
@@ -78,6 +80,10 @@ class _ReelsScreenState extends State<ReelsScreen>
   final Set<int> _viewCountedReelIds = {};
   Timer? _viewTimer;
   int? _viewTimerReelId;
+
+  // Не даём повторной загрузке Reels повторно открывать комментарии,
+  // если экран был запущен из уведомления.
+  bool _didOpenInitialComments = false;
 
   _ReplyTarget? _replyTarget;
 
@@ -305,6 +311,16 @@ class _ReelsScreenState extends State<ReelsScreen>
 
         if (mounted) {
           setState(() {});
+        }
+
+        // Переход из уведомления: сначала показываем нужный Reels,
+        // затем автоматически раскрываем его комментарии.
+        if (widget.openCommentsOnStart && !_didOpenInitialComments) {
+          _didOpenInitialComments = true;
+          await Future<void>.delayed(const Duration(milliseconds: 180));
+          if (mounted && targetIndex >= 0 && targetIndex < reels.length) {
+            await _openCommentsSheet(targetIndex);
+          }
         }
       });
     } catch (e) {

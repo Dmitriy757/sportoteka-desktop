@@ -229,7 +229,17 @@ class _CmrNotificationsPanelState extends State<CmrNotificationsPanel> {
   Future<void> _open(Map<String, dynamic> item) async {
     await _markRead(item);
 
-    final target = (item['action_target'] ?? '').toString().trim();
+    var target = (item['action_target'] ?? '').toString().trim();
+
+    // Совместимость со старыми/частично заполненными уведомлениями Reels:
+    // если action_target не пришёл, определяем его по типу уведомления.
+    if (target.isEmpty) {
+      final type = (item['type'] ?? '').toString().toLowerCase();
+      if (type == 'reel_comment' || type == 'reel_comment_reply') {
+        target = 'reel';
+      }
+    }
+
     if (target.isEmpty || widget.onNavigate == null) return;
 
     Map<String, dynamic> payload = <String, dynamic>{};
@@ -255,6 +265,10 @@ class _CmrNotificationsPanelState extends State<CmrNotificationsPanel> {
       'match_id',
       'test_id',
       'document_id',
+      'reel_id',
+      'comment_id',
+      'reply_to_comment_id',
+      'actor_user_id',
     ]) {
       final value = _asInt(item[key]);
       if (value > 0 && !payload.containsKey(key)) {
@@ -267,6 +281,9 @@ class _CmrNotificationsPanelState extends State<CmrNotificationsPanel> {
 
   IconData _icon(String type) {
     final t = type.toLowerCase();
+    if (t.contains('reel') || t.contains('comment')) {
+      return Icons.mode_comment_outlined;
+    }
     if (t.contains('diary') || t.contains('note')) {
       return Icons.note_alt_outlined;
     }

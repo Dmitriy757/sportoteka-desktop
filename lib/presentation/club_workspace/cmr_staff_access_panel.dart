@@ -9,6 +9,8 @@ class CmrStaffAccessPanel extends StatefulWidget {
   final int staffUserId;
   final List<Map<String, dynamic>> allTeams;
   final Future<void> Function()? onChanged;
+  final bool initiallyExpanded;
+  final bool adminMode;
 
   const CmrStaffAccessPanel({
     super.key,
@@ -16,6 +18,8 @@ class CmrStaffAccessPanel extends StatefulWidget {
     required this.staffUserId,
     required this.allTeams,
     this.onChanged,
+    this.initiallyExpanded = false,
+    this.adminMode = false,
   });
 
   @override
@@ -51,7 +55,10 @@ class _CmrStaffAccessPanelState extends State<CmrStaffAccessPanel> {
   bool _expanded = false;
   bool _editingScope = false;
   bool _confirmReissue = false;
+  bool _confirmPasswordReissue = false;
   bool _confirmRevoke = false;
+  bool _passwordVisible = true;
+  String _temporaryPassword = '';
 
   String? _error;
   Map<String, dynamic>? _access;
@@ -63,6 +70,7 @@ class _CmrStaffAccessPanelState extends State<CmrStaffAccessPanel> {
   @override
   void initState() {
     super.initState();
+    _expanded = widget.initiallyExpanded;
     _load();
   }
 
@@ -71,10 +79,15 @@ class _CmrStaffAccessPanelState extends State<CmrStaffAccessPanel> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.clubId != widget.clubId ||
         oldWidget.staffUserId != widget.staffUserId) {
-      _expanded = false;
+      _expanded = widget.initiallyExpanded;
       _editingScope = false;
       _confirmReissue = false;
+      _confirmPasswordReissue = false;
       _confirmRevoke = false;
+      _temporaryPassword = '';
+      _passwordVisible = true;
+      _access = null;
+      _error = null;
       _load();
     }
   }
@@ -109,6 +122,7 @@ class _CmrStaffAccessPanelState extends State<CmrStaffAccessPanel> {
   }
 
   String get _statusLabel {
+    if (_error != null && _access == null) return 'Ошибка доступа';
     return switch (_status) {
       'pending' => 'Ожидает ключ',
       'active' => 'Активен',
@@ -118,6 +132,7 @@ class _CmrStaffAccessPanelState extends State<CmrStaffAccessPanel> {
   }
 
   Color get _statusColor {
+    if (_error != null && _access == null) return _red;
     return switch (_status) {
       'pending' => _amber,
       'active' => _green,
@@ -127,6 +142,7 @@ class _CmrStaffAccessPanelState extends State<CmrStaffAccessPanel> {
   }
 
   Color get _statusSoft {
+    if (_error != null && _access == null) return _redSoft;
     return switch (_status) {
       'pending' => _amberSoft,
       'active' => _greenSoft,
@@ -181,6 +197,7 @@ class _CmrStaffAccessPanelState extends State<CmrStaffAccessPanel> {
             : null;
         _syncDraft();
       } else {
+        _access = null;
         _error =
             '${result['message'] ?? 'Не удалось загрузить рабочий доступ.'}';
       }
@@ -197,7 +214,11 @@ class _CmrStaffAccessPanelState extends State<CmrStaffAccessPanel> {
     }
   }
 
-  Future<void> _manage(String action) async {
+  Future<void> _manage(
+    String action, {
+    String? profile,
+    List<int>? teamIds,
+  }) async {
     if (_saving) return;
 
     setState(() {
@@ -210,7 +231,8 @@ class _CmrStaffAccessPanelState extends State<CmrStaffAccessPanel> {
       clubId: widget.clubId,
       staffUserId: widget.staffUserId,
       actorUserId: _actorUserId,
-      profile: _roleCode,
+      profile: profile ?? _roleCode,
+      teamIds: teamIds,
     );
 
     if (!mounted) return;
@@ -241,6 +263,237 @@ class _CmrStaffAccessPanelState extends State<CmrStaffAccessPanel> {
       SnackBar(
         content: Text('${result['message'] ?? 'Готово'}'),
       ),
+    );
+  }
+
+  Future<void> _issueWithScope() async {
+    if (_saving) return;
+
+    final validTeamIds = _draftTeamIds.where((id) => id > 0).toList();
+    if (widget.allTeams.isNotEmpty && validTeamIds.isEmpty) {
+      setState(() {
+        _error = 'Выберите хотя бы одну команду для рабочего доступа.';
+      });
+      return;
+    }
+
+    await _manage(
+      'issue',
+      profile: _draftRole,
+      teamIds: validTeamIds,
+    );
+  }
+
+  String _roleAccessHint(String role) {
+    switch (role) {
+      case 'press_assistant':
+        return 'Пресс-служба получит доступ только к выбранным командам: новости, публикации и пресс-функции.';
+      case 'doctor':
+        return 'Медик будет видеть рабочие разделы только выбранных команд в пределах своей роли.';
+      case 'assistant':
+        return 'Ассистент получит рабочий доступ только к выбранным командам.';
+      case 'main':
+        return 'Главный тренер получит рабочий доступ к выбранным командам.';
+      case 'manager':
+        return 'Администратор получит рабочий доступ к выбранным командам. Клубные полномочия определяются отдельно.';
+      default:
+        return 'Тренер получит рабочий доступ только к выбранным командам.';
+    }
+  }
+
+  Future<void> _reissuePassword() async {
+    if (_saving) return;
+
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+
+    final result = await StaffAccessService.reissuePassword(
+      clubId: widget.clubId,
+      staffUserId: widget.staffUserId,
+      actorUserId: _actorUserId,
+    );
+
+    if (!mounted) return;
+
+    if (result['success'] != true) {
+      setState(() {
+        _saving = false;
+        _error = '${result['message'] ?? 'Не удалось перевыпустить пароль.'}';
+      });
+      return;
+    }
+
+    final password = '${result['temporary_password'] ?? ''}'.trim();
+    final mailSent = result['mail_sent'] == true;
+
+    if (password.isEmpty) {
+      setState(() {
+        _saving = false;
+        _confirmPasswordReissue = false;
+        _error = 'Сервер перевыпустил пароль, но не вернул его для показа администратору.';
+      });
+      return;
+    }
+
+    setState(() {
+      _saving = false;
+      _confirmPasswordReissue = false;
+      _temporaryPassword = password;
+      _passwordVisible = true;
+    });
+
+    // ВАЖНО: здесь НЕ вызываем widget.onChanged. Родительский _load()
+    // пересобирает карточку сотрудника и уничтожает локальное состояние,
+    // из-за чего новый пароль исчезал раньше, чем администратор успевал его увидеть.
+    await _showTemporaryPasswordDialog(
+      password: password,
+      mailSent: mailSent,
+    );
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          mailSent
+              ? 'Новый пароль сохранён и отправлен сотруднику на почту.'
+              : 'Новый пароль сохранён. Письмо отправить не удалось — скопируйте пароль вручную.',
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showTemporaryPasswordDialog({
+    required String password,
+    required bool mailSent,
+  }) async {
+    var visible = true;
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Row(
+                children: [
+                  Icon(Icons.password_rounded, color: _greenDark),
+                  SizedBox(width: 9),
+                  Expanded(
+                    child: Text(
+                      'Новый пароль сотрудника',
+                      style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ],
+              ),
+              content: SizedBox(
+                width: 420,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      mailSent
+                          ? 'Пароль уже отправлен сотруднику на почту. Скопируйте его сейчас при необходимости.'
+                          : 'Письмо отправить не удалось. Скопируйте пароль и передайте сотруднику вручную.',
+                      style: const TextStyle(
+                        color: _muted,
+                        fontSize: 11.5,
+                        height: 1.35,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 13,
+                        vertical: 12,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _greenSoft,
+                        borderRadius: BorderRadius.circular(11),
+                        border: Border.all(color: _greenBorder),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: SelectableText(
+                              visible ? password : '••••••••••••••',
+                              style: const TextStyle(
+                                color: _text,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: .6,
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            tooltip: visible ? 'Скрыть пароль' : 'Показать пароль',
+                            onPressed: () => setDialogState(() => visible = !visible),
+                            icon: Icon(
+                              visible
+                                  ? Icons.visibility_off_outlined
+                                  : Icons.visibility_outlined,
+                              color: _greenDark,
+                              size: 19,
+                            ),
+                          ),
+                          IconButton(
+                            tooltip: 'Копировать пароль',
+                            onPressed: () async {
+                              await Clipboard.setData(ClipboardData(text: password));
+                              if (!dialogContext.mounted) return;
+                              ScaffoldMessenger.of(dialogContext).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Новый пароль скопирован'),
+                                ),
+                              );
+                            },
+                            icon: const Icon(
+                              Icons.copy_rounded,
+                              color: _greenDark,
+                              size: 19,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    const Text(
+                      'После закрытия карточки SPORTOTEKA не сможет снова показать этот пароль. В базе хранится только его защищённый хэш.',
+                      style: TextStyle(
+                        color: _subtle,
+                        fontSize: 10.3,
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton.icon(
+                  onPressed: () async {
+                    await Clipboard.setData(ClipboardData(text: password));
+                  },
+                  icon: const Icon(Icons.copy_rounded, size: 17),
+                  label: const Text('Копировать'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: _green,
+                    foregroundColor: Colors.white,
+                  ),
+                  child: const Text('Готово'),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 
@@ -422,6 +675,212 @@ class _CmrStaffAccessPanelState extends State<CmrStaffAccessPanel> {
     );
   }
 
+  Widget _issueSetupEditor() {
+    final allIds = widget.allTeams
+        .map(_teamId)
+        .where((id) => id > 0)
+        .toSet();
+    final allSelected = allIds.isNotEmpty &&
+        _draftTeamIds.length == allIds.length &&
+        _draftTeamIds.containsAll(allIds);
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: _soft,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _sectionTitle(
+            'Настроить рабочий доступ',
+            subtitle:
+                'Выберите роль и команды до выпуска Staff Key. Один ключ действует на весь клуб, а этот список определяет видимые команды.',
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String>(
+            initialValue: _draftRole,
+            decoration: InputDecoration(
+              labelText: 'Роль сотрудника',
+              filled: true,
+              fillColor: Colors.white,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 11,
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide.none,
+              ),
+            ),
+            items: _roles.entries
+                .map(
+                  (entry) => DropdownMenuItem<String>(
+                    value: entry.key,
+                    child: Text(entry.value),
+                  ),
+                )
+                .toList(),
+            onChanged: _saving
+                ? null
+                : (value) {
+                    if (value != null) {
+                      setState(() => _draftRole = value);
+                    }
+                  },
+          ),
+          const SizedBox(height: 7),
+          Text(
+            _roleAccessHint(_draftRole),
+            style: const TextStyle(
+              color: _muted,
+              fontSize: 10.1,
+              height: 1.3,
+            ),
+          ),
+          const SizedBox(height: 11),
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Видимые команды',
+                  style: TextStyle(
+                    color: _text,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              TextButton.icon(
+                onPressed: _saving || allIds.isEmpty
+                    ? null
+                    : () {
+                        setState(() {
+                          if (allSelected) {
+                            _draftTeamIds.clear();
+                          } else {
+                            _draftTeamIds
+                              ..clear()
+                              ..addAll(allIds);
+                          }
+                        });
+                      },
+                icon: Icon(
+                  allSelected
+                      ? Icons.check_box_rounded
+                      : Icons.select_all_rounded,
+                  size: 16,
+                ),
+                label: Text(allSelected ? 'Снять все' : 'Все команды'),
+              ),
+            ],
+          ),
+          if (widget.allTeams.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: Text(
+                'У клуба пока нет команд. Staff Key можно выпустить после создания команды.',
+                style: TextStyle(color: _muted, fontSize: 10.5),
+              ),
+            )
+          else
+            Container(
+              constraints: const BoxConstraints(maxHeight: 260),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: _line),
+              ),
+              child: ListView.separated(
+                shrinkWrap: true,
+                itemCount: widget.allTeams.length,
+                separatorBuilder: (_, __) =>
+                    const Divider(height: 1, color: _line),
+                itemBuilder: (context, index) {
+                  final team = widget.allTeams[index];
+                  final id = _teamId(team);
+                  return CheckboxListTile(
+                    dense: true,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                    visualDensity: VisualDensity.compact,
+                    activeColor: _green,
+                    value: id > 0 && _draftTeamIds.contains(id),
+                    title: Text(
+                      _teamName(team),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: _text,
+                        fontSize: 10.7,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    onChanged: _saving || id <= 0
+                        ? null
+                        : (checked) {
+                            setState(() {
+                              if (checked == true) {
+                                _draftTeamIds.add(id);
+                              } else {
+                                _draftTeamIds.remove(id);
+                              }
+                            });
+                          },
+                  );
+                },
+              ),
+            ),
+          const SizedBox(height: 11),
+          FilledButton.icon(
+            onPressed: _saving ||
+                    widget.allTeams.isEmpty ||
+                    _draftTeamIds.isEmpty
+                ? null
+                : _issueWithScope,
+            style: FilledButton.styleFrom(
+              backgroundColor: _green,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              minimumSize: const Size.fromHeight(42),
+            ),
+            icon: const Icon(Icons.key_rounded, size: 17),
+            label: Text(
+              _saving
+                  ? 'Выпуск доступа...'
+                  : 'Выпустить Staff Key и отправить на почту',
+            ),
+          ),
+          const SizedBox(height: 6),
+          TextButton.icon(
+            onPressed: _saving
+                ? null
+                : () {
+                    setState(() {
+                      _confirmPasswordReissue = true;
+                      _confirmReissue = false;
+                      _confirmRevoke = false;
+                    });
+                  },
+            icon: const Icon(Icons.password_rounded, size: 17),
+            label: const Text('Сменить / перевыпустить пароль'),
+            style: TextButton.styleFrom(
+              foregroundColor: _greenDark,
+            ),
+          ),
+          if (_confirmPasswordReissue)
+            _dangerConfirmation(
+              text: 'Будет создан новый временный пароль. Текущий пароль сразу перестанет работать. Новый пароль будет показан администратору один раз и отправлен сотруднику на email.',
+              actionTitle: 'Создать новый пароль',
+              onConfirm: _reissuePassword,
+              onCancel: () =>
+                  setState(() => _confirmPasswordReissue = false),
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _inlineScopeEditor() {
     return Container(
       margin: const EdgeInsets.only(top: 10),
@@ -470,12 +929,21 @@ class _CmrStaffAccessPanelState extends State<CmrStaffAccessPanel> {
                     }
                   },
           ),
+          const SizedBox(height: 7),
+          Text(
+            _roleAccessHint(_draftRole),
+            style: const TextStyle(
+              color: _muted,
+              fontSize: 10.1,
+              height: 1.3,
+            ),
+          ),
           const SizedBox(height: 10),
           Row(
             children: [
               const Expanded(
                 child: Text(
-                  'Команды',
+                  'Видимые команды',
                   style: TextStyle(
                     color: _text,
                     fontSize: 11.5,
@@ -760,7 +1228,9 @@ class _CmrStaffAccessPanelState extends State<CmrStaffAccessPanel> {
                       const SizedBox(height: 3),
                       Text(
                         access == null
-                            ? 'Staff Key ещё не выпущен'
+                            ? (_error != null
+                                ? 'Не удалось проверить Staff Access'
+                                : 'Staff Key ещё не выпущен')
                             : '$_roleTitle · ${teams.isEmpty ? 'без команды' : '${teams.length} команд(ы)'}',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -789,33 +1259,40 @@ class _CmrStaffAccessPanelState extends State<CmrStaffAccessPanel> {
         if (_expanded) ...[
           const SizedBox(height: 12),
           if (access == null) ...[
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: _soft,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Text(
-                'У сотрудника ещё нет рабочего Staff Access. '
-                'Выпустите ключ — после этого здесь появятся роль, команды и состояние активации.',
-                style: TextStyle(
-                  color: _muted,
-                  fontSize: 10.8,
-                  height: 1.35,
+            if (_error == null) ...[
+              if (widget.adminMode)
+                _issueSetupEditor()
+              else
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: _soft,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Text(
+                    'Рабочий доступ ещё не выпущен. Управление Staff Key, ролями, командами и паролем доступно в клубном окне «Доступы сотрудников».',
+                    style: TextStyle(
+                      color: _muted,
+                      fontSize: 10.8,
+                      height: 1.35,
+                    ),
+                  ),
                 ),
-              ),
+            ],
+          ] else if (!widget.adminMode) ...[
+            _infoRow(
+              icon: Icons.badge_outlined,
+              label: 'Роль',
+              value: _roleTitle,
             ),
             const SizedBox(height: 10),
-            FilledButton.icon(
-              onPressed: _saving ? null : () => _manage('issue'),
-              style: FilledButton.styleFrom(
-                backgroundColor: _green,
-                foregroundColor: Colors.white,
-                elevation: 0,
-              ),
-              icon: const Icon(Icons.key_rounded, size: 17),
-              label: const Text('Выпустить Staff Key'),
+            _sectionTitle(
+              'Доступ к командам',
+              subtitle:
+                  'Для управления ключом, паролем и назначениями используйте клубное окно «Доступы сотрудников».',
             ),
+            const SizedBox(height: 8),
+            _teamPills(teams),
           ] else ...[
             _infoRow(
               icon: Icons.badge_outlined,
@@ -847,6 +1324,59 @@ class _CmrStaffAccessPanelState extends State<CmrStaffAccessPanel> {
                         size: 17,
                         color: _greenDark,
                       ),
+                    ),
+            ),
+            const Divider(height: 1, color: _line),
+            _infoRow(
+              icon: Icons.password_rounded,
+              label: _temporaryPassword.isEmpty ? 'Пароль' : 'Новый пароль',
+              value: _temporaryPassword.isEmpty
+                  ? 'Текущий пароль защищён'
+                  : (_passwordVisible
+                      ? _temporaryPassword
+                      : '••••••••••••'),
+              trailing: _temporaryPassword.isEmpty
+                  ? null
+                  : Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          tooltip: _passwordVisible
+                              ? 'Скрыть временный пароль'
+                              : 'Показать временный пароль',
+                          onPressed: () {
+                            setState(() {
+                              _passwordVisible = !_passwordVisible;
+                            });
+                          },
+                          icon: Icon(
+                            _passwordVisible
+                                ? Icons.visibility_off_outlined
+                                : Icons.visibility_outlined,
+                            size: 17,
+                            color: _greenDark,
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: 'Копировать временный пароль',
+                          onPressed: () async {
+                            await Clipboard.setData(
+                              ClipboardData(text: _temporaryPassword),
+                            );
+                            if (!mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Временный пароль скопирован'),
+                              ),
+                            );
+                          },
+                          icon: const Icon(
+                            Icons.copy_rounded,
+                            size: 17,
+                            color: _greenDark,
+                          ),
+                        ),
+                      ],
                     ),
             ),
             const Divider(height: 1, color: _line),
@@ -901,7 +1431,10 @@ class _CmrStaffAccessPanelState extends State<CmrStaffAccessPanel> {
               ],
             ],
             if (_editingScope) _inlineScopeEditor(),
-            if (!_editingScope && !_confirmReissue && !_confirmRevoke) ...[
+            if (!_editingScope &&
+                !_confirmReissue &&
+                !_confirmPasswordReissue &&
+                !_confirmRevoke) ...[
               const Divider(height: 1, color: _line),
               _plainActionRow(
                 icon: Icons.key_rounded,
@@ -912,6 +1445,23 @@ class _CmrStaffAccessPanelState extends State<CmrStaffAccessPanel> {
                     : () {
                         setState(() {
                           _confirmReissue = true;
+                          _confirmPasswordReissue = false;
+                          _confirmRevoke = false;
+                        });
+                      },
+              ),
+              const Divider(height: 1, color: _line),
+              _plainActionRow(
+                icon: Icons.password_rounded,
+                title: 'Сменить / перевыпустить пароль',
+                subtitle:
+                    'Создать новый временный пароль, показать администратору и отправить сотруднику',
+                onTap: _saving || _status == 'revoked'
+                    ? null
+                    : () {
+                        setState(() {
+                          _confirmPasswordReissue = true;
+                          _confirmReissue = false;
                           _confirmRevoke = false;
                         });
                       },
@@ -929,6 +1479,7 @@ class _CmrStaffAccessPanelState extends State<CmrStaffAccessPanel> {
                           setState(() {
                             _confirmRevoke = true;
                             _confirmReissue = false;
+                            _confirmPasswordReissue = false;
                           });
                         },
                 ),
@@ -941,6 +1492,16 @@ class _CmrStaffAccessPanelState extends State<CmrStaffAccessPanel> {
                 actionTitle: 'Перевыпустить',
                 onConfirm: () => _manage('reissue'),
                 onCancel: () => setState(() => _confirmReissue = false),
+              ),
+            if (_confirmPasswordReissue)
+              _dangerConfirmation(
+                text: 'Будет создан новый временный пароль. '
+                    'Текущий пароль сотрудника сразу перестанет работать. '
+                    'Новый пароль будет показан здесь один раз и отправлен на email.',
+                actionTitle: 'Создать новый пароль',
+                onConfirm: _reissuePassword,
+                onCancel: () =>
+                    setState(() => _confirmPasswordReissue = false),
               ),
             if (_confirmRevoke)
               _dangerConfirmation(

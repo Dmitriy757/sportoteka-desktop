@@ -3349,9 +3349,23 @@ class _SportotekaWorkspaceFinderPanelState
                 label: Text('Обновить данные', style: AppTypography.action()),
               )
             else if (_canCreateWorkspaceNode)
-              OutlinedButton.icon(
+              TextButton.icon(
                 onPressed: _createNote,
-                icon: const Icon(Icons.note_add_rounded, size: 18),
+                style: TextButton.styleFrom(
+                  foregroundColor: _text,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 8,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                icon: const Icon(
+                  Icons.note_add_rounded,
+                  size: 18,
+                  color: _green,
+                ),
                 label: Text('Новый документ', style: AppTypography.action()),
               )
             else

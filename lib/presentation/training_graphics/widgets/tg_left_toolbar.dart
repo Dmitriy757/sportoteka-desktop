@@ -50,13 +50,15 @@ class TgLeftToolbar extends StatelessWidget {
   static const _line = Color(0xFFE8ECE9);
   static const _danger = Color(0xFFD9465F);
 
-  double get _width {
-    if (workspaceWidth >= 1700) return 306;
-    if (workspaceWidth >= 1440) return 286;
-    if (workspaceWidth >= 1180) return 262;
-    if (workspaceWidth >= 920) return 232;
+  static double widthForWorkspace(double width) {
+    if (width >= 1700) return 306;
+    if (width >= 1440) return 286;
+    if (width >= 1180) return 262;
+    if (width >= 920) return 232;
     return 76;
   }
+
+  double get _width => widthForWorkspace(workspaceWidth);
 
   bool get _compact => _width < 200;
 
@@ -91,6 +93,13 @@ class TgLeftToolbar extends StatelessWidget {
                         subtitle: 'игроки, мячи, фишки и инвентарь',
                         active: state.tool == TgTool.stamp,
                         onTap: onOpenObjects,
+                      ),
+                      _gap(),
+                      _item(
+                        icon: Icons.auto_awesome_motion_rounded,
+                        label: 'Расстановки и тактика',
+                        subtitle: 'схемы, игровые эпизоды и упражнения',
+                        onTap: onOpenTactics,
                       ),
                       _gap(),
                       _item(
@@ -147,13 +156,6 @@ class TgLeftToolbar extends StatelessWidget {
                         subtitle: 'ставить элементы подряд без перевыбора',
                         active: state.continuousDrawMode,
                         onTap: state.toggleContinuousDrawMode,
-                      ),
-                      _gap(),
-                      _item(
-                        icon: Icons.auto_awesome_motion_rounded,
-                        label: 'Тактика',
-                        subtitle: 'расширенные траектории и упражнения',
-                        onTap: onOpenTactics,
                       ),
                       _gap(),
                       _item(
@@ -467,14 +469,14 @@ class TgLeftToolbar extends StatelessWidget {
         onTap: onCloseEditor,
         borderRadius: BorderRadius.circular(12),
         child: Container(
-          constraints: const BoxConstraints(minHeight: 62),
-          padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
+          constraints: const BoxConstraints(minHeight: 50),
+          padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                width: 8,
-                height: 8,
+                width: 6,
+                height: 6,
                 margin: const EdgeInsets.only(top: 5),
                 decoration: const BoxDecoration(color: _green, shape: BoxShape.circle),
               ),
@@ -484,7 +486,7 @@ class TgLeftToolbar extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'К меню тренировок',
+                      'К тренировкам',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: AppTypography.custom(
@@ -497,7 +499,7 @@ class TgLeftToolbar extends StatelessWidget {
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      teamName.isEmpty ? 'Training Graphics' : '$teamName · Training Graphics',
+                      teamName.isEmpty ? 'Спортотека' : teamName,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: AppTypography.custom(

@@ -471,22 +471,41 @@ class _CmrPlayerParentAccessPanelState
             ),
           ),
         const SizedBox(height: 13),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(
-              minWidth: 190,
-              maxWidth: 250,
+        SizedBox(
+          height: 44,
+          child: FilledButton(
+            onPressed: _saving ? null : _issue,
+            style: FilledButton.styleFrom(
+              backgroundColor: _Pc.green,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
-            child: _ParentAccessActionButton(
-              icon: _saving
-                  ? Icons.hourglass_top_rounded
-                  : Icons.key_rounded,
-              label: _saving
-                  ? 'Подождите...'
-                  : 'Выдать новый ключ',
-              onTap: _saving ? null : _issue,
-            ),
+            child: _saving
+                ? Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(width: 9),
+                      Text(
+                        'Подождите...',
+                        style: _Pt.value(12).copyWith(color: Colors.white),
+                      ),
+                    ],
+                  )
+                : Text(
+                    'Выдать новый ключ',
+                    style: _Pt.value(12).copyWith(color: Colors.white),
+                  ),
           ),
         ),
         const SizedBox(height: 8),
@@ -1161,69 +1180,6 @@ class _EmptyBox extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-
-class _ParentAccessActionButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback? onTap;
-
-  const _ParentAccessActionButton({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(10),
-      child: Ink(
-        decoration: BoxDecoration(
-          color: _Pc.greenSoft,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: _Pc.greenBorder,
-            width: .8,
-          ),
-        ),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(10),
-          child: Opacity(
-            opacity: onTap == null ? .5 : 1,
-            child: Container(
-              height: 42,
-              padding: const EdgeInsets.symmetric(horizontal: 13),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    icon,
-                    size: 17,
-                    color: _Pc.greenDark,
-                  ),
-                  const SizedBox(width: 8),
-                  Flexible(
-                    child: Text(
-                      label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: _Pt.value(11.4).copyWith(
-                        color: _Pc.greenDark,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
       ),
     );
   }

@@ -2144,6 +2144,85 @@ class _TrackerMatchWorkspaceScreenState
         'Поле', 'Поле убрано из текущей аналитики. Данные сессий не удалены.');
   }
 
+  Future<void> _deleteSelectedField() async {
+    final field = _selectedField;
+    if (field == null) return;
+
+    if (field.id == null) {
+      setState(() {
+        _selectedField = _fields.isEmpty
+            ? null
+            : _fields.firstWhere(
+                (item) => item.isDefault,
+                orElse: () => _fields.first,
+              );
+        _calibrationCorners.clear();
+        _fieldCalibrationEditingIndex = null;
+        _fieldCalibrationMapCenter = _selectedField?.hasCalibration == true
+            ? _geoCenterForCalibrationCorners(
+                _savedFieldCalibrationCorners(_selectedField),
+              )
+            : null;
+      });
+      _toast('Поле', 'Черновик нового поля отменён.');
+      return;
+    }
+
+    if (_liveRunning) {
+      _toast('Поле', 'Сначала завершите Live-сессию, затем удалите поле.');
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: const Text('Удалить поле?'),
+            content: Text(
+              'Поле «${field.title}» исчезнет из списка команды. '
+              'История уже записанных тренировок и GPS-сессий останется на сервере.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('Отмена'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child: const Text('Удалить'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (!confirmed || !mounted) return;
+
+    final deletingId = field.id!;
+    try {
+      await _api.deleteField(teamId: widget.teamId, fieldId: deletingId);
+      if (!mounted) return;
+      setState(() {
+        _fields.removeWhere((item) => item.id == deletingId);
+        _selectedField = null;
+        _calibrationCorners.clear();
+        _fieldCalibrationEditingIndex = null;
+        _fieldCalibrationMapCenter = null;
+      });
+      await _loadServerData();
+      await _logRemote(
+        'Поле удалено из списка: id=$deletingId title=${field.title}',
+        source: 'workspace_field_deleted',
+      );
+      _toast('Поле', '«${field.title}» удалено из списка команды.');
+    } catch (e) {
+      await _logRemote(
+        'Ошибка удаления поля id=$deletingId: $e',
+        level: 'error',
+        source: 'workspace_field_delete_error',
+      );
+      _toast('Поле', 'Не удалось удалить поле: $e');
+    }
+  }
+
   Future<void> _loadServerData({bool silent = false}) async {
     if (_serverDataLoadInFlight) return;
     _serverDataLoadInFlight = true;
@@ -4691,15 +4770,23 @@ class _TrackerMatchWorkspaceScreenState
   }
 
   void _createNewFieldDraft() {
-    final index = _fields.length + 1;
+    final usedTitles = _fields.map((field) => field.title.trim()).toSet();
+    var title = 'Основное поле';
+    if (_fields.isNotEmpty) {
+      var number = 2;
+      while (usedTitles.contains('Поле $number')) {
+        number++;
+      }
+      title = 'Поле $number';
+    }
     setState(() {
       _selectedField = TrackerFieldModel(
         clubId: widget.clubId,
         teamId: widget.teamId,
-        title: index <= 1 ? 'Основное поле' : 'Поле $index',
+        title: title,
         lengthM: 105,
         widthM: 68,
-        isDefault: true,
+        isDefault: _fields.isEmpty,
       );
       _calibrationCorners.clear();
       _fieldCalibrationMapCenter = null;
@@ -4979,15 +5066,17 @@ class _TrackerMatchWorkspaceScreenState
       cornerCLng: orderedCorners[2].longitude,
       cornerDLat: orderedCorners[3].latitude,
       cornerDLng: orderedCorners[3].longitude,
-      isDefault: true,
+      isDefault: _selectedField?.isDefault ?? _fields.isEmpty,
     );
     try {
       final response = await _api.saveField(
           clubId: widget.clubId, teamId: widget.teamId, field: field);
       final responseData = response['data'];
-      final responseFieldId = responseData is Map ? responseData['id'] : null;
+      final nestedField = response['field'] ??
+          (responseData is Map ? responseData['field'] : null);
       final savedId = int.tryParse(
-          '${response['field_id'] ?? response['id'] ?? responseFieldId ?? field.id ?? ''}');
+        '${response['field_id'] ?? (responseData is Map ? responseData['field_id'] : null) ?? response['id'] ?? (responseData is Map ? responseData['id'] : null) ?? (nestedField is Map ? nestedField['id'] : null) ?? field.id ?? ''}',
+      );
       final optimisticField = TrackerFieldModel(
         id: savedId ?? field.id,
         clubId: field.clubId,
@@ -5009,9 +5098,9 @@ class _TrackerMatchWorkspaceScreenState
       setState(() {
         _calibrationCorners.clear();
         _selectedField = optimisticField;
-        final sameIndex = _fields.indexWhere((f) =>
-            (optimisticField.id != null && f.id == optimisticField.id) ||
-            f.title == optimisticField.title);
+        final sameIndex = optimisticField.id == null
+            ? -1
+            : _fields.indexWhere((f) => f.id == optimisticField.id);
         if (sameIndex >= 0) {
           _fields[sameIndex] = optimisticField;
         } else {
@@ -5031,9 +5120,8 @@ class _TrackerMatchWorkspaceScreenState
           (_selectedField == null || _selectedField?.hasCalibration != true)) {
         setState(() {
           _selectedField = optimisticField;
-          if (!_fields.any((f) =>
-              (optimisticField.id != null && f.id == optimisticField.id) ||
-              f.title == optimisticField.title)) {
+          if (optimisticField.id == null ||
+              !_fields.any((f) => f.id == optimisticField.id)) {
             _fields.insert(0, optimisticField);
           }
         });
@@ -14543,8 +14631,10 @@ class _TrackerMatchWorkspaceScreenState
                 ),
                 actionButton(
                   icon: Icons.delete_outline_rounded,
-                  tooltip: 'Убрать поле',
-                  onTap: _selectedField == null ? null : _clearSelectedField,
+                  tooltip: _selectedField?.id == null
+                      ? 'Отменить новое поле'
+                      : 'Удалить поле',
+                  onTap: _selectedField == null ? null : _deleteSelectedField,
                 ),
                 const SizedBox(width: 6),
                 actionButton(
@@ -15307,6 +15397,16 @@ class _TrackerMatchWorkspaceScreenState
                             ? _saveCapturedField
                             : null)),
               ]),
+              if (_selectedField != null) ...[
+                const SizedBox(height: 8),
+                mobileAction(
+                  icon: Icons.delete_outline_rounded,
+                  label: _selectedField?.id == null
+                      ? 'Отменить новое поле'
+                      : 'Удалить выбранное поле',
+                  onTap: _deleteSelectedField,
+                ),
+              ],
               const SizedBox(height: 10),
               mobileCard(
                 icon: Icons.sports_soccer_rounded,

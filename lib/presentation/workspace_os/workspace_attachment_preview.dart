@@ -67,6 +67,63 @@ Future<void> openWorkspaceAttachmentPreview(
 }
 
 
+class WorkspacePdfInlinePreview extends StatelessWidget {
+  const WorkspacePdfInlinePreview({
+    super.key,
+    required this.title,
+    required this.url,
+  });
+
+  final String title;
+  final String url;
+
+  static const _viewerBackground = Color(0xFFF4F6F5);
+
+  Future<Uint8List> _loadPdf() async {
+    final response = await http
+        .get(Uri.parse(url))
+        .timeout(const Duration(minutes: 2));
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('Не удалось загрузить PDF (${response.statusCode})');
+    }
+    return response.bodyBytes;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final fileTitle = title.trim().isEmpty ? 'Документ.pdf' : title.trim();
+    return ColoredBox(
+      color: _viewerBackground,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // PdfPreviewScreen already renders the complete PDF. Its legacy
+          // bottom toolbar is clipped so the preview fits SPORTOTEKA OS.
+          const legacyToolbarHeight = 44.0;
+          final previewHeight = constraints.maxHeight + legacyToolbarHeight;
+
+          return ClipRect(
+            child: OverflowBox(
+              alignment: Alignment.topCenter,
+              minWidth: constraints.maxWidth,
+              maxWidth: constraints.maxWidth,
+              minHeight: previewHeight,
+              maxHeight: previewHeight,
+              child: SizedBox(
+                width: constraints.maxWidth,
+                height: previewHeight,
+                child: PdfPreviewScreen(
+                  fileName: fileTitle,
+                  buildPdf: (_) => _loadPdf(),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
 class _WorkspacePdfAttachmentPreviewScreen extends StatelessWidget {
   const _WorkspacePdfAttachmentPreviewScreen({
     required this.title,
@@ -80,17 +137,6 @@ class _WorkspacePdfAttachmentPreviewScreen extends StatelessWidget {
   static const _text = Color(0xFF101814);
   static const _muted = Color(0xFF758079);
   static const _line = Color(0xFFE7EAE7);
-  static const _viewerBackground = Color(0xFFF4F6F5);
-
-  Future<Uint8List> _loadPdf() async {
-    final response = await http
-        .get(Uri.parse(url))
-        .timeout(const Duration(minutes: 2));
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception('Не удалось загрузить PDF (${response.statusCode})');
-    }
-    return response.bodyBytes;
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -140,37 +186,9 @@ class _WorkspacePdfAttachmentPreviewScreen extends StatelessWidget {
             ),
           ),
           Expanded(
-            child: ColoredBox(
-              color: _viewerBackground,
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  // PdfPreviewScreen contains an old green toolbar at the
-                  // bottom. We keep its PDF renderer, but render that widget
-                  // slightly taller and clip the legacy toolbar outside the
-                  // visible area. The document itself remains fully visible.
-                  const legacyToolbarHeight = 44.0;
-                  final previewHeight =
-                      constraints.maxHeight + legacyToolbarHeight;
-
-                  return ClipRect(
-                    child: OverflowBox(
-                      alignment: Alignment.topCenter,
-                      minWidth: constraints.maxWidth,
-                      maxWidth: constraints.maxWidth,
-                      minHeight: previewHeight,
-                      maxHeight: previewHeight,
-                      child: SizedBox(
-                        width: constraints.maxWidth,
-                        height: previewHeight,
-                        child: PdfPreviewScreen(
-                          fileName: fileTitle,
-                          buildPdf: (_) => _loadPdf(),
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
+            child: WorkspacePdfInlinePreview(
+              title: fileTitle,
+              url: url,
             ),
           ),
         ],

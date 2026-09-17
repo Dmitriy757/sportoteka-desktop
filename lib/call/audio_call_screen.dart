@@ -2,6 +2,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -56,6 +57,8 @@ class _AudioCallScreenState extends State<AudioCallScreen> {
       MethodChannel('sportoteka/call_audio');
 
   lk.Room? _room;
+  final AudioPlayer _ringbackPlayer = AudioPlayer();
+  Future<void>? _ringbackStart;
   Timer? _connectTimeout;
   Timer? _durationTimer;
   Timer? _statusTimer;
@@ -66,6 +69,8 @@ class _AudioCallScreenState extends State<AudioCallScreen> {
   bool _endNotified = false;
   bool _nativeCallUiEnded = false;
   bool _statusPollBusy = false;
+  bool _ringbackDisposed = false;
+  bool _waitingForAnswer = false;
   String? _roomName;
   String? _fatalError;
   DateTime? _connectedAt;
@@ -90,6 +95,46 @@ class _AudioCallScreenState extends State<AudioCallScreen> {
     _peerUsername = (widget.peerUsername ?? '').trim();
     _peerPhotoUrl = _normalizePhoto(widget.peerPhotoUrl);
     unawaited(_init());
+  }
+
+  Future<void> _startRingback() {
+    if (!widget.isCaller || _closing || _ringbackDisposed) {
+      return Future<void>.value();
+    }
+    return _ringbackStart ??= _startRingbackOnce();
+  }
+
+  Future<void> _startRingbackOnce() async {
+    try {
+      await _ringbackPlayer.setReleaseMode(ReleaseMode.loop);
+      if (_closing || _ringbackDisposed) return;
+      await _ringbackPlayer.play(
+        AssetSource('sounds/outgoing_ringback.wav'),
+        volume: .45,
+      );
+    } catch (e) {
+      debugPrint('[CALL] ringback start error: $e');
+    }
+  }
+
+  Future<void> _stopRingback({bool dispose = false}) async {
+    final starting = _ringbackStart;
+    if (starting != null) {
+      try {
+        await starting;
+      } catch (_) {}
+    }
+
+    try {
+      await _ringbackPlayer.stop();
+    } catch (_) {}
+
+    if (dispose && !_ringbackDisposed) {
+      _ringbackDisposed = true;
+      try {
+        await _ringbackPlayer.dispose();
+      } catch (_) {}
+    }
   }
 
   Future<void> _startIosOutgoingCallKit() async {
@@ -154,11 +199,14 @@ class _AudioCallScreenState extends State<AudioCallScreen> {
 
   Future<void> _init() async {
     // Сразу загружаем профиль второго участника по call_id, чтобы имя и
-    // аватар появились ещё до установления медиасоединения.
-    await _refreshPeerIdentity();
+    // аватар появились как можно раньше. Это декоративный запрос: раньше его
+    // ожидание могло задерживать медиасоединение до четырёх секунд.
+    unawaited(_refreshPeerIdentity());
 
     final mic = await Permission.microphone.request();
     if (!mic.isGranted) {
+      await _stopRingback();
+      await _notifyEnded();
       if (!mounted) return;
       setState(
         () => _fatalError = 'Нет разрешения на использование микрофона',
@@ -168,6 +216,15 @@ class _AudioCallScreenState extends State<AudioCallScreen> {
 
     try {
       await _startIosOutgoingCallKit();
+
+      // livekit_token.php не выдаёт токен вызывающему до принятия звонка.
+      // Поэтому во время ringing показываем этот же экран, проигрываем
+      // локальные гудки и быстро проверяем статус. Как только callee принял
+      // звонок, гудки останавливаются ДО включения микрофона/LiveKit.
+      if (widget.isCaller) {
+        final accepted = await _waitForCalleeAcceptance();
+        if (!accepted || !mounted || _closing) return;
+      }
 
       final room =
           await CallSessionService.instance.ensureConnected(
@@ -200,14 +257,99 @@ class _AudioCallScreenState extends State<AudioCallScreen> {
       }
 
       _connectTimeout?.cancel();
+      await _stopRingback();
       _startStatusPolling();
       _syncConnectedTimer();
 
       if (mounted) setState(() {});
     } catch (e) {
       _connectTimeout?.cancel();
+      await _stopRingback();
       if (!mounted) return;
       setState(() => _fatalError = _friendlyError(e));
+    }
+  }
+
+  Future<bool> _waitForCalleeAcceptance() async {
+    final deadline = DateTime.now().add(const Duration(seconds: 95));
+    _waitingForAnswer = true;
+    if (mounted) setState(() {});
+
+    while (mounted && !_closing) {
+      try {
+        final response = await http.post(
+          Uri.parse('$_apiBase/status.php'),
+          body: {
+            'call_id': widget.callId.toString(),
+            'user_id': widget.userId.toString(),
+          },
+        ).timeout(const Duration(seconds: 4));
+
+        if (response.statusCode == 200) {
+          final decoded = jsonDecode(response.body);
+          if (decoded is Map) {
+            final data = Map<String, dynamic>.from(decoded);
+            if (data['status'] == 'ok') {
+              _applyPeerData(data);
+              final state = (data['call_status'] ?? '')
+                  .toString()
+                  .trim()
+                  .toLowerCase();
+
+              if (state == 'accepted') {
+                _waitingForAnswer = false;
+                await _stopRingback();
+                if (mounted) setState(() {});
+                return true;
+              }
+
+              if (state == 'ringing' || state.isEmpty) {
+                await _startRingback();
+              } else if ({
+                'declined',
+                'busy',
+                'missed',
+                'canceled',
+                'cancelled',
+                'ended',
+              }.contains(state)) {
+                await _finishBeforeConnection(
+                  state == 'declined' || state == 'busy'
+                      ? 'Вызов отклонён'
+                      : state == 'missed'
+                          ? 'Нет ответа'
+                          : 'Вызов завершён',
+                );
+                return false;
+              }
+            }
+          }
+        }
+      } catch (e) {
+        // Краткий сетевой сбой не завершает настоящий исходящий звонок.
+        debugPrint('[CALL] waiting status retry: $e');
+      }
+
+      if (DateTime.now().isAfter(deadline)) {
+        await _finishBeforeConnection('Нет ответа');
+        return false;
+      }
+
+      await Future<void>.delayed(const Duration(milliseconds: 450));
+    }
+
+    await _stopRingback();
+    return false;
+  }
+
+  Future<void> _finishBeforeConnection(String message) async {
+    _waitingForAnswer = false;
+    await _stopRingback();
+    if (!mounted || _closing) return;
+    setState(() => _fatalError = message);
+    await Future<void>.delayed(const Duration(milliseconds: 950));
+    if (mounted && !_closing) {
+      await _closeFromRemoteStatus();
     }
   }
 
@@ -615,6 +757,7 @@ class _AudioCallScreenState extends State<AudioCallScreen> {
     _connectTimeout?.cancel();
     _durationTimer?.cancel();
     _statusTimer?.cancel();
+    await _stopRingback();
 
     final room = _room;
     _room = null;
@@ -690,6 +833,7 @@ class _AudioCallScreenState extends State<AudioCallScreen> {
     _connectTimeout?.cancel();
     _durationTimer?.cancel();
     _statusTimer?.cancel();
+    await _stopRingback();
     await _notifyEnded();
     await _endNativeCallUi();
 
@@ -715,6 +859,8 @@ class _AudioCallScreenState extends State<AudioCallScreen> {
 
   String _statusText() {
     if (_fatalError != null) return _fatalError!;
+
+    if (_waitingForAnswer) return 'Ожидание ответа…';
 
     final room = _room;
     if (room == null) return 'Подключение…';
@@ -755,6 +901,7 @@ class _AudioCallScreenState extends State<AudioCallScreen> {
     _connectTimeout?.cancel();
     _durationTimer?.cancel();
     _statusTimer?.cancel();
+    unawaited(_stopRingback(dispose: true));
 
     // AudioCallScreen больше НЕ владеет LiveKit lifecycle.
     //

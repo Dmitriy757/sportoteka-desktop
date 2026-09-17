@@ -14,6 +14,7 @@ import 'package:sportoteka/core/theme/app_typography.dart';
 
 import 'package:sportoteka/core/utils/pref_utils.dart';
 import 'package:sportoteka/presentation/club_workspace/cmr_staff_access_panel.dart';
+import 'package:sportoteka/presentation/club_workspace/cmr_staff_access_admin_panel.dart';
 import 'package:sportoteka/presentation/club_workspace/cmr_staff_invite_dialog.dart';
 import 'package:sportoteka/presentation/club_workspace/cmr_staff_add_right_panel.dart';
 import 'package:sportoteka/presentation/chat_screen/chat_room_screen.dart';
@@ -108,6 +109,18 @@ String _trainerBio(Map<String, dynamic> t) =>
 String _trainerCity(Map<String, dynamic> t) => _s(t['city'] ?? t['town']);
 String _trainerSpecialization(Map<String, dynamic> t) =>
     _s(t['specialization'] ?? t['speciality'] ?? t['category']);
+
+// Staff Access на сервере привязан именно к users.id.
+// В ответах API поле `id` может быть id записи тренера/назначения,
+// поэтому user_id должен иметь приоритет.
+int _staffAccessUserId(Map<String, dynamic> t) => _i(
+      t['user_id'] ??
+          t['userId'] ??
+          t['trainer_id'] ??
+          t['trainerId'] ??
+          t['coach_id'] ??
+          t['id'],
+    );
 
 List<Map<String, dynamic>> _trainerTeams(Map<String, dynamic> t) {
   final rawTeams = t['teams'];
@@ -633,6 +646,7 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
 
   Map<String, dynamic>? _openedTrainerProfile;
   bool _addTrainerOpen = false;
+  bool _staffAdminOpen = false;
   Map<String, dynamic>? _assigningTrainer;
   String _assigningInitialProfile = 'extra';
 
@@ -900,6 +914,7 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
       setState(() {
         _selectedTrainerKey = key;
         _addTrainerOpen = false;
+        _staffAdminOpen = false;
         _assigningTrainer = null;
         _editingTrainer = null;
         _openedTrainerProfile = null;
@@ -955,6 +970,7 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
       setState(() {
         _selectedTrainerKey = key;
         _addTrainerOpen = false;
+        _staffAdminOpen = false;
         _openedTrainerProfile = Map<String, dynamic>.from(trainer);
       });
     }
@@ -1012,6 +1028,7 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
       _openedTrainerProfile = null;
       _editingTrainer = null;
       _addTrainerOpen = false;
+      _staffAdminOpen = false;
       _sideChatId = 0;
       _sideChatUserId = 0;
       _sideChatName = '';
@@ -1176,6 +1193,32 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
     );
   }
 
+  String _addInitialProfileForFilter(_CmrStaffFilter filter) {
+    switch (filter) {
+      case _CmrStaffFilter.main:
+        return 'main';
+      case _CmrStaffFilter.coaches:
+        return 'extra';
+      case _CmrStaffFilter.assistants:
+        return 'assistant';
+      case _CmrStaffFilter.doctors:
+        return 'doctor';
+      case _CmrStaffFilter.press:
+        return 'press_assistant';
+      case _CmrStaffFilter.all:
+      case _CmrStaffFilter.noTeam:
+        return 'extra';
+    }
+  }
+
+  bool _lockAddProfileForFilter(_CmrStaffFilter filter) {
+    return filter == _CmrStaffFilter.main ||
+        filter == _CmrStaffFilter.coaches ||
+        filter == _CmrStaffFilter.assistants ||
+        filter == _CmrStaffFilter.doctors ||
+        filter == _CmrStaffFilter.press;
+  }
+
   Widget _buildMainLayout(
     List<Map<String, dynamic>> visible,
     int assigned,
@@ -1190,6 +1233,8 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
         final mobile = constraints.maxWidth < 640;
         final compact = constraints.maxWidth < 980;
         final pressMode = _filter == _CmrStaffFilter.press;
+        final addInitialProfile = _addInitialProfileForFilter(_filter);
+        final lockAddProfile = _lockAddProfileForFilter(_filter);
         final listWidth = math.min(compact ? 430.0 : 480.0,
             constraints.maxWidth * (compact ? .43 : .45));
 
@@ -1197,7 +1242,7 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
           clubName: widget.clubName,
           sectionTitle: pressMode ? 'Пресс-служба' : 'Тренеры',
           sectionSubtitle: pressMode
-              ? 'Только сотрудники с активным пресс-доступом'
+              ? 'Сотрудники пресс-службы и ожидающие активации'
               : widget.clubName,
           searchHint: pressMode ? 'Поиск в пресс-службе' : 'Поиск тренера',
           pressMode: pressMode,
@@ -1220,6 +1265,7 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
                 setState(() {
                   _selectedTrainerKey = key;
                   _addTrainerOpen = false;
+                  _staffAdminOpen = false;
                   _editingTrainer = null;
                 });
               }
@@ -1239,7 +1285,7 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
               _selectTrainerForInspector(trainer);
             }
           },
-          onAddTrainer: pressMode || !_canManageAllTrainers() || _saving
+          onAddTrainer: !_canManageAllTrainers() || _saving
               ? null
               : _openAddTrainerRightPanel,
           onAssignTrainer:
@@ -1252,6 +1298,8 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
                                 : _visibleTrainers.first),
                       ),
           onRefresh: _load,
+          onManageAccess:
+              _canManageAllTrainers() ? _openStaffAdminPanel : null,
           mobile: mobile,
           compact: compact,
         );
@@ -1309,6 +1357,21 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
                                 clubId: widget.clubId,
                                 clubName: widget.clubName,
                                 teams: widget.teams,
+                                pressMode: pressMode,
+                                initialProfile: addInitialProfile,
+                                lockProfile: lockAddProfile,
+                                onAssignExistingPress: pressMode
+                                    ? ({
+                                        required int userId,
+                                        required List<int> teamIds,
+                                        required bool allTeams,
+                                      }) =>
+                                        _saveExistingStaffPressAccess(
+                                          userId: userId,
+                                          teamIds: teamIds,
+                                          allTeams: allTeams,
+                                        )
+                                    : null,
                                 onClose: _closeAddTrainerRightPanel,
                                 onSaved: () async {
                                   _trainerProfileFutures.clear();
@@ -1316,7 +1379,20 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
                                   widget.onChanged?.call();
                                 },
                               )
-                            : list,
+                            : _staffAdminOpen
+                                ? CmrStaffAccessAdminPanel(
+                                    clubId: widget.clubId,
+                                    clubName: widget.clubName,
+                                    staff: _trainers,
+                                    allTeams: widget.teams,
+                                    onClose: _closeStaffAdminPanel,
+                                    onChanged: () async {
+                                      _trainerProfileFutures.clear();
+                                      await _load();
+                                      widget.onChanged?.call();
+                                    },
+                                  )
+                                : list,
                   ),
                 ),
               )
@@ -1386,6 +1462,21 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
                                           clubId: widget.clubId,
                                           clubName: widget.clubName,
                                           teams: widget.teams,
+                                          pressMode: pressMode,
+                                          initialProfile: addInitialProfile,
+                                          lockProfile: lockAddProfile,
+                                          onAssignExistingPress: pressMode
+                                              ? ({
+                                                  required int userId,
+                                                  required List<int> teamIds,
+                                                  required bool allTeams,
+                                                }) =>
+                                                  _saveExistingStaffPressAccess(
+                                                    userId: userId,
+                                                    teamIds: teamIds,
+                                                    allTeams: allTeams,
+                                                  )
+                                              : null,
                                           onClose: _closeAddTrainerRightPanel,
                                           onSaved: () async {
                                             _trainerProfileFutures.clear();
@@ -1393,12 +1484,30 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
                                             widget.onChanged?.call();
                                           },
                                         )
-                                      : pressMode
+                                      : _staffAdminOpen
+                                          ? CmrStaffAccessAdminPanel(
+                                              clubId: widget.clubId,
+                                              clubName: widget.clubName,
+                                              staff: _trainers,
+                                              allTeams: widget.teams,
+                                              onClose: _closeStaffAdminPanel,
+                                              onChanged: () async {
+                                                _trainerProfileFutures.clear();
+                                                await _load();
+                                                widget.onChanged?.call();
+                                              },
+                                            )
+                                          : pressMode
                                           ? _PressServiceDetailPanel(
                                               trainer: selected,
+                                              clubId: widget.clubId,
+                                              allTeams: widget.teams,
+                                              onAccessChanged: _load,
                                               clubName: widget.clubName,
                                               allTeamsCount:
                                                   widget.teams.length,
+                                              canManageAccess:
+                                                  _canManageAllTrainers(),
                                               onManageTeams: selected == null ||
                                                       !_canManageAllTrainers()
                                                   ? null
@@ -1430,6 +1539,8 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
                                               clubName: widget.clubName,
                                               selectedTeamName:
                                                   widget.selectedTeamName,
+                                              canManageAccess:
+                                                  _canManageAllTrainers(),
                                               onMessage: selected == null
                                                   ? null
                                                   : () => _messageTrainer(
@@ -1866,6 +1977,16 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
     setState(() {
       _editingTrainer = null;
       _assigningTrainer = null;
+      _staffAdminOpen = false;
+
+      // Панель добавления должна иметь приоритет над ранее открытым чатом.
+      // Иначе _addTrainerOpen становится true, но справа продолжает
+      // отображаться _TrainerChatSidePanel и кажется, что кнопка не работает.
+      _sideChatId = 0;
+      _sideChatUserId = 0;
+      _sideChatName = '';
+      _sideChatOpening = false;
+
       _addTrainerOpen = true;
     });
   }
@@ -1873,6 +1994,25 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
   void _closeAddTrainerRightPanel() {
     if (!mounted) return;
     setState(() => _addTrainerOpen = false);
+  }
+
+  void _openStaffAdminPanel() {
+    if (!_canManageAllTrainers() || !mounted) return;
+    setState(() {
+      _staffAdminOpen = true;
+      _addTrainerOpen = false;
+      _assigningTrainer = null;
+      _editingTrainer = null;
+      _sideChatId = 0;
+      _sideChatUserId = 0;
+      _sideChatName = '';
+      _sideChatOpening = false;
+    });
+  }
+
+  void _closeStaffAdminPanel() {
+    if (!mounted) return;
+    setState(() => _staffAdminOpen = false);
   }
 
   Future<List<Map<String, dynamic>>> _searchTrainerByEmailRight(
@@ -2361,6 +2501,7 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
       _assigningTrainer = Map<String, dynamic>.from(trainer);
       _assigningInitialProfile = initialProfile;
       _addTrainerOpen = false;
+      _staffAdminOpen = false;
       _editingTrainer = null;
       _sideChatId = 0;
       _sideChatUserId = 0;
@@ -2670,6 +2811,48 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
     } else {
       await _assignPressAssistant(trainer);
     }
+  }
+
+  Future<bool> _saveExistingStaffPressAccess({
+    required int userId,
+    required List<int> teamIds,
+    required bool allTeams,
+  }) async {
+    if (!_canManageAllTrainers()) {
+      Get.snackbar(
+        'Доступ',
+        'Назначать пресс-службу может только клубный аккаунт.',
+      );
+      return false;
+    }
+
+    if (userId <= 0 || widget.clubId <= 0) return false;
+
+    final validTeamIds = teamIds.where((id) => id > 0).toSet().toList();
+
+    if (!allTeams && widget.teams.isNotEmpty && validTeamIds.isEmpty) {
+      Get.snackbar(
+        'Пресс-служба',
+        'Выберите хотя бы одну команду.',
+      );
+      return false;
+    }
+
+    // ВАЖНО: для уже существующего сотрудника клуба используем
+    // отдельный press scope. Не вызываем StaffAccessService.invite:
+    // иначе press_assistant стал бы его основной staff-ролью и мог бы
+    // перезаписать текущие staff scopes.
+    return _saveAction(
+      () => _postJson(
+        setPressStaffScopeUrl,
+        <String, dynamic>{
+          'club_id': widget.clubId,
+          'user_id': userId,
+          'all_teams': allTeams,
+          'team_ids': allTeams ? <int>[] : validTeamIds,
+        },
+      ),
+    );
   }
 
   Future<bool> _setPressScope({
@@ -3083,6 +3266,7 @@ class _TrainerListPanel extends StatelessWidget {
   final VoidCallback? onAddTrainer;
   final VoidCallback? onAssignTrainer;
   final Future<void> Function()? onRefresh;
+  final VoidCallback? onManageAccess;
   final bool mobile;
   final bool compact;
 
@@ -3108,6 +3292,7 @@ class _TrainerListPanel extends StatelessWidget {
     required this.onAddTrainer,
     required this.onAssignTrainer,
     required this.onRefresh,
+    required this.onManageAccess,
     required this.mobile,
     required this.compact,
   });
@@ -3142,6 +3327,7 @@ class _TrainerListPanel extends StatelessWidget {
               onAddTrainer: onAddTrainer,
               onAssignTrainer: onAssignTrainer,
               onRefresh: onRefresh,
+              onManageAccess: onManageAccess,
               mobile: mobile,
             ),
           ),
@@ -3221,6 +3407,7 @@ class _TrainerHeader extends StatelessWidget {
   final VoidCallback? onAddTrainer;
   final VoidCallback? onAssignTrainer;
   final Future<void> Function()? onRefresh;
+  final VoidCallback? onManageAccess;
   final bool mobile;
 
   const _TrainerHeader({
@@ -3235,6 +3422,7 @@ class _TrainerHeader extends StatelessWidget {
     required this.onAddTrainer,
     required this.onAssignTrainer,
     required this.onRefresh,
+    required this.onManageAccess,
     required this.mobile,
   });
 
@@ -3278,9 +3466,20 @@ class _TrainerHeader extends StatelessWidget {
               compact: true),
           const SizedBox(width: 6),
         ],
+        if (onManageAccess != null) ...[
+          _TrainerIconButton(
+            icon: Icons.admin_panel_settings_outlined,
+            tooltip: 'Доступы сотрудников',
+            onTap: onManageAccess,
+            compact: true,
+          ),
+          const SizedBox(width: 6),
+        ],
         _TrainerIconButton(
           icon: Icons.person_add_alt_1_rounded,
-          tooltip: 'Добавить сотрудника',
+          tooltip: title == 'Пресс-служба'
+              ? 'Добавить в пресс-службу'
+              : 'Добавить сотрудника',
           onTap: onAddTrainer,
           emphasized: true,
           compact: true,
@@ -5369,18 +5568,138 @@ class _CmrRoleChoice extends StatelessWidget {
   }
 }
 
+
+class _StaffAccessSummaryCard extends StatelessWidget {
+  final String role;
+  final List<Map<String, dynamic>> teams;
+
+  const _StaffAccessSummaryCard({
+    required this.role,
+    required this.teams,
+  });
+
+  String _name(Map<String, dynamic> team) {
+    final value =
+        '${team['team_name'] ?? team['name'] ?? team['teamName'] ?? ''}'.trim();
+    if (value.isNotEmpty && value != 'null') return value;
+    final id = _i(team['team_id'] ?? team['teamId'] ?? team['id']);
+    return id > 0 ? 'Команда #$id' : 'Команда';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(11),
+      decoration: BoxDecoration(
+        color: _CmrColors.soft,
+        borderRadius: BorderRadius.circular(11),
+        border: Border.all(
+          color: _CmrColors.line.withOpacity(.65),
+          width: .7,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: _CmrColors.greenSoft,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.work_outline_rounded,
+                  color: _CmrColors.greenDark,
+                  size: 17,
+                ),
+              ),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Рабочая информация',
+                      style: _CmrText.value(11.6),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '$role · ${teams.isEmpty ? 'без команды' : '${teams.length} команд(ы)'}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: _CmrText.muted(9.6),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (teams.isNotEmpty) ...[
+            const SizedBox(height: 9),
+            Wrap(
+              spacing: 5,
+              runSpacing: 5,
+              children: teams
+                  .map(
+                    (team) => Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: _CmrColors.line.withOpacity(.65),
+                          width: .6,
+                        ),
+                      ),
+                      child: Text(
+                        _name(team),
+                        style: _CmrText.muted(9.1).copyWith(
+                          color: _CmrColors.text,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  )
+                  .toList(),
+            ),
+          ],
+          const SizedBox(height: 7),
+          Text(
+            'Staff Key, пароль и действия управления доступны только клубному аккаунту.',
+            style: _CmrText.muted(8.9),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _PressServiceDetailPanel extends StatelessWidget {
   final Map<String, dynamic>? trainer;
+  final int clubId;
+  final List<Map<String, dynamic>> allTeams;
+  final Future<void> Function()? onAccessChanged;
   final String clubName;
   final int allTeamsCount;
+  final bool canManageAccess;
   final VoidCallback? onManageTeams;
   final VoidCallback? onRemovePress;
   final VoidCallback? onOpenProfile;
 
   const _PressServiceDetailPanel({
     required this.trainer,
+    required this.clubId,
+    required this.allTeams,
+    required this.onAccessChanged,
     required this.clubName,
     required this.allTeamsCount,
+    required this.canManageAccess,
     required this.onManageTeams,
     required this.onRemovePress,
     required this.onOpenProfile,
@@ -5440,6 +5759,22 @@ class _PressServiceDetailPanel extends StatelessWidget {
               clubName: clubName,
               main: false,
             ),
+            const SizedBox(height: 12),
+            if (_staffAccessUserId(t) > 0)
+              canManageAccess
+                  ? CmrStaffAccessPanel(
+                      key: ValueKey(
+                        'staff-access-$clubId-${_staffAccessUserId(t)}',
+                      ),
+                      clubId: clubId,
+                      staffUserId: _staffAccessUserId(t),
+                      allTeams: allTeams,
+                      onChanged: onAccessChanged,
+                    )
+                  : _StaffAccessSummaryCard(
+                      role: 'Пресс-служба',
+                      teams: pressTeams,
+                    ),
             const SizedBox(height: 12),
             if (onOpenProfile != null)
               _PressOpenWorkProfileButton(
@@ -5718,6 +6053,7 @@ class _TrainerDetailPanel extends StatelessWidget {
   final List<Map<String, dynamic>> allTeams;
   final String clubName;
   final String selectedTeamName;
+  final bool canManageAccess;
   final Future<void> Function()? onAccessChanged;
   final VoidCallback? onMessage;
   final VoidCallback? onEdit;
@@ -5733,6 +6069,7 @@ class _TrainerDetailPanel extends StatelessWidget {
     required this.allTeams,
     required this.clubName,
     required this.selectedTeamName,
+    required this.canManageAccess,
     required this.onAccessChanged,
     required this.onMessage,
     required this.onEdit,
@@ -5783,35 +6120,21 @@ class _TrainerDetailPanel extends StatelessWidget {
               main: main,
             ),
             const SizedBox(height: 12),
-            if (_i(
-                  t['id'] ??
-                      t['trainer_id'] ??
-                      t['trainerId'] ??
-                      t['user_id'] ??
-                      t['userId'],
-                ) >
-                0)
-              CmrStaffAccessPanel(
-                key: ValueKey(
-                  'staff-access-$clubId-${_i(
-                    t['id'] ??
-                        t['trainer_id'] ??
-                        t['trainerId'] ??
-                        t['user_id'] ??
-                        t['userId'],
-                  )}',
-                ),
-                clubId: clubId,
-                staffUserId: _i(
-                  t['id'] ??
-                      t['trainer_id'] ??
-                      t['trainerId'] ??
-                      t['user_id'] ??
-                      t['userId'],
-                ),
-                allTeams: allTeams,
-                onChanged: onAccessChanged,
-              ),
+            if (_staffAccessUserId(t) > 0)
+              canManageAccess
+                  ? CmrStaffAccessPanel(
+                      key: ValueKey(
+                        'staff-access-$clubId-${_staffAccessUserId(t)}',
+                      ),
+                      clubId: clubId,
+                      staffUserId: _staffAccessUserId(t),
+                      allTeams: allTeams,
+                      onChanged: onAccessChanged,
+                    )
+                  : _StaffAccessSummaryCard(
+                      role: role,
+                      teams: teams,
+                    ),
             const SizedBox(height: 12),
             if (onOpenDetailedProfile != null)
               _TrainerOpenWorkProfileButton(

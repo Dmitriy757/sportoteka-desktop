@@ -495,6 +495,16 @@ class TrackerProApi {
     ));
   }
 
+  Future<Map<String, dynamic>> deleteField({
+    required int teamId,
+    required int fieldId,
+  }) {
+    return _post('$apiBaseUrl/delete_tracker_field.php', <String, dynamic>{
+      'team_id': teamId,
+      'id': fieldId,
+    });
+  }
+
   Future<TrackerSpeedSettings> loadSettings({required int teamId}) async {
     final json = await _get('$apiBaseUrl/get_tracker_settings.php?team_id=$teamId');
     return TrackerSpeedSettings.fromJson(Map<String, dynamic>.from(json['settings'] as Map? ?? const {}));

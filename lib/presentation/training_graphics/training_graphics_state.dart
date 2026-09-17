@@ -651,6 +651,94 @@ class TgState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Добавляет редактируемый макет на поле одним нажатием в каталоге сцены.
+  /// Это объекты Flutter 2.5D; реальные mesh/prefab подключаются отдельно.
+  void addScenePreset(String preset) {
+    final count = _elements.where((e) => e.layer == '3d').length;
+    final center = Offset(
+      fieldLogicalSize.width / 2 + ((count % 5) - 2) * 72.0,
+      fieldLogicalSize.height / 2 + ((count ~/ 5) % 3 - 1) * 68.0,
+    );
+    final id = _newId();
+    TgElement element;
+    switch (preset) {
+      case 'player':
+      case 'opponent':
+        final opponent = preset == 'opponent';
+        element = TgStamp(
+          id: id,
+          asset: Uri(scheme: 'sportoteka', host: 'player-avatar', queryParameters: {
+            'name': opponent ? 'Соперник' : 'Игрок',
+            'number': '${count + 1}',
+            'ring': opponent ? '0xFFDC4255' : '0xFF00A750',
+            'team': opponent ? 'away' : 'home',
+          }).toString(),
+          pos: center, size: 62, rotation: 0, opacity: 1,
+          layer: '3d', name: opponent ? 'Соперник ${count + 1}' : 'Игрок ${count + 1}',
+        );
+        break;
+      case 'ball':
+      case 'cone':
+      case 'dummy':
+        element = TgStamp(
+          id: id, asset: 'sportoteka://$preset', pos: center,
+          size: preset == 'ball' ? 38 : (preset == 'cone' ? 48 : 72),
+          rotation: 0, opacity: 1, layer: '3d',
+          name: preset == 'ball' ? 'Мяч' : (preset == 'cone' ? 'Конус' : 'Манекен'),
+        );
+        break;
+      case 'arrow':
+        element = TgLine(
+          id: id, a: center - const Offset(65, 0),
+          b: center + const Offset(65, 0),
+          color: const Color(0xFF00A750), width: 5,
+          kind: LineKind.normal, end: LineEnd.arrow,
+          arrowSize: 22, opacity: 1, layer: '3d', name: 'Направление',
+        );
+        break;
+      case 'zone':
+        element = TgRect(
+          id: id, position: center, width: 190, height: 105,
+          rotation: 0, fill: const Color(0xFF00A750), opacity: .24,
+          border: const Color(0xFF00A750), borderWidth: 3,
+          borderKind: BorderKind.solid, borderRadius: 12,
+          layer: '3d', name: 'Зона',
+        );
+        break;
+      default:
+        return;
+    }
+    _commitUndo();
+    _elements.add(element);
+    selectedIds..clear()..add(id);
+    tool = TgTool.select;
+    notifyListeners();
+  }
+
+  /// Копирует геометрию маршрутов, чтобы копия шага не забирала маршруты
+  /// у исходного шага. Возвращает соответствие старых и новых ID.
+  Map<String, String> duplicateAnimationRoutes(Iterable<String> routeIds) {
+    final wanted = routeIds.toSet();
+    final originals = _elements.where((e) => wanted.contains(e.id) &&
+        (e is TgLine || e is TgCurve || e is TgWavy)).toList(growable: false);
+    if (originals.isEmpty) return const <String, String>{};
+    _commitUndo();
+    final mapping = <String, String>{};
+    final stamp = DateTime.now().microsecondsSinceEpoch;
+    for (var index = 0; index < originals.length; index++) {
+      final source = originals[index];
+      final copy = Map<String, dynamic>.from(source.toJson());
+      final copyId = '${stamp}_$index';
+      copy['id'] = copyId;
+      copy['name'] = '${source.name ?? 'Маршрут'} копия';
+      copy['createdAt'] = stamp + index;
+      _elements.add(TgElement.fromJson(copy));
+      mapping[source.id] = copyId;
+    }
+    notifyListeners();
+    return mapping;
+  }
+
   void selectMultiple(Set<String> ids) {
     selectedIds
       ..clear()

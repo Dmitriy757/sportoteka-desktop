@@ -1,9 +1,11 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import 'package:sportoteka/presentation/training_graphics/tg_models.dart';
 import 'package:sportoteka/presentation/training_graphics/training_graphics_state.dart';
+import 'package:sportoteka/presentation/training_graphics/tg_scene_export.dart';
 import 'package:sportoteka/presentation/training_graphics/widgets/tg_canvas.dart';
 import 'package:sportoteka/core/theme/app_typography.dart';
 
@@ -554,12 +556,14 @@ class _BasePanel extends StatelessWidget {
   final IconData icon;
   final Widget child;
   final VoidCallback onClose;
+  final ScrollController? scrollController;
 
   const _BasePanel({
     required this.title,
     required this.icon,
     required this.child,
     required this.onClose,
+    this.scrollController,
   });
 
   static const _green = Color(0xFF00A750);
@@ -592,6 +596,7 @@ class _BasePanel extends StatelessWidget {
           _buildHeader(),
           Expanded(
             child: SingleChildScrollView(
+              controller: scrollController,
               physics: const BouncingScrollPhysics(),
               padding: EdgeInsets.fromLTRB(
                 MediaQuery.of(context).size.width < 900 ? 10 : 14,
@@ -731,6 +736,7 @@ class _ObjectPanel extends _BasePanel {
   final VoidCallback? onOpen3DPro;
 
   _ObjectPanel({
+    super.scrollController,
     required this.state,
     required this.stamps,
     required this.onObjectSelected,
@@ -828,7 +834,7 @@ class _ObjectPanelContentState extends State<_ObjectPanelContent> {
       children: [
         _Section(
           title: 'Тактические схемы',
-          trailing: 'TacticalPad',
+          trailing: 'быстрый старт',
           child: Column(
             children: [
               _tacticalPresetRow([
@@ -1450,6 +1456,7 @@ class _EditorPanel extends _BasePanel {
   final void Function(String asset, PlayerColors colors)? onRefreshSvg;
 
   _EditorPanel({
+    super.scrollController,
     required this.state,
     required this.onRefreshSvg,
     required super.onClose,
@@ -1723,6 +1730,7 @@ class _ThreeDPanel extends _BasePanel {
   final GlobalKey<TgCanvasState> canvasKey;
 
   _ThreeDPanel({
+    super.scrollController,
     required this.state,
     required this.canvasKey,
     required super.onClose,
@@ -4383,6 +4391,7 @@ class _TemplatesPanel extends _BasePanel {
   final TgState state;
 
   _TemplatesPanel({
+    super.scrollController,
     required this.state,
     required super.onClose,
   }) : super(
@@ -4496,7 +4505,7 @@ class _TemplatesPanelContent extends StatelessWidget {
           state.applyTacticalPreset(t.key);
           _hint(context, t.key == 'clear_tactical'
               ? 'Тактический слой очищен.'
-              : 'Добавлен TacticalPad пресет «${t.title}». Откройте «Слои» или «Свойства» для редактирования.');
+              : 'Шаблон «${t.title}» добавлен. Его можно изменить в «Слоях» и «Свойствах».');
         },
         child: Container(
           padding: const EdgeInsets.all(10),
@@ -4635,6 +4644,7 @@ class _LayersPanel extends _BasePanel {
   final TgState state;
 
   _LayersPanel({
+    super.scrollController,
     required this.state,
     required super.onClose,
   }) : super(
@@ -4813,18 +4823,21 @@ class _ThreeDObjectsPanel extends _BasePanel {
   final TgState state;
 
   _ThreeDObjectsPanel({
+    super.scrollController,
     required this.state,
+    required VoidCallback onOpenCamera,
     required super.onClose,
   }) : super(
-          title: '3D объекты',
+          title: 'Объекты сцены',
           icon: Icons.view_in_ar_rounded,
-          child: _ThreeDObjectsPanelContent(state: state),
+          child: _ThreeDObjectsPanelContent(state: state, onOpenCamera: onOpenCamera),
         );
 }
 
 class _ThreeDObjectsPanelContent extends StatelessWidget {
-  const _ThreeDObjectsPanelContent({required this.state});
+  const _ThreeDObjectsPanelContent({required this.state, required this.onOpenCamera});
   final TgState state;
+  final VoidCallback onOpenCamera;
 
   static const _green = Color(0xFF00A750);
   static const _border = Color(0xFFE5E7EB);
@@ -4839,37 +4852,45 @@ class _ThreeDObjectsPanelContent extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _Section(
-          title: 'Логика 3D',
-          trailing: 'без тайминга',
+          title: 'Вид и инструменты',
+          trailing: state.is3DMode ? 'перспектива' : 'вид сверху',
           child: const Text(
-            'Тайминг убран из основного редактора. Здесь настраивается сцена: поле, камера, глубина, 3D-объекты и формат для Unity/GLB.',
-            style: TextStyle(fontFamily: AppTypography.fontFamily, color: _muted, fontSize: AppTypography.secondarySize, height: 1.35, fontWeight: FontWeight.w600),
+            'Нажмите на объект: он появится на поле. Перетащите его и откройте «Свойства». Перспектива работает в редакторе, модели GLB добавляются отдельно.',
+            style: TextStyle(fontFamily: AppTypography.fontFamily, color: _muted, fontSize: AppTypography.captionSize, height: 1.3, fontWeight: FontWeight.w500),
           ),
         ),
         const SizedBox(height: 12),
         _Section(
-          title: 'Формат сцены',
-          trailing: 'pipeline',
+          title: 'Вид и файл сцены',
           child: Column(
             children: [
-              _modeTile(context, Icons.layers_rounded, 'Flutter 2.5D', 'быстро: поле с перспективой, тени, глубина объектов'),
-              _modeTile(context, Icons.view_in_ar_rounded, 'GLB / glTF сцена', 'универсальный формат моделей и материалов'),
-              _modeTile(context, Icons.memory_rounded, 'Unity Scene JSON', 'координаты, камера, слои и объекты для Unity-модуля'),
+              _modeTile(Icons.layers_rounded, 'Поле с перспективой', 'Включить 2.5D вид и камеру',
+                  onTap: () => state.set3DParams(enabled: true, rotationX: -.34)),
+              _modeTile(Icons.memory_rounded, 'Скачать JSON сцены', 'Координаты, объекты, слои и камера',
+                  onTap: () => _saveScene(context)),
+              _modeTile(Icons.view_in_ar_rounded, 'GLB / glTF', 'Потребуются 3D-модели и конвертер'),
             ],
           ),
         ),
         const SizedBox(height: 12),
         _Section(
-          title: 'Профессиональные 3D объекты',
-          trailing: 'FIFA style',
+          title: 'Поставить на поле',
+          trailing: '2.5D макеты',
           child: Column(
             children: [
-              _assetTile(context, Icons.person_rounded, '3D футболист', 'силуэт/манекен игрока с номером'),
-              _assetTile(context, Icons.sports_soccer_rounded, 'Мяч', 'объект с тенью и масштабом'),
-              _assetTile(context, Icons.traffic_rounded, 'Конус / маркер', 'тренировочные точки на поле'),
-              _assetTile(context, Icons.height_rounded, '3D стрелка', 'стрелка с толщиной, высотой и тенью'),
-              _assetTile(context, Icons.blur_circular_rounded, 'Объёмная зона', 'полупрозрачная зона с мягким свечением'),
-              _assetTile(context, Icons.videocam_rounded, 'Камера трансляции', 'точка камеры для вида TV/тактика'),
+              _assetTile(Icons.person_rounded, 'Наш игрок', 'Маркер с номером, цветом и именем', 'player'),
+              _assetTile(Icons.person_outline_rounded, 'Соперник', 'Контрастный маркер другой команды', 'opponent'),
+              _assetTile(Icons.sports_soccer_rounded, 'Мяч', 'Передвигайте вместе с игроками', 'ball'),
+              _assetTile(Icons.traffic_rounded, 'Конус', 'Точка тренировочного упражнения', 'cone'),
+              _assetTile(Icons.accessibility_new_rounded, 'Манекен', 'Препятствие на поле', 'dummy'),
+              _assetTile(Icons.trending_flat_rounded, 'Стрелка', 'Редактируемое направление', 'arrow'),
+              _assetTile(Icons.crop_square_rounded, 'Зона', 'Изменяемые границы и прозрачность', 'zone'),
+              _cleanTile(
+                icon: Icons.videocam_rounded,
+                title: 'Камера',
+                subtitle: 'Открыть настройки ракурса поля',
+                onTap: onOpenCamera,
+              ),
             ],
           ),
         ),
@@ -4877,16 +4898,17 @@ class _ThreeDObjectsPanelContent extends StatelessWidget {
         if (selected != null)
           _Section(
             title: 'Выбранный объект',
-            trailing: '3D props',
+            trailing: 'свойства',
             child: Column(
               children: [
                 _selectedObjectRow(selected),
                 const SizedBox(height: 8),
-                Row(
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
                   children: [
-                    Expanded(child: _smallAction(context, 'В 3D слой', Icons.view_in_ar_rounded, () => _markElement(selected, layer: '3d'))),
-                    const SizedBox(width: 8),
-                    Expanded(child: _smallAction(context, 'Заблокировать', Icons.lock_rounded, () => _markElement(selected, locked: true))),
+                    _smallAction(context, 'В слой сцены', Icons.view_in_ar_rounded, () => _markElement(selected, layer: '3d')),
+                    _smallAction(context, 'Заблокировать', Icons.lock_rounded, () => _markElement(selected, locked: true)),
                   ],
                 ),
               ],
@@ -4895,7 +4917,7 @@ class _ThreeDObjectsPanelContent extends StatelessWidget {
         else
           _Section(
             title: 'Выбранный объект',
-            child: const Text('Выберите элемент на поле или в списке ниже, чтобы назначить ему 3D-слой и свойства.', style: TextStyle(fontFamily: AppTypography.fontFamily, color: _muted, fontSize: AppTypography.secondarySize, height: 1.35, fontWeight: FontWeight.w600)),
+            child: const Text('Выберите элемент на поле или ниже, чтобы изменить слой и свойства.', style: TextStyle(fontFamily: AppTypography.fontFamily, color: _muted, fontSize: AppTypography.captionSize, height: 1.3, fontWeight: FontWeight.w500)),
           ),
         const SizedBox(height: 12),
         _Section(
@@ -4909,25 +4931,51 @@ class _ThreeDObjectsPanelContent extends StatelessWidget {
     );
   }
 
-  Widget _modeTile(BuildContext context, IconData icon, String title, String subtitle) {
+  Widget _modeTile(IconData icon, String title, String subtitle, {VoidCallback? onTap}) {
     return _cleanTile(
       icon: icon,
       title: title,
       subtitle: subtitle,
-      onTap: () => _hint(context, 'Выбран формат «$title». Реальный экспорт подключается отдельным шагом через JSON/GLB pipeline.'),
+      onTap: onTap,
     );
   }
 
-  Widget _assetTile(BuildContext context, IconData icon, String title, String subtitle) {
+  Widget _assetTile(IconData icon, String title, String subtitle, String preset) {
     return _cleanTile(
       icon: icon,
       title: title,
       subtitle: subtitle,
-      onTap: () => _hint(context, 'Объект «$title» добавлен как профессиональный 3D-пресет интерфейса. Следующий шаг — связать его с GLB-моделью/Unity prefab.'),
+      onTap: () => state.addScenePreset(preset),
     );
   }
 
-  Widget _cleanTile({required IconData icon, required String title, required String subtitle, required VoidCallback onTap}) {
+  Future<void> _saveScene(BuildContext context) async {
+    try {
+      final saved = await TgSceneExport.save(state);
+      if (!context.mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('JSON сцены сохранён'),
+          content: SelectableText(saved),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: saved));
+                Navigator.of(dialogContext).pop();
+              },
+              child: const Text('Копировать путь'),
+            ),
+            TextButton(onPressed: () => Navigator.of(dialogContext).pop(), child: const Text('Готово')),
+          ],
+        ),
+      );
+    } catch (error) {
+      if (context.mounted) _hint(context, 'Не удалось сохранить JSON: $error');
+    }
+  }
+
+  Widget _cleanTile({required IconData icon, required String title, required String subtitle, VoidCallback? onTap}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Material(
@@ -4948,7 +4996,7 @@ class _ThreeDObjectsPanelContent extends StatelessWidget {
                   width: 34,
                   height: 34,
                   decoration: BoxDecoration(color: const Color(0xFFF3FBF7), borderRadius: BorderRadius.circular(12)),
-                  child: Icon(icon, size: 18, color: _green),
+                  child: Icon(icon, size: 18, color: onTap == null ? _muted : _green),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
@@ -4961,7 +5009,7 @@ class _ThreeDObjectsPanelContent extends StatelessWidget {
                     ],
                   ),
                 ),
-                const Icon(Icons.chevron_right_rounded, size: 18, color: _muted),
+                if (onTap != null) const Icon(Icons.chevron_right_rounded, size: 18, color: _muted),
               ],
             ),
           ),
@@ -4979,7 +5027,7 @@ class _ThreeDObjectsPanelContent extends StatelessWidget {
           Icon(_elementIcon(e), size: 18, color: _green),
           const SizedBox(width: 8),
           Expanded(child: Text(_elementTitle(e), style: const TextStyle(fontFamily: AppTypography.fontFamily, color: _txt, fontSize: AppTypography.secondarySize, fontWeight: FontWeight.w900))),
-          Text(e.layer == '3d' ? '3D' : '2D', style: TextStyle(fontFamily: AppTypography.fontFamily, color: e.layer == '3d' ? _green : _muted, fontSize: AppTypography.captionSize, fontWeight: FontWeight.w900)),
+          Text(e.layer == '3d' ? 'Сцена' : 'Схема', style: TextStyle(fontFamily: AppTypography.fontFamily, color: e.layer == '3d' ? _green : _muted, fontSize: AppTypography.captionSize, fontWeight: FontWeight.w900)),
         ],
       ),
     );
@@ -5012,7 +5060,7 @@ class _ThreeDObjectsPanelContent extends StatelessWidget {
                     children: [
                       Text(_elementTitle(e), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontFamily: AppTypography.fontFamily, color: _txt, fontSize: AppTypography.secondarySize, fontWeight: FontWeight.w800)),
                       const SizedBox(height: 2),
-                      Text(is3d ? '3D слой / экспортируемый объект' : '2D слой / схема', style: const TextStyle(fontFamily: AppTypography.fontFamily, color: _muted, fontSize: AppTypography.captionSize, fontWeight: FontWeight.w600)),
+                      Text(is3d ? 'Слой сцены / 2.5D' : 'Слой схемы', style: const TextStyle(fontFamily: AppTypography.fontFamily, color: _muted, fontSize: AppTypography.captionSize, fontWeight: FontWeight.w600)),
                     ],
                   ),
                 ),
@@ -5026,7 +5074,7 @@ class _ThreeDObjectsPanelContent extends StatelessWidget {
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(color: is3d ? _green.withOpacity(.45) : _border),
                     ),
-                    child: Text(is3d ? '3D' : '+3D', style: TextStyle(fontFamily: AppTypography.fontFamily, color: is3d ? _green : _muted, fontSize: AppTypography.captionSize, fontWeight: FontWeight.w900)),
+                    child: Text(is3d ? 'Сцена' : '+Сцена', style: TextStyle(fontFamily: AppTypography.fontFamily, color: is3d ? _green : _muted, fontSize: AppTypography.captionSize, fontWeight: FontWeight.w900)),
                   ),
                 ),
               ],
@@ -5055,11 +5103,16 @@ class _ThreeDObjectsPanelContent extends StatelessWidget {
     final json = Map<String, dynamic>.from(e.toJson());
     if (locked != null) json['locked'] = locked;
     if (layer != null) json['layer'] = layer;
-    state.replaceElement(TgElement.fromJson(json));
+    state.replaceElement(TgElement.fromJson(json), commitUndo: true);
   }
 
   void _hint(BuildContext context, String text) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text), behavior: SnackBarBehavior.floating, duration: const Duration(seconds: 2)));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(text),
+      behavior: SnackBarBehavior.floating,
+      width: math.min(360.0, MediaQuery.sizeOf(context).width - 24),
+      duration: const Duration(seconds: 2),
+    ));
   }
 }
 
@@ -5068,6 +5121,7 @@ class _ExportPanel extends _BasePanel {
   final VoidCallback? onExportPng;
 
   _ExportPanel({
+    super.scrollController,
     required this.state,
     this.onExportPng,
     required super.onClose,
@@ -5094,26 +5148,24 @@ class _ExportPanelContent extends StatelessWidget {
       children: [
         _Section(
           title: 'Форматы',
-          trailing: 'pro',
+          trailing: 'доступно сейчас',
           child: Column(
             children: [
-              _exportTile(context, Icons.image, 'PNG 4K кадр', 'для отчёта, презентации, Telegram', onExportPng),
-              _exportTile(context, Icons.view_in_ar_rounded, 'GLB / Unity сцена', 'поле + объекты + камера для 3D пайплайна', null),
-              _exportTile(context, Icons.picture_as_pdf, 'PDF разбор', 'схема + список элементов + заметки', null),
-              _exportTile(context, Icons.sports_soccer_rounded, 'FIFA overlay', 'прозрачные слои поверх видео/кадра', null),
+              _exportTile(context, Icons.image, 'PNG текущего кадра', 'поле и схема без панелей', onExportPng),
+              _exportTile(context, Icons.memory_rounded, 'JSON сцены', 'геометрия, объекты, слои и камера', () => _saveScene(context)),
+              _exportTile(context, Icons.view_in_ar_rounded, 'GLB / glTF', 'понадобятся модели и конвертер', null),
+              _exportTile(context, Icons.picture_as_pdf, 'PDF / MP4', 'понадобится сборка документа и кадров', null),
             ],
           ),
         ),
         const SizedBox(height: 12),
         _Section(
-          title: 'Качество',
-          trailing: 'broadcast',
+          title: 'Параметры',
           child: Column(
             children: const [
-              _QualityRow('Разрешение', '3840 × 2160'),
-              _QualityRow('FPS анимации', '30'),
-              _QualityRow('Фон', 'поле + прозрачные слои'),
-              _QualityRow('Стиль', 'FIFA / CMR'),
+              _QualityRow('Изображение', 'текущий вид ×3'),
+              _QualityRow('Сцена', 'JSON v1'),
+              _QualityRow('3D-модели', 'не включены'),
             ],
           ),
         ),
@@ -5142,13 +5194,13 @@ class _ExportPanelContent extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         child: InkWell(
           borderRadius: BorderRadius.circular(14),
-          onTap: onTap ?? () => _hint(context, 'Формат «$title» добавлен как pro-раздел интерфейса. Для реального файла нужен следующий шаг: backend/export или desktop file saver.'),
+          onTap: onTap,
           child: Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(borderRadius: BorderRadius.circular(14), border: Border.all(color: _border)),
             child: Row(
               children: [
-                Container(width: 34, height: 34, decoration: BoxDecoration(color: const Color(0xFFF3FBF7), borderRadius: BorderRadius.circular(11)), child: Icon(icon, color: _green, size: 18)),
+                Container(width: 34, height: 34, decoration: BoxDecoration(color: const Color(0xFFF3FBF7), borderRadius: BorderRadius.circular(11)), child: Icon(icon, color: onTap == null ? _muted : _green, size: 18)),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -5157,7 +5209,7 @@ class _ExportPanelContent extends StatelessWidget {
                     Text(subtitle, style: const TextStyle(fontFamily: AppTypography.fontFamily, color: _muted, fontSize: AppTypography.captionSize, height: 1.2, fontWeight: FontWeight.w600)),
                   ]),
                 ),
-                const Icon(Icons.chevron_right, color: _muted, size: 18),
+                if (onTap != null) const Icon(Icons.chevron_right, color: _muted, size: 18),
               ],
             ),
           ),
@@ -5178,8 +5230,32 @@ class _ExportPanelContent extends StatelessWidget {
     );
   }
 
-  void _hint(BuildContext context, String text) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text), behavior: SnackBarBehavior.floating));
+  Future<void> _saveScene(BuildContext context) async {
+    try {
+      final saved = await TgSceneExport.save(state);
+      if (!context.mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('JSON сцены сохранён'),
+          content: SelectableText(saved),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: saved));
+                Navigator.of(dialogContext).pop();
+              },
+              child: const Text('Копировать путь'),
+            ),
+            TextButton(onPressed: () => Navigator.of(dialogContext).pop(), child: const Text('Готово')),
+          ],
+        ),
+      );
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('JSON: $error')));
+      }
+    }
   }
 }
 
@@ -5248,6 +5324,10 @@ class TgRightPanel extends StatefulWidget {
     this.teamPlayersError,
     this.onOpen3DPro,
     this.initialPanel = TgPanel.objects,
+    this.sheetScrollController,
+    this.panelOpenRevision = 0,
+    this.onPanelOpened,
+    this.onPanelClosed,
   });
 
   final TgState state;
@@ -5261,6 +5341,10 @@ class TgRightPanel extends StatefulWidget {
   final String? teamPlayersError;
   final VoidCallback? onOpen3DPro;
   final TgPanel initialPanel;
+  final ScrollController? sheetScrollController;
+  final int panelOpenRevision;
+  final ValueChanged<TgPanel>? onPanelOpened;
+  final VoidCallback? onPanelClosed;
 
   @override
   State<TgRightPanel> createState() => _TgRightPanelState();
@@ -5288,7 +5372,8 @@ class _TgRightPanelState extends State<TgRightPanel> {
   @override
   void didUpdateWidget(covariant TgRightPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.initialPanel != widget.initialPanel) {
+    if (oldWidget.initialPanel != widget.initialPanel ||
+        oldWidget.panelOpenRevision != widget.panelOpenRevision) {
       setState(() => _activePanel = widget.initialPanel);
     }
   }
@@ -5301,31 +5386,36 @@ class _TgRightPanelState extends State<TgRightPanel> {
 
   void _onStateChanged() {
     if (!mounted) return;
+    if (_activePanel == TgPanel.editor && widget.state.selected == null) {
+      _closeAllPanels();
+      return;
+    }
     setState(() {});
   }
 
   void _closeAllPanels() {
+    if (_activePanel == TgPanel.none) return;
     setState(() {
       _activePanel = TgPanel.none;
     });
+    widget.onPanelClosed?.call();
   }
 
   void _openPanel(TgPanel panel, {bool enable3D = false}) {
+    final closing = _activePanel == panel;
     setState(() {
-      if (_activePanel == panel) {
+      if (closing) {
         _activePanel = TgPanel.none;
-        if (widget.state.is3DMode && !enable3D) {
-          widget.state.toggle3DMode();
-        }
       } else {
         _activePanel = panel;
-        if (enable3D) {
-          if (!widget.state.is3DMode) widget.state.toggle3DMode();
-        } else if (widget.state.is3DMode) {
-          widget.state.toggle3DMode();
-        }
+        if (enable3D && !widget.state.is3DMode) widget.state.toggle3DMode();
       }
     });
+    if (closing) {
+      widget.onPanelClosed?.call();
+    } else {
+      widget.onPanelOpened?.call(panel);
+    }
   }
 
   void _openObjectPanel() => _openPanel(TgPanel.objects);
@@ -5351,9 +5441,17 @@ class _TgRightPanelState extends State<TgRightPanel> {
   @override
   Widget build(BuildContext context) {
     final safe = _panelInsets(context);
+    final phoneDock = MediaQuery.of(context).size.width < 700;
+    final panelRight = phoneDock ? 68.0 : 88.0;
+    final panelLeft = phoneDock ? 4.0 : null;
 
     return Stack(
       children: [
+        if ((!_panelOpen || (_activePanel == TgPanel.editor && widget.state.selected == null)) &&
+            widget.sheetScrollController != null)
+          Positioned.fill(
+            child: ListView(controller: widget.sheetScrollController),
+          ),
         if (_panelOpen)
           Positioned.fill(
             child: GestureDetector(
@@ -5364,10 +5462,12 @@ class _TgRightPanelState extends State<TgRightPanel> {
           ),
         if (_activePanel == TgPanel.objects)
           Positioned(
-            right: 88,
+            right: panelRight,
+            left: panelLeft,
             top: safe.top,
             bottom: safe.bottom,
             child: _ObjectPanel(
+              scrollController: widget.sheetScrollController,
               state: widget.state,
               stamps: widget.stamps,
               onObjectSelected: (asset) {
@@ -5391,40 +5491,49 @@ class _TgRightPanelState extends State<TgRightPanel> {
           ),
         if (_activePanel == TgPanel.templates)
           Positioned(
-            right: 88,
+            right: panelRight,
+            left: panelLeft,
             top: safe.top,
             bottom: safe.bottom,
             child: _TemplatesPanel(
+              scrollController: widget.sheetScrollController,
               state: widget.state,
               onClose: _closeAllPanels,
             ),
           ),
         if (_activePanel == TgPanel.layers)
           Positioned(
-            right: 88,
+            right: panelRight,
+            left: panelLeft,
             top: safe.top,
             bottom: safe.bottom,
             child: _LayersPanel(
+              scrollController: widget.sheetScrollController,
               state: widget.state,
               onClose: _closeAllPanels,
             ),
           ),
         if (_activePanel == TgPanel.assets3d)
           Positioned(
-            right: 88,
+            right: panelRight,
+            left: panelLeft,
             top: safe.top,
             bottom: safe.bottom,
             child: _ThreeDObjectsPanel(
+              scrollController: widget.sheetScrollController,
               state: widget.state,
+              onOpenCamera: _open3DPanel,
               onClose: _closeAllPanels,
             ),
           ),
         if (_activePanel == TgPanel.export)
           Positioned(
-            right: 88,
+            right: panelRight,
+            left: panelLeft,
             top: safe.top,
             bottom: safe.bottom,
             child: _ExportPanel(
+              scrollController: widget.sheetScrollController,
               state: widget.state,
               onExportPng: widget.onExportPng,
               onClose: _closeAllPanels,
@@ -5432,10 +5541,12 @@ class _TgRightPanelState extends State<TgRightPanel> {
           ),
         if (_activePanel == TgPanel.editor && widget.state.selected != null)
           Positioned(
-            right: 88,
+            right: panelRight,
+            left: panelLeft,
             top: safe.top,
             bottom: safe.bottom,
             child: _EditorPanel(
+              scrollController: widget.sheetScrollController,
               state: widget.state,
               onRefreshSvg: widget.onRefreshSvg,
               onClose: _closeAllPanels,
@@ -5443,10 +5554,12 @@ class _TgRightPanelState extends State<TgRightPanel> {
           ),
         if (_activePanel == TgPanel.threeD)
           Positioned(
-            right: 88,
+            right: panelRight,
+            left: panelLeft,
             top: safe.top,
             bottom: safe.bottom,
             child: _ThreeDPanel(
+              scrollController: widget.sheetScrollController,
               state: widget.state,
               canvasKey: widget.canvasKey,
               onClose: _closeAllPanels,

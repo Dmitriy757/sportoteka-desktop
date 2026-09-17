@@ -821,6 +821,9 @@ class _MyProfileScreenState extends State<MyProfileScreen>
   String lastName = "";
   String email = "";
   String role = "";
+  // Отдельная должность, выданная клубом через ключ/назначение.
+  // Базовый users.role может при этом оставаться trainer.
+  String _assignedStaffRole = "";
   Map<String, dynamic>? _pressAssistantAssignment;
   String? photo;
   String? bio;
@@ -915,7 +918,54 @@ class _MyProfileScreenState extends State<MyProfileScreen>
     return r == 'club' || r == 'клуб' || r.contains('club');
   }
 
+  String _normalizeAssignedStaffRole(dynamic value) {
+    final v = '${value ?? ''}'.trim().toLowerCase();
+    if (v.isEmpty || v == 'null') return '';
+
+    if (v.contains('press') || v.contains('пресс')) return 'press';
+
+    if (v == 'doctor' ||
+        v == 'medic' ||
+        v.contains('medical') ||
+        v.contains('мед') ||
+        v.contains('врач')) {
+      return 'medic';
+    }
+
+    if (v.contains('assistant') ||
+        v.contains('ассист') ||
+        v.contains('помощ')) {
+      return 'assistant';
+    }
+
+    if (v == 'main' ||
+        v.contains('head_coach') ||
+        v.contains('head coach') ||
+        v.contains('главн')) {
+      return 'head_coach';
+    }
+
+    return '';
+  }
+
+  String get _assignedStaffRoleLabel {
+    switch (_assignedStaffRole) {
+      case 'press':
+        return 'пресс-служба';
+      case 'medic':
+        return 'медик';
+      case 'assistant':
+        return 'ассистент';
+      case 'head_coach':
+        return 'главный тренер';
+      default:
+        return '';
+    }
+  }
+
   bool get hasPressAssistantAccess {
+    if (_assignedStaffRole == 'press') return true;
+
     final r = role.trim().toLowerCase();
     if (r == 'press_assistant' ||
         r == 'press' ||
@@ -1011,6 +1061,11 @@ class _MyProfileScreenState extends State<MyProfileScreen>
   }
 
   String get _roleLabel {
+    // Для подписи в профиле важнее фактически назначенная клубом должность,
+    // чем общий users.role=trainer. Логика доступа при этом не меняется.
+    final assigned = _assignedStaffRoleLabel;
+    if (assigned.isNotEmpty) return assigned;
+
     if (isPressAssistantRole) return 'пресс-служба';
     if (isClubRole) return 'клуб';
     if (isCoachRole) return 'тренер';
@@ -1024,6 +1079,10 @@ class _MyProfileScreenState extends State<MyProfileScreen>
     if (_isPublicProfileView) return _publicProfileTitle;
     final team = (playerTeamName ?? '').trim();
     final club = (playerClubName ?? '').trim();
+
+    final assigned = _assignedStaffRoleLabel;
+    if (assigned.isNotEmpty) return 'Вы вошли как $assigned';
+
     if (isPressAssistantRole) return 'Вы вошли как пресс-служба';
     if (isClubRole) return 'Вы вошли как клуб';
     if (isCoachRole)
@@ -2734,56 +2793,66 @@ class _MyProfileScreenState extends State<MyProfileScreen>
     final viewedUserId = widget.userId ?? currentUserId;
     if (currentUserId <= 0 || viewedUserId != currentUserId) return;
 
-    bool isPressValue(dynamic value) {
-      final v = '${value ?? ''}'.trim().toLowerCase();
-      return v == 'press_assistant' ||
-          v == 'press' ||
-          v == 'press_service' ||
-          v.contains('press_assistant') ||
-          v.contains('пресс');
+    int priorityFor(String code) {
+      switch (code) {
+        case 'press':
+          return 400;
+        case 'medic':
+          return 300;
+        case 'assistant':
+          return 200;
+        case 'head_coach':
+          return 100;
+        default:
+          return 0;
+      }
     }
 
-    Map<String, dynamic>? firstPressFrom(dynamic node) {
+    String bestRole = '';
+    int bestPriority = 0;
+    Map<String, dynamic>? bestAssignment;
+    Map<String, dynamic>? pressAssignment;
+
+    void inspect(dynamic node) {
       if (node is Map) {
         final map = Map<String, dynamic>.from(node);
 
-        // Новый get_trainer_profile.php возвращает отдельный массив
-        // press_assignments из club_press_staff. Используем его первым.
+        // get_trainer_profile.php в разных версиях отдаёт должность
+        // в разных полях. Проверяем все известные варианты.
         for (final key in const <String>[
-          'press_assignments',
-          'press_teams',
+          'profile',
+          'link_profile',
+          'staff_role',
+          'position_code',
+          'role_code',
+          'position',
+          'role_title',
+          'specialization',
+          'role',
         ]) {
-          final raw = map[key];
-          if (raw is List) {
-            for (final item in raw.whereType<Map>()) {
-              final assignment = Map<String, dynamic>.from(item);
-              if (isPressValue(assignment['profile']) ||
-                  isPressValue(assignment['link_profile'])) {
-                return assignment;
-              }
-            }
+          final code = _normalizeAssignedStaffRole(map[key]);
+          if (code.isEmpty) continue;
+
+          if (code == 'press' && pressAssignment == null) {
+            pressAssignment = Map<String, dynamic>.from(map);
+          }
+
+          final priority = priorityFor(code);
+          if (priority > bestPriority) {
+            bestPriority = priority;
+            bestRole = code;
+            bestAssignment = Map<String, dynamic>.from(map);
           }
         }
 
-        if (isPressValue(map['profile']) ||
-            isPressValue(map['link_profile']) ||
-            isPressValue(map['staff_role']) ||
-            isPressValue(map['position_code'])) {
-          return map;
-        }
-
         for (final value in map.values) {
-          final found = firstPressFrom(value);
-          if (found != null) return found;
+          inspect(value);
         }
       } else if (node is List) {
         for (final value in node) {
-          final found = firstPressFrom(value);
-          if (found != null) return found;
+          inspect(value);
         }
       }
-
-      return null;
     }
 
     try {
@@ -2807,32 +2876,32 @@ class _MyProfileScreenState extends State<MyProfileScreen>
         decoded = null;
       }
 
-      final found = firstPressFrom(decoded);
+      inspect(decoded);
+
+      // Если профиль тренера ничего специального не вернул, пробуем
+      // сам users.role. Для обычного trainer это даст пустую строку.
+      if (bestRole.isEmpty) {
+        bestRole = _normalizeAssignedStaffRole(role);
+        if (bestRole == 'press') {
+          pressAssignment = <String, dynamic>{'profile': 'press_assistant'};
+        }
+      }
 
       if (!mounted) return;
-
-      if (found != null) {
-        setState(() => _pressAssistantAssignment = found);
-        return;
-      }
-
-      final r = role.trim().toLowerCase();
-      if (r.contains('press') || r.contains('пресс')) {
-        setState(() {
-          _pressAssistantAssignment = <String, dynamic>{
-            'profile': 'press_assistant',
-          };
-        });
-      }
+      setState(() {
+        _assignedStaffRole = bestRole;
+        _pressAssistantAssignment = pressAssignment ??
+            (bestRole == 'press' ? bestAssignment : null);
+      });
     } catch (_) {
-      final r = role.trim().toLowerCase();
-      if (mounted && (r.contains('press') || r.contains('пресс'))) {
-        setState(() {
-          _pressAssistantAssignment = <String, dynamic>{
-            'profile': 'press_assistant',
-          };
-        });
-      }
+      final fallback = _normalizeAssignedStaffRole(role);
+      if (!mounted) return;
+      setState(() {
+        _assignedStaffRole = fallback;
+        _pressAssistantAssignment = fallback == 'press'
+            ? <String, dynamic>{'profile': 'press_assistant'}
+            : null;
+      });
     }
   }
 
@@ -6501,6 +6570,41 @@ class _MyProfileScreenState extends State<MyProfileScreen>
     );
   }
 
+  void _handleNotificationNavigate(
+    String target,
+    Map<String, dynamic> payload,
+  ) {
+    if (!mounted) return;
+
+    final normalizedTarget = target.trim().toLowerCase();
+
+    if (normalizedTarget == 'reel' || normalizedTarget == 'reels') {
+      final reelId = _toInt(payload['reel_id']);
+
+      // Если в старом уведомлении нет reel_id — просто открываем общую ленту.
+      if (reelId <= 0) {
+        _openGlobalReels();
+        return;
+      }
+
+      _openCmrWindow(
+        title: 'Reels сообщества',
+        icon: Icons.play_circle_fill_rounded,
+        maxWidth: 720,
+        maxHeight: 820,
+        child: ReelsScreen(
+          initialReelId: reelId,
+          openCommentsOnStart: true,
+        ),
+      );
+
+      if (mounted) {
+        setState(() => _mobileDockKey = 'reels');
+      }
+      return;
+    }
+  }
+
   Future<void> _openImportantNotifications() async {
     final myId = await PrefUtils.getUserId() ?? widget.userId ?? 0;
     if (!mounted || myId <= 0) return;
@@ -6516,6 +6620,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
           if (!mounted) return;
           setState(() => _importantNotificationCount = value);
         },
+        onNavigate: _handleNotificationNavigate,
       ),
     );
   }
@@ -7183,6 +7288,9 @@ class _MyProfileScreenState extends State<MyProfileScreen>
     ].join(' · ');
 
     final avatarSize = compactSocial ? 76.0 : 92.0;
+    final workspaceName = _activeWorkspaceName.trim();
+    final showWorkspaceName = workspaceName.isNotEmpty &&
+        workspaceName.toLowerCase() != fullName.trim().toLowerCase();
 
     return Container(
       color: Colors.white,
@@ -7207,7 +7315,12 @@ class _MyProfileScreenState extends State<MyProfileScreen>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (isClubRole || isCoachRole || isPlayer || isParentRole)
+                    if (isClubRole ||
+                        isCoachRole ||
+                        isPlayer ||
+                        isParentRole ||
+                        isPressAssistantRole ||
+                        _assignedStaffRoleLabel.isNotEmpty)
                       Padding(
                         padding: EdgeInsets.only(
                           bottom: compactSocial ? 3 : 6,
@@ -7230,19 +7343,19 @@ class _MyProfileScreenState extends State<MyProfileScreen>
                         weight: FontWeight.w600,
                       ),
                     ),
-                    SizedBox(height: compactSocial ? 3 : 7),
-                    Text(
-                      _activeWorkspaceName.isEmpty
-                          ? 'Sportoteka'
-                          : _activeWorkspaceName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: _flagshipText(
-                        compactSocial ? 10.2 : 11.5,
-                        color: const Color(0xFF667085),
-                        weight: FontWeight.w400,
+                    if (showWorkspaceName) ...[
+                      SizedBox(height: compactSocial ? 3 : 7),
+                      Text(
+                        workspaceName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: _flagshipText(
+                          compactSocial ? 10.2 : 11.5,
+                          color: const Color(0xFF667085),
+                          weight: FontWeight.w400,
+                        ),
                       ),
-                    ),
+                    ],
                     if (infoLine.isNotEmpty) ...[
                       SizedBox(height: compactSocial ? 3 : 7),
                       Text(
@@ -7906,7 +8019,10 @@ class _MyProfileScreenState extends State<MyProfileScreen>
         child: Material(
           color: Colors.white,
           child: SafeArea(
-            top: false,
+            // На iPhone внутренние разделы (Поиск, Чаты, Лента и т.д.)
+            // не должны заходить под status bar / Dynamic Island.
+            // Снизу SafeArea не нужен: там остаётся постоянный нижний dock.
+            top: true,
             bottom: false,
             child: Container(
               width: double.infinity,
