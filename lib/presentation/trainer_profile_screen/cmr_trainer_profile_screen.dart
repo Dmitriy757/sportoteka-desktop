@@ -1192,97 +1192,88 @@ class _CmrTrainerProfileScreenState
     setState(() => _saving = true);
 
     try {
-      final actorUserId =
-          await PrefUtils.getUserId() ?? 0;
+      final actorUserId = await PrefUtils.getUserId() ?? 0;
       final actorRole =
-          (await PrefUtils.getRole())
-              .trim()
-              .toLowerCase();
+          (await PrefUtils.getRole()).trim().toLowerCase();
 
-      http.Response response;
+      // Один формат запроса для всех случаев: multipart/form-data.
+      // Это устраняет расхождение между JSON-сохранением и сохранением с фото
+      // и надёжнее работает с XFile на macOS/iOS.
+      final request = http.MultipartRequest(
+        'POST',
+        Uri.parse(_updateProfileUrl),
+      );
 
-      final fields = <String, String>{
+      request.fields.addAll(<String, String>{
+        'trainer_id': '$trainerId',
+        'user_id': '$trainerId',
         'actor_user_id': '$actorUserId',
         'actor_role': actorRole,
-        'trainer_id': '$trainerId',
         'position': _positionC.text.trim(),
-        'specialization':
-            _specializationC.text.trim(),
+        'specialization': _specializationC.text.trim(),
         'city': _cityC.text.trim(),
-        'work_locations':
-            _locationsC.text.trim(),
+        'work_locations': _locationsC.text.trim(),
         'birthday': _birthdayC.text.trim(),
         'experience': _experienceC.text.trim(),
         'phone': _phoneC.text.trim(),
         'bio': _bioC.text.trim(),
-      };
+      });
 
       if (_pickedPhoto != null) {
-        final request = http.MultipartRequest(
-          'POST',
-          Uri.parse(_updateProfileUrl),
-        );
+        final bytes = await _pickedPhoto!.readAsBytes();
+        if (bytes.isEmpty) {
+          _snack('Выбранное фото пустое');
+          return;
+        }
 
-        request.fields.addAll(fields);
+        final fileName = _pickedPhoto!.name.trim().isEmpty
+            ? 'trainer_$trainerId.jpg'
+            : _pickedPhoto!.name.trim();
+
         request.files.add(
-          await http.MultipartFile.fromPath(
+          http.MultipartFile.fromBytes(
             'photo',
-            File(_pickedPhoto!.path).path,
-          ),
-        );
-
-        final streamed = await request.send();
-        response = http.Response(
-          await streamed.stream.bytesToString(),
-          streamed.statusCode,
-        );
-      } else {
-        response = await http.post(
-          Uri.parse(_updateProfileUrl),
-          headers: const <String, String>{
-            'Content-Type':
-                'application/json; charset=utf-8',
-          },
-          body: jsonEncode(
-            <String, dynamic>{
-              'trainer_id': trainerId,
-              'actor_user_id':
-                  actorUserId,
-              'actor_role': actorRole,
-              'position': _positionC.text.trim(),
-              'specialization':
-                  _specializationC.text.trim(),
-              'city': _cityC.text.trim(),
-              'work_locations':
-                  _locationsC.text.trim(),
-              'birthday': _birthdayC.text.trim(),
-              'experience':
-                  _experienceC.text.trim(),
-              'phone': _phoneC.text.trim(),
-              'bio': _bioC.text.trim(),
-            },
+            bytes,
+            filename: fileName,
           ),
         );
       }
 
-      final data = _decode(response.body);
+      final streamed =
+          await request.send().timeout(const Duration(seconds: 35));
+      final body = await streamed.stream.bytesToString();
+      final data = _decode(body);
 
-      if (!_success(data)) {
+      final ok = streamed.statusCode >= 200 &&
+          streamed.statusCode < 300 &&
+          _success(data);
+
+      if (!ok) {
         final message = data is Map
-            ? _s(
-                data['message'] ??
-                    data['error'],
-              )
+            ? _s(data['message'] ?? data['error'] ?? data['detail'])
             : '';
-        _snack(
-          message.isEmpty
-              ? 'Не удалось сохранить профиль'
-              : message,
-        );
+
+        final fallback = body.trim().isEmpty
+            ? 'HTTP ${streamed.statusCode}'
+            : 'HTTP ${streamed.statusCode}: ${body.trim().length > 240 ? '${body.trim().substring(0, 240)}…' : body.trim()}';
+
+        _snack(message.isEmpty ? fallback : message);
         return;
       }
 
       if (!mounted) return;
+
+      // Если сервер вернул обновлённый профиль — показываем его сразу,
+      // ещё до повторной загрузки карточки.
+      if (data is Map && data['profile'] is Map) {
+        final returned = Map<String, dynamic>.from(data['profile'] as Map);
+        setState(() {
+          _profile = <String, dynamic>{
+            ..._profile,
+            ...returned,
+          };
+        });
+      }
 
       setState(() {
         _editorOpen = false;

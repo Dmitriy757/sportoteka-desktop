@@ -2424,53 +2424,72 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
     }
 
     try {
-      http.Response resp;
+      // Всегда отправляем multipart. Так один и тот же серверный путь
+      // используется и для обычного сохранения, и для сохранения с фото.
+      // На macOS это также надёжнее, чем читать XFile через dart:io File.
+      final req =
+          http.MultipartRequest('POST', Uri.parse(updateTrainerProfileUrl));
+
+      req.fields.addAll(<String, String>{
+        'trainer_id': '$trainerId',
+        'user_id': '$trainerId',
+        'actor_user_id': '$_currentUserId',
+        'actor_role': _currentUserRole,
+        'first_name': firstName.trim(),
+        'last_name': lastName.trim(),
+        'position': position.trim(),
+        'birthday': birthday.trim(),
+        'experience': experience.trim(),
+        'bio': bio.trim(),
+      });
+
       if (pickedPhoto != null) {
-        final req =
-            http.MultipartRequest('POST', Uri.parse(updateTrainerProfileUrl));
-        req.fields['trainer_id'] = '$trainerId';
-        req.fields['actor_user_id'] = '$_currentUserId';
-        req.fields['actor_role'] = _currentUserRole;
-        req.fields['first_name'] = firstName.trim();
-        req.fields['last_name'] = lastName.trim();
-        req.fields['position'] = position.trim();
-        req.fields['birthday'] = birthday.trim();
-        req.fields['experience'] = experience.trim();
-        req.fields['bio'] = bio.trim();
-        req.files.add(await http.MultipartFile.fromPath(
-            'photo', File(pickedPhoto.path).path));
-        final streamed = await req.send();
-        resp = http.Response(
-            await streamed.stream.bytesToString(), streamed.statusCode);
-      } else {
-        resp = await http.post(
-          Uri.parse(updateTrainerProfileUrl),
-          headers: const {'Content-Type': 'application/json; charset=utf-8'},
-          body: jsonEncode({
-            'trainer_id': trainerId,
-            'actor_user_id': _currentUserId,
-            'actor_role': _currentUserRole,
-            'first_name': firstName.trim(),
-            'last_name': lastName.trim(),
-            'position': position.trim(),
-            'birthday': birthday.trim(),
-            'experience': experience.trim(),
-            'bio': bio.trim(),
-          }),
+        final bytes = await pickedPhoto.readAsBytes();
+        if (bytes.isEmpty) {
+          Get.snackbar('Ошибка', 'Выбранное фото пустое');
+          return false;
+        }
+
+        final fileName = pickedPhoto.name.trim().isEmpty
+            ? 'trainer_$trainerId.jpg'
+            : pickedPhoto.name.trim();
+
+        req.files.add(
+          http.MultipartFile.fromBytes(
+            'photo',
+            bytes,
+            filename: fileName,
+          ),
         );
       }
 
-      final data = _tryDecode(resp.body);
-      final ok = data is Map &&
-          (data['success'] == true || data['status'] == 'success');
+      final streamed =
+          await req.send().timeout(const Duration(seconds: 35));
+      final body = await streamed.stream.bytesToString();
+      final data = _tryDecode(body);
+
+      final ok = streamed.statusCode >= 200 &&
+          streamed.statusCode < 300 &&
+          _isSuccessfulResponse(data);
+
       if (!ok) {
-        final msg = data is Map ? _s(data['message'] ?? data['error']) : '';
+        final serverMessage = data is Map
+            ? _s(data['message'] ?? data['error'] ?? data['detail'])
+            : '';
+        final fallback = body.trim().isEmpty
+            ? 'HTTP ${streamed.statusCode}'
+            : 'HTTP ${streamed.statusCode}: ${body.trim().length > 220 ? '${body.trim().substring(0, 220)}…' : body.trim()}';
+
         Get.snackbar(
-            'Ошибка', msg.isEmpty ? 'Не удалось сохранить профиль' : msg);
+          'Ошибка',
+          serverMessage.isEmpty ? fallback : serverMessage,
+        );
+        return false;
       }
-      return ok;
-    } catch (_) {
-      Get.snackbar('Ошибка', 'Не удалось сохранить профиль');
+
+      return true;
+    } catch (e) {
+      Get.snackbar('Ошибка', 'Не удалось сохранить профиль: $e');
       return false;
     }
   }
@@ -7261,6 +7280,8 @@ class _TrainerEditSidePanelState extends State<_TrainerEditSidePanel> {
   bool _savingPassword = false;
   bool _hideNewPassword = true;
   bool _hideRepeatPassword = true;
+  String _savedFirstName = '';
+  String _savedLastName = '';
 
   @override
   void initState() {
@@ -7276,6 +7297,8 @@ class _TrainerEditSidePanelState extends State<_TrainerEditSidePanel> {
     _bioC = TextEditingController(text: _trainerBio(widget.trainer));
     _newPasswordC = TextEditingController();
     _repeatPasswordC = TextEditingController();
+    _savedFirstName = _firstNameC.text.trim();
+    _savedLastName = _lastNameC.text.trim();
     _currentPhoto = _trainerPhoto(widget.trainer);
     _load();
   }
@@ -7295,6 +7318,8 @@ class _TrainerEditSidePanelState extends State<_TrainerEditSidePanel> {
       _bioC.text = _trainerBio(widget.trainer);
       _newPasswordC.clear();
       _repeatPasswordC.clear();
+      _savedFirstName = _firstNameC.text.trim();
+      _savedLastName = _lastNameC.text.trim();
       _currentPhoto = _trainerPhoto(widget.trainer);
       _pickedPhoto = null;
       _loading = true;
@@ -7355,6 +7380,8 @@ class _TrainerEditSidePanelState extends State<_TrainerEditSidePanel> {
       setState(() {
         if (firstName.isNotEmpty) _firstNameC.text = firstName;
         if (lastName.isNotEmpty) _lastNameC.text = lastName;
+        _savedFirstName = _firstNameC.text.trim();
+        _savedLastName = _lastNameC.text.trim();
         if (position.isNotEmpty) _positionC.text = position;
         if (birthday.isNotEmpty) _birthdayC.text = birthday;
         if (experience.isNotEmpty) _experienceC.text = experience;
@@ -7395,16 +7422,9 @@ class _TrainerEditSidePanelState extends State<_TrainerEditSidePanel> {
 
     setState(() => _saving = true);
 
-    final accountOk = await widget.onSaveAccount(
-      firstName: firstName,
-      lastName: lastName,
-    );
-
-    if (!accountOk) {
-      if (mounted) setState(() => _saving = false);
-      return;
-    }
-
+    // ВАЖНО: профиль/фото сохраняем независимо от account endpoint.
+    // Раньше любое отклонение update_club_staff_account.php полностью
+    // блокировало сохранение фотографии, опыта, должности и описания.
     final profileOk = await widget.onSaveProfile(
       trainerId: trainerId,
       firstName: firstName,
@@ -7416,12 +7436,32 @@ class _TrainerEditSidePanelState extends State<_TrainerEditSidePanel> {
       pickedPhoto: _pickedPhoto,
     );
 
-    if (profileOk) {
-      await widget.onSaved();
+    if (!profileOk) {
+      if (mounted) setState(() => _saving = false);
       return;
     }
 
-    if (mounted) setState(() => _saving = false);
+    final namesChanged =
+        firstName != _savedFirstName || lastName != _savedLastName;
+
+    if (namesChanged) {
+      final accountOk = await widget.onSaveAccount(
+        firstName: firstName,
+        lastName: lastName,
+      );
+
+      if (!accountOk) {
+        // Остальные данные и фото уже сохранены. Оставляем редактор открытым,
+        // чтобы пользователь мог повторить только сохранение имени/фамилии.
+        if (mounted) setState(() => _saving = false);
+        return;
+      }
+
+      _savedFirstName = firstName;
+      _savedLastName = lastName;
+    }
+
+    await widget.onSaved();
   }
 
   Future<void> _resetPassword() async {
