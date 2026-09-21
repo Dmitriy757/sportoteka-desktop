@@ -25,6 +25,11 @@ import 'package:sportoteka/presentation/plans/plan_detail_screen.dart';
 import 'package:sportoteka/presentation/club_workspace/cmr_club_ai_assistant_panel.dart';
 import 'package:sportoteka/presentation/trainer_profile_screen/trainer_hr_sections.dart';
 import 'package:sportoteka/presentation/testing/cmr_testing_panel.dart';
+import 'package:sportoteka/presentation/workspace_os/sportoteka_workspace_icons.dart';
+import 'package:sportoteka/presentation/workspace_os/workspace_entity_data_bridge.dart';
+import 'package:sportoteka/presentation/workspace_os/workspace_entity_records.dart';
+import 'package:sportoteka/presentation/workspace_os/workspace_finder_models.dart';
+import 'package:sportoteka/presentation/workspace_os/workspace_server_storage.dart';
 
 enum TrainerProfileSection {
   card,
@@ -49,6 +54,7 @@ class CmrTrainerProfileScreen extends StatefulWidget {
   final List<Map<String, dynamic>> availableTeams;
   final Future<bool> Function(int teamId, String profile)? onAssignTeam;
   final VoidCallback? onChanged;
+  final TrainerProfileSection initialSection;
 
   const CmrTrainerProfileScreen({
     super.key,
@@ -63,6 +69,7 @@ class CmrTrainerProfileScreen extends StatefulWidget {
     this.availableTeams = const <Map<String, dynamic>>[],
     this.onAssignTeam,
     this.onChanged,
+    this.initialSection = TrainerProfileSection.card,
   });
 
   @override
@@ -148,10 +155,16 @@ class _CmrTrainerProfileScreenState
   late final TextEditingController _bioC;
 
   final ImagePicker _picker = ImagePicker();
+  final WorkspaceEntityDataBridge _workspaceBridge =
+      WorkspaceEntityDataBridge();
+
+  int _workspaceUserId = 0;
+  bool _workspaceFolderEnsuring = false;
 
   @override
   void initState() {
     super.initState();
+    _section = widget.initialSection;
     _profile = Map<String, dynamic>.from(widget.trainer);
 
     _positionC = TextEditingController();
@@ -183,6 +196,7 @@ class _CmrTrainerProfileScreenState
 
     // Сразу показываем данные, которые уже пришли из списка тренеров.
     _fillEditor();
+    _initWorkspaceDocuments();
     _load();
   }
 
@@ -197,7 +211,7 @@ class _CmrTrainerProfileScreenState
 
     if (oldId != newId) {
       _profile = Map<String, dynamic>.from(widget.trainer);
-      _section = TrainerProfileSection.card;
+      _section = widget.initialSection;
       _editorOpen = false;
       _testingByTeam.clear();
       _testingLoadingTeams.clear();
@@ -228,7 +242,13 @@ class _CmrTrainerProfileScreenState
       _assignProfile = 'extra';
 
       _fillEditor();
+      _initWorkspaceDocuments();
       _load();
+    } else if (oldWidget.initialSection != widget.initialSection) {
+      _section = widget.initialSection;
+      _editorOpen = false;
+      _assignTeamOpen = false;
+      _aiOpen = false;
     }
   }
 
@@ -271,6 +291,32 @@ class _CmrTrainerProfileScreenState
             team['teamId'],
       );
 
+  int _teamClubId(Map<String, dynamic> team) => _i(
+        team['club_id'] ?? team['clubId'],
+      );
+
+  Set<int> get _availableClubTeamIds => widget.availableTeams
+      .map(_teamId)
+      .where((id) => id > 0)
+      .toSet();
+
+  bool _belongsToCurrentClub(Map<String, dynamic> team) {
+    final explicitClubId = _teamClubId(team);
+    if (explicitClubId > 0 && widget.clubId > 0) {
+      return explicitClubId == widget.clubId;
+    }
+
+    final ids = _availableClubTeamIds;
+    final teamId = _teamId(team);
+    if (ids.isNotEmpty && teamId > 0) {
+      return ids.contains(teamId);
+    }
+
+    // Для старых ответов без club_id сохраняем совместимость. Когда профиль
+    // открыт из клубного workspace, availableTeams даёт строгую фильтрацию.
+    return true;
+  }
+
   String _normalizeImage(String raw) {
     final url = raw.trim();
     if (url.isEmpty || url == 'null') return '';
@@ -302,19 +348,61 @@ class _CmrTrainerProfileScreenState
     return joined.isEmpty ? 'Тренер' : joined;
   }
 
+  String _roleTitle(String raw) {
+    final v = raw.trim().toLowerCase();
+    if (v.isEmpty || v == 'extra' || v == 'coach' || v == 'trainer') {
+      return 'Тренер';
+    }
+    if (v == 'main' || v == 'head' || v.contains('глав')) {
+      return 'Главный тренер';
+    }
+    if (v == 'goalkeeper' ||
+        v == 'goalkeeper_coach' ||
+        v == 'gk' ||
+        v.contains('вратар')) {
+      return 'Тренер по вратарям';
+    }
+    if (v == 'assistant' || v.contains('ассист')) {
+      return 'Ассистент';
+    }
+    if (v == 'doctor' ||
+        v == 'medic' ||
+        v.contains('врач') ||
+        v.contains('мед')) {
+      return 'Врач спортивной медицины';
+    }
+    if (v == 'manager' || v == 'admin' || v.contains('админист')) {
+      return 'Администратор';
+    }
+    return raw.trim();
+  }
+
   String get _role {
-    final raw = _s(
-      _profile['position'] ??
-          _profile['role_title'] ??
-          _profile['specialization'] ??
-          _profile['staff_role'] ??
-          _profile['role'],
+    // Текущая роль в открытом клубе имеет приоритет над общей биографической
+    // должностью users.position. Так история работы в другом клубе не меняет
+    // текущую роль сотрудника в этом workspace.
+    final current = _s(
+      _profile['current_club_role'] ??
+          _profile['_current_club_role'],
     );
-    if (raw.isEmpty || raw == 'extra') return 'Тренер';
-    if (raw == 'main') return 'Главный тренер';
-    if (raw == 'assistant') return 'Ассистент';
-    if (raw == 'doctor') return 'Медик';
-    return raw;
+    if (current.isNotEmpty) return _roleTitle(current);
+
+    final teams = _teams;
+    if (teams.isNotEmpty) {
+      for (final team in teams) {
+        final raw = _s(team['profile'] ?? team['link_profile']);
+        if (raw.toLowerCase() == 'main') return _roleTitle(raw);
+      }
+      final raw = _s(
+        teams.first['profile'] ?? teams.first['link_profile'],
+      );
+      if (raw.isNotEmpty) return _roleTitle(raw);
+    }
+
+    // position — биографическое поле и используется только как fallback,
+    // когда в текущем клубе нет штатного назначения.
+    final raw = _s(_profile['position'] ?? _profile['role_title']);
+    return raw.isEmpty ? 'Тренер' : _roleTitle(raw);
   }
 
   String get _photo => _normalizeImage(
@@ -372,6 +460,7 @@ class _CmrTrainerProfileScreenState
       return raw
           .whereType<Map>()
           .map((e) => Map<String, dynamic>.from(e))
+          .where(_belongsToCurrentClub)
           .toList();
     }
 
@@ -388,19 +477,17 @@ class _CmrTrainerProfileScreenState
       return const <Map<String, dynamic>>[];
     }
 
-    return <Map<String, dynamic>>[
-      <String, dynamic>{
-        'team_id': id,
-        'team_name':
-            name.isEmpty ? 'Команда #$id' : name,
-        'team_logo':
-            _profile['team_logo'] ??
-            _profile['teamLogo'],
-        'link_profile':
-            _profile['link_profile'] ??
-            _profile['profile'],
-      },
-    ];
+    final fallback = <String, dynamic>{
+      'team_id': id,
+      'team_name': name.isEmpty ? 'Команда #$id' : name,
+      'team_logo': _profile['team_logo'] ?? _profile['teamLogo'],
+      'link_profile': _profile['link_profile'] ?? _profile['profile'],
+      'club_id': _profile['club_id'] ?? _profile['clubId'],
+    };
+
+    return _belongsToCurrentClub(fallback)
+        ? <Map<String, dynamic>>[fallback]
+        : const <Map<String, dynamic>>[];
   }
 
   String _teamName(Map<String, dynamic> team) {
@@ -435,13 +522,20 @@ class _CmrTrainerProfileScreenState
         raw.contains('глав')) {
       return 'Главный тренер';
     }
+    if (raw.contains('goalkeeper') ||
+        raw == 'gk' ||
+        raw.contains('вратар')) {
+      return 'Тренер по вратарям';
+    }
     if (raw.contains('assistant') ||
         raw.contains('ассист')) {
       return 'Ассистент';
     }
     if (raw.contains('doctor') ||
+        raw.contains('medic') ||
+        raw.contains('врач') ||
         raw.contains('мед')) {
-      return 'Медик';
+      return 'Врач спортивной медицины';
     }
     if (raw.contains('manager') ||
         raw.contains('admin')) {
@@ -562,6 +656,7 @@ class _CmrTrainerProfileScreenState
               body: jsonEncode(
                 <String, dynamic>{
                   'trainer_id': trainerId,
+                  'club_id': widget.clubId,
                 },
               ),
             )
@@ -1098,45 +1193,510 @@ class _CmrTrainerProfileScreenState
     _phoneC.text = _phone;
     _bioC.text = _bio;
 
-    final storedLocations = _s(
-      _profile['work_locations'] ??
-          _profile['locations'],
-    );
-
-    if (storedLocations.isNotEmpty) {
-      _locationsC.text = storedLocations;
-    } else {
-      _locationsC.text =
-          _locationNames.join(', ');
-    }
+    // В редактор выводим только ручную корректировку ТЕКУЩЕГО клуба.
+    // Автоматические локации остаются производными от назначенных команд
+    // и их календарей, поэтому старые базы другого клуба сюда не протекают.
+    _locationsC.text = _manualLocationNames.join('\n');
   }
 
-  List<String> get _locationNames {
-    final values = <String>{};
+  String _firstNonEmptyLocation(Map<String, dynamic> source) {
+    for (final key in const <String>[
+      'location',
+      'venue',
+      'address',
+      'place',
+      'stadium',
+      'base',
+      'training_base',
+      'training_location',
+    ]) {
+      final value = _s(source[key]);
+      if (value.isNotEmpty) return value;
+    }
+    return '';
+  }
 
-    for (final event in _schedule) {
-      final location = _s(
-        event['location'] ??
-            event['venue'] ??
-            event['address'] ??
-            event['place'],
-      );
-      if (location.isNotEmpty) values.add(location);
+  String _normalizeLocationKey(String raw) {
+    return raw
+        .trim()
+        .toLowerCase()
+        .replaceAll('ё', 'е')
+        .replaceAll(RegExp(r'[«»„“”]'), '')
+        .replaceAll('\"', '')
+        .replaceAll("'", '')
+        .replaceAll(RegExp(r'\s*[–—-]\s*'), '-')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .replaceAll(RegExp(r'[.,;:]+$'), '')
+        .trim();
+  }
+
+  Map<String, dynamic>? _availableTeamById(int teamId) {
+    if (teamId <= 0) return null;
+    for (final team in widget.availableTeams) {
+      if (_teamId(team) == teamId) {
+        return Map<String, dynamic>.from(team);
+      }
+    }
+    return null;
+  }
+
+  List<String> get _automaticLocationNames {
+    final result = <String>[];
+
+    for (final assignment in _teams) {
+      final teamId = _teamId(assignment);
+      final teamName = _teamName(assignment);
+      final unique = <String, String>{};
+
+      // 1. Сначала пробуем локацию из паспорта конкретной команды.
+      final canonicalTeam = _availableTeamById(teamId) ?? assignment;
+      final teamLocation = _firstNonEmptyLocation(canonicalTeam);
+      if (teamLocation.isNotEmpty) {
+        unique[_normalizeLocationKey(teamLocation)] = teamLocation;
+      }
+
+      // 2. Затем добавляем места только из календаря этой же команды.
+      for (final event in _schedule) {
+        if (_i(event['team_id'] ?? event['teamId']) != teamId) continue;
+        final location = _firstNonEmptyLocation(event);
+        if (location.isEmpty) continue;
+        unique.putIfAbsent(_normalizeLocationKey(location), () => location);
+      }
+
+      for (final location in unique.values) {
+        result.add(teamName.isEmpty ? location : '$teamName — $location');
+      }
     }
 
+    return result;
+  }
+
+  String get _currentClubLocationMarker => '#club:${widget.clubId}|';
+
+  List<String> _manualInputLines(String raw) {
+    final seen = <String>{};
+    final out = <String>[];
+
+    for (final piece in raw.split(RegExp(r'[\r\n;]+'))) {
+      final value = piece.trim();
+      if (value.isEmpty) continue;
+      final key = _normalizeLocationKey(value);
+      if (key.isEmpty || !seen.add(key)) continue;
+      out.add(value);
+    }
+
+    return out;
+  }
+
+  List<String> get _manualLocationNames {
     final stored = _s(
       _profile['work_locations'] ??
           _profile['locations'],
     );
+    if (stored.isEmpty) return const <String>[];
 
-    if (stored.isNotEmpty) {
-      for (final piece in stored.split(',')) {
-        final value = piece.trim();
-        if (value.isNotEmpty) values.add(value);
+    final marker = _currentClubLocationMarker;
+    final values = <String>[];
+    final seen = <String>{};
+
+    // Новый формат хранится построчно с внутренней меткой club_id.
+    // Legacy-строки без метки сохраняем в БД, но в клубном workspace
+    // не показываем, чтобы локации другого клуба не попадали в текущий.
+    for (final rawLine in stored.split(RegExp(r'[\r\n]+'))) {
+      final line = rawLine.trim();
+      if (!line.startsWith(marker)) continue;
+      final value = line.substring(marker.length).trim();
+      final key = _normalizeLocationKey(value);
+      if (value.isEmpty || key.isEmpty || !seen.add(key)) continue;
+      values.add(value);
+    }
+
+    return values;
+  }
+
+  String _workLocationsForSave() {
+    final stored = _s(
+      _profile['work_locations'] ??
+          _profile['locations'],
+    );
+    final marker = _currentClubLocationMarker;
+
+    // Сохраняем ручные строки других клубов и старые legacy-значения,
+    // заменяем только корректировку текущего клуба.
+    final keep = stored
+        .split(RegExp(r'[\r\n]+'))
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty && !e.startsWith(marker))
+        .toList();
+
+    for (final value in _manualInputLines(_locationsC.text)) {
+      keep.add('$marker$value');
+    }
+
+    return keep.join('\n');
+  }
+
+  String get _workspaceDocumentsFolderId {
+    final trainerId = _trainerId(_profile);
+    return 'local-folder:trainer-documents:$trainerId';
+  }
+
+  Future<void> _initWorkspaceDocuments() async {
+    try {
+      final userId = await PrefUtils.getUserId() ?? 0;
+      if (!mounted) return;
+      if (_workspaceUserId != userId) {
+        setState(() => _workspaceUserId = userId);
+      }
+      await _ensureWorkspaceDocumentsFolder();
+    } catch (_) {
+      // Workspace не должен блокировать открытие профиля тренера.
+    }
+  }
+
+  Future<WorkspaceServerStorage?> _workspaceStorage() async {
+    final trainerId = _trainerId(_profile);
+    if (widget.clubId <= 0 || trainerId <= 0) return null;
+
+    var userId = _workspaceUserId;
+    if (userId <= 0) {
+      userId = await PrefUtils.getUserId() ?? 0;
+      if (mounted && userId != _workspaceUserId) {
+        setState(() => _workspaceUserId = userId);
       }
     }
 
-    return values.toList();
+    return WorkspaceServerStorage(
+      clubId: widget.clubId,
+      userId: userId,
+    );
+  }
+
+  Future<void> _ensureWorkspaceDocumentsFolder() async {
+    if (_workspaceFolderEnsuring) return;
+
+    final trainerId = _trainerId(_profile);
+    if (trainerId <= 0 || widget.clubId <= 0) return;
+
+    _workspaceFolderEnsuring = true;
+    try {
+      final storage = await _workspaceStorage();
+      if (storage == null) return;
+
+      final snapshot = await storage.load();
+      final folderId = _workspaceDocumentsFolderId;
+      final existing = snapshot.nodes.where((node) => node.id == folderId);
+
+      final folder = WorkspaceFinderNode(
+        id: folderId,
+        title: 'Документы · $_name',
+        subtitle: widget.clubName.trim().isEmpty
+            ? 'Документы тренера'
+            : 'Документы тренера · ${widget.clubName}',
+        kind: WorkspaceFinderNodeKind.folder,
+        parentId: 'documents',
+        payload: <String, dynamic>{
+          '_trainer_documents_folder': true,
+          'trainer_id': trainerId,
+          'trainer_name': _name,
+          'club_id': widget.clubId,
+        },
+        updatedAt: DateTime.now(),
+      );
+
+      if (existing.isEmpty) {
+        await storage.createNode(folder);
+      } else {
+        final old = existing.first;
+        if (old.title != folder.title ||
+            old.subtitle != folder.subtitle ||
+            old.parentId != folder.parentId) {
+          await storage.updateNode(folder);
+        }
+      }
+    } catch (_) {
+      // При временно недоступном Workspace HR-документы продолжают работать.
+    } finally {
+      _workspaceFolderEnsuring = false;
+    }
+  }
+
+  String _trainerDocumentTitle(Map<String, dynamic> row) {
+    final title = _s(
+      row['title'] ??
+          row['name'] ??
+          row['file_name'] ??
+          row['document_type'] ??
+          row['type'],
+    );
+    return title.isEmpty ? 'Документ тренера' : title;
+  }
+
+  String _trainerDocumentSubtitle(Map<String, dynamic> row) {
+    final type = _s(
+      row['document_type'] ??
+          row['type'] ??
+          row['record_type'],
+    );
+    final number = _s(
+      row['document_number'] ??
+          row['number'],
+    );
+    return <String>[
+      if (type.isNotEmpty) type,
+      if (number.isNotEmpty) '№ $number',
+    ].join(' · ');
+  }
+
+  String _trainerDocumentDate(Map<String, dynamic> row) => _s(
+        row['updated_at'] ??
+            row['created_at'] ??
+            row['issue_date'] ??
+            row['date'],
+      );
+
+  String _trainerDocumentFileUrl(Map<String, dynamic> row) {
+    final raw = _s(
+      row['file_url'] ??
+          row['document_url'] ??
+          row['file'] ??
+          row['url'] ??
+          row['pdf_url'],
+    );
+    if (raw.isEmpty) return '';
+    if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
+    if (raw.startsWith('//')) return 'https:$raw';
+    if (raw.startsWith('/')) return 'https://sportotekaapp.ru$raw';
+    return 'https://sportotekaapp.ru/$raw';
+  }
+
+  List<WorkspaceEntityProperty> _trainerDocumentProperties(
+    Map<String, dynamic> row,
+  ) {
+    final out = <WorkspaceEntityProperty>[];
+
+    void add(String label, dynamic value) {
+      final text = _s(value);
+      if (text.isNotEmpty) {
+        out.add(WorkspaceEntityProperty(label, text));
+      }
+    }
+
+    add('Тип', row['document_type'] ?? row['type'] ?? row['record_type']);
+    add('Номер', row['document_number'] ?? row['number']);
+    add('Кем выдан', row['issued_by']);
+    add('Дата выдачи', row['issue_date'] ?? row['date']);
+    add('Действует до', row['valid_until']);
+    add('Комментарий', row['note'] ?? row['comment'] ?? row['description']);
+    add('Добавлено', row['created_at']);
+    add('Обновлено', row['updated_at']);
+
+    return out;
+  }
+
+  String _trainerDocumentMirrorId(Map<String, dynamic> row, int index) {
+    final trainerId = _trainerId(_profile);
+    final recordId = _i(
+      row['id'] ??
+          row['record_id'] ??
+          row['document_id'],
+    );
+    if (recordId > 0) {
+      return 'trainer-hr-document:$trainerId:$recordId';
+    }
+
+    final raw = '${_trainerDocumentTitle(row)}|${_trainerDocumentDate(row)}|$index'
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9а-яё_-]+', caseSensitive: false), '_');
+    final safe = raw.length > 80 ? raw.substring(0, 80) : raw;
+    return 'trainer-hr-document:$trainerId:$safe';
+  }
+
+  Future<void> _syncTrainerDocumentsToWorkspace(
+    List<Map<String, dynamic>> rows,
+  ) async {
+    final trainerId = _trainerId(_profile);
+    if (trainerId <= 0 || widget.clubId <= 0) return;
+
+    try {
+      await _ensureWorkspaceDocumentsFolder();
+      final storage = await _workspaceStorage();
+      if (storage == null) return;
+
+      final snapshot = await storage.load();
+      final folderId = _workspaceDocumentsFolderId;
+      final existing = <String, WorkspaceFinderNode>{
+        for (final node in snapshot.nodes)
+          if (node.parentId == folderId &&
+              node.payload?['_trainer_hr_mirror'] == true)
+            node.id: node,
+      };
+
+      final wanted = <String>{};
+
+      for (var index = 0; index < rows.length; index++) {
+        final row = Map<String, dynamic>.from(rows[index]);
+        final nodeId = _trainerDocumentMirrorId(row, index);
+        wanted.add(nodeId);
+
+        final payload = <String, dynamic>{
+          ...row,
+          '_workspace_real_record': true,
+          '_trainer_hr_mirror': true,
+          '_workspace_owner': _name,
+          'trainer_id': trainerId,
+          'club_id': widget.clubId,
+          if (_trainerDocumentFileUrl(row).isNotEmpty)
+            'file_url': _trainerDocumentFileUrl(row),
+        };
+
+        final node = WorkspaceFinderNode(
+          id: nodeId,
+          title: _trainerDocumentTitle(row),
+          subtitle: _trainerDocumentSubtitle(row),
+          kind: WorkspaceFinderNodeKind.document,
+          parentId: folderId,
+          payload: payload,
+          updatedAt: _date(
+                row['updated_at'] ??
+                    row['created_at'] ??
+                    row['issue_date'],
+              ) ??
+              DateTime.now(),
+        );
+
+        if (existing.containsKey(nodeId)) {
+          await storage.updateNode(node);
+        } else {
+          await storage.createNode(node);
+        }
+      }
+
+      for (final stale in existing.entries) {
+        if (!wanted.contains(stale.key)) {
+          await storage.deleteNode(stale.key);
+        }
+      }
+    } catch (_) {
+      // Синхронизация Workspace вспомогательная: основной HR список не ломаем.
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _loadTrainerDocumentsForWorkspace() async {
+    final trainerId = _trainerId(_profile);
+    if (trainerId <= 0 || widget.clubId <= 0) {
+      return const <Map<String, dynamic>>[];
+    }
+
+    final rows = await _workspaceBridge.loadTrainerDocuments(
+      trainerId: trainerId,
+      clubId: widget.clubId,
+    );
+    await _syncTrainerDocumentsToWorkspace(rows);
+    return rows;
+  }
+
+  Future<void> _uploadTrainerDocumentsFromProfile(
+    List<String> paths,
+  ) async {
+    final trainerId = _trainerId(_profile);
+    if (trainerId <= 0 || widget.clubId <= 0 || paths.isEmpty) return;
+
+    await _workspaceBridge.uploadTrainerDocuments(
+      trainerId: trainerId,
+      clubId: widget.clubId,
+      filePaths: paths,
+    );
+
+    final rows = await _workspaceBridge.loadTrainerDocuments(
+      trainerId: trainerId,
+      clubId: widget.clubId,
+    );
+    await _syncTrainerDocumentsToWorkspace(rows);
+    widget.onChanged?.call();
+  }
+
+  Future<void> _openTrainerDocumentRecord(
+    BuildContext routeContext,
+    Map<String, dynamic> row,
+  ) async {
+    final trainerId = _trainerId(_profile);
+    final recordId = _i(
+      row['id'] ??
+          row['record_id'] ??
+          row['document_id'],
+    );
+    final documentKey = recordId > 0
+        ? '$recordId'
+        : _trainerDocumentMirrorId(row, 0);
+
+    await Navigator.of(routeContext).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => Scaffold(
+          backgroundColor: Colors.white,
+          body: SafeArea(
+            child: WorkspaceEntityRecordDocument(
+              ownerTitle: _name,
+              sectionTitle: 'Документы тренера',
+              title: _trainerDocumentTitle(row),
+              iconKind: SportotekaWorkspaceIconKind.documents,
+              record: row,
+              properties: _trainerDocumentProperties(row),
+              noteKey:
+                  'sportoteka_trainer_document_${widget.clubId}_${trainerId}_$documentKey',
+              entityType: 'trainer_document',
+              entityId: recordId > 0 ? '$recordId' : '',
+              clubId: widget.clubId,
+              currentUserId: _workspaceUserId,
+              serverParentKey: 'entity:trainer_document:$documentKey',
+              fileUrl: _trainerDocumentFileUrl(row),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _documentsSection() {
+    final trainerId = _trainerId(_profile);
+    // В клубном Workspace документы являются рабочей частью карточки тренера.
+    // Кнопки создания/загрузки не должны исчезать из-за задержки загрузки роли.
+    final canManageDocuments = widget.allowEdit || widget.embeddedInWorkspace;
+
+    return WorkspaceEntityRecordBrowser(
+      ownerTitle: _name,
+      sectionTitle: 'Документы тренера',
+      iconKind: SportotekaWorkspaceIconKind.documents,
+      loadRecords: _loadTrainerDocumentsForWorkspace,
+      titleFor: _trainerDocumentTitle,
+      subtitleFor: _trainerDocumentSubtitle,
+      dateFor: _trainerDocumentDate,
+      propertiesFor: _trainerDocumentProperties,
+      openRecord: _openTrainerDocumentRecord,
+      emptyText:
+          'Документов пока нет. Добавьте файл или создайте документ SPORTOTEKA OS.',
+      contextLabel: 'Тренер',
+      clubId: widget.clubId,
+      currentUserId: _workspaceUserId,
+      serverParentKey: _workspaceDocumentsFolderId,
+      allowCreateDocuments: canManageDocuments,
+      externalUploadPaths:
+          canManageDocuments ? _uploadTrainerDocumentsFromProfile : null,
+      attachmentEntityType: '',
+      attachmentEntityId: trainerId,
+      attachmentSectionKey: 'documents',
+      showBackButton: false,
+    );
+  }
+
+  List<String> get _locationNames {
+    final manual = _manualLocationNames;
+    if (manual.isNotEmpty) {
+      // Ручная корректировка имеет приоритет. Это позволяет администратору
+      // убрать неточную автоматическую подпись без изменения календаря.
+      return manual;
+    }
+    return _automaticLocationNames;
   }
 
   List<Map<String, dynamic>> get _upcomingSchedule {
@@ -1153,6 +1713,570 @@ class _CmrTrainerProfileScreenState
       );
       return date != null && !date.isBefore(floor);
     }).toList();
+  }
+
+  Future<void> _openLocationsEditor() async {
+    if (!widget.allowEdit || !mounted) return;
+
+    final automatic = <String>[];
+    final automaticByKey = <String, String>{};
+    for (final raw in _automaticLocationNames) {
+      final value = raw.trim();
+      final key = _normalizeLocationKey(value);
+      if (value.isEmpty || key.isEmpty || automaticByKey.containsKey(key)) {
+        continue;
+      }
+      automaticByKey[key] = value;
+      automatic.add(value);
+    }
+
+    final manual = _manualLocationNames;
+    final selectedAutomaticKeys = <String>{};
+    final createdControllers = <TextEditingController>[];
+    final customControllers = <TextEditingController>[];
+    final addController = TextEditingController();
+
+    TextEditingController createController([String text = '']) {
+      final controller = TextEditingController(text: text);
+      createdControllers.add(controller);
+      return controller;
+    }
+
+    if (manual.isEmpty) {
+      selectedAutomaticKeys.addAll(automaticByKey.keys);
+    } else {
+      for (final raw in manual) {
+        final value = raw.trim();
+        final key = _normalizeLocationKey(value);
+        if (value.isEmpty || key.isEmpty) continue;
+
+        if (automaticByKey.containsKey(key)) {
+          selectedAutomaticKeys.add(key);
+        } else {
+          customControllers.add(createController(value));
+        }
+      }
+    }
+
+    void addCustomLocation(StateSetter setLocal) {
+      final value = addController.text.trim();
+      if (value.isEmpty) return;
+
+      final key = _normalizeLocationKey(value);
+      final alreadyAutomatic =
+          automaticByKey.containsKey(key) && selectedAutomaticKeys.contains(key);
+      final alreadyCustom = customControllers.any(
+        (controller) =>
+            _normalizeLocationKey(controller.text.trim()) == key,
+      );
+
+      if (key.isEmpty || alreadyAutomatic || alreadyCustom) {
+        addController.clear();
+        return;
+      }
+
+      setLocal(() {
+        customControllers.add(createController(value));
+        addController.clear();
+      });
+    }
+
+    final manualText = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (dialogContext, setLocal) {
+            Widget selector({
+              required bool selected,
+              required VoidCallback onTap,
+            }) {
+              return Material(
+                color: Colors.transparent,
+                shape: const CircleBorder(),
+                child: InkWell(
+                  onTap: onTap,
+                  customBorder: const CircleBorder(),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 150),
+                    width: 24,
+                    height: 24,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: selected ? _TpColors.green : Colors.white,
+                      border: Border.all(
+                        color: selected
+                            ? _TpColors.green
+                            : _TpColors.line,
+                        width: selected ? 1 : .9,
+                      ),
+                    ),
+                    child: selected
+                        ? const Icon(
+                            Icons.check_rounded,
+                            size: 15,
+                            color: Colors.white,
+                          )
+                        : null,
+                  ),
+                ),
+              );
+            }
+
+            Widget deleteButton(VoidCallback onTap) {
+              return IconButton(
+                tooltip: 'Убрать локацию',
+                onPressed: onTap,
+                visualDensity: VisualDensity.compact,
+                icon: const Icon(
+                  Icons.delete_outline_rounded,
+                  size: 19,
+                  color: _TpColors.muted2,
+                ),
+              );
+            }
+
+            Widget automaticRow(String location) {
+              final key = _normalizeLocationKey(location);
+              final selected = selectedAutomaticKeys.contains(key);
+
+              return AnimatedOpacity(
+                duration: const Duration(milliseconds: 150),
+                opacity: selected ? 1 : .48,
+                child: Container(
+                  margin: const EdgeInsets.only(bottom: 7),
+                  padding: const EdgeInsets.fromLTRB(10, 8, 6, 8),
+                  decoration: BoxDecoration(
+                    color: selected
+                        ? _TpColors.greenSoft
+                        : _TpColors.soft,
+                    borderRadius: BorderRadius.circular(11),
+                    border: Border.all(
+                      color: selected
+                          ? _TpColors.green.withOpacity(.18)
+                          : _TpColors.line,
+                      width: .7,
+                    ),
+                  ),
+                  child: Row(
+                    children: <Widget>[
+                      selector(
+                        selected: selected,
+                        onTap: () {
+                          setLocal(() {
+                            if (selected) {
+                              selectedAutomaticKeys.remove(key);
+                            } else {
+                              selectedAutomaticKeys.add(key);
+                            }
+                          });
+                        },
+                      ),
+                      const SizedBox(width: 9),
+                      Expanded(
+                        child: Text(
+                          location,
+                          style: _TpText.body(
+                            10.4,
+                            color: _TpColors.text,
+                            weight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                      deleteButton(
+                        () => setLocal(
+                          () => selectedAutomaticKeys.remove(key),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }
+
+            Widget customRow(
+              TextEditingController controller,
+              int index,
+            ) {
+              return Container(
+                margin: const EdgeInsets.only(bottom: 7),
+                padding: const EdgeInsets.fromLTRB(10, 6, 5, 6),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(11),
+                  border: Border.all(
+                    color: _TpColors.line,
+                    width: .8,
+                  ),
+                ),
+                child: Row(
+                  children: <Widget>[
+                    selector(
+                      selected: true,
+                      onTap: () {},
+                    ),
+                    const SizedBox(width: 9),
+                    Expanded(
+                      child: TextField(
+                        controller: controller,
+                        maxLines: 2,
+                        minLines: 1,
+                        style: _TpText.body(
+                          10.4,
+                          color: _TpColors.text,
+                          weight: FontWeight.w500,
+                        ),
+                        decoration: InputDecoration(
+                          hintText: 'Название или адрес локации',
+                          hintStyle: _TpText.body(
+                            10.0,
+                            color: _TpColors.muted2,
+                          ),
+                          isDense: true,
+                          filled: true,
+                          fillColor: _TpColors.soft,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 9,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(9),
+                            borderSide: BorderSide.none,
+                          ),
+                        ),
+                      ),
+                    ),
+                    deleteButton(
+                      () => setLocal(
+                        () => customControllers.removeAt(index),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }
+
+            return AlertDialog(
+              backgroundColor: Colors.white,
+              surfaceTintColor: Colors.white,
+              insetPadding: const EdgeInsets.symmetric(
+                horizontal: 20,
+                vertical: 18,
+              ),
+              title: Text(
+                'Рабочие локации',
+                style: _TpText.title(15),
+              ),
+              content: SizedBox(
+                width: 650,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight:
+                        MediaQuery.sizeOf(dialogContext).height * .68,
+                  ),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          'Автоматически из команд и календаря',
+                          style: _TpText.body(
+                            9.7,
+                            color: _TpColors.muted,
+                            weight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 5),
+                        Text(
+                          'Зелёный круг — оставить локацию. Корзина исключает её из карточки тренера.',
+                          style: _TpText.body(
+                            9.1,
+                            color: _TpColors.muted2,
+                            height: 1.35,
+                          ),
+                        ),
+                        const SizedBox(height: 9),
+                        if (automatic.isEmpty)
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: _TpColors.soft,
+                              borderRadius: BorderRadius.circular(11),
+                            ),
+                            child: Text(
+                              'Автоматические локации пока не найдены.',
+                              style: _TpText.body(
+                                10.2,
+                                color: _TpColors.muted,
+                              ),
+                            ),
+                          )
+                        else
+                          ...automatic.map(automaticRow),
+                        const SizedBox(height: 14),
+                        Text(
+                          'Добавить вручную',
+                          style: _TpText.body(
+                            9.7,
+                            color: _TpColors.text,
+                            weight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 7),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Expanded(
+                              child: TextField(
+                                controller: addController,
+                                textInputAction: TextInputAction.done,
+                                onSubmitted: (_) =>
+                                    addCustomLocation(setLocal),
+                                style: _TpText.body(10.5),
+                                decoration: InputDecoration(
+                                  hintText:
+                                      'Введите название или адрес локации',
+                                  hintStyle: _TpText.body(
+                                    10.0,
+                                    color: _TpColors.muted2,
+                                  ),
+                                  filled: true,
+                                  fillColor: _TpColors.soft,
+                                  contentPadding:
+                                      const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 12,
+                                  ),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                    borderSide: const BorderSide(
+                                      color: _TpColors.line,
+                                    ),
+                                  ),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                    borderSide: const BorderSide(
+                                      color: _TpColors.line,
+                                    ),
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                    borderSide: const BorderSide(
+                                      color: _TpColors.green,
+                                      width: 1,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            SizedBox(
+                              height: 46,
+                              child: FilledButton.icon(
+                                onPressed: () =>
+                                    addCustomLocation(setLocal),
+                                icon: const Icon(
+                                  Icons.add_rounded,
+                                  size: 18,
+                                ),
+                                label: Text(
+                                  'Добавить',
+                                  style: _TpText.body(
+                                    10.1,
+                                    color: Colors.white,
+                                    weight: FontWeight.w600,
+                                  ),
+                                ),
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: _TpColors.green,
+                                  elevation: 0,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 14,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (customControllers.isNotEmpty) ...<Widget>[
+                          const SizedBox(height: 10),
+                          for (var i = 0;
+                              i < customControllers.length;
+                              i++)
+                            customRow(customControllers[i], i),
+                        ],
+                        const SizedBox(height: 8),
+                        Text(
+                          'Если оставить все автоматические локации и не добавлять свои, профиль продолжит обновляться из команд и календаря автоматически.',
+                          style: _TpText.body(
+                            9.1,
+                            color: _TpColors.muted2,
+                            height: 1.35,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              actions: <Widget>[
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: Text(
+                    'Отмена',
+                    style: _TpText.body(
+                      10.2,
+                      color: _TpColors.muted,
+                    ),
+                  ),
+                ),
+                FilledButton(
+                  onPressed: () {
+                    final values = <String>[];
+                    final seen = <String>{};
+
+                    for (final location in automatic) {
+                      final key = _normalizeLocationKey(location);
+                      if (!selectedAutomaticKeys.contains(key) ||
+                          key.isEmpty ||
+                          !seen.add(key)) {
+                        continue;
+                      }
+                      values.add(location.trim());
+                    }
+
+                    for (final controller in customControllers) {
+                      final value = controller.text.trim();
+                      final key = _normalizeLocationKey(value);
+                      if (value.isEmpty ||
+                          key.isEmpty ||
+                          !seen.add(key)) {
+                        continue;
+                      }
+                      values.add(value);
+                    }
+
+                    final allAutomaticSelected =
+                        selectedAutomaticKeys.length ==
+                                automaticByKey.length &&
+                            automaticByKey.keys.every(
+                              selectedAutomaticKeys.contains,
+                            );
+                    final hasCustom = customControllers.any(
+                      (controller) => controller.text.trim().isNotEmpty,
+                    );
+
+                    // Если пользователь оставил весь автоматический набор
+                    // и не добавил свои строки — не создаём ручной override.
+                    final result =
+                        allAutomaticSelected && !hasCustom
+                            ? ''
+                            : values.join('\n');
+
+                    Navigator.of(dialogContext).pop(result);
+                  },
+                  style: FilledButton.styleFrom(
+                    backgroundColor: _TpColors.green,
+                    elevation: 0,
+                  ),
+                  child: Text(
+                    'Сохранить',
+                    style: _TpText.body(
+                      10.2,
+                      color: Colors.white,
+                      weight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    addController.dispose();
+    for (final controller in createdControllers) {
+      controller.dispose();
+    }
+
+    if (manualText == null || !mounted) return;
+    await _saveLocationsOnly(manualText);
+  }
+
+  Future<void> _saveLocationsOnly(String manualText) async {
+    if (_saving || !widget.allowEdit) return;
+
+    final trainerId = _trainerId(_profile);
+    if (trainerId <= 0) {
+      _snack('Не найден ID тренера');
+      return;
+    }
+
+    _locationsC.text = manualText;
+    setState(() => _saving = true);
+
+    try {
+      final actorUserId = await PrefUtils.getUserId() ?? 0;
+      final actorRole =
+          (await PrefUtils.getRole()).trim().toLowerCase();
+
+      final request = http.MultipartRequest(
+        'POST',
+        Uri.parse(_updateProfileUrl),
+      );
+
+      request.fields.addAll(<String, String>{
+        'trainer_id': '$trainerId',
+        'user_id': '$trainerId',
+        'actor_user_id': '$actorUserId',
+        'actor_role': actorRole,
+        'position': _s(_profile['position'] ?? _profile['role_title']),
+        'specialization': _specialization,
+        'city': _city,
+        'work_locations': _workLocationsForSave(),
+        'birthday': _birthday,
+        'experience': _experience,
+        'phone': _phone,
+        'bio': _bio,
+      });
+
+      final streamed =
+          await request.send().timeout(const Duration(seconds: 30));
+      final body = await streamed.stream.bytesToString();
+      final data = _decode(body);
+
+      final ok = streamed.statusCode >= 200 &&
+          streamed.statusCode < 300 &&
+          _success(data);
+
+      if (!ok) {
+        final message = data is Map
+            ? _s(data['message'] ?? data['error'] ?? data['detail'])
+            : '';
+        _snack(message.isEmpty
+            ? 'Не удалось сохранить рабочие локации'
+            : message);
+        return;
+      }
+
+      if (data is Map && data['profile'] is Map) {
+        final returned = Map<String, dynamic>.from(data['profile'] as Map);
+        _profile = <String, dynamic>{..._profile, ...returned};
+      } else {
+        _profile['work_locations'] = _workLocationsForSave();
+      }
+
+      await _load();
+      widget.onChanged?.call();
+      _snack('Рабочие локации сохранены');
+    } catch (e) {
+      _snack('Ошибка сохранения локаций: $e');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   Future<void> _pickPhoto() async {
@@ -1212,7 +2336,7 @@ class _CmrTrainerProfileScreenState
         'position': _positionC.text.trim(),
         'specialization': _specializationC.text.trim(),
         'city': _cityC.text.trim(),
-        'work_locations': _locationsC.text.trim(),
+        'work_locations': _workLocationsForSave(),
         'birthday': _birthdayC.text.trim(),
         'experience': _experienceC.text.trim(),
         'phone': _phoneC.text.trim(),
@@ -1823,6 +2947,8 @@ class _CmrTrainerProfileScreenState
                         specializationC:
                             _specializationC,
                         cityC: _cityC,
+                        automaticLocations:
+                            _automaticLocationNames.join('\n'),
                         locationsC:
                             _locationsC,
                         birthdayC:
@@ -1834,6 +2960,8 @@ class _CmrTrainerProfileScreenState
                         saving: _saving,
                         onPickPhoto:
                             _pickPhoto,
+                        onEditLocations:
+                            _openLocationsEditor,
                         onClose: () {
                           if (mounted) {
                             setState(
@@ -2011,12 +3139,13 @@ class _CmrTrainerProfileScreenState
         final avatarSize =
             compact ? 40.0 : 46.0;
 
-        final teamName =
-            _teams.isEmpty
-                ? ''
-                : _teamName(
-                    _teams.first,
-                  );
+        final teamName = _teams.isEmpty
+            ? ''
+            : _teams
+                .take(2)
+                .map(_teamName)
+                .where((name) => name.trim().isNotEmpty)
+                .join(' / ');
 
         final subtitle = <String>[
           _role,
@@ -2619,17 +3748,7 @@ class _CmrTrainerProfileScreenState
           onChanged: widget.onChanged,
         );
       case TrainerProfileSection.documents:
-        return TrainerHrSectionPanel(
-          kind: TrainerHrSectionKind.documents,
-          trainerId: _trainerId(_profile),
-          clubId: widget.clubId,
-          clubName: widget.clubName,
-          trainerName: _name,
-          teams: _teams,
-          schedule: _schedule,
-          allowEdit: widget.allowEdit,
-          onChanged: widget.onChanged,
-        );
+        return _documentsSection();
     }
   }
 
@@ -2917,14 +4036,50 @@ class _CmrTrainerProfileScreenState
             ),
           ),
         const SizedBox(height: 18),
-        const _TpSectionTitle(
-          title: 'Рабочие локации',
-          color: _TpColors.amber,
+        Row(
+          children: <Widget>[
+            const Expanded(
+              child: _TpSectionTitle(
+                title: 'Рабочие локации',
+                color: _TpColors.amber,
+              ),
+            ),
+            if (widget.allowEdit)
+              _TpAction(
+                title: _manualLocationNames.isEmpty
+                    ? 'Корректировать'
+                    : 'Изменить вручную',
+                color: _TpColors.amber,
+                onTap: _openLocationsEditor,
+              ),
+          ],
         ),
+        if (_manualLocationNames.isNotEmpty) ...<Widget>[
+          const SizedBox(height: 6),
+          Row(
+            children: <Widget>[
+              const _TpDot(
+                color: _TpColors.amber,
+                size: 5,
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'Используется ручная корректировка для этого клуба',
+                  style: _TpText.body(
+                    9.2,
+                    color: _TpColors.muted,
+                    weight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
         const SizedBox(height: 7),
         if (locations.isEmpty)
           Text(
-            'Локации пока не указаны. Они автоматически собираются из расписания команд и могут быть сохранены в профиле тренера.',
+            'Локации пока не указаны. Они берутся только из текущих назначенных команд: сначала из паспорта команды, затем из её календаря. При необходимости список можно вручную скорректировать в редакторе.',
             style: _TpText.body(
               10.4,
               color: _TpColors.muted,
@@ -8880,10 +10035,12 @@ class _TrainerAssignTeamPanel extends StatelessWidget {
     switch (value) {
       case 'main':
         return 'Главный тренер';
+      case 'goalkeeper':
+        return 'Тренер по вратарям';
       case 'assistant':
         return 'Ассистент';
       case 'doctor':
-        return 'Медик';
+        return 'Врач спортивной медицины';
       case 'manager':
         return 'Администратор';
       default:
@@ -8896,6 +10053,7 @@ class _TrainerAssignTeamPanel extends StatelessWidget {
     const roles = <String>[
       'main',
       'extra',
+      'goalkeeper',
       'assistant',
       'doctor',
       'manager',
@@ -9305,6 +10463,7 @@ class _TrainerEditorPanel extends StatelessWidget {
   final TextEditingController positionC;
   final TextEditingController specializationC;
   final TextEditingController cityC;
+  final String automaticLocations;
   final TextEditingController locationsC;
   final TextEditingController birthdayC;
   final TextEditingController experienceC;
@@ -9313,6 +10472,7 @@ class _TrainerEditorPanel extends StatelessWidget {
 
   final bool saving;
   final VoidCallback onPickPhoto;
+  final VoidCallback onEditLocations;
   final VoidCallback onClose;
   final VoidCallback onSave;
 
@@ -9324,6 +10484,7 @@ class _TrainerEditorPanel extends StatelessWidget {
     required this.positionC,
     required this.specializationC,
     required this.cityC,
+    required this.automaticLocations,
     required this.locationsC,
     required this.birthdayC,
     required this.experienceC,
@@ -9331,6 +10492,7 @@ class _TrainerEditorPanel extends StatelessWidget {
     required this.bioC,
     required this.saving,
     required this.onPickPhoto,
+    required this.onEditLocations,
     required this.onClose,
     required this.onSave,
   });
@@ -9496,12 +10658,86 @@ class _TrainerEditorPanel extends StatelessWidget {
                     controller: cityC,
                     label: 'Город',
                   ),
-                  _TpEditorField(
-                    controller: locationsC,
-                    label:
-                        'Рабочие локации',
-                    hint:
-                        'Манеж, стадион, адрес...',
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    padding: const EdgeInsets.all(11),
+                    decoration: BoxDecoration(
+                      color: _TpColors.soft,
+                      borderRadius: BorderRadius.circular(11),
+                      border: Border.all(
+                        color: _TpColors.line,
+                        width: .7,
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Row(
+                          children: <Widget>[
+                            const _TpDot(
+                              color: _TpColors.greenDark,
+                              size: 5.5,
+                            ),
+                            const SizedBox(width: 7),
+                            Expanded(
+                              child: Text(
+                                'Рабочие локации',
+                                style: _TpText.body(
+                                  10.2,
+                                  weight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            Material(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(8),
+                              child: InkWell(
+                                onTap: saving ? null : onEditLocations,
+                                borderRadius: BorderRadius.circular(8),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 9,
+                                    vertical: 6,
+                                  ),
+                                  child: Text(
+                                    'Настроить',
+                                    style: _TpText.body(
+                                      9.4,
+                                      color: _TpColors.greenDark,
+                                      weight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 7),
+                        Text(
+                          locationsC.text.trim().isEmpty
+                              ? 'Автоматический режим: используются локации назначенных команд и календаря.'
+                              : 'Используется ручная корректировка для текущего клуба.',
+                          style: _TpText.body(
+                            9.2,
+                            color: _TpColors.muted,
+                            height: 1.35,
+                          ),
+                        ),
+                        if (automaticLocations.trim().isNotEmpty) ...<Widget>[
+                          const SizedBox(height: 6),
+                          Text(
+                            automaticLocations,
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                            style: _TpText.body(
+                              8.9,
+                              color: _TpColors.muted2,
+                              height: 1.3,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
                   ),
                   _TpEditorField(
                     controller: birthdayC,

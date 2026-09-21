@@ -5,6 +5,8 @@ import 'package:sportoteka/presentation/workspace_os/workspace_entity_data_bridg
 import 'package:sportoteka/presentation/workspace_os/workspace_entity_records.dart';
 import 'package:sportoteka/presentation/workspace_os/workspace_entity_identity.dart';
 import 'package:sportoteka/presentation/workspace_os/workspace_team_project_screen.dart';
+import 'package:sportoteka/presentation/workspace_os/workspace_finder_models.dart';
+import 'package:sportoteka/presentation/workspace_os/workspace_server_storage.dart';
 
 class SportotekaTrainerProjectScreen extends StatefulWidget {
   const SportotekaTrainerProjectScreen({
@@ -43,6 +45,7 @@ class _SportotekaTrainerProjectScreenState extends State<SportotekaTrainerProjec
   void initState() {
     super.initState();
     _trainer = Map<String, dynamic>.from(widget.trainer);
+    _ensureDocumentsFolder();
     _refreshProfile();
   }
 
@@ -64,6 +67,206 @@ class _SportotekaTrainerProjectScreenState extends State<SportotekaTrainerProjec
     final loaded = await _bridge.loadTrainerProfile(_trainer);
     if (!mounted) return;
     setState(() => _trainer = loaded);
+    await _ensureDocumentsFolder();
+  }
+
+  String get _documentsFolderId =>
+      'local-folder:trainer-documents:$_trainerId';
+
+  WorkspaceServerStorage get _workspaceStorage => WorkspaceServerStorage(
+        clubId: widget.clubId,
+        userId: widget.currentUserId,
+      );
+
+  Future<void> _ensureDocumentsFolder() async {
+    if (_trainerId <= 0 || widget.clubId <= 0) return;
+
+    try {
+      final storage = _workspaceStorage;
+      final snapshot = await storage.load();
+      final existing =
+          snapshot.nodes.where((node) => node.id == _documentsFolderId);
+
+      final folder = WorkspaceFinderNode(
+        id: _documentsFolderId,
+        title: 'Документы · $_trainerName',
+        subtitle: 'Документы тренера',
+        kind: WorkspaceFinderNodeKind.folder,
+        parentId: 'documents',
+        payload: <String, dynamic>{
+          '_trainer_documents_folder': true,
+          'trainer_id': _trainerId,
+          'trainer_name': _trainerName,
+          'club_id': widget.clubId,
+        },
+        updatedAt: DateTime.now(),
+      );
+
+      if (existing.isEmpty) {
+        await storage.createNode(folder);
+      } else {
+        final old = existing.first;
+        if (old.title != folder.title ||
+            old.subtitle != folder.subtitle ||
+            old.parentId != folder.parentId) {
+          await storage.updateNode(folder);
+        }
+      }
+    } catch (_) {
+      // Workspace-связь вспомогательная и не должна блокировать профиль.
+    }
+  }
+
+  String _documentTitle(Map<String, dynamic> row) {
+    final value = _bridge.asString(
+      row['title'] ??
+          row['name'] ??
+          row['file_name'] ??
+          row['document_type'] ??
+          row['type'],
+    );
+    return value.isEmpty ? 'Документ' : value;
+  }
+
+  String _documentSubtitle(Map<String, dynamic> row) {
+    final type = _bridge.asString(
+      row['document_type'] ??
+          row['type'] ??
+          row['record_type'],
+    );
+    final number = _bridge.asString(
+      row['document_number'] ??
+          row['number'],
+    );
+    return <String>[
+      if (type.isNotEmpty) type,
+      if (number.isNotEmpty) '№ $number',
+    ].join(' · ');
+  }
+
+  String _documentFileUrl(Map<String, dynamic> row) {
+    final raw = _bridge.asString(
+      row['file_url'] ??
+          row['document_url'] ??
+          row['file'] ??
+          row['url'] ??
+          row['pdf_url'],
+    );
+    if (raw.isEmpty) return '';
+    if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
+    if (raw.startsWith('//')) return 'https:$raw';
+    if (raw.startsWith('/')) return 'https://sportotekaapp.ru$raw';
+    return 'https://sportotekaapp.ru/$raw';
+  }
+
+  String _documentMirrorId(Map<String, dynamic> row, int index) {
+    final id = _bridge.asInt(
+      row['id'] ??
+          row['record_id'] ??
+          row['document_id'],
+    );
+    if (id > 0) return 'trainer-hr-document:$_trainerId:$id';
+
+    final raw =
+        '${_documentTitle(row)}|${_bridge.asString(row['created_at'] ?? row['issue_date'])}|$index'
+            .toLowerCase()
+            .replaceAll(
+              RegExp(r'[^a-z0-9а-яё_-]+', caseSensitive: false),
+              '_',
+            );
+    final safe = raw.length > 80 ? raw.substring(0, 80) : raw;
+    return 'trainer-hr-document:$_trainerId:$safe';
+  }
+
+  Future<void> _syncDocumentsFolder(
+    List<Map<String, dynamic>> rows,
+  ) async {
+    if (_trainerId <= 0 || widget.clubId <= 0) return;
+
+    try {
+      await _ensureDocumentsFolder();
+      final storage = _workspaceStorage;
+      final snapshot = await storage.load();
+      final existing = <String, WorkspaceFinderNode>{
+        for (final node in snapshot.nodes)
+          if (node.parentId == _documentsFolderId &&
+              node.payload?['_trainer_hr_mirror'] == true)
+            node.id: node,
+      };
+
+      final wanted = <String>{};
+
+      for (var index = 0; index < rows.length; index++) {
+        final row = Map<String, dynamic>.from(rows[index]);
+        final nodeId = _documentMirrorId(row, index);
+        wanted.add(nodeId);
+
+        final node = WorkspaceFinderNode(
+          id: nodeId,
+          title: _documentTitle(row),
+          subtitle: _documentSubtitle(row),
+          kind: WorkspaceFinderNodeKind.document,
+          parentId: _documentsFolderId,
+          payload: <String, dynamic>{
+            ...row,
+            '_workspace_real_record': true,
+            '_trainer_hr_mirror': true,
+            '_workspace_owner': _trainerName,
+            'trainer_id': _trainerId,
+            'club_id': widget.clubId,
+            if (_documentFileUrl(row).isNotEmpty)
+              'file_url': _documentFileUrl(row),
+          },
+          updatedAt: DateTime.tryParse(
+                _bridge
+                    .asString(
+                      row['updated_at'] ??
+                          row['created_at'] ??
+                          row['issue_date'],
+                    )
+                    .replaceFirst(' ', 'T'),
+              ) ??
+              DateTime.now(),
+        );
+
+        if (existing.containsKey(nodeId)) {
+          await storage.updateNode(node);
+        } else {
+          await storage.createNode(node);
+        }
+      }
+
+      for (final stale in existing.keys) {
+        if (!wanted.contains(stale)) {
+          await storage.deleteNode(stale);
+        }
+      }
+    } catch (_) {
+      // Основной список документов остаётся доступным даже без Workspace.
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _loadTrainerDocumentsLinked() async {
+    final rows = await _bridge.loadTrainerDocuments(
+      trainerId: _trainerId,
+      clubId: widget.clubId,
+    );
+    await _syncDocumentsFolder(rows);
+    return rows;
+  }
+
+  Future<void> _uploadTrainerDocumentsLinked(List<String> paths) async {
+    await _bridge.uploadTrainerDocuments(
+      trainerId: _trainerId,
+      clubId: widget.clubId,
+      filePaths: paths,
+    );
+    final rows = await _bridge.loadTrainerDocuments(
+      trainerId: _trainerId,
+      clubId: widget.clubId,
+    );
+    await _syncDocumentsFolder(rows);
+    await widget.onRefresh?.call();
   }
 
   static const _sections = <_TrainerSectionFile>[
@@ -144,17 +347,16 @@ class _SportotekaTrainerProjectScreenState extends State<SportotekaTrainerProjec
       localStorageKey: '',
       clubId: widget.clubId,
       currentUserId: widget.currentUserId,
-      serverParentKey: 'trainer:${_trainerId}:${file.section.name}',
+      serverParentKey: file.section == _TrainerSection.documents
+          ? _documentsFolderId
+          : 'trainer:${_trainerId}:${file.section.name}',
       allowCreateDocuments: true,
-      attachmentEntityType: 'trainer',
+      attachmentEntityType:
+          file.section == _TrainerSection.documents ? '' : 'trainer',
       attachmentEntityId: _trainerId,
       attachmentSectionKey: file.section.name,
       externalUploadPaths: file.section == _TrainerSection.documents
-          ? (paths) => _bridge.uploadTrainerDocuments(
-                trainerId: _trainerId,
-                clubId: widget.clubId,
-                filePaths: paths,
-              )
+          ? _uploadTrainerDocumentsLinked
           : null,
       contextLabel: 'Тренер',
       openRecord: (context, row) => _openRecord(file, row),
@@ -177,7 +379,7 @@ class _SportotekaTrainerProjectScreenState extends State<SportotekaTrainerProjec
       case _TrainerSection.health:
         return _bridge.loadTrainerHealth(trainerId: _trainerId, clubId: widget.clubId);
       case _TrainerSection.documents:
-        return _bridge.loadTrainerDocuments(trainerId: _trainerId, clubId: widget.clubId);
+        return _loadTrainerDocumentsLinked();
       case _TrainerSection.card:
         return <Map<String, dynamic>>[];
     }
@@ -422,48 +624,204 @@ class _SportotekaTrainerProjectScreenState extends State<SportotekaTrainerProjec
   }
 
   Future<void> _editTrainer() async {
-    final position = TextEditingController(text: _bridge.asString(_trainer['position'] ?? _trainer['role_title']));
-    final specialization = TextEditingController(text: _bridge.asString(_trainer['specialization']));
-    final city = TextEditingController(text: _bridge.asString(_trainer['city']));
-    final locations = TextEditingController(text: _bridge.asString(_trainer['work_locations'] ?? _trainer['locations']));
-    final birthday = TextEditingController(text: _bridge.asString(_trainer['birthday'] ?? _trainer['birth_date']));
-    final experience = TextEditingController(text: _bridge.asString(_trainer['experience'] ?? _trainer['work_experience']));
-    final phone = TextEditingController(text: _bridge.asString(_trainer['phone'] ?? _trainer['phone_number']));
-    final bio = TextEditingController(text: _bridge.asString(_trainer['bio'] ?? _trainer['description']));
+    final position = TextEditingController(
+      text: _bridge.asString(
+        _trainer['position'] ?? _trainer['role_title'],
+      ),
+    );
+    final specialization = TextEditingController(
+      text: _bridge.asString(_trainer['specialization']),
+    );
+    final city = TextEditingController(
+      text: _bridge.asString(_trainer['city']),
+    );
+
+    final marker = '#club:${widget.clubId}|';
+    final storedLocations = _bridge.asString(
+      _trainer['work_locations'] ?? _trainer['locations'],
+    );
+    final manualValues = <String>[];
+    for (final raw in storedLocations.split(RegExp(r'[\r\n]+'))) {
+      final line = raw.trim();
+      if (!line.startsWith(marker)) continue;
+      final value = line.substring(marker.length).trim();
+      if (value.isNotEmpty && !manualValues.contains(value)) {
+        manualValues.add(value);
+      }
+    }
+
+    final locations = TextEditingController(
+      text: manualValues.join('\n'),
+    );
+
+    final schedule = await _bridge.loadTrainerSchedule(
+      trainer: _trainer,
+      allTeams: widget.teams,
+    );
+    if (!mounted) {
+      position.dispose();
+      specialization.dispose();
+      city.dispose();
+      locations.dispose();
+      return;
+    }
+
+    String normalize(String value) => value
+        .toLowerCase()
+        .replaceAll('ё', 'е')
+        .replaceAll(RegExp(r'[«»"“”„]'), '')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+
+    final automatic = <String, String>{};
+
+    for (final team in _bridge.trainerTeams(_trainer, widget.teams)) {
+      final teamName = _bridge.teamName(team);
+      for (final key in const <String>[
+        'location',
+        'venue',
+        'address',
+        'training_base',
+        'base',
+        'stadium',
+      ]) {
+        final value = _bridge.asString(team[key]);
+        if (value.isEmpty) continue;
+        final label = teamName.isEmpty ? value : '$teamName — $value';
+        automatic.putIfAbsent(normalize(label), () => label);
+      }
+    }
+
+    for (final event in schedule) {
+      final teamName = _bridge.asString(event['team_name']);
+      final value = _bridge.asString(
+        event['location'] ??
+            event['venue'] ??
+            event['address'] ??
+            event['place'],
+      );
+      if (value.isEmpty) continue;
+      final label = teamName.isEmpty ? value : '$teamName — $value';
+      automatic.putIfAbsent(normalize(label), () => label);
+    }
+
+    final automaticText = automatic.values.isEmpty
+        ? 'Автоматические локации пока не найдены'
+        : automatic.values.join('\n');
+
+    final birthday = TextEditingController(
+      text: _bridge.asString(
+        _trainer['birthday'] ?? _trainer['birth_date'],
+      ),
+    );
+    final experience = TextEditingController(
+      text: _bridge.asString(
+        _trainer['experience'] ?? _trainer['work_experience'],
+      ),
+    );
+    final phone = TextEditingController(
+      text: _bridge.asString(
+        _trainer['phone'] ?? _trainer['phone_number'],
+      ),
+    );
+    final bio = TextEditingController(
+      text: _bridge.asString(
+        _trainer['bio'] ?? _trainer['description'],
+      ),
+    );
 
     final saved = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.white,
-        title: Text('Редактировать тренера', style: AppTypography.sectionTitle(color: _text)),
+        title: Text(
+          'Редактировать тренера',
+          style: AppTypography.sectionTitle(color: _text),
+        ),
         content: SizedBox(
           width: 560,
           child: SingleChildScrollView(
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              _field(position, 'Должность'),
-              _field(specialization, 'Специализация'),
-              _field(city, 'Город'),
-              _field(locations, 'Рабочие локации'),
-              _field(birthday, 'Дата рождения'),
-              _field(experience, 'Опыт'),
-              _field(phone, 'Телефон'),
-              TextField(controller: bio, maxLines: 4, style: AppTypography.formText(color: _text), decoration: const InputDecoration(labelText: 'О тренере')),
-            ]),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _field(position, 'Должность'),
+                _field(specialization, 'Специализация'),
+                _field(city, 'Город'),
+                TextFormField(
+                  initialValue: automaticText,
+                  readOnly: true,
+                  minLines: 2,
+                  maxLines: 5,
+                  style: AppTypography.formText(color: _muted),
+                  decoration: const InputDecoration(
+                    labelText: 'Локации автоматически из команд и календаря',
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: locations,
+                  minLines: 2,
+                  maxLines: 5,
+                  style: AppTypography.formText(color: _text),
+                  decoration: const InputDecoration(
+                    labelText: 'Ручная корректировка локаций',
+                    hintText:
+                        'Каждая итоговая локация с новой строки. Если пусто — используются автоматические.',
+                  ),
+                ),
+                const SizedBox(height: 10),
+                _field(birthday, 'Дата рождения'),
+                _field(experience, 'Опыт'),
+                _field(phone, 'Телефон'),
+                TextField(
+                  controller: bio,
+                  maxLines: 4,
+                  style: AppTypography.formText(color: _text),
+                  decoration: const InputDecoration(
+                    labelText: 'О тренере',
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: Text('Отмена', style: AppTypography.action(color: _muted))),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(
+              'Отмена',
+              style: AppTypography.action(color: _muted),
+            ),
+          ),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: _green),
             onPressed: () async {
+              final keep = storedLocations
+                  .split(RegExp(r'[\r\n]+'))
+                  .map((value) => value.trim())
+                  .where(
+                    (value) =>
+                        value.isNotEmpty && !value.startsWith(marker),
+                  )
+                  .toList();
+
+              final seen = <String>{};
+              for (final raw in locations.text.split(RegExp(r'[\r\n;]+'))) {
+                final value = raw.trim();
+                if (value.isEmpty) continue;
+                final key = normalize(value);
+                if (!seen.add(key)) continue;
+                keep.add('$marker$value');
+              }
+
               final ok = await _bridge.saveTrainerProfile(
                 trainer: _trainer,
                 fields: <String, String>{
                   'position': position.text.trim(),
                   'specialization': specialization.text.trim(),
                   'city': city.text.trim(),
-                  'work_locations': locations.text.trim(),
+                  'work_locations': keep.join('\n'),
                   'birthday': birthday.text.trim(),
                   'experience': experience.text.trim(),
                   'phone': phone.text.trim(),
@@ -473,11 +831,24 @@ class _SportotekaTrainerProjectScreenState extends State<SportotekaTrainerProjec
               if (!dialogContext.mounted) return;
               Navigator.pop(dialogContext, ok);
             },
-            child: Text('Сохранить', style: AppTypography.actionStrong(color: Colors.white)),
+            child: Text(
+              'Сохранить',
+              style: AppTypography.actionStrong(color: Colors.white),
+            ),
           ),
         ],
       ),
     );
+
+    position.dispose();
+    specialization.dispose();
+    city.dispose();
+    locations.dispose();
+    birthday.dispose();
+    experience.dispose();
+    phone.dispose();
+    bio.dispose();
+
     if (saved == true) {
       await _refreshProfile();
       await widget.onRefresh?.call();

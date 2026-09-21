@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
 import 'package:sportoteka/core/theme/app_typography.dart';
 import 'package:sportoteka/presentation/workspace_os/workspace_document_editor.dart';
 import 'package:sportoteka/presentation/workspace_os/workspace_ai_document_library.dart';
@@ -18,7 +19,9 @@ import 'package:sportoteka/presentation/workspace_os/workspace_root_data_bridge.
 import 'package:sportoteka/presentation/workspace_os/sportoteka_workspace_icons.dart';
 import 'package:sportoteka/presentation/workspace_os/workspace_live_blocks.dart';
 import 'package:sportoteka/presentation/workspace_os/workspace_window_manager.dart';
+import 'package:sportoteka/presentation/workspace_os/workspace_training_plan_codec.dart';
 import 'package:sportoteka/presentation/workspace_os/workspace_video_center.dart';
+import 'package:sportoteka/presentation/training_graphics/training_graphics_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class SportotekaWorkspaceFinderPanel extends StatefulWidget {
@@ -159,6 +162,16 @@ class _SportotekaWorkspaceFinderPanelState
 
   String get _storageKey => 'sportoteka_finder_v1_${widget.clubId}';
 
+  bool _isPlanLibraryFolderKey(String key) => key.startsWith('plan-folder:');
+
+  int _planFolderIdFromKey(String key) {
+    if (!_isPlanLibraryFolderKey(key)) return 0;
+    return int.tryParse(key.substring('plan-folder:'.length)) ?? 0;
+  }
+
+  bool get _isPlansWorkspace =>
+      _folderKey == 'plans' || _isPlanLibraryFolderKey(_folderKey);
+
   void _wsLog(String message) {
     debugPrint(
       '[WORKSPACE_SYNC][FINDER] club=${widget.clubId} user=${widget.currentUserId} '
@@ -196,14 +209,16 @@ class _SportotekaWorkspaceFinderPanelState
     if (teamChanged || dataChanged) {
       _realFolderNodes.clear();
       _realFolderErrors.clear();
-      if (_projectedFolders.contains(_folderKey)) {
+      if (_projectedFolders.contains(_folderKey) ||
+          _isPlanLibraryFolderKey(_folderKey)) {
         _loadRealFolder(_folderKey, force: true);
       }
     }
   }
 
   Future<void> _loadRealFolder(String key, {bool force = false}) async {
-    if (!_projectedFolders.contains(key)) return;
+    final isPlanFolder = _isPlanLibraryFolderKey(key);
+    if (!_projectedFolders.contains(key) && !isPlanFolder) return;
     if (!force &&
         (_realFolderNodes.containsKey(key) || _realFolderLoading.contains(key)))
       return;
@@ -214,7 +229,11 @@ class _SportotekaWorkspaceFinderPanelState
       });
     }
     try {
-      final rows = await _rootDataBridge.loadFolder(key);
+      final rows = isPlanFolder
+          ? await _rootDataBridge.loadPlanLibraryFolder(
+              folderId: _planFolderIdFromKey(key),
+            )
+          : await _rootDataBridge.loadFolder(key);
       if (!mounted) return;
       setState(() {
         _realFolderNodes[key] = rows;
@@ -240,6 +259,15 @@ class _SportotekaWorkspaceFinderPanelState
       _selectedNodeId = null;
       if (closeCompactSidebar) _showSidebarOnCompact = false;
     });
+
+    // Папки документов тренеров могут создаваться из CMR-профиля,
+    // пока Workspace OS уже открыт. Перед входом в «Документы»
+    // подтягиваем server nodes, чтобы новая папка появилась сразу,
+    // без перезапуска приложения.
+    if (key == 'documents') {
+      await _loadServerWorkspace();
+    }
+
     await _loadRealFolder(key);
   }
 
@@ -770,7 +798,11 @@ class _SportotekaWorkspaceFinderPanelState
             .toList();
         break;
       default:
-        if (_projectedFolders.contains(_folderKey)) {
+        if (_isPlanLibraryFolderKey(_folderKey)) {
+          nodes = <WorkspaceFinderNode>[
+            ...?_realFolderNodes[_folderKey],
+          ];
+        } else if (_projectedFolders.contains(_folderKey)) {
           nodes = <WorkspaceFinderNode>[
             if (_folderKey == 'documents')
               WorkspaceFinderNode(
@@ -852,7 +884,8 @@ class _SportotekaWorkspaceFinderPanelState
     // Real module collections are already returned by the backend bridge in
     // meaningful chronological order. Do not destroy that order by sorting
     // matches/trainings/plans alphabetically.
-    if (!_projectedFolders.contains(_folderKey)) {
+    if (!_projectedFolders.contains(_folderKey) &&
+        !_isPlanLibraryFolderKey(_folderKey)) {
       nodes.sort((a, b) {
         if (a.isFolder != b.isFolder) return a.isFolder ? -1 : 1;
         return a.title.toLowerCase().compareTo(b.title.toLowerCase());
@@ -874,7 +907,14 @@ class _SportotekaWorkspaceFinderPanelState
 
   Future<void> _refreshCurrentFolder() async {
     await widget.onRefresh?.call();
-    if (_projectedFolders.contains(_folderKey)) {
+
+    // Refresh должен обновлять не только реальные модули, но и серверное
+    // дерево Workspace. Иначе автоматически созданная папка тренера могла
+    // существовать на сервере, но не появляться в уже открытом Workspace OS.
+    await _loadServerWorkspace();
+
+    if (_projectedFolders.contains(_folderKey) ||
+        _isPlanLibraryFolderKey(_folderKey)) {
       await _loadRealFolder(_folderKey, force: true);
     } else if (mounted) {
       setState(() {});
@@ -1039,6 +1079,22 @@ class _SportotekaWorkspaceFinderPanelState
       _rememberRecent(node);
     });
 
+    if (node.payload?['_workspace_plan_folder'] == true) {
+      final folderId = int.tryParse(
+            '${node.payload?['_workspace_plan_folder_id'] ?? node.payload?['id'] ?? ''}',
+          ) ??
+          0;
+      if (folderId > 0) {
+        await _enterFolder('plan-folder:$folderId');
+      }
+      return;
+    }
+
+    if (node.payload?['_workspace_training_graphic'] == true) {
+      await _openWorkspaceTrainingGraphic(node);
+      return;
+    }
+
     if (node.isFolder && node.moduleKey != null) {
       await _enterFolder(node.moduleKey!);
       return;
@@ -1055,6 +1111,12 @@ class _SportotekaWorkspaceFinderPanelState
 
     if (node.payload?['_workspace_ai_document_library'] == true) {
       await _openAiDocumentLibrary();
+      return;
+    }
+
+    if (node.kind == WorkspaceFinderNodeKind.plan &&
+        node.payload?['_workspace_real_record'] == true) {
+      await _openWorkspaceTrainingPlanEditor(node);
       return;
     }
 
@@ -1129,6 +1191,225 @@ class _SportotekaWorkspaceFinderPanelState
       subtitle: 'Методические материалы · ${widget.clubName}',
       iconKind: SportotekaWorkspaceIconKind.document,
       builder: (closeWindow) => builder(closeWindow),
+    );
+  }
+
+  Future<void> _createWorkspaceTrainingPlan() async {
+    final folderId = _isPlanLibraryFolderKey(_folderKey)
+        ? _planFolderIdFromKey(_folderKey)
+        : 0;
+    final teamId = widget.selectedTeamId ?? 0;
+    if (teamId <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Сначала выберите активную команду')),
+      );
+      return;
+    }
+
+    final draft = WorkspaceFinderNode(
+      id: 'draft-plan:${DateTime.now().microsecondsSinceEpoch}',
+      title: 'Новый план-конспект',
+      subtitle: _currentTitle,
+      kind: WorkspaceFinderNodeKind.plan,
+      payload: <String, dynamic>{
+        'id': 0,
+        'plan_id': 0,
+        'club_id': widget.clubId,
+        'team_id': teamId,
+        'team_name': widget.selectedTeamName,
+        'folder_id': folderId,
+        '_workspace_real_record': true,
+        '_workspace_section': 'plans',
+      },
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+    );
+    await _openWorkspaceTrainingPlanEditor(draft, forceNew: true);
+  }
+
+  Future<void> _openWorkspaceTrainingPlanEditor(
+    WorkspaceFinderNode node, {
+    bool forceNew = false,
+  }) async {
+    final raw = Map<String, dynamic>.from(
+      node.payload ?? const <String, dynamic>{},
+    );
+    var planId = forceNew
+        ? 0
+        : (int.tryParse('${raw['plan_id'] ?? raw['id'] ?? 0}') ?? 0);
+    final teamId = int.tryParse(
+          '${raw['team_id'] ?? widget.selectedTeamId ?? 0}',
+        ) ??
+        0;
+    final folderId = int.tryParse(
+          '${raw['folder_id'] ?? (_isPlanLibraryFolderKey(_folderKey) ? _planFolderIdFromKey(_folderKey) : 0)}',
+        ) ??
+        0;
+    final teamName = '${raw['team_name'] ?? widget.selectedTeamName}'.trim();
+    final trainerName = '${raw['trainer_name'] ?? raw['coach_name'] ?? raw['trainer'] ?? ''}'.trim();
+    final storedBody = '${raw['plan_description'] ?? raw['description'] ?? raw['workspace_body'] ?? ''}';
+    final hasWorkspaceBody = WorkspaceTrainingPlanCodec.containsPlan(storedBody);
+
+    String firstNonEmpty(List<dynamic> values) {
+      for (final value in values) {
+        final text = '${value ?? ''}'.trim();
+        if (text.isNotEmpty && text != 'null') return text;
+      }
+      return '';
+    }
+
+    final seed = WorkspaceTrainingPlanCodec.newPlan(
+      clubName: widget.clubName,
+      teamName: teamName,
+      trainerName: trainerName,
+      cycle: firstNonEmpty(<dynamic>[raw['cycle_title'], raw['cycle']]),
+      date: firstNonEmpty(<dynamic>[raw['plan_date'], raw['date']]),
+      theme: firstNonEmpty(<dynamic>[raw['theme'], raw['title'], node.title]),
+      location: firstNonEmpty(<dynamic>[raw['location'], raw['place']]),
+      playersCount: raw['players_count'] ?? raw['player_count'] ?? '',
+      durationMin: raw['duration_min'] ?? raw['duration'] ?? '',
+    );
+
+    final editorId = planId > 0 ? 'training-plan:$planId' : node.id;
+
+    Future<void> savePlan(String title, String body) async {
+      if (teamId <= 0) {
+        throw StateError('Не выбрана команда для плана-конспекта');
+      }
+      final planData = WorkspaceTrainingPlanCodec.decodeFirst(body) ?? seed;
+      final now = DateTime.now();
+      final fallbackDate =
+          '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+      final theme = '${planData['theme'] ?? ''}'.trim();
+      final response = await http
+          .post(
+            Uri.parse('https://sportotekaapp.ru/api/create_training_plan.php'),
+            headers: const <String, String>{
+              'Content-Type': 'application/json; charset=utf-8',
+            },
+            body: jsonEncode(<String, dynamic>{
+              'id': planId,
+              'plan_id': planId,
+              'club_id': widget.clubId,
+              'club_name': widget.clubName,
+              'team_id': teamId,
+              'team_name': teamName,
+              'folder_id': folderId,
+              'theme': theme.isNotEmpty
+                  ? theme
+                  : (title.trim().isEmpty ? 'Новый план-конспект' : title.trim()),
+              'cycle_title': '${planData['cycle'] ?? ''}'.trim(),
+              // Workspace OS body is the canonical plan document. Existing
+              // Plans APIs keep it in the plan description, so the same record
+              // remains visible in CMR/Plans and in Workspace.
+              'description': body,
+              'plan_description': body,
+              'workspace_body': body,
+              'plan_date': '${planData['date'] ?? ''}'.trim().isEmpty
+                  ? fallbackDate
+                  : '${planData['date']}'.trim(),
+              'location': '${planData['location'] ?? ''}'.trim(),
+              'players_count': '${planData['players_count'] ?? ''}'.trim(),
+              'duration_min': '${planData['duration_min'] ?? ''}'.trim(),
+            }),
+          )
+          .timeout(const Duration(seconds: 15));
+      final decoded = jsonDecode(response.body);
+      if (response.statusCode < 200 ||
+          response.statusCode >= 300 ||
+          decoded is! Map ||
+          decoded['success'] != true) {
+        throw StateError(
+          decoded is Map
+              ? '${decoded['message'] ?? decoded['error'] ?? 'Не удалось сохранить план'}'
+              : 'Не удалось сохранить план',
+        );
+      }
+      final savedId = int.tryParse(
+            '${decoded['plan_id'] ?? decoded['id'] ?? planId}',
+          ) ??
+          planId;
+      if (savedId > 0) planId = savedId;
+
+      _realFolderNodes.remove('plans');
+      _realFolderNodes.remove('plan-folder:$folderId');
+      if (mounted) {
+        await _loadRealFolder(_folderKey, force: true);
+      }
+    }
+
+    Widget buildEditor(VoidCallback closeWindow) => WorkspaceDocumentEditor(
+          initialTitle: node.title,
+          initialBody: hasWorkspaceBody ? storedBody : '',
+          startWithTrainingPlanTemplate: !hasWorkspaceBody,
+          initialTrainingPlanData: seed,
+          contextLabel: 'План-конспект',
+          contextName: _currentTitle,
+          documentType: 'План-конспект',
+          onSave: savePlan,
+          onClose: closeWindow,
+          compactWorkspaceChrome: true,
+          aiClubId: widget.clubId,
+          aiUserId: widget.currentUserId,
+          aiTeamId: teamId,
+          aiClubName: widget.clubName,
+          aiTeamName: teamName,
+          aiDocumentKey: planId > 0 ? 'training_plan_$planId' : editorId,
+          aiExtraPayload: <String, dynamic>{
+            'workspace_section': 'plans',
+            'folder_id': folderId,
+            'plan_id': planId,
+          },
+        );
+
+    await _openMethodDocumentEditorWindow(
+      editorId,
+      node.title,
+      buildEditor,
+    );
+  }
+
+  Future<void> _openWorkspaceTrainingGraphic(WorkspaceFinderNode node) async {
+    final raw = Map<String, dynamic>.from(
+      node.payload ?? const <String, dynamic>{},
+    );
+    final graphicId = int.tryParse('${raw['id'] ?? raw['graphic_id'] ?? 0}') ?? 0;
+    final teamId = int.tryParse('${raw['team_id'] ?? widget.selectedTeamId ?? 0}') ?? 0;
+    final folderId = int.tryParse(
+          '${raw['_workspace_plan_folder_id'] ?? raw['folder_id'] ?? 0}',
+        ) ??
+        0;
+    final teamName = '${raw['team_name'] ?? widget.selectedTeamName}'.trim();
+
+    Widget buildEditor() => TrainingGraphicsScreen(
+          clubId: widget.clubId,
+          clubName: widget.clubName,
+          teamId: teamId,
+          teamName: teamName,
+          graphicId: graphicId > 0 ? graphicId : null,
+          initialFolderId: folderId > 0 ? folderId : null,
+          initialFolderTitle: _currentTitle,
+        );
+
+    final width = MediaQuery.sizeOf(context).width;
+    if (width < 760) {
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (_) => Scaffold(
+            backgroundColor: Colors.white,
+            body: SafeArea(child: buildEditor()),
+          ),
+        ),
+      );
+      return;
+    }
+
+    await _openDesktopWindow(
+      id: 'training-graphic:${graphicId > 0 ? graphicId : node.id}',
+      title: node.title,
+      subtitle: 'Схемы · $_currentTitle',
+      iconKind: SportotekaWorkspaceIconKind.plans,
+      builder: (_) => buildEditor(),
     );
   }
 
@@ -1531,11 +1812,39 @@ class _SportotekaWorkspaceFinderPanelState
     });
   }
 
+  Future<void> _goBackFromCurrentFolder() async {
+    if (_isPlanLibraryFolderKey(_folderKey)) {
+      final currentId = _planFolderIdFromKey(_folderKey);
+      var parentId = 0;
+      for (final list in _realFolderNodes.values) {
+        for (final node in list) {
+          final id = int.tryParse('${node.payload?['_workspace_plan_folder_id'] ?? ''}') ?? 0;
+          if (id != currentId) continue;
+          parentId = int.tryParse('${node.payload?['parent_id'] ?? 0}') ?? 0;
+          break;
+        }
+      }
+      await _enterFolder(parentId > 0 ? 'plan-folder:$parentId' : 'plans');
+      return;
+    }
+    _goHome();
+  }
+
   String get _currentTitle {
     if (_folderKey == 'home')
       return widget.clubName.trim().isEmpty ? 'SPORTOTEKA' : widget.clubName;
     if (_folderKey == 'favorites') return 'Избранное';
     if (_folderKey == 'recent') return 'Недавние';
+    if (_isPlanLibraryFolderKey(_folderKey)) {
+      final currentId = _planFolderIdFromKey(_folderKey);
+      for (final list in _realFolderNodes.values) {
+        for (final node in list) {
+          final id = int.tryParse('${node.payload?['_workspace_plan_folder_id'] ?? ''}') ?? 0;
+          if (id == currentId) return node.title;
+        }
+      }
+      return 'Папка планов';
+    }
     final module = _moduleFor(_folderKey);
     if (module != null) return module.title;
     for (final node in _allKnownNodes()) {
@@ -1587,7 +1896,7 @@ class _SportotekaWorkspaceFinderPanelState
       return;
     }
 
-    final currentNames = (_localChildren[_folderKey] ?? const <WorkspaceFinderNode>[])
+    final currentNames = _nodesForCurrentFolder()
         .where((node) => node.isFolder)
         .map((node) => node.title.trim().toLowerCase())
         .toSet();
@@ -1600,6 +1909,54 @@ class _SportotekaWorkspaceFinderPanelState
       _creatingFolder = true;
       _folderCreateError = null;
     });
+
+    if (_isPlansWorkspace) {
+      final parentId = _isPlanLibraryFolderKey(_folderKey)
+          ? _planFolderIdFromKey(_folderKey)
+          : 0;
+      try {
+        final response = await http.post(
+          Uri.parse('https://sportotekaapp.ru/api/create_plan_folder.php'),
+          body: <String, String>{
+            'club_id': '${widget.clubId}',
+            'parent_id': '$parentId',
+            'name': name,
+            'title': name,
+            'type': parentId == 0 ? 'age' : 'custom',
+            'created_by': '${widget.currentUserId > 0 ? widget.currentUserId : widget.clubId}',
+          },
+        ).timeout(const Duration(seconds: 12));
+        final decoded = jsonDecode(response.body);
+        if (response.statusCode < 200 ||
+            response.statusCode >= 300 ||
+            decoded is! Map ||
+            decoded['success'] != true) {
+          throw StateError(
+            decoded is Map
+                ? '${decoded['message'] ?? decoded['error'] ?? 'Не удалось создать папку'}'
+                : 'Не удалось создать папку',
+          );
+        }
+        if (!mounted) return;
+        setState(() {
+          _showInlineFolderCreator = false;
+          _creatingFolder = false;
+          _folderCreateError = null;
+        });
+        _newFolderNameFocus.unfocus();
+        _realFolderNodes.remove('plans');
+        _realFolderNodes.remove(_folderKey);
+        await _loadRealFolder(_folderKey, force: true);
+      } catch (e) {
+        if (!mounted) return;
+        setState(() {
+          _creatingFolder = false;
+          _folderCreateError = 'Не удалось создать папку: $e';
+          _showInlineFolderCreator = true;
+        });
+      }
+      return;
+    }
 
     final id = 'local-folder:${DateTime.now().microsecondsSinceEpoch}';
     final node = WorkspaceFinderNode(
@@ -1651,6 +2008,10 @@ class _SportotekaWorkspaceFinderPanelState
 
   Future<void> _createNote() async {
     if (!_canCreateWorkspaceNode) return;
+    if (_isPlansWorkspace) {
+      await _createWorkspaceTrainingPlan();
+      return;
+    }
     final id = 'note:${DateTime.now().microsecondsSinceEpoch}';
     final node = WorkspaceFinderNode(
       id: id,
@@ -1900,6 +2261,8 @@ class _SportotekaWorkspaceFinderPanelState
         return 'Тренировка';
       case 'matches':
         return 'Матч';
+      case 'plans':
+        return 'План-конспект';
       default:
         return 'Пространство клуба';
     }
@@ -2846,7 +3209,7 @@ class _SportotekaWorkspaceFinderPanelState
               tooltip: 'Разделы',
             ),
           IconButton(
-            onPressed: _folderKey == 'home' ? null : _goHome,
+            onPressed: _folderKey == 'home' ? null : _goBackFromCurrentFolder,
             icon: const Icon(Icons.arrow_back_rounded),
             tooltip: 'Назад',
           ),
@@ -2896,7 +3259,7 @@ class _SportotekaWorkspaceFinderPanelState
                         Text('Новая папка', style: AppTypography.menuTitle())),
                 PopupMenuItem(
                     value: 'note',
-                    child: Text('Новый документ',
+                    child: Text(_isPlansWorkspace ? 'Новый план-конспект' : 'Новый документ',
                         style: AppTypography.menuTitle())),
                 if (_clipboardNode != null)
                   PopupMenuItem(

@@ -615,9 +615,55 @@ class _PlayerTestingSectionState extends State<PlayerTestingSection> {
     }).toList();
   }
 
+  String _formatTestValue(Map<String, dynamic> row) {
+    final raw = _s(row['value'] ?? row['result']);
+    if (raw.isEmpty) return '';
+
+    final parsed = double.tryParse(
+      raw.replaceAll(',', '.').replaceAll(RegExp(r'[^0-9.\-]'), ''),
+    );
+    if (parsed == null) return raw;
+
+    final unit = _s(row['unit']).toLowerCase();
+    final code = _s(row['test_code'] ?? row['code']).toLowerCase();
+    final name = _s(row['test_name']).toLowerCase();
+
+    int fraction;
+    if (code == 'long_jump' ||
+        unit == 'см' ||
+        unit == 'cm' ||
+        unit.contains('сантим') ||
+        unit.contains('повтор') ||
+        unit.contains('раз') ||
+        unit.contains('балл')) {
+      fraction = 0;
+    } else if (unit == 'кг' || unit == 'kg' || unit.contains('килограмм')) {
+      fraction = 1;
+    } else if (unit.contains('%') || unit.contains('процент')) {
+      fraction = 0;
+    } else if (unit == 'сек' ||
+        unit == 'с' ||
+        unit == 'sec' ||
+        unit == 's' ||
+        unit.contains('секунд') ||
+        name.contains('бег') ||
+        name.contains('челноч')) {
+      fraction = 2;
+    } else {
+      fraction = 2;
+    }
+
+    var text = parsed.toStringAsFixed(fraction).replaceAll('.', ',');
+    while (text.contains(',') && text.endsWith('0')) {
+      text = text.substring(0, text.length - 1);
+    }
+    if (text.endsWith(',')) text = text.substring(0, text.length - 1);
+    return text;
+  }
+
   Widget _testRow(Map<String, dynamic> row) {
     final name = _s(row['test_name']).isEmpty ? 'Тест' : _s(row['test_name']);
-    final value = _s(row['value'] ?? row['result']);
+    final value = _formatTestValue(row);
     final unit = _s(row['unit']);
     final rating = _ratingLabel(row);
     final ratingColor = _ratingColor(row);

@@ -1,9 +1,14 @@
-// lib/presentation/training_graphics/unity/unity_training_screen.dart
 import 'dart:convert';
-import 'package:flutter/material.dart';
-import 'package:flutter_embed_unity/flutter_embed_unity.dart';
-import 'package:sportoteka/core/theme/app_typography.dart';
 
+import 'package:flutter/material.dart';
+
+import '../flutter_3d_pro_screen.dart';
+import '../training_graphics_state.dart';
+
+/// Backward-compatible wrapper for the former Unity screen.
+/// No Unity runtime is used anymore: the supplied tactical JSON is opened in
+/// the native Flutter presentation renderer.
+@Deprecated('Unity was removed. Use SportotekaFlutter3DProScreen.')
 class UnityTrainingScreen extends StatefulWidget {
   const UnityTrainingScreen({
     super.key,
@@ -19,114 +24,33 @@ class UnityTrainingScreen extends StatefulWidget {
 }
 
 class _UnityTrainingScreenState extends State<UnityTrainingScreen> {
-  bool _unityReady = false;
-  bool _sentInitial = false;
-  String? _lastUnityMsg;
+  late final TgState _state;
 
-  void _sendInitialIfNeeded() {
-    if (!_unityReady) return;
-    if (_sentInitial) return;
-    _sentInitial = true;
-
-    // Flutter -> Unity
-    sendToUnity("FlutterBridge", "LoadScheme", widget.initialSchemeJson);
-  }
-
-  void _handleUnityMessage(String message) {
-    _lastUnityMsg = message;
-
-    // 1) handshake: Unity -> Flutter {"type":"ready"}
+  @override
+  void initState() {
+    super.initState();
+    _state = TgState(teamId: 0, teamName: widget.teamName);
     try {
-      final j = jsonDecode(message);
-      if (j is Map && j["type"] == "ready") {
-        if (!_unityReady) {
-          setState(() => _unityReady = true);
-        }
-        _sendInitialIfNeeded();
-        return;
+      final decoded = jsonDecode(widget.initialSchemeJson);
+      if (decoded is Map) {
+        _state.loadFromJson(Map<String, dynamic>.from(decoded));
       }
     } catch (_) {
-      // not json — ignore
+      // A malformed legacy payload should still open a clean 3D field.
     }
+  }
 
-    // 2) если Unity не прислала ready, но присылает любые сообщения — тоже считаем что жива
-    if (!_unityReady) {
-      setState(() => _unityReady = true);
-      _sendInitialIfNeeded();
-    }
-
-    // 3) тут можно обработать export обратно: {"type":"scheme_export", ...}
-    // пока просто покажем snackbar (по желанию)
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text("Unity: $message")),
-    );
+  @override
+  void dispose() {
+    _state.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text("3D поле — ${widget.teamName}"),
-        actions: [
-          IconButton(
-            tooltip: "Отправить схему в Unity",
-            icon: const Icon(Icons.upload_rounded),
-            onPressed: _unityReady
-                ? () => sendToUnity("FlutterBridge", "LoadScheme", widget.initialSchemeJson)
-                : null,
-          ),
-          IconButton(
-            tooltip: "Запросить схему из Unity",
-            icon: const Icon(Icons.download_rounded),
-            onPressed: _unityReady
-                ? () => sendToUnity("FlutterBridge", "ExportScheme", "")
-                : null,
-          ),
-        ],
-      ),
-      body: Stack(
-        children: [
-          EmbedUnity(
-            onMessageFromUnity: _handleUnityMessage,
-          ),
-
-          if (!_unityReady)
-            const Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 12),
-                  Text("Запускаю 3D движок…"),
-                ],
-              ),
-            ),
-
-          if (_unityReady && _lastUnityMsg != null)
-            Positioned(
-              left: 12,
-              right: 12,
-              bottom: 12,
-              child: Opacity(
-                opacity: 0.85,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: Colors.black87,
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Text(
-                    _lastUnityMsg!,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontFamily: AppTypography.fontFamily, color: Colors.white, fontSize: AppTypography.secondarySize),
-                  ),
-                ),
-              ),
-            ),
-        ],
-      ),
+    return SportotekaFlutter3DProScreen(
+      state: _state,
+      teamName: widget.teamName,
     );
   }
 }

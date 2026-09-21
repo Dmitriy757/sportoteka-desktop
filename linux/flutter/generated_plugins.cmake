@@ -11,6 +11,7 @@ list(APPEND FLUTTER_PLUGIN_LIST
   livekit_client
   printing
   syncfusion_pdfviewer_linux
+  thermion_flutter
   url_launcher_linux
 )
 

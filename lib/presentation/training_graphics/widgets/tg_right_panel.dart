@@ -1063,17 +1063,17 @@ class _ObjectPanelContentState extends State<_ObjectPanelContent> {
                   width: double.infinity,
                   height: 42,
                   padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: const Row(
+                  child: Row(
                     children: [
-                      Icon(Icons.view_in_ar_rounded, color: Colors.white, size: 18),
-                      SizedBox(width: 8),
+                      const Icon(Icons.stadium_rounded, color: Colors.white, size: 18),
+                      const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          'Открыть 3D Pro с этим составом',
-                          style: TextStyle(fontFamily: AppTypography.fontFamily, color: Colors.white, fontSize: AppTypography.secondarySize, fontWeight: FontWeight.w600),
+                          'Открыть Game View',
+                          style: const TextStyle(fontFamily: AppTypography.fontFamily, color: Colors.white, fontSize: AppTypography.secondarySize, fontWeight: FontWeight.w600),
                         ),
                       ),
-                      Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 17),
+                      const Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 17),
                     ],
                   ),
                 ),
@@ -1293,10 +1293,11 @@ class _ObjectPanelContentState extends State<_ObjectPanelContent> {
               const SizedBox(width: 8),
               Expanded(
                 child: _presetCard(
-                  icon: Icons.view_in_ar_rounded,
-                  title: '3D поле',
-                  subtitle: 'трансляция',
+                  icon: Icons.threed_rotation_rounded,
+                  title: 'Перспектива',
+                  subtitle: 'рабочий ракурс',
                   onTap: () {
+                    widget.state.setPresentationMode(false);
                     if (!widget.state.is3DMode) widget.state.toggle3DMode();
                   },
                 ),
@@ -1898,7 +1899,7 @@ class _EditorPanelContent extends StatelessWidget {
   }
 }
 
-// ==================== ПАНЕЛЬ 3D ====================
+// ==================== ПАНЕЛЬ КАМЕРЫ ====================
 class _ThreeDPanel extends _BasePanel {
   final TgState state;
   final GlobalKey<TgCanvasState> canvasKey;
@@ -1909,7 +1910,7 @@ class _ThreeDPanel extends _BasePanel {
     required this.canvasKey,
     required super.onClose,
   }) : super(
-          title: '3D камера',
+          title: 'Камера поля',
           icon: Icons.threed_rotation,
           child: _ThreeDPanelContent(
             state: state,
@@ -4501,18 +4502,28 @@ class _ThreeDObjectsPanel extends _BasePanel {
     super.scrollController,
     required this.state,
     required VoidCallback onOpenCamera,
+    VoidCallback? onOpen3DPro,
     required super.onClose,
   }) : super(
           title: 'Объекты сцены',
           icon: Icons.view_in_ar_rounded,
-          child: _ThreeDObjectsPanelContent(state: state, onOpenCamera: onOpenCamera),
+          child: _ThreeDObjectsPanelContent(
+            state: state,
+            onOpenCamera: onOpenCamera,
+            onOpen3DPro: onOpen3DPro,
+          ),
         );
 }
 
 class _ThreeDObjectsPanelContent extends StatelessWidget {
-  const _ThreeDObjectsPanelContent({required this.state, required this.onOpenCamera});
+  const _ThreeDObjectsPanelContent({
+    required this.state,
+    required this.onOpenCamera,
+    this.onOpen3DPro,
+  });
   final TgState state;
   final VoidCallback onOpenCamera;
+  final VoidCallback? onOpen3DPro;
 
   static const _green = Color(0xFF00A750);
   static const _border = Color(0xFFE5E7EB);
@@ -4528,9 +4539,9 @@ class _ThreeDObjectsPanelContent extends StatelessWidget {
       children: [
         _Section(
           title: 'Вид и инструменты',
-          trailing: state.is3DMode ? 'перспектива' : 'вид сверху',
+          trailing: state.presentationMode ? 'стадион' : (state.is3DMode ? 'перспектива' : 'вид сверху'),
           child: const Text(
-            'Нажмите на объект: он появится на поле. Перетащите его и откройте «Свойства». Перспектива работает в редакторе, модели GLB добавляются отдельно.',
+            'Редактирование, перспектива и режим «Стадион» используют одну сцену. Игроки и инвентарь не меняют стиль при переключении вида.',
             style: TextStyle(fontFamily: AppTypography.fontFamily, color: _muted, fontSize: AppTypography.captionSize, height: 1.3, fontWeight: FontWeight.w500),
           ),
         ),
@@ -4540,10 +4551,11 @@ class _ThreeDObjectsPanelContent extends StatelessWidget {
           child: Column(
             children: [
               _modeTile(Icons.layers_rounded, 'Поле с перспективой', 'Включить 2.5D вид и камеру',
-                  onTap: () => state.set3DParams(enabled: true, rotationX: -.34)),
+                  onTap: () { state.setPresentationMode(false); state.set3DParams(enabled: true, rotationX: -.34); }),
+              _modeTile(Icons.sports_esports_rounded, 'Game View', 'Игровая камера, стадион, свет и глубина',
+                  onTap: onOpen3DPro),
               _modeTile(Icons.memory_rounded, 'Скачать JSON сцены', 'Координаты, объекты, слои и камера',
                   onTap: () => _saveScene(context)),
-              _modeTile(Icons.view_in_ar_rounded, 'GLB / glTF', 'Потребуются 3D-модели и конвертер'),
             ],
           ),
         ),
@@ -4828,8 +4840,8 @@ class _ExportPanelContent extends StatelessWidget {
             children: [
               _exportTile(context, Icons.image, 'PNG текущего кадра', 'поле и схема без панелей', onExportPng),
               _exportTile(context, Icons.memory_rounded, 'JSON сцены', 'геометрия, объекты, слои и камера', () => _saveScene(context)),
-              _exportTile(context, Icons.view_in_ar_rounded, 'GLB / glTF', 'понадобятся модели и конвертер', null),
-              _exportTile(context, Icons.picture_as_pdf, 'PDF / MP4', 'понадобится сборка документа и кадров', null),
+              _exportTile(context, Icons.stadium_rounded, 'Режим «Стадион»', 'презентационный вид этой же схемы', state.togglePresentationMode),
+              _exportTile(context, Icons.picture_as_pdf, 'PDF', 'готовый лист схемы для отправки и печати', null),
             ],
           ),
         ),
@@ -4840,7 +4852,7 @@ class _ExportPanelContent extends StatelessWidget {
             children: const [
               _QualityRow('Изображение', 'текущий вид ×3'),
               _QualityRow('Сцена', 'JSON v1'),
-              _QualityRow('3D-модели', 'не включены'),
+              _QualityRow('Режим показа', 'поле / стадион'),
             ],
           ),
         ),
@@ -4851,7 +4863,7 @@ class _ExportPanelContent extends StatelessWidget {
             children: [
               Expanded(child: _stat('Объекты', '${state.elements.length}')),
               const SizedBox(width: 8),
-              Expanded(child: _stat('3D', state.is3DMode ? 'ON' : 'OFF')),
+              Expanded(child: _stat('Вид', state.presentationMode ? 'Стадион' : (state.is3DMode ? 'Персп.' : '2D'))),
               const SizedBox(width: 8),
               Expanded(child: _stat('Выбор', state.selected == null ? '—' : '1')),
             ],
@@ -5226,6 +5238,7 @@ class _TgRightPanelState extends State<TgRightPanel> {
               scrollController: widget.sheetScrollController,
               state: widget.state,
               onOpenCamera: _open3DPanel,
+              onOpen3DPro: widget.onOpen3DPro,
               onClose: _closeAllPanels,
             ),
           ),

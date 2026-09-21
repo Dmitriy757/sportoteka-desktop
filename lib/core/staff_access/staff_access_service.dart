@@ -181,4 +181,37 @@ class StaffAccessService {
         .where((value) => value > 0)
         .toSet();
   }
+
+  static List<Map<String, dynamic>> activeAccesses(
+    Map<String, dynamic> state,
+  ) {
+    return accesses(state).where((access) {
+      final status = '${access['status'] ?? ''}'.trim().toLowerCase();
+      final requiresActivation = access['requires_activation'] == true;
+      return status == 'active' && !requiresActivation;
+    }).toList(growable: false);
+  }
+
+  static Map<String, dynamic>? accessForClub(
+    Map<String, dynamic> state,
+    int clubId,
+  ) {
+    if (clubId <= 0) return null;
+
+    for (final access in accesses(state)) {
+      final id = int.tryParse('${access['club_id'] ?? 0}') ?? 0;
+      if (id == clubId) return access;
+    }
+    return null;
+  }
+
+  static Set<int> teamIdsForAccess(Map<String, dynamic>? access) {
+    if (access == null) return <int>{};
+    final raw = access['teams'];
+    if (raw is! List) return <int>{};
+
+    return raw.whereType<Map>().map((team) {
+      return int.tryParse('${team['team_id'] ?? team['id'] ?? 0}') ?? 0;
+    }).where((id) => id > 0).toSet();
+  }
 }

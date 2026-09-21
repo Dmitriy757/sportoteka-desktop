@@ -4,11 +4,14 @@ PODS:
   - FlutterMacOS (1.0.0)
   - printing (1.0.0):
     - FlutterMacOS
+  - thermion_flutter (0.0.1):
+    - FlutterMacOS
 
 DEPENDENCIES:
   - flutter_blue_plus (from `Flutter/ephemeral/.symlinks/plugins/flutter_blue_plus/macos`)
   - FlutterMacOS (from `Flutter/ephemeral`)
   - printing (from `Flutter/ephemeral/.symlinks/plugins/printing/macos`)
+  - thermion_flutter (from `Flutter/ephemeral/.symlinks/plugins/thermion_flutter/macos`)
 
 EXTERNAL SOURCES:
   flutter_blue_plus:
@@ -17,12 +20,15 @@ EXTERNAL SOURCES:
     :path: Flutter/ephemeral
   printing:
     :path: Flutter/ephemeral/.symlinks/plugins/printing/macos
+  thermion_flutter:
+    :path: Flutter/ephemeral/.symlinks/plugins/thermion_flutter/macos
 
 SPEC CHECKSUMS:
   flutter_blue_plus: dfaef8c6b52955205b65e6ea88659c68570dd563
   FlutterMacOS: d0db08ddef1a9af05a5ec4b724367152bb0500b1
   printing: c4cf83c78fd684f9bc318e6aadc18972aa48f617
+  thermion_flutter: d5d52ef933321eedbee6c4ddda4259c8cbcc84ed
 
-PODFILE CHECKSUM: 97aea182ea1f905245c25dfa335e71791b5529db
+PODFILE CHECKSUM: 9ee08b214e73e9bde2588843e4fc7fd661500a8c
 
 COCOAPODS: 1.16.2

@@ -16,6 +16,7 @@ list(APPEND FLUTTER_PLUGIN_LIST
   printing
   share_plus
   syncfusion_pdfviewer_windows
+  thermion_flutter
   url_launcher_windows
   video_player_win
 )

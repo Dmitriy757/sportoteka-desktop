@@ -17,6 +17,8 @@ import 'package:sportoteka/presentation/plans/plan_folders_screen.dart';
 import 'package:sportoteka/presentation/plans/plans_embedded_file_viewer.dart';
 import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 import 'package:sportoteka/presentation/plans/api/training_graphics_api.dart';
+import 'package:sportoteka/presentation/workspace_os/workspace_document_editor.dart';
+import 'package:sportoteka/presentation/workspace_os/workspace_training_plan_codec.dart';
 
 class CmrPlansPanel extends StatefulWidget {
   final int clubId;
@@ -81,7 +83,6 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
 
   bool editMode = false;
   bool showFoldersList = false;
-  bool _showPreviewPane = true;
   _ExplorerViewMode _viewMode = _ExplorerViewMode.grid;
   _ExplorerSortMode _sortMode = _ExplorerSortMode.name;
   bool _sortAscending = true;
@@ -2692,54 +2693,44 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
+
+        // План-конспект больше не является правой preview-панелью.
+        // При открытии документа он занимает ВСЮ рабочую область Plans —
+        // от основной навигации SPORTOTEKA OS до правого края.
+        // Список папок и файлов остаётся под редактором и возвращается
+        // после закрытия документа. Так Plans и Workspace ведут себя одинаково.
+        final fullPlanEditorOpen = selectedPlan != null;
+        if (fullPlanEditorOpen) {
+          return Container(
+            color: Colors.white,
+            child: _buildPreviewPane(compact: false),
+          );
+        }
+
         final sidebarWidth = width < 1160 ? 220.0 : 252.0;
-        final isTabletWidth = width < 1260;
-        final tabletEditorOpen =
-            isTabletWidth && selectedPlan != null && _showPreviewPane;
-        final previewWidth = width < 1460 ? 430.0 : 500.0;
-        final showDesktopPreview =
-            !isTabletWidth && _showPreviewPane && selectedPlan != null;
 
         return Container(
-          color: _C.page,
-          padding: const EdgeInsets.all(8),
+          color: Colors.white,
           child: Container(
-            decoration: _C.explorerDecoration,
+            decoration: _C.explorerDecoration.copyWith(
+              borderRadius: BorderRadius.zero,
+              boxShadow: const <BoxShadow>[],
+            ),
             clipBehavior: Clip.antiAlias,
             child: Column(
               children: [
                 _buildExplorerTopBar(),
                 const _PaneDivider(horizontal: true),
                 Expanded(
-                  child: tabletEditorOpen
-                      ? Row(
-                          children: [
-                            SizedBox(
-                              width: width < 900 ? 250 : 285,
-                              child: _buildFilesColumn(forceList: true),
-                            ),
-                            const _PaneDivider(),
-                            Expanded(child: _buildPreviewPane(compact: true)),
-                          ],
-                        )
-                      : Row(
-                          children: [
-                            SizedBox(width: sidebarWidth, child: _buildSidebar()),
-                            const _PaneDivider(),
-                            Expanded(child: _buildFilesColumn()),
-                            if (showDesktopPreview) ...[
-                              const _PaneDivider(),
-                              SizedBox(
-                                width: previewWidth,
-                                child: _buildPreviewPane(),
-                              ),
-                            ],
-                          ],
-                        ),
+                  child: Row(
+                    children: [
+                      SizedBox(width: sidebarWidth, child: _buildSidebar()),
+                      const _PaneDivider(),
+                      Expanded(child: _buildFilesColumn()),
+                    ],
+                  ),
                 ),
-                _buildExplorerStatusBar(
-                  showPreview: tabletEditorOpen || showDesktopPreview,
-                ),
+                _buildExplorerStatusBar(showPreview: false),
               ],
             ),
           ),
@@ -2812,12 +2803,6 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
           ),
           const SizedBox(width: 8),
           _RoundTool(icon: Icons.refresh_rounded, onTap: saving || uploadingFiles ? null : _load, tooltip: 'Обновить'),
-          const SizedBox(width: 8),
-          _RoundTool(
-            icon: _showPreviewPane ? Icons.view_sidebar_rounded : Icons.view_sidebar_outlined,
-            onTap: () => setState(() => _showPreviewPane = !_showPreviewPane),
-            tooltip: _showPreviewPane ? 'Скрыть область просмотра' : 'Показать область просмотра',
-          ),
         ],
       ),
     );
@@ -2860,22 +2845,25 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
   Widget _buildMobileFinder() {
     final showPlan = selectedPlan != null && !showFoldersList;
 
+    // На телефоне/планшете открытый план тоже является самостоятельным
+    // рабочим окном: без второй шапки Plans и без лишней внешней рамки.
+    if (showPlan) {
+      return ColoredBox(
+        color: Colors.white,
+        child: _buildPreviewPane(compact: true),
+      );
+    }
+
     return Container(
-      color: _C.page,
+      color: Colors.white,
       child: Column(
         children: [
           _buildMobileTopBar(),
-          const SizedBox(height: 8),
           Expanded(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-              child: _SoftPanel(
-                child: showPlan
-                    ? _buildPreviewPane(compact: true)
-                    : showFoldersList
-                        ? _buildSidebar(mobile: true)
-                        : _buildFilesColumn(mobile: true),
-              ),
+            child: _SoftPanel(
+              child: showFoldersList
+                  ? _buildSidebar(mobile: true)
+                  : _buildFilesColumn(mobile: true),
             ),
           ),
         ],
@@ -3743,6 +3731,183 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
     );
   }
 
+  bool _usesWorkspacePlanEditor(Map<String, dynamic> plan) {
+    if (plan['_is_local_draft'] == true) return true;
+    final body = _asStr(
+      plan['plan_description'] ?? plan['description'] ?? plan['workspace_body'],
+    );
+    return WorkspaceTrainingPlanCodec.containsPlan(body);
+  }
+
+  Map<String, dynamic> _workspacePlanSeed(Map<String, dynamic> plan) {
+    return WorkspaceTrainingPlanCodec.newPlan(
+      clubName: widget.clubName,
+      teamName: _asStr(plan['team_name']).isNotEmpty
+          ? _asStr(plan['team_name'])
+          : widget.teamName,
+      trainerName: _asStr(
+        plan['trainer_name'] ?? plan['trainer'] ?? widget.trainerName,
+      ),
+      cycle: _asStr(plan['cycle_title'] ?? plan['cycle']),
+      date: _asStr(plan['plan_date'] ?? plan['date'] ?? plan['created_at']),
+      theme: _asStr(plan['theme']).isEmpty ? 'Новый план' : _asStr(plan['theme']),
+      location: _asStr(plan['location']),
+      playersCount: plan['players_count'] ?? '',
+      durationMin: plan['duration_min'] ?? '',
+    );
+  }
+
+  Future<void> _saveWorkspacePlanDocument(
+    Map<String, dynamic> sourcePlan,
+    String title,
+    String body,
+  ) async {
+    final planId = _asInt(
+      selectedPlan?['id'] ??
+          selectedPlan?['plan_id'] ??
+          sourcePlan['id'] ??
+          sourcePlan['plan_id'],
+    );
+    final activeTeamId = widget.teamId ?? _asInt(sourcePlan['team_id']);
+    if (activeTeamId <= 0) {
+      throw StateError('Не выбрана команда для плана-конспекта');
+    }
+
+    final decoded = WorkspaceTrainingPlanCodec.decodeFirst(body) ??
+        _workspacePlanSeed(sourcePlan);
+    final now = DateTime.now();
+    final fallbackDate = [
+      now.year.toString().padLeft(4, '0'),
+      now.month.toString().padLeft(2, '0'),
+      now.day.toString().padLeft(2, '0'),
+    ].join('-');
+    final theme = _asStr(decoded['theme']).isNotEmpty
+        ? _asStr(decoded['theme'])
+        : (title.trim().isEmpty ? 'Новый план' : title.trim());
+
+    final payload = <String, dynamic>{
+      'id': planId,
+      'plan_id': planId,
+      'club_id': widget.clubId,
+      'club_name': widget.clubName,
+      'team_id': activeTeamId,
+      'team_name': widget.teamName,
+      if (_effectiveTrainerId > 0) ...<String, dynamic>{
+        'trainer_id': _effectiveTrainerId,
+        'coach_id': _effectiveTrainerId,
+      },
+      if (_effectiveTrainerName.isNotEmpty) ...<String, dynamic>{
+        'trainer_name': _effectiveTrainerName,
+        'trainer': _effectiveTrainerName,
+      },
+      'folder_id': _asInt(sourcePlan['folder_id']) > 0
+          ? _asInt(sourcePlan['folder_id'])
+          : _activeFolderId,
+      'theme': theme,
+      'cycle_title': _asStr(decoded['cycle']),
+      // Новый единый формат: тело документа Workspace хранится прямо в
+      // существующей записи plan, поэтому папки/списки Plans не дублируются.
+      'description': body,
+      'plan_description': body,
+      'workspace_body': body,
+      'plan_date': _asStr(decoded['date']).isEmpty
+          ? fallbackDate
+          : _asStr(decoded['date']),
+      'location': _asStr(decoded['location']),
+      'players_count': _asStr(decoded['players_count']),
+      'duration_min': _asStr(decoded['duration_min']),
+    };
+
+    final response = await http
+        .post(
+          Uri.parse('${TrainingPlansApi.base}/create_training_plan.php'),
+          headers: const <String, String>{
+            'Content-Type': 'application/json; charset=utf-8',
+          },
+          body: jsonEncode(payload),
+        )
+        .timeout(const Duration(seconds: 15));
+    final data = jsonDecode(response.body);
+    if (response.statusCode < 200 ||
+        response.statusCode >= 300 ||
+        data is! Map ||
+        data['success'] != true) {
+      throw StateError(
+        data is Map
+            ? '${data['message'] ?? data['error'] ?? 'Не удалось сохранить план'}'
+            : 'Не удалось сохранить план',
+      );
+    }
+
+    final savedPlanId = _asInt(data['plan_id'] ?? data['id'] ?? planId);
+    if (savedPlanId <= 0) throw StateError('Сервер не вернул plan_id');
+
+    if (!mounted) return;
+    setState(() {
+      selectedPlan = <String, dynamic>{
+        ...sourcePlan,
+        ...payload,
+        'id': savedPlanId,
+        'plan_id': savedPlanId,
+        '_is_local_draft': false,
+      };
+    });
+    await _loadPlansForTeam();
+
+    final refreshed = plans.where((p) => _asInt(p['id']) == savedPlanId).toList();
+    if (!mounted) return;
+    if (refreshed.isNotEmpty) {
+      setState(() {
+        selectedPlan = <String, dynamic>{
+          ...refreshed.first,
+          'description': body,
+          'plan_description': body,
+          'workspace_body': body,
+        };
+      });
+    }
+  }
+
+  Widget _buildWorkspacePlanEditor(
+    Map<String, dynamic> plan, {
+    required bool compact,
+  }) {
+    final planId = _asInt(plan['id'] ?? plan['plan_id']);
+    final storedBody = _asStr(
+      plan['plan_description'] ?? plan['description'] ?? plan['workspace_body'],
+    );
+    final hasWorkspaceBody = WorkspaceTrainingPlanCodec.containsPlan(storedBody);
+    final teamId = widget.teamId ?? _asInt(plan['team_id']);
+
+    return WorkspaceDocumentEditor(
+      key: ValueKey('cmr_workspace_plan_${planId > 0 ? planId : 'draft_${_activeFolderId}'}'),
+      initialTitle: _planTitle(plan),
+      initialBody: hasWorkspaceBody ? storedBody : '',
+      startWithTrainingPlanTemplate: !hasWorkspaceBody,
+      initialTrainingPlanData: _workspacePlanSeed(plan),
+      contextLabel: 'План-конспект',
+      contextName: selectedFolderTitle,
+      documentType: 'План-конспект',
+      onSave: (title, body) => _saveWorkspacePlanDocument(plan, title, body),
+      onClose: _closePlanEditor,
+      compactWorkspaceChrome: false,
+      showTemplates: true,
+      aiClubId: widget.clubId,
+      aiUserId: null,
+      aiTeamId: teamId > 0 ? teamId : null,
+      aiClubName: widget.clubName,
+      aiTeamName: widget.teamName,
+      aiDocumentKey: planId > 0 ? 'training_plan_$planId' : 'training_plan_draft_${widget.clubId}_${_activeFolderId}',
+      aiExtraPayload: <String, dynamic>{
+        'workspace_section': 'plans',
+        'folder_id': _asInt(plan['folder_id']) > 0
+            ? _asInt(plan['folder_id'])
+            : _activeFolderId,
+        'plan_id': planId,
+      },
+    );
+  }
+
   Widget _buildPreviewPane({bool compact = false}) {
     final plan = selectedPlan;
 
@@ -3757,6 +3922,13 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
     }
 
     final planId = _asInt(plan['id']);
+
+    if (_usesWorkspacePlanEditor(plan)) {
+      return Container(
+        color: _C.preview,
+        child: _buildWorkspacePlanEditor(plan, compact: compact),
+      );
+    }
 
     final media = MediaQuery.of(context);
 
@@ -4106,7 +4278,7 @@ class _ExplorerInfoDialog extends StatelessWidget {
 
 class _C {
   static const Color page = Color(0xFFF7F9F8);
-  static const Color sidebar = Color(0xFFF7F9F8);
+  static const Color sidebar = Colors.white;
   static const Color preview = Colors.white;
 
   // Премиальная CMR-палитра: бело-графитовая основа,

@@ -61,13 +61,7 @@ class WorkspaceRootDataBridge {
           subtitle: _eventSubtitle,
         );
       case 'plans':
-        return _loadTeamCollection(
-          kind: WorkspaceFinderNodeKind.plan,
-          moduleKey: 'plans',
-          loader: (team) => _entity.loadTeamPlans(teamId: _teamId(team), clubId: clubId),
-          title: _planTitle,
-          subtitle: _planSubtitle,
-        );
+        return loadPlanLibraryFolder();
       case 'testing':
         return _loadTeamCollection(
           kind: WorkspaceFinderNodeKind.testing,
@@ -94,6 +88,146 @@ class WorkspaceRootDataBridge {
         return const <WorkspaceFinderNode>[];
     }
   }
+
+  /// Shared Plans / Training Graphics tree used by Workspace OS.
+  ///
+  /// `folderId == null` means the root of the plan library. The folders are
+  /// loaded from the very same list_plan_folders.php endpoint as the ordinary
+  /// Plans module and the scheme picker, so U6/U7/U8 never become copied
+  /// Workspace-only folders.
+  Future<List<WorkspaceFinderNode>> loadPlanLibraryFolder({int? folderId}) async {
+    final currentFolderId = folderId ?? 0;
+    final folderTree = await _loadPlanFolderTree();
+    final directFolders = _directPlanFolders(folderTree, currentFolderId);
+
+    final folderNodes = directFolders.map((folder) {
+      final id = _int(folder['id']);
+      final title = _first(folder, const <String>['title', 'name'], fallback: 'Папка');
+      final count = _int(folder['plans_count'] ?? folder['plan_count'] ?? folder['items_count']);
+      final schemes = _int(folder['graphics_count'] ?? folder['schemes_count']);
+      final parts = <String>[
+        if (count > 0) '$count план${count == 1 ? '' : 'ов'}',
+        if (schemes > 0) '$schemes схем',
+      ];
+      final payload = Map<String, dynamic>.from(folder)
+        ..['_workspace_plan_folder'] = true
+        ..['_workspace_plan_folder_id'] = id;
+      return WorkspaceFinderNode(
+        id: 'plan-folder:$id',
+        title: title,
+        subtitle: parts.isEmpty ? 'Планы-конспекты и схемы' : parts.join(' · '),
+        kind: WorkspaceFinderNodeKind.folder,
+        payload: payload,
+        isSystem: true,
+      );
+    }).toList(growable: true);
+
+    final planNodes = await _loadTeamCollection(
+      kind: WorkspaceFinderNodeKind.plan,
+      moduleKey: 'plans',
+      loader: (team) => _entity.loadTeamPlans(teamId: _teamId(team), clubId: clubId),
+      title: _planTitle,
+      subtitle: _planSubtitle,
+    );
+    final plansHere = planNodes.where((node) {
+      final raw = node.payload ?? const <String, dynamic>{};
+      return _int(raw['folder_id'] ?? raw['folderId']) == currentFolderId;
+    }).toList(growable: true);
+
+    final graphicsHere = await _loadTrainingGraphicsForFolder(currentFolderId);
+
+    return <WorkspaceFinderNode>[
+      ...folderNodes,
+      ...plansHere,
+      ...graphicsHere,
+    ];
+  }
+
+  Future<List<dynamic>> _loadPlanFolderTree() async {
+    if (clubId <= 0) return <dynamic>[];
+    try {
+      final response = await http.post(
+        Uri.parse('https://sportotekaapp.ru/api/list_plan_folders.php'),
+        headers: const <String, String>{'Content-Type': 'application/json; charset=utf-8'},
+        body: jsonEncode(<String, dynamic>{'club_id': clubId}),
+      ).timeout(const Duration(seconds: 12));
+      final decoded = jsonDecode(response.body);
+      if (decoded is! Map || decoded['success'] != true) return <dynamic>[];
+      final raw = decoded['tree'] ?? decoded['folders'] ?? decoded['items'] ?? decoded['data'];
+      return raw is List ? List<dynamic>.from(raw) : <dynamic>[];
+    } catch (_) {
+      return <dynamic>[];
+    }
+  }
+
+  List<Map<String, dynamic>> _directPlanFolders(List<dynamic> tree, int parentId) {
+    final out = <Map<String, dynamic>>[];
+    void walk(List<dynamic> nodes) {
+      for (final item in nodes) {
+        if (item is! Map) continue;
+        final folder = Map<String, dynamic>.from(item);
+        if (_int(folder['parent_id']) == parentId) out.add(folder);
+        final children = folder['children'];
+        if (children is List && children.isNotEmpty) walk(children);
+      }
+    }
+    walk(tree);
+    return out;
+  }
+
+  Future<List<WorkspaceFinderNode>> _loadTrainingGraphicsForFolder(int folderId) async {
+    final groups = await Future.wait(_effectiveTeams.map((team) async {
+      final teamId = _teamId(team);
+      if (teamId <= 0) return <WorkspaceFinderNode>[];
+      try {
+        final response = await http.post(
+          Uri.parse('https://sportotekaapp.ru/api/list_training_graphics.php'),
+          headers: const <String, String>{'Content-Type': 'application/json; charset=utf-8'},
+          body: jsonEncode(<String, dynamic>{
+            'club_id': clubId,
+            'clubId': clubId,
+            'team_id': teamId,
+            'teamId': teamId,
+            'folder_id': folderId,
+            'folderId': folderId,
+          }),
+        ).timeout(const Duration(seconds: 12));
+        final decoded = jsonDecode(response.body);
+        if (decoded is! Map || decoded['success'] != true) return <WorkspaceFinderNode>[];
+        final rawItems = decoded['items'] ?? decoded['graphics'] ?? decoded['data'];
+        if (rawItems is! List) return <WorkspaceFinderNode>[];
+        final teamName = _teamName(team);
+        final out = <WorkspaceFinderNode>[];
+        for (var index = 0; index < rawItems.length; index++) {
+          final item = rawItems[index];
+          if (item is! Map) continue;
+          final raw = Map<String, dynamic>.from(item);
+          raw['team_id'] ??= teamId;
+          raw['team_name'] ??= teamName;
+          raw['_workspace_training_graphic'] = true;
+          raw['_workspace_plan_folder_id'] = folderId;
+          final id = _int(raw['id'] ?? raw['graphic_id']);
+          final date = _rowDate(raw);
+          out.add(WorkspaceFinderNode(
+            id: 'training-graphic:$teamId:${id > 0 ? id : index}',
+            title: _first(raw, const <String>['title', 'name'], fallback: 'Тактическая схема'),
+            subtitle: _join(<String>['Схема', if (_effectiveTeams.length > 1) teamName, _friendlyDate(date)]),
+            kind: WorkspaceFinderNodeKind.plan,
+            payload: raw,
+            isSystem: true,
+            createdAt: date,
+            updatedAt: date,
+          ));
+        }
+        return out;
+      } catch (_) {
+        return <WorkspaceFinderNode>[];
+      }
+    }));
+    return <WorkspaceFinderNode>[for (final group in groups) ...group];
+  }
+
+  int _int(dynamic value) => value is num ? value.toInt() : int.tryParse('${value ?? ''}'.trim()) ?? 0;
 
   List<Map<String, dynamic>> get _effectiveTeams {
     final selected = selectedTeamId ?? 0;

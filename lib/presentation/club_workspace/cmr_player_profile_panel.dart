@@ -134,10 +134,20 @@ class _CmrPlayerProfilePanelState extends State<CmrPlayerProfilePanel> {
     final name = _playerName(player);
     final photo = _absoluteUrl(_first(player, const ['photo', 'avatar', 'image', 'photo_url', 'avatar_url']));
     final position = _playerPosition(player).isEmpty ? 'Амплуа не указано' : _playerPosition(player);
-    final number = _first(player, const ['number', 'player_number', 'shirt_number'], '—');
-    final birth = _first(player, const ['birthDate', 'birth_date', 'birthday'], '—');
-    final height = _first(player, const ['height'], '—');
-    final weight = _first(player, const ['weight'], '—');
+    final number = _first(
+      player,
+      const ['number', 'player_number', 'shirt_number', 'jersey_number', 'jerseyNumber'],
+      '—',
+    );
+    final birth = _first(
+      player,
+      const ['birthDate', 'birth_date', 'birthday', 'date_birth', 'date_of_birth', 'dob'],
+      '—',
+    );
+    final rawHeight = _first(player, const ['height', 'height_cm', 'heightCm']);
+    final rawWeight = _first(player, const ['weight', 'weight_kg', 'weightKg']);
+    final height = rawHeight.isEmpty ? '—' : _formatProfileMetric(rawHeight, 'см');
+    final weight = rawWeight.isEmpty ? '—' : _formatProfileMetric(rawWeight, 'кг');
     final nationality = _first(player, const ['nationality', 'citizenship', 'nationa'], '—');
     final email = _first(player, const ['email'], '—');
     final phone = _first(player, const ['phone', 'telephone', 'phone_number', 'mobile'], '—');
@@ -1674,8 +1684,8 @@ List<_MetricData> _extractMetrics(Map<String, dynamic> player, String sportData)
   final result = <_MetricData>[];
 
   final known = <_KnownMetric>[
-    _KnownMetric('Рост', const ['height'], Icons.height_rounded),
-    _KnownMetric('Вес', const ['weight'], Icons.monitor_weight_outlined),
+    _KnownMetric('Рост', const ['height', 'height_cm', 'heightCm'], Icons.height_rounded),
+    _KnownMetric('Вес', const ['weight', 'weight_kg', 'weightKg'], Icons.monitor_weight_outlined),
     _KnownMetric('Голы', const ['goals'], Icons.sports_soccer_rounded),
     _KnownMetric('Передачи', const ['assists'], Icons.call_split_rounded),
     _KnownMetric('Скорость', const ['speed'], Icons.speed_rounded),
@@ -1709,6 +1719,21 @@ List<_MetricData> _extractMetrics(Map<String, dynamic> player, String sportData)
 
   final seen = <String>{};
   return result.where((item) => seen.add('${item.title}:${item.value}'.toLowerCase())).toList();
+}
+
+String _formatProfileMetric(String raw, String unit) {
+  final parsed = double.tryParse(raw.trim().replaceAll(',', '.'));
+  if (parsed == null) {
+    final clean = raw.trim();
+    if (clean.toLowerCase().contains(unit.toLowerCase())) return clean;
+    return '$clean $unit';
+  }
+  var text = parsed.toStringAsFixed(unit == 'кг' ? 1 : 0).replaceAll('.', ',');
+  while (text.contains(',') && text.endsWith('0')) {
+    text = text.substring(0, text.length - 1);
+  }
+  if (text.endsWith(',')) text = text.substring(0, text.length - 1);
+  return '$text $unit';
 }
 
 String _identity(Map<String, dynamic>? player) {

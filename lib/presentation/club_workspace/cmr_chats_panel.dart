@@ -615,8 +615,9 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
 
   bool get _phoneMessengerLayout {
     if (!mounted) return false;
+    final localWidth = context.size?.width;
     final media = MediaQuery.maybeOf(context);
-    final w = media?.size.width ?? 9999;
+    final w = localWidth ?? media?.size.width ?? 9999;
     return w < 700;
   }
 
@@ -972,6 +973,9 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
         final items = _visibleItems();
         final phone = width < 700;
         final tablet = width >= 700 && width < 1120;
+        // На планшете сохраняем классический split-view: список чатов слева,
+        // переписка справа. При прокрутке левой колонки её служебная шапка
+        // и закреплённые блоки уходят вверх, освобождая место списку.
         final compact = width < 920;
         final showInfoRail = width >= 1280 && _selectedChatId != null;
         final listWidth = phone
@@ -1018,9 +1022,14 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     SizedBox(
-                        width: listWidth,
-                        child:
-                            _buildLeft(items, mobile: false, compact: compact)),
+                      width: listWidth,
+                      child: _buildLeft(
+                        items,
+                        mobile: false,
+                        compact: compact,
+                        scrollHeaderAway: tablet,
+                      ),
+                    ),
                     Container(
                         width: 1, color: _CmrChatColors.line.withOpacity(.90)),
                     Expanded(child: _buildRight()),
@@ -1106,8 +1115,13 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
     List<Map<String, dynamic>> items, {
     required bool mobile,
     required bool compact,
+    bool scrollHeaderAway = false,
     Key? key,
   }) {
+    if (scrollHeaderAway && !mobile) {
+      return _buildScrollableLeft(items, compact: compact, key: key);
+    }
+
     return Container(
       key: key,
       decoration: _CmrChatDecor.seamlessPane(),
@@ -1228,6 +1242,290 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
                       ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildScrollableLeft(
+    List<Map<String, dynamic>> items, {
+    required bool compact,
+    Key? key,
+  }) {
+    final loading = _loading || (_mode == _CmrChatMode.users && _loadingUsers);
+
+    Widget rowForItem(Map<String, dynamic> item) {
+      if (_mode == _CmrChatMode.users) {
+        return _UserRow(
+          title: _userTitle(item),
+          subtitle: (item['email'] ?? 'Нажмите, чтобы начать диалог').toString(),
+          avatarUrl: _photo(item),
+          initials: _initials(_userTitle(item)),
+          onTap: () => _createPrivateWithUser(item),
+          mobile: false,
+        );
+      }
+
+      final id = _asInt(item['id'] ?? item['chat_id']);
+      final selected = id == _selectedChatId;
+      final isGroup = _mode == _CmrChatMode.groups;
+      final canOpen = !isGroup || _iAmMember(item);
+      final chatTitle = _chatTitle(item);
+
+      return _ChatRow(
+        title: chatTitle,
+        subtitle: _subtitle(item),
+        lastTime: _chatLastTime(item),
+        avatarUrl: _photo(item),
+        initials: _initials(chatTitle),
+        selected: selected,
+        unread: _asInt(item['unread_count']),
+        isGroup: isGroup,
+        isPublic: _truthy(item['is_public']),
+        canOpen: canOpen,
+        onTap: () => canOpen ? _selectChat(item) : _joinGroup(item),
+        mobile: false,
+      );
+    }
+
+    return Container(
+      key: key,
+      decoration: _CmrChatDecor.seamlessPane(),
+      padding: EdgeInsets.all(compact ? 10 : 12),
+      child: RefreshIndicator(
+        color: _CmrChatColors.green,
+        onRefresh: _refresh,
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(
+            parent: BouncingScrollPhysics(),
+          ),
+          slivers: <Widget>[
+            SliverPersistentHeader(
+              pinned: true,
+              delegate: _CmrCollapsingHeaderDelegate(
+                minHeight: 44,
+                maxHeight: 62,
+                builder: (context, progress, overlapsContent) {
+                  final scope = <String>[
+                    if ((widget.clubName ?? '').trim().isNotEmpty)
+                      widget.clubName!.trim(),
+                    if ((widget.teamName ?? '').trim().isNotEmpty)
+                      widget.teamName!.trim(),
+                  ].join(' · ');
+
+                  final iconSize = 32.0 - (progress * 4.0);
+                  final titleSize = 14.7 - (progress * .7);
+
+                  return Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      border: Border(
+                        bottom: BorderSide(
+                          color: overlapsContent || progress > .92
+                              ? _CmrChatColors.line
+                              : Colors.transparent,
+                          width: .7,
+                        ),
+                      ),
+                    ),
+                    padding: EdgeInsets.fromLTRB(
+                      0,
+                      4 - progress * 2,
+                      0,
+                      6 - progress * 2,
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: iconSize,
+                          height: iconSize,
+                          decoration: BoxDecoration(
+                            color: _CmrChatColors.greenSoft,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Icon(
+                            Icons.forum_rounded,
+                            color: _CmrChatColors.greenDark,
+                            size: 17 - progress,
+                          ),
+                        ),
+                        const SizedBox(width: 9),
+                        Expanded(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Flexible(
+                                    child: Text(
+                                      'Чаты',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: _CmrChatText.title(titleSize),
+                                    ),
+                                  ),
+                                  if (_unreadTotal > 0) ...[
+                                    const SizedBox(width: 6),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 6,
+                                        vertical: 2,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: _CmrChatColors.graphite,
+                                        borderRadius: BorderRadius.circular(7),
+                                      ),
+                                      child: Text(
+                                        _unreadTotal > 99
+                                            ? '99+'
+                                            : _unreadTotal.toString(),
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 9.2,
+                                          fontWeight: FontWeight.w600,
+                                          height: 1,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                              if (scope.isNotEmpty)
+                                AnimatedOpacity(
+                                  duration: const Duration(milliseconds: 80),
+                                  opacity: (1 - progress * 1.5).clamp(0.0, 1.0).toDouble(),
+                                  child: Padding(
+                                    padding: const EdgeInsets.only(top: 2),
+                                    child: Text(
+                                      scope,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: _CmrChatText.muted(10.4),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 5),
+                        _CircleAction(
+                          icon: Icons.refresh_rounded,
+                          onTap: _refresh,
+                          tooltip: 'Обновить',
+                        ),
+                        const SizedBox(width: 5),
+                        _CircleAction(
+                          icon: Icons.group_add_rounded,
+                          onTap: _openCreateGroup,
+                          tooltip: 'Создать группу',
+                          emphasized: true,
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+            const SliverToBoxAdapter(child: SizedBox(height: 8)),
+            SliverToBoxAdapter(
+              child: _NotificationsPinnedRow(
+                selected: _notificationsSelected,
+                unread: _notificationsUnread,
+                mobile: false,
+                onTap: _selectNotifications,
+              ),
+            ),
+            const SliverToBoxAdapter(child: SizedBox(height: 7)),
+            SliverToBoxAdapter(
+              child: _CallsPinnedRow(
+                selected: _callsSelected,
+                unread: _callsUnread,
+                mobile: false,
+                onTap: _selectCalls,
+              ),
+            ),
+            const SliverToBoxAdapter(child: SizedBox(height: 7)),
+            SliverToBoxAdapter(
+              child: _AiPinnedChatRow(
+                selected: _aiSelected,
+                mobile: false,
+                onTap: _selectAiClub,
+              ),
+            ),
+            const SliverToBoxAdapter(child: SizedBox(height: 10)),
+            SliverToBoxAdapter(
+              child: _ChatSearch(
+                controller: _search,
+                hintText: _mode == _CmrChatMode.users
+                    ? 'Найти пользователя...'
+                    : 'Поиск по чатам...',
+                mobile: false,
+              ),
+            ),
+            const SliverToBoxAdapter(child: SizedBox(height: 8)),
+            SliverToBoxAdapter(
+              child: _ChatModeBar(
+                value: _mode,
+                privateCount: _privateChats.length,
+                groupsCount: _groups.length,
+                usersCount: _users.length,
+                onChanged: (mode) {
+                  setState(() => _mode = mode);
+                  if (mode == _CmrChatMode.privateChats && _privateChats.isEmpty) {
+                    _loadPrivateChats();
+                  }
+                  if (mode == _CmrChatMode.groups && _groups.isEmpty) {
+                    _loadGroups();
+                  }
+                  if (mode == _CmrChatMode.users && _users.isEmpty) {
+                    _loadUsers();
+                  }
+                },
+                mobile: false,
+              ),
+            ),
+            if (_error != null) ...<Widget>[
+              const SliverToBoxAdapter(child: SizedBox(height: 10)),
+              SliverToBoxAdapter(
+                child: _InlineError(text: _error!, onRefresh: _refresh),
+              ),
+            ],
+            const SliverToBoxAdapter(child: SizedBox(height: 10)),
+            if (loading)
+              SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (_, index) => Padding(
+                    padding: const EdgeInsets.only(bottom: 7),
+                    child: Container(
+                      height: 64,
+                      decoration: _CmrChatDecor.softCard(radius: 11),
+                    ),
+                  ),
+                  childCount: 8,
+                ),
+              )
+            else if (items.isEmpty)
+              SliverFillRemaining(
+                hasScrollBody: false,
+                child: _emptyForMode(),
+              )
+            else
+              SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (_, index) {
+                    final item = items[index];
+                    return Padding(
+                      padding: EdgeInsets.only(
+                        bottom: index == items.length - 1 ? 22 : 7,
+                      ),
+                      child: rowForItem(item),
+                    );
+                  },
+                  childCount: items.length,
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -2952,6 +3250,43 @@ class _CmrChatColors {
 Color _chatAccent(int index) => _CmrChatColors.green;
 
 Color _chatAccentSoft(int index) => _CmrChatColors.greenSoft;
+
+class _CmrCollapsingHeaderDelegate extends SliverPersistentHeaderDelegate {
+  final double minHeight;
+  final double maxHeight;
+  final Widget Function(BuildContext context, double progress, bool overlapsContent)
+      builder;
+
+  const _CmrCollapsingHeaderDelegate({
+    required this.minHeight,
+    required this.maxHeight,
+    required this.builder,
+  });
+
+  @override
+  double get minExtent => minHeight;
+
+  @override
+  double get maxExtent => math.max(maxHeight, minHeight).toDouble();
+
+  @override
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
+    final range = math.max(1.0, maxExtent - minExtent).toDouble();
+    final progress = (shrinkOffset / range).clamp(0.0, 1.0).toDouble();
+    return builder(context, progress, overlapsContent);
+  }
+
+  @override
+  bool shouldRebuild(covariant _CmrCollapsingHeaderDelegate oldDelegate) {
+    return oldDelegate.minHeight != minHeight ||
+        oldDelegate.maxHeight != maxHeight ||
+        oldDelegate.builder != builder;
+  }
+}
 
 class _CmrChatDecor {
   static BoxDecoration workspaceBg() => const BoxDecoration(

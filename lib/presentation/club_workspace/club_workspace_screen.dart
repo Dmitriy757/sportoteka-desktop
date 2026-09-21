@@ -47,6 +47,7 @@ import 'package:sportoteka/presentation/trainer_profile_screen/trainer_cabinet_p
 import 'package:sportoteka/presentation/trainer_profile_screen/trainer_self_profile_panel.dart';
 import 'package:sportoteka/presentation/club_workspace/cmr_club_trainers_panel.dart';
 import 'package:sportoteka/presentation/club_workspace/cmr_club_teams_panel.dart';
+import 'package:sportoteka/presentation/club_workspace/cmr_club_news_panel.dart';
 import 'package:sportoteka/presentation/club_workspace/cmr_club_roster_panel.dart';
 import 'package:sportoteka/presentation/club_workspace/cmr_chats_panel.dart';
 import 'package:sportoteka/presentation/club_workspace/cmr_game_zone_panel.dart';
@@ -63,6 +64,7 @@ enum ClubSection {
   overview,
   finder,
   teams,
+  news,
   teamDashboard,
   roster,
   trainers,
@@ -348,6 +350,14 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
   bool trainerAssignedMode = false;
   bool _showOwnTrainerProfile = false;
 
+  // Staff Access может содержать несколько независимых клубов одного
+  // сотрудника. Активный club_id приходит из HUB и внутри Workspace не
+  // переключается.
+  Map<String, dynamic> _trainerStaffState = <String, dynamic>{};
+  List<Map<String, dynamic>> _trainerActiveAccesses =
+      <Map<String, dynamic>>[];
+  bool _trainerStaffManaged = false;
+
   bool loading = true;
   bool refreshing = false;
   bool loadingPlayers = false;
@@ -360,6 +370,9 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
   bool savingProfile = false;
   bool hasActiveSubscription = false;
   String subscriptionPlanCode = '';
+
+  Map<String, dynamic>? get _currentTrainerAccess =>
+      StaffAccessService.accessForClub(_trainerStaffState, clubId);
 
   ClubSubscriptionTier get _clubSubscriptionTier => hasActiveSubscription
       ? ClubSubscriptionPolicy.tierForPlan(subscriptionPlanCode)
@@ -377,6 +390,7 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
   List<Map<String, dynamic>> trainers = [];
   List<Map<String, dynamic>> events = [];
   List<Map<String, dynamic>> latestPlans = [];
+  List<Map<String, dynamic>> clubNews = [];
   List<Map<String, dynamic>> players = [];
 
   int? selectedTeamId;
@@ -405,6 +419,7 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
   final Set<ClubSection> _desktopIconSections = <ClubSection>{
     ClubSection.finder,
     ClubSection.teams,
+    ClubSection.news,
     ClubSection.roster,
     ClubSection.trainers,
     ClubSection.matches,
@@ -419,6 +434,7 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
   final Set<ClubSection> _dockSections = <ClubSection>{
     ClubSection.finder,
     ClubSection.teams,
+    ClubSection.news,
     ClubSection.roster,
     ClubSection.trainers,
     ClubSection.matches,
@@ -446,6 +462,7 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
 
   static const List<ClubSection> _mobileSwipeSections = <ClubSection>[
     ClubSection.teams,
+    ClubSection.news,
     ClubSection.roster,
     ClubSection.calendar,
     ClubSection.trainers,
@@ -608,6 +625,13 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
 
     if (trainerWorkspaceId <= 0) trainerWorkspaceId = currentUserId;
 
+    // HUB уже передаёт выбранный club_id. Здесь только проверяем, что он
+    // действительно входит в активные Staff Access пользователя, и
+    // восстанавливаем его, если экран был открыт без аргумента.
+    if (trainerAssignedMode) {
+      await _loadTrainerStaffContext();
+    }
+
     // Сам тренер входит сразу в персональный обзор,
     // а не в общий список команд клуба.
     if (trainerAssignedMode) {
@@ -635,6 +659,76 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
     }
   }
 
+  Future<void> _loadTrainerStaffContext() async {
+    if (!trainerAssignedMode || trainerWorkspaceId <= 0) return;
+
+    try {
+      final state = await StaffAccessService.loadMyStatus(trainerWorkspaceId);
+      if (state['success'] != true) return;
+
+      final active = StaffAccessService.activeAccesses(state);
+      final managed = state['has_access_rows'] == true;
+
+      int targetClubId = 0;
+
+      bool isActiveClub(int value) {
+        return value > 0 && active.any((access) {
+          return _asInt(access['club_id'] ?? access['clubId']) == value;
+        });
+      }
+
+      // Явно переданный HUB club_id всегда имеет приоритет.
+      if (isActiveClub(clubId)) {
+        targetClubId = clubId;
+      }
+
+      // Если экран открыт без club_id, используем последний выбор HUB.
+      if (targetClubId <= 0) {
+        final savedClubId = await PrefUtils.getActiveStaffClubId() ?? 0;
+        if (isActiveClub(savedClubId)) targetClubId = savedClubId;
+      }
+
+      // Для совместимости со старым переходом ищем клуб по initial_team_id.
+      if (targetClubId <= 0 && (initialTeamId ?? 0) > 0) {
+        for (final access in active) {
+          if (StaffAccessService.teamIdsForAccess(access)
+              .contains(initialTeamId)) {
+            targetClubId = _asInt(access['club_id'] ?? access['clubId']);
+            break;
+          }
+        }
+      }
+
+      if (targetClubId <= 0 && active.isNotEmpty) {
+        targetClubId = _asInt(
+          active.first['club_id'] ?? active.first['clubId'],
+        );
+      }
+
+      _trainerStaffState = state;
+      _trainerActiveAccesses = active;
+      _trainerStaffManaged = managed;
+
+      if (targetClubId > 0) {
+        clubId = targetClubId;
+        final access = StaffAccessService.accessForClub(state, targetClubId);
+        final accessClubName = _asString(
+          access?['club_name'] ?? access?['clubName'],
+        );
+        if (accessClubName != null) clubName = accessClubName;
+
+        await PrefUtils.setActiveStaffClubId(targetClubId);
+        await PrefUtils.setUserClubId(targetClubId);
+        if (accessClubName != null) {
+          await PrefUtils.setActiveStaffClubName(accessClubName);
+          await PrefUtils.setUserClubName(accessClubName);
+        }
+      }
+    } catch (error) {
+      debugPrint('Trainer Staff Access context error: $error');
+    }
+  }
+
   Future<void> _loadAll({bool initial = false}) async {
     if (!mounted) return;
     setState(() {
@@ -659,6 +753,8 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
         _safeLoad(_loadSubscriptionPlan),
       ]);
     }
+
+    await _safeLoad(_loadClubNews);
 
     final targetTeamId = initialTeamId ?? selectedTeamId;
     Map<String, dynamic>? teamToSelect;
@@ -823,13 +919,15 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
     teams = [];
     if (trainerWorkspaceId <= 0) return;
 
+    final query = <String, String>{
+      'coach_id': trainerWorkspaceId.toString(),
+      'trainer_id': trainerWorkspaceId.toString(),
+      if (clubId > 0) 'club_id': clubId.toString(),
+    };
+
     final response = await http.post(
-      Uri.parse(
-          '$getTrainerTeamsUrl?coach_id=$trainerWorkspaceId&trainer_id=$trainerWorkspaceId'),
-      body: {
-        'coach_id': trainerWorkspaceId.toString(),
-        'trainer_id': trainerWorkspaceId.toString(),
-      },
+      Uri.parse(getTrainerTeamsUrl).replace(queryParameters: query),
+      body: query,
     ).timeout(const Duration(seconds: 12));
 
     final data = _decode(response.body);
@@ -864,23 +962,39 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
       normalized.add(team);
     }
 
-    // Staff Access becomes authoritative only after migration/issue
-    // has created at least one row for this employee. Legacy trainers without
-    // staff_access rows keep the old behaviour until migration is applied.
+    // Для аккаунтов, переведённых на Staff Access, выбранный в HUB клуб
+    // является единственным рабочим контекстом. Дополнительно ограничиваем
+    // список разрешёнными team_id именно этого access.
     try {
-      final staffState =
-          await StaffAccessService.loadMyStatus(trainerWorkspaceId);
+      var staffState = _trainerStaffState;
+      if (staffState.isEmpty) {
+        staffState = await StaffAccessService.loadMyStatus(trainerWorkspaceId);
+        if (staffState['success'] == true) {
+          _trainerStaffState = staffState;
+          _trainerActiveAccesses = StaffAccessService.activeAccesses(staffState);
+          _trainerStaffManaged = staffState['has_access_rows'] == true;
+        }
+      }
 
       if (staffState['success'] == true &&
           staffState['has_access_rows'] == true) {
-        final activeClubIds = StaffAccessService.activeClubIds(staffState);
+        final access = StaffAccessService.accessForClub(staffState, clubId);
+        final accessStatus =
+            _asString(access?['status'])?.toLowerCase() ?? '';
+        final active = access != null &&
+            accessStatus == 'active' &&
+            access['requires_activation'] != true;
+        final allowedTeamIds =
+            active ? StaffAccessService.teamIdsForAccess(access) : <int>{};
 
         normalized.removeWhere((team) {
+          final teamId =
+              _asInt(team['id'] ?? team['team_id'] ?? team['teamId']);
           final teamClubId = _asInt(team['club_id'] ?? team['clubId']);
 
-          if (teamClubId <= 0) return false;
-
-          return !activeClubIds.contains(teamClubId);
+          if (!active) return true;
+          if (teamClubId > 0 && teamClubId != clubId) return true;
+          return !allowedTeamIds.contains(teamId);
         });
       }
     } catch (error) {
@@ -889,7 +1003,9 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
 
     teams = normalized;
 
-    if (teams.isNotEmpty) {
+    // Legacy-тренерам без staff_access оставляем старое определение club_id
+    // по первой назначенной команде. Для Staff Access club_id уже выбран HUB.
+    if (!_trainerStaffManaged && teams.isNotEmpty) {
       Map<String, dynamic>? clubSourceTeam;
 
       final targetTeamId = initialTeamId ?? selectedTeamId;
@@ -914,7 +1030,14 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
         clubId = resolvedClubId;
       }
     }
-    if ((clubName.trim().isEmpty || clubName == 'Клуб') && teams.isNotEmpty) {
+    final accessClubName = _asString(
+      _currentTrainerAccess?['club_name'] ??
+          _currentTrainerAccess?['clubName'],
+    );
+    if (accessClubName != null) {
+      clubName = accessClubName;
+    } else if ((clubName.trim().isEmpty || clubName == 'Клуб') &&
+        teams.isNotEmpty) {
       clubName =
           _asString(teams.first['club_name'] ?? teams.first['clubName']) ??
               'Панель тренера';
@@ -1084,6 +1207,32 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
       _asString(t['full_name']),
     ].whereType<String>().join('|').trim().toLowerCase();
     return name.isNotEmpty ? 'name:$name' : 'raw:${jsonEncode(t)}';
+  }
+
+  Future<void> _loadClubNews() async {
+    clubNews = [];
+    final viewerId = currentUserId > 0 ? currentUserId : clubId;
+    if (viewerId <= 0 || clubId <= 0) return;
+
+    try {
+      final uri = Uri.parse('$apiBase/get_club_news.php').replace(
+        queryParameters: <String, String>{
+          'viewer_id': '$viewerId',
+          'club_id': '$clubId',
+          'limit': '100',
+        },
+      );
+      final response = await http.get(uri).timeout(const Duration(seconds: 10));
+      final decoded = _decode(response.body);
+      if (decoded is Map && decoded['success'] == true) {
+        clubNews = _extractList(
+          decoded,
+          keys: const ['posts', 'data', 'items'],
+        );
+      }
+    } catch (_) {
+      clubNews = [];
+    }
   }
 
   Future<void> _loadEvents() async {
@@ -2187,6 +2336,12 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
           Icons.account_tree_rounded,
           'Команды',
           'Список команд клуба',
+        ),
+        const _FullMenuItem(
+          ClubSection.news,
+          Icons.newspaper_rounded,
+          'Новости клуба',
+          'Внутренние новости команд',
         ),
         _FullMenuItem(
           ClubSection.trainers,
@@ -5756,6 +5911,7 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
         'players': players.length,
         'trainers': trainers.length,
         'events': events.length,
+        'club_news': clubNews.length,
         'plans': latestPlans.length,
       },
       'response_contract': const <String>[
@@ -5764,6 +5920,23 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
         'coach_action',
       ],
     };
+  }
+
+  void _toggleContextAi() {
+    final section = selectedSection;
+    if (!_clubContextAiSupported(section)) {
+      Get.snackbar(
+        'СПОРТОТЕКА ИИ',
+        'ИИ-помощник недоступен в разделе «${_titleFor(section)}».',
+      );
+      return;
+    }
+
+    final expanded = _contextAiExpanded ?? false;
+    setState(() {
+      _contextAiExpanded = !expanded;
+      if (!expanded) _contextAiRevision++;
+    });
   }
 
   Widget _withClubContextAiLayer(
@@ -5782,13 +5955,7 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
     return CmrContextAiLayer(
       child: child,
       expanded: expanded,
-      onToggle: () {
-        setState(() {
-          final next = !expanded;
-          _contextAiExpanded = next;
-          if (next) _contextAiRevision++;
-        });
-      },
+      onToggle: _toggleContextAi,
       clubId: clubId,
       userId: currentUserId,
       teamId: selectedTeamId,
@@ -5808,6 +5975,9 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
       playerName: playerOnly ? playerName : null,
       onNavigate: _handleAiNavigate,
       onOpenPdf: _handleAiOpenDocument,
+      // ИИ вызывается из нижнего Dock/меню. Плавающий launcher больше
+      // не перекрывает рабочие окна и элементы интерфейса.
+      showCollapsedLauncher: false,
     );
   }
 
@@ -5895,6 +6065,8 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
               hasActiveSubscription: hasActiveSubscription,
               onStart: _openFullModulesMenu,
               onSearch: _openDesktopCommandMenu,
+              aiActive: _contextAiExpanded ?? false,
+              onAi: _toggleContextAi,
               onSelect: _activateInlineSection,
               onHome: _goHomeFromWorkspace,
               onRefresh: () => _loadAll(),
@@ -5992,6 +6164,8 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
               activeSection: selectedSection,
               onOpenStart: _openFullModulesMenu,
               onOpenSearch: _openDesktopCommandMenu,
+              aiActive: _contextAiExpanded ?? false,
+              onOpenAi: _toggleContextAi,
               onOpenSettings: _openWorkspaceSettings,
               onOpenHome: _goHomeFromWorkspace,
               onRefresh: () => _loadAll(),
@@ -6084,6 +6258,8 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
         return 'Спортотека OS';
       case ClubSection.teams:
         return 'Команды клуба';
+      case ClubSection.news:
+        return 'Новости клуба';
       case ClubSection.teamDashboard:
         return selectedTeamName;
       case ClubSection.roster:
@@ -6151,6 +6327,8 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
         return 'Папки, заметки, игроки, тренеры, команды и рабочие модули клуба';
       case ClubSection.teams:
         return 'Крупные карточки команд и быстрое создание новой команды';
+      case ClubSection.news:
+        return 'Внутренние новости клуба и команд, получатели и управление публикациями';
       case ClubSection.teamDashboard:
         return 'Единая панель выбранной команды';
       case ClubSection.roster:
@@ -6393,6 +6571,10 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
       case 'parents':
         _selectWorkspaceSection(ClubSection.parents);
         break;
+      case 'news':
+      case 'club_news':
+        _selectWorkspaceSection(ClubSection.news);
+        break;
       case 'documents':
         Get.snackbar(
           'Документы',
@@ -6577,7 +6759,21 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
           onOpenChats: null,
           events: events,
           latestPlans: latestPlans,
+          news: clubNews,
           players: players,
+        );
+      case ClubSection.news:
+        return CmrClubNewsPanel(
+          clubId: clubId,
+          clubName: clubName,
+          currentUserId: currentUserId > 0 ? currentUserId : clubId,
+          teams: teams,
+          selectedTeamId: selectedTeamId,
+          canManage: !trainerAssignedMode && currentUserId == clubId,
+          onChanged: () async {
+            await _loadClubNews();
+            if (mounted) setState(() {});
+          },
         );
       case ClubSection.teamDashboard:
         return _TeamModulePanel(
@@ -7074,6 +7270,7 @@ class _C {
         return purple;
       case ClubSection.overview:
       case ClubSection.finder:
+      case ClubSection.news:
         return primaryGreen;
       case ClubSection.teams:
       case ClubSection.trainers:
@@ -7441,6 +7638,12 @@ const List<_NavGroup> _clubWorkspaceNavGroups = [
       subtitle: 'Список команд клуба',
     ),
     _NavItem(
+      ClubSection.news,
+      Icons.newspaper_rounded,
+      'Новости',
+      subtitle: 'Внутренние публикации',
+    ),
+    _NavItem(
       ClubSection.trainers,
       Icons.badge_rounded,
       'Тренеры',
@@ -7564,6 +7767,8 @@ class _DesktopWorkspaceTaskbar extends StatelessWidget {
   final bool hasActiveSubscription;
   final VoidCallback onStart;
   final VoidCallback onSearch;
+  final bool aiActive;
+  final VoidCallback onAi;
   final ValueChanged<ClubSection> onSelect;
   final VoidCallback onHome;
   final VoidCallback onRefresh;
@@ -7576,6 +7781,8 @@ class _DesktopWorkspaceTaskbar extends StatelessWidget {
     required this.hasActiveSubscription,
     required this.onStart,
     required this.onSearch,
+    required this.aiActive,
+    required this.onAi,
     required this.onSelect,
     required this.onHome,
     required this.onRefresh,
@@ -7661,6 +7868,14 @@ class _DesktopWorkspaceTaskbar extends StatelessWidget {
                 _TaskbarSearchButton(
                   compact: veryCompact,
                   onTap: onSearch,
+                ),
+                const SizedBox(width: 6),
+                _TaskbarSystemButton(
+                  icon: Icons.auto_awesome_rounded,
+                  tooltip: 'СПОРТОТЕКА ИИ',
+                  active: aiActive,
+                  accentColor: const Color(0xFF07883F),
+                  onTap: onAi,
                 ),
                 if (!veryCompact) ...[
                   const SizedBox(width: 8),
@@ -7792,11 +8007,15 @@ class _TaskbarSystemButton extends StatefulWidget {
   final IconData icon;
   final String tooltip;
   final VoidCallback onTap;
+  final bool active;
+  final Color? accentColor;
 
   const _TaskbarSystemButton({
     required this.icon,
     required this.tooltip,
     required this.onTap,
+    this.active = false,
+    this.accentColor,
   });
 
   @override
@@ -7825,11 +8044,21 @@ class _TaskbarSystemButtonState extends State<_TaskbarSystemButton> {
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                color: _hovered ? _C.railHover : _C.railPanel,
+                color: widget.active
+                    ? const Color(0xFFEAF8F0)
+                    : (_hovered ? _C.railHover : _C.railPanel),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: _C.borderSoft),
+                border: Border.all(
+                  color: widget.active
+                      ? const Color(0xFFBFE7CF)
+                      : _C.borderSoft,
+                ),
               ),
-              child: Icon(widget.icon, color: _C.railText, size: 21),
+              child: Icon(
+                widget.icon,
+                color: widget.accentColor ?? _C.railText,
+                size: 21,
+              ),
             ),
           ),
         ),
@@ -8470,6 +8699,8 @@ class _Sidebar extends StatelessWidget {
         return 'OS';
       case ClubSection.teams:
         return 'Команды';
+      case ClubSection.news:
+        return 'Новости';
       case ClubSection.trainers:
         return 'Тренеры';
       case ClubSection.roster:
@@ -20250,6 +20481,8 @@ class _WorkspaceDock extends StatelessWidget {
   final ClubSection activeSection;
   final VoidCallback onOpenStart;
   final VoidCallback onOpenSearch;
+  final bool aiActive;
+  final VoidCallback onOpenAi;
   final VoidCallback onOpenSettings;
   final VoidCallback onOpenHome;
   final VoidCallback onRefresh;
@@ -20265,6 +20498,8 @@ class _WorkspaceDock extends StatelessWidget {
     required this.activeSection,
     required this.onOpenStart,
     required this.onOpenSearch,
+    required this.aiActive,
+    required this.onOpenAi,
     required this.onOpenSettings,
     required this.onOpenHome,
     required this.onRefresh,
@@ -20351,6 +20586,16 @@ class _WorkspaceDock extends StatelessWidget {
                 running: false,
                 onTap: onOpenSearch,
               ),
+              const SizedBox(width: 5),
+              _WorkspaceDockButton(
+                icon: Icons.auto_awesome_rounded,
+                tooltip: 'СПОРТОТЕКА ИИ',
+                size: _buttonSize,
+                active: aiActive,
+                running: aiActive,
+                iconColor: const Color(0xFF07883F),
+                onTap: onOpenAi,
+              ),
               const SizedBox(width: 8),
               _WorkspaceDockDivider(height: _buttonSize - 12),
               const SizedBox(width: 8),
@@ -20432,6 +20677,7 @@ class _WorkspaceDockButton extends StatefulWidget {
   final bool active;
   final bool running;
   final bool minimized;
+  final Color? iconColor;
   final VoidCallback onTap;
 
   const _WorkspaceDockButton({
@@ -20442,6 +20688,7 @@ class _WorkspaceDockButton extends StatefulWidget {
     required this.running,
     required this.onTap,
     this.minimized = false,
+    this.iconColor,
   });
 
   @override
@@ -20458,8 +20705,8 @@ class _WorkspaceDockButtonState extends State<_WorkspaceDockButton> {
         : _hovered
             ? const Color(0xFFF3F5F7)
             : Colors.transparent;
-    final iconColor =
-        widget.active ? const Color(0xFF111827) : const Color(0xFF344054);
+    final iconColor = widget.iconColor ??
+        (widget.active ? const Color(0xFF111827) : const Color(0xFF344054));
 
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),

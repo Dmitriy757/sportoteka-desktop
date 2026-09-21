@@ -23,7 +23,15 @@ class PlayerProfileHeader extends StatelessWidget {
     required this.embedded,
   });
 
-  String _s(dynamic value) => '${value ?? ''}'.trim();
+  String _playerNumber(Map<String, dynamic> player) {
+  for (final key in const ['number', 'player_number', 'shirt_number', 'jersey_number', 'jerseyNumber']) {
+    final value = _s(player[key]);
+    if (value.isNotEmpty) return value;
+  }
+  return '';
+}
+
+String _s(dynamic value) => '${value ?? ''}'.trim();
 
   String get name {
     final full = _s(player['full_name'] ?? player['name']);
@@ -36,7 +44,7 @@ class PlayerProfileHeader extends StatelessWidget {
 
   String get subtitle => <String>[
         _s(player['position'] ?? player['role']),
-        _s(player['number']).isEmpty ? '' : '№${_s(player['number'])}',
+        _playerNumber(player).isEmpty ? '' : '№${_playerNumber(player)}',
         _s(player['team_name']),
       ].where((item) => item.isNotEmpty).join(' · ');
 

@@ -199,6 +199,8 @@ class _PressDotCluster extends StatelessWidget {
   }
 }
 
+enum _PressContentSection { clubNews, publicFeed, myMaterials }
+
 class CmrPressAssistantScreen extends StatefulWidget {
   final int userId;
   final int clubId;
@@ -250,6 +252,7 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
   Map<String, dynamic>? _editingPost;
   List<Map<String, dynamic>> _posts = <Map<String, dynamic>>[];
   List<Map<String, dynamic>> _pressAssignments = <Map<String, dynamic>>[];
+  _PressContentSection _contentSection = _PressContentSection.clubNews;
 
   int _activeTeamId = 0;
   int _activeClubId = 0;
@@ -510,24 +513,9 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
     await _loadPosts();
   }
 
-  Future<void> _loadPosts() async {
-    var userId = widget.userId;
-    if (userId <= 0) userId = await PrefUtils.getUserId() ?? 0;
-    if (userId <= 0) return;
-
+  Future<List<Map<String, dynamic>>> _fetchPublicPosts(int userId) async {
     final clubId = _resolvedClubId;
-    if (clubId <= 0) {
-      throw Exception('Для пресс-службы не определён клуб');
-    }
-
-    if (_activeTeamId <= 0 && !_canPublishWholeClub) {
-      // Пользователь с доступом только к выбранным командам работает
-      // в конкретной команде, а не во всём клубе.
-      if (_pressAssignments.isEmpty) {
-        throw Exception('Нет доступных команд пресс-службы');
-      }
-      _applyActiveAssignment(_pressAssignments.first);
-    }
+    if (clubId <= 0) throw Exception('Для пресс-службы не определён клуб');
 
     final uri = Uri.parse('$_apiBase/get_press_team_posts.php').replace(
       queryParameters: <String, String>{
@@ -536,43 +524,84 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
         'team_id': '$_activeTeamId',
       },
     );
-
     final response = await http.get(uri).timeout(const Duration(seconds: 15));
-
     if (response.statusCode != 200) {
-      Map<String, dynamic>? errorData;
-      try {
-        final decoded = jsonDecode(utf8.decode(response.bodyBytes));
-        if (decoded is Map) {
-          errorData = Map<String, dynamic>.from(decoded);
-        }
-      } catch (_) {}
-
-      final message = _s(
-        errorData?['message'] ?? errorData?['error'],
-      );
-
-      throw Exception(
-        message.isEmpty ? 'HTTP ${response.statusCode}' : message,
-      );
+      final data = _decodeMap(response);
+      throw Exception(_apiMessage(data, 'HTTP ${response.statusCode}'));
     }
-
     final decoded = jsonDecode(utf8.decode(response.bodyBytes));
-    final List<dynamic> raw = decoded is List
+    final raw = decoded is List
         ? decoded
         : decoded is Map && decoded['posts'] is List
             ? decoded['posts'] as List
             : const <dynamic>[];
+    return raw.whereType<Map>().map((item) {
+      final post = Map<String, dynamic>.from(item);
+      post['_content_visibility'] = 'feed';
+      return post;
+    }).toList();
+  }
 
-    final result = <Map<String, dynamic>>[];
+  Future<List<Map<String, dynamic>>> _fetchInternalPosts(
+    int userId, {
+    bool mine = false,
+  }) async {
+    final clubId = _resolvedClubId;
+    if (clubId <= 0) throw Exception('Для пресс-службы не определён клуб');
 
-    for (final item in raw) {
-      if (item is! Map) continue;
+    final params = <String, String>{
+      'viewer_id': '$userId',
+      'club_id': '$clubId',
+      'team_id': '$_activeTeamId',
+      if (mine) 'mine': '1',
+    };
+    final uri = Uri.parse('$_apiBase/get_club_news.php')
+        .replace(queryParameters: params);
+    final response = await http.get(uri).timeout(const Duration(seconds: 15));
+    if (response.statusCode != 200) {
+      final data = _decodeMap(response);
+      throw Exception(_apiMessage(data, 'HTTP ${response.statusCode}'));
+    }
+    final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+    final raw = decoded is Map && decoded['posts'] is List
+        ? decoded['posts'] as List
+        : const <dynamic>[];
+    return raw.whereType<Map>().map((item) {
+      final post = Map<String, dynamic>.from(item);
+      post['_content_visibility'] = 'club_internal';
+      return post;
+    }).toList();
+  }
 
-      // НЕ фильтруем по category/sportName.
-      // Старые публикации могли иметь другую категорию, хотя принадлежат
-      // этому же пользователю/клубу/команде.
-      result.add(Map<String, dynamic>.from(item));
+  Future<void> _loadPosts() async {
+    final userId = await _resolvedUserId();
+    if (userId <= 0) return;
+
+    if (_activeTeamId <= 0 && !_canPublishWholeClub) {
+      if (_pressAssignments.isEmpty) {
+        throw Exception('Нет доступных команд пресс-службы');
+      }
+      _applyActiveAssignment(_pressAssignments.first);
+    }
+
+    List<Map<String, dynamic>> result;
+    switch (_contentSection) {
+      case _PressContentSection.clubNews:
+        result = await _fetchInternalPosts(userId);
+        break;
+      case _PressContentSection.publicFeed:
+        result = await _fetchPublicPosts(userId);
+        break;
+      case _PressContentSection.myMaterials:
+        final chunks = await Future.wait<List<Map<String, dynamic>>>([
+          _fetchInternalPosts(userId, mine: true),
+          _fetchPublicPosts(userId),
+        ]);
+        result = <Map<String, dynamic>>[
+          ...chunks[0],
+          ...chunks[1],
+        ].where((post) => _asInt(post['user_id']) == userId).toList();
+        break;
     }
 
     result.sort((a, b) {
@@ -654,6 +683,65 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
 
     await _loadPosts();
   }
+
+  String get _contentSectionTitle {
+    switch (_contentSection) {
+      case _PressContentSection.clubNews:
+        return 'Новости клуба';
+      case _PressContentSection.publicFeed:
+        return 'Пресс-лента';
+      case _PressContentSection.myMaterials:
+        return 'Мои материалы';
+    }
+  }
+
+  String get _newContentLabel =>
+      _contentSection == _PressContentSection.publicFeed
+          ? 'Новая публикация'
+          : 'Новая новость';
+
+  Future<void> _selectContentSection(_PressContentSection section) async {
+    if (!mounted || _contentSection == section) return;
+    setState(() {
+      _contentSection = section;
+      _profileOpen = false;
+      _editorOpen = false;
+      _editingPost = null;
+      _posts = <Map<String, dynamic>>[];
+    });
+    try {
+      await _loadPosts();
+    } catch (e) {
+      if (mounted) _snack('Не удалось загрузить раздел: $e');
+    }
+  }
+
+  List<int> _postTargetTeamIds(Map<String, dynamic> post) {
+    final raw = post['target_team_ids'];
+    if (raw is List) {
+      return raw.map(_asInt).where((id) => id > 0).toList();
+    }
+    if (raw is String && raw.trim().isNotEmpty) {
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is List) {
+          return decoded.map(_asInt).where((id) => id > 0).toList();
+        }
+      } catch (_) {}
+    }
+    final fallback = _asInt(post['_press_team_id'] ?? post['team_id']);
+    return fallback > 0 ? <int>[fallback] : <int>[];
+  }
+
+  List<Map<String, dynamic>> get _availableTargetTeams => _pressAssignments
+      .map((row) => <String, dynamic>{
+            'id': _asInt(row['team_id'] ?? row['teamId']),
+            'team_id': _asInt(row['team_id'] ?? row['teamId']),
+            'name': _s(row['team_name'] ?? row['teamName']),
+            'team_name': _s(row['team_name'] ?? row['teamName']),
+          })
+      .where((row) => _asInt(row['id']) > 0)
+      .toList();
 
   void _openNewPost() {
     if (!mounted) return;
@@ -737,6 +825,91 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
       _editorOpen = true;
     });
   }
+  bool _canEditPost(Map<String, dynamic> post) {
+    final visibility = _s(
+      post['_content_visibility'] ?? post['visibility'],
+    ).toLowerCase();
+    if (visibility == 'club_internal') return post['can_edit'] == true;
+    return _asInt(post['user_id']) == widget.userId || widget.userId <= 0;
+  }
+
+  void _openPost(Map<String, dynamic> post) {
+    if (_canEditPost(post)) {
+      _openEditPost(post);
+      return;
+    }
+    final title = _s(post['title']).isEmpty ? 'Новость клуба' : _s(post['title']);
+    final body = _s(post['body'] ?? post['text'])
+        .replaceAll(RegExp(r'<[^>]+>'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(title),
+        content: Text(body.isEmpty ? 'Без текстового описания' : body),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Закрыть'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _deletePost(Map<String, dynamic> post) async {
+    if (!_canEditPost(post)) return;
+    final postId = _asInt(post['id']);
+    final userId = await _resolvedUserId();
+    if (postId <= 0 || userId <= 0) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Удалить материал?'),
+        content: Text(
+          _s(post['_content_visibility'] ?? post['visibility']) == 'club_internal'
+              ? 'Внутренняя новость будет перемещена в корзину клуба.'
+              : 'Публичная публикация будет удалена.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Отмена'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text(
+              'Удалить',
+              style: TextStyle(color: _CmrPressColors.red),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    try {
+      final response = await http.post(
+        Uri.parse('$_apiBase/delete_post.php'),
+        body: <String, String>{
+          'post_id': '$postId',
+          'user_id': '$userId',
+        },
+      ).timeout(const Duration(seconds: 12));
+      final data = _decodeMap(response);
+      if (response.statusCode != 200 || data?['success'] != true) {
+        _snack(_apiMessage(data, 'Не удалось удалить материал'));
+        return;
+      }
+      await _loadPosts();
+      _snack('Материал удалён');
+    } catch (e) {
+      _snack('Ошибка удаления: $e');
+    }
+  }
+
 
   Future<void> _closeEditor({bool refresh = false}) async {
     if (!mounted) return;
@@ -946,12 +1119,7 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
   }
 
   void _openFeed() {
-    if (!mounted) return;
-    setState(() {
-      _profileOpen = false;
-      _editorOpen = false;
-      _editingPost = null;
-    });
+    _selectContentSection(_PressContentSection.publicFeed);
   }
 
   void _snack(String message) {
@@ -1022,7 +1190,7 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
                     vertical: 9,
                   ),
                   child: Text(
-                    'Новая новость',
+                    _newContentLabel,
                     style: _CmrPressText.action().copyWith(
                       color: _CmrPressColors.greenDark,
                       fontSize: 10.8,
@@ -1035,7 +1203,7 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
           ],
           if (mobile && !_profileOpen)
             IconButton(
-              tooltip: 'Новая новость',
+              tooltip: _newContentLabel,
               onPressed: _openNewPost,
               icon: const Icon(
                 Icons.add_rounded,
@@ -1063,7 +1231,8 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
       if (_activeClubName.trim().isNotEmpty) _activeClubName.trim(),
       if (_activeTeamName.trim().isNotEmpty) _activeTeamName.trim(),
     ];
-    return parts.isEmpty ? 'Новости назначенных команд' : parts.join(' • ');
+    final context = parts.isEmpty ? 'Назначенные команды' : parts.join(' • ');
+    return '$_contentSectionTitle • $context';
   }
 
   Widget _buildProfileStrip() {
@@ -1394,17 +1563,42 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
                     ),
                   ),
                   item(
-                    title: 'Пресс-лента',
-                    subtitle: 'ваши публикации и новости',
-                    active: !_profileOpen && !_editorOpen,
-                    onTap: _openFeed,
+                    title: 'Новости клуба',
+                    subtitle: 'внутренние новости команд',
+                    active: !_profileOpen && !_editorOpen &&
+                        _contentSection == _PressContentSection.clubNews,
+                    onTap: () => _selectContentSection(
+                      _PressContentSection.clubNews,
+                    ),
                   ),
                   const SizedBox(height: 4),
                   item(
-                    title: 'Новая новость',
-                    subtitle: _canPublishWholeClub
-                        ? 'команда или весь клуб'
-                        : 'для назначенной команды',
+                    title: 'Пресс-лента',
+                    subtitle: 'публично для всей СПОРТОТЕКИ',
+                    active: !_profileOpen && !_editorOpen &&
+                        _contentSection == _PressContentSection.publicFeed,
+                    onTap: () => _selectContentSection(
+                      _PressContentSection.publicFeed,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  item(
+                    title: 'Мои материалы',
+                    subtitle: 'внутренние и публичные',
+                    active: !_profileOpen && !_editorOpen &&
+                        _contentSection == _PressContentSection.myMaterials,
+                    onTap: () => _selectContentSection(
+                      _PressContentSection.myMaterials,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  item(
+                    title: _newContentLabel,
+                    subtitle: _contentSection == _PressContentSection.publicFeed
+                        ? 'публикация в общей ленте'
+                        : (_canPublishWholeClub
+                            ? 'весь клуб или выбранные команды'
+                            : 'одна или несколько доступных команд'),
                     active: _editorOpen && _editingPost == null,
                     onTap: _openNewPost,
                   ),
@@ -1482,6 +1676,32 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
     );
   }
 
+  Widget _buildMobileSectionTabs() {
+    Widget chip(String label, _PressContentSection section) {
+      final active = _contentSection == section;
+      return ChoiceChip(
+        label: Text(label),
+        selected: active,
+        onSelected: (_) => _selectContentSection(section),
+      );
+    }
+
+    return SizedBox(
+      height: 48,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.fromLTRB(10, 4, 10, 6),
+        children: [
+          chip('Новости клуба', _PressContentSection.clubNews),
+          const SizedBox(width: 6),
+          chip('Пресс-лента', _PressContentSection.publicFeed),
+          const SizedBox(width: 6),
+          chip('Мои', _PressContentSection.myMaterials),
+        ],
+      ),
+    );
+  }
+
   Widget _buildWorkingArea({
     required bool mobile,
   }) {
@@ -1491,6 +1711,7 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
         children: [
           if (mobile) _buildHeader(mobile: true),
           if (mobile && !_editorOpen && !_profileOpen) _buildProfileStrip(),
+          if (mobile && !_editorOpen && !_profileOpen) _buildMobileSectionTabs(),
           Expanded(
             child: _editorOpen
                 ? _editor()
@@ -1888,12 +2109,18 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
                 : 'Команда';
 
     final clubPost = normalizedScope == 'club' || normalizedTeamId <= 0;
+    final contentVisibility = _s(
+      post['_content_visibility'] ?? post['visibility'],
+    ).toLowerCase();
+    final contentLabel = contentVisibility == 'club_internal'
+        ? 'Внутренняя'
+        : 'Публичная';
 
     return Material(
       color: Colors.transparent,
       borderRadius: BorderRadius.circular(9),
       child: InkWell(
-        onTap: () => _openEditPost(post),
+        onTap: () => _openPost(post),
         borderRadius: BorderRadius.circular(9),
         child: Container(
           constraints: const BoxConstraints(minHeight: 66),
@@ -1951,6 +2178,7 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
                     const SizedBox(height: 4),
                     Text(
                       <String>[
+                        contentLabel,
                         scopeLabel,
                         if (created.isNotEmpty) created,
                       ].join(' · '),
@@ -1962,11 +2190,39 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
                 ),
               ),
               const SizedBox(width: 6),
-              const Icon(
-                Icons.chevron_right_rounded,
-                size: 18,
-                color: _CmrPressColors.subtle,
-              ),
+              if (_canEditPost(post))
+                PopupMenuButton<String>(
+                  tooltip: 'Действия',
+                  padding: EdgeInsets.zero,
+                  onSelected: (value) {
+                    if (value == 'edit') _openEditPost(post);
+                    if (value == 'delete') _deletePost(post);
+                  },
+                  itemBuilder: (_) => const <PopupMenuEntry<String>>[
+                    PopupMenuItem<String>(
+                      value: 'edit',
+                      child: Text('Редактировать'),
+                    ),
+                    PopupMenuItem<String>(
+                      value: 'delete',
+                      child: Text(
+                        'Удалить',
+                        style: TextStyle(color: _CmrPressColors.red),
+                      ),
+                    ),
+                  ],
+                  icon: const Icon(
+                    Icons.more_horiz_rounded,
+                    size: 18,
+                    color: _CmrPressColors.subtle,
+                  ),
+                )
+              else
+                const Icon(
+                  Icons.visibility_outlined,
+                  size: 18,
+                  color: _CmrPressColors.subtle,
+                ),
             ],
           ),
         ),
@@ -2037,12 +2293,16 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
               ),
               const SizedBox(height: 11),
               Text(
-                'Новостей пока нет',
+                _contentSection == _PressContentSection.publicFeed
+                    ? 'Публичных публикаций пока нет'
+                    : 'Новостей пока нет',
                 style: _CmrPressText.title(14.2),
               ),
               const SizedBox(height: 5),
               Text(
-                'Создайте первую публикацию для выбранной команды или всего клуба.',
+                _contentSection == _PressContentSection.publicFeed
+                    ? 'Создайте первую публичную публикацию для общей ленты СПОРТОТЕКИ.'
+                    : 'Создайте первую внутреннюю новость для выбранных команд или всего клуба.',
                 textAlign: TextAlign.center,
                 style: _CmrPressText.muted(11.2),
               ),
@@ -2050,7 +2310,7 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
               TextButton(
                 onPressed: _openNewPost,
                 child: Text(
-                  'Создать новость',
+                  _newContentLabel,
                   style: _CmrPressText.action().copyWith(
                     color: _CmrPressColors.greenDark,
                   ),
@@ -2104,6 +2364,20 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
       }
     }
 
+    final editingVisibility = post == null
+        ? (_contentSection == _PressContentSection.publicFeed
+            ? 'feed'
+            : 'club_internal')
+        : _s(post['_content_visibility'] ?? post['visibility']).isEmpty
+            ? 'feed'
+            : _s(post['_content_visibility'] ?? post['visibility']);
+
+    final initialTargets = post == null
+        ? (editingVisibility == 'club_internal' && _activeTeamId > 0
+            ? <int>[_activeTeamId]
+            : const <int>[])
+        : _postTargetTeamIds(post);
+
     return CreatePostEditorScreen(
       sportName: _activeSportName.isEmpty ? widget.sportName : _activeSportName,
       isEdit: post != null,
@@ -2122,6 +2396,10 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
       teamName: editorTeamName,
       clubId: editorClubId,
       pressMode: true,
+      visibility: editingVisibility,
+      targetTeamIds: initialTargets,
+      availableTargetTeams: _availableTargetTeams,
+      allowWholeClubTarget: _canPublishWholeClub,
       authorLabel: _displayName,
       onClose: () => _closeEditor(),
       onSaved: () => _closeEditor(refresh: true),

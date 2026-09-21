@@ -379,10 +379,12 @@ class _PhysicalMetrics extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final player = data.player;
+    final rawHeight = _s(player['height'] ?? player['height_cm'] ?? player['heightCm']);
+    final rawWeight = _s(player['weight'] ?? player['weight_kg'] ?? player['weightKg']);
     final height =
-        double.tryParse(_s(player['height']).replaceAll(',', '.')) ?? 0;
+        double.tryParse(rawHeight.replaceAll(',', '.')) ?? 0;
     final weight =
-        double.tryParse(_s(player['weight']).replaceAll(',', '.')) ?? 0;
+        double.tryParse(rawWeight.replaceAll(',', '.')) ?? 0;
     final bmi = height > 0 && weight > 0
         ? (weight / ((height / 100) * (height / 100))).toStringAsFixed(1)
         : '—';
@@ -390,8 +392,8 @@ class _PhysicalMetrics extends StatelessWidget {
     final restSession = data.trackerRestHrSession;
 
     final values = <({String label, String value, Color color})>[
-      (label: 'Рост', value: _value(player['height'], 'см'), color: PpColors.green),
-      (label: 'Вес', value: _value(player['weight'], 'кг'), color: PpColors.amber),
+      (label: 'Рост', value: _value(rawHeight, 'см'), color: PpColors.green),
+      (label: 'Вес', value: _value(rawWeight, 'кг'), color: PpColors.amber),
       (label: 'ИМТ', value: bmi, color: PpColors.greenDark),
       (
         label: 'Пульс покоя',

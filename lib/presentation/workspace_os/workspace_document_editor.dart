@@ -16,6 +16,7 @@ import 'package:sportoteka/presentation/club_workspace/cmr_context_ai_layer.dart
 import 'package:sportoteka/presentation/workspace_os/sportoteka_workspace_icons.dart';
 import 'package:sportoteka/presentation/workspace_os/workspace_attachment_preview.dart';
 import 'package:sportoteka/presentation/workspace_os/workspace_live_blocks.dart';
+import 'package:sportoteka/presentation/workspace_os/workspace_training_plan_codec.dart';
 import 'package:sportoteka/presentation/plans/plan_folders_screen.dart';
 import 'package:sportoteka/presentation/plans/api/training_graphics_api.dart';
 
@@ -48,6 +49,8 @@ class WorkspaceDocumentEditor extends StatefulWidget {
     this.aiExtraPayload = const <String, dynamic>{},
     this.onUploadImage,
     this.compactWorkspaceChrome = false,
+    this.startWithTrainingPlanTemplate = false,
+    this.initialTrainingPlanData = const <String, dynamic>{},
   });
 
   final String initialTitle;
@@ -75,6 +78,12 @@ class WorkspaceDocumentEditor extends StatefulWidget {
   /// В этом режиме внешняя шапка окна/сущности уже показывает название,
   /// поэтому внутренний ряд SPORTOTEKA OS + Save скрывается, как в Word.
   final bool compactWorkspaceChrome;
+
+  /// Opens the document immediately as the canonical Workspace plan-conspект.
+  /// Used by both Workspace OS and the Plans module, so there is only one
+  /// creation/editing surface.
+  final bool startWithTrainingPlanTemplate;
+  final Map<String, dynamic> initialTrainingPlanData;
 
   @override
   State<WorkspaceDocumentEditor> createState() =>
@@ -161,6 +170,14 @@ class _WorkspaceDocumentEditorState extends State<WorkspaceDocumentEditor> {
     _bodyHistory.add(_bodyController.text);
     _bodyHistoryIndex = 0;
     _loadLiveBlocks();
+    if (widget.startWithTrainingPlanTemplate &&
+        widget.initialBody.trim().isEmpty &&
+        !widget.readOnly) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _bodyController.text.trim().isNotEmpty) return;
+        _insertTrainingPlanTemplate(seed: widget.initialTrainingPlanData);
+      });
+    }
   }
 
   @override
@@ -3792,8 +3809,8 @@ ${_docBodyHtml()}
 
 
 
-  static const String _trainingPlanTokenPrefix = '[[SPORTOTEKA_PLAN_V2:';
-  static const String _trainingPlanTokenSuffix = ']]';
+  static const String _trainingPlanTokenPrefix = WorkspaceTrainingPlanCodec.tokenPrefix;
+  static const String _trainingPlanTokenSuffix = WorkspaceTrainingPlanCodec.tokenSuffix;
 
   Map<String, dynamic> _newTrainingPlanExercise(int index) => <String, dynamic>{
         'index': index,
@@ -4135,34 +4152,11 @@ ${_docBodyHtml()}
     );
   }
 
-  String _encodeTrainingPlanToken(Map<String, dynamic> data) {
-    final json = jsonEncode(data);
-    final encoded = base64Url.encode(utf8.encode(json)).replaceAll('=', '');
-    return '$_trainingPlanTokenPrefix$encoded$_trainingPlanTokenSuffix';
-  }
+  String _encodeTrainingPlanToken(Map<String, dynamic> data) =>
+      WorkspaceTrainingPlanCodec.encode(data);
 
-  Map<String, dynamic>? _decodeTrainingPlanToken(String raw) {
-    final value = raw.trim();
-    if (!value.startsWith(_trainingPlanTokenPrefix) ||
-        !value.endsWith(_trainingPlanTokenSuffix)) {
-      return null;
-    }
-    try {
-      var encoded = value.substring(
-        _trainingPlanTokenPrefix.length,
-        value.length - _trainingPlanTokenSuffix.length,
-      );
-      while (encoded.length % 4 != 0) {
-        encoded += '=';
-      }
-      final decoded = utf8.decode(base64Url.decode(encoded));
-      final data = jsonDecode(decoded);
-      if (data is! Map) return null;
-      return Map<String, dynamic>.from(data);
-    } catch (_) {
-      return null;
-    }
-  }
+  Map<String, dynamic>? _decodeTrainingPlanToken(String raw) =>
+      WorkspaceTrainingPlanCodec.decode(raw);
 
   Map<String, dynamic> _cloneTrainingPlan(Map<String, dynamic> data) =>
       Map<String, dynamic>.from(jsonDecode(jsonEncode(data)) as Map);
@@ -4359,12 +4353,18 @@ ${_trainingPlanExerciseTemplate(1)}
 ''';
   }
 
-  void _insertTrainingPlanTemplate() async {
+  void _insertTrainingPlanTemplate({Map<String, dynamic>? seed}) async {
     if (widget.readOnly) return;
 
     _finishVisualBlockEditing(rebuild: false);
     final current = _bodyController.text.trimRight();
     final plan = _newTrainingPlanData();
+    final incoming = seed ?? const <String, dynamic>{};
+    for (final entry in incoming.entries) {
+      if (entry.value != null && plan.containsKey(entry.key)) {
+        plan[entry.key] = entry.value;
+      }
+    }
 
     final loaded = await Future.wait<String>(<Future<String>>[
       _loadDefaultTrainingPlanTeamLogo(),

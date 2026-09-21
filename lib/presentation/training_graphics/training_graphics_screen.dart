@@ -6,10 +6,12 @@ import 'dart:ui' as ui;
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:file_picker/file_picker.dart';
+import 'package:vector_math/vector_math_64.dart' as vector;
 
 import 'training_graphics_state.dart';
 import 'widgets/tg_canvas.dart';
@@ -20,12 +22,13 @@ import 'package:sportoteka/core/utils/pref_utils.dart';
 import 'package:sportoteka/presentation/plans/api/training_graphics_api.dart';
 import 'package:sportoteka/presentation/training_graphics/widgets/tg_right_panel.dart';
 import 'package:sportoteka/presentation/training_graphics/tg_models.dart';
-import 'package:sportoteka/presentation/sportoteka_3d_pro/sportoteka_3d_pro_launcher.dart';
+import 'package:sportoteka/presentation/training_graphics/game_view_screen.dart';
 import 'package:sportoteka/presentation/workspace_os/workspace_plan_folder_picker.dart';
 import 'package:sportoteka/presentation/workspace_os/workspace_window_manager.dart';
 import 'package:sportoteka/presentation/workspace_os/sportoteka_workspace_icons.dart';
 import 'tg_export_saver.dart';
 import 'tg_scene_export.dart';
+import 'tg_pdf_export.dart';
 import 'package:sportoteka/core/theme/app_typography.dart';
 
 /// ================== ЦВЕТОВАЯ ПАЛИТРА ==================
@@ -336,6 +339,13 @@ class TgScreenLoadingOverlay extends StatelessWidget {
 }
 
 /// ================== ОСНОВНОЙ ЭКРАН ==================
+typedef TgPersonalLibraryLoader = Future<List<Map<String, dynamic>>> Function(int userId);
+typedef TgPersonalGraphicSaver = Future<Map<String, dynamic>?> Function(
+  int userId,
+  Map<String, dynamic> document,
+);
+typedef TgPersonalGraphicDeleter = Future<void> Function(int userId, int graphicId);
+
 class TrainingGraphicsScreen extends StatefulWidget {
   const TrainingGraphicsScreen({
     super.key,
@@ -349,6 +359,14 @@ class TrainingGraphicsScreen extends StatefulWidget {
     this.initialDocJson,
     this.initialFolderId,
     this.initialFolderTitle,
+    this.personalMode = false,
+    this.userId,
+    this.userDisplayName,
+    this.moduleAccessGranted = true,
+    this.onManageSubscription,
+    this.personalLibraryLoader,
+    this.personalGraphicSaver,
+    this.personalGraphicDeleter,
   });
 
   final int? teamId;
@@ -362,13 +380,43 @@ class TrainingGraphicsScreen extends StatefulWidget {
   final int? initialFolderId;
   final String? initialFolderTitle;
 
-  int get resolvedTeamId => teamId ?? 0;
-  String get resolvedTeamName =>
-      (teamName ?? "").trim().isNotEmpty ? teamName!.trim() : "Team";
+  /// Personal profile mode lets a coach use the editor without any club/team.
+  /// The tactical document is stored in the user's personal library and can
+  /// later be copied into a club Workspace by the host application.
+  final bool personalMode;
+  final int? userId;
+  final String? userDisplayName;
 
-  int get resolvedClubId => clubId ?? teamId ?? 0;
-  String get resolvedClubName =>
-      (clubName ?? "").trim().isNotEmpty ? clubName!.trim() : (teamName ?? "Club");
+  /// Subscription/entitlement gate supplied by the host app. Billing itself
+  /// stays outside this editor; when access is false a calm module-paywall is
+  /// rendered instead of partially opening the editor.
+  final bool moduleAccessGranted;
+  final VoidCallback? onManageSubscription;
+
+  /// Optional account-level cloud hooks. When omitted, personal documents use
+  /// the profile-scoped local cache; when supplied by the host app, the same UI
+  /// transparently becomes a multi-device personal Workspace.
+  final TgPersonalLibraryLoader? personalLibraryLoader;
+  final TgPersonalGraphicSaver? personalGraphicSaver;
+  final TgPersonalGraphicDeleter? personalGraphicDeleter;
+
+  bool get isPersonalWorkspace => personalMode;
+  int get resolvedUserId => userId ?? 0;
+
+  int get resolvedTeamId => teamId ?? 0;
+  String get resolvedTeamName {
+    if (isPersonalWorkspace) {
+      final name = (userDisplayName ?? '').trim();
+      return name.isEmpty ? 'Личный профиль' : name;
+    }
+    return (teamName ?? '').trim().isNotEmpty ? teamName!.trim() : 'Team';
+  }
+
+  int get resolvedClubId => isPersonalWorkspace ? 0 : (clubId ?? teamId ?? 0);
+  String get resolvedClubName {
+    if (isPersonalWorkspace) return 'Личный Workspace';
+    return (clubName ?? '').trim().isNotEmpty ? clubName!.trim() : (teamName ?? 'Club');
+  }
 
   @override
   State<TrainingGraphicsScreen> createState() => _TrainingGraphicsScreenState();
@@ -536,6 +584,13 @@ class _TrainingGraphicsScreenState extends State<TrainingGraphicsScreen>
   );
   
   bool _didLayoutFit = false;
+  bool _glbFieldMode = false;
+  final TrainingGraphicsGlbFieldController _glbFieldController =
+      TrainingGraphicsGlbFieldController();
+  final ValueNotifier<vector.Matrix4?> _glbProjection =
+      ValueNotifier<vector.Matrix4?>(null);
+  bool _glbProjectionUpdateScheduled = false;
+  List<double>? _pendingGlbProjection;
 
 // Добавьте этот метод в класс _TrainingGraphicsScreenState (в любое место внутри класса)
 Future<void> _refreshSvg(String asset, PlayerColors colors) async {
@@ -599,23 +654,30 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
   bool _workflowMetaLoaded = false;
   bool _workflowSyncing = false;
 
+  String get _storageScope => widget.isPersonalWorkspace
+      ? 'u${widget.resolvedUserId}_personal'
+      : 'c${widget.resolvedClubId}_t${widget.resolvedTeamId}';
+
   String get _templatesStorageKey =>
-      "${PrefUtils.prefName}tg_templates_c${widget.resolvedClubId}_t${widget.resolvedTeamId}";
+      "${PrefUtils.prefName}tg_templates_$_storageScope";
 
   String get _trainingPlanStorageKey =>
-      "${PrefUtils.prefName}tg_training_plan_c${widget.resolvedClubId}_t${widget.resolvedTeamId}";
+      "${PrefUtils.prefName}tg_training_plan_$_storageScope";
 
   String get _trainingCalendarStorageKey =>
-      "${PrefUtils.prefName}tg_training_calendar_c${widget.resolvedClubId}_t${widget.resolvedTeamId}";
+      "${PrefUtils.prefName}tg_training_calendar_$_storageScope";
 
   String get _trainingAttendanceStorageKey =>
-      "${PrefUtils.prefName}tg_training_attendance_c${widget.resolvedClubId}_t${widget.resolvedTeamId}";
+      "${PrefUtils.prefName}tg_training_attendance_$_storageScope";
 
   String get _trainingExecutionStorageKey =>
-      "${PrefUtils.prefName}tg_training_execution_c${widget.resolvedClubId}_t${widget.resolvedTeamId}";
+      "${PrefUtils.prefName}tg_training_execution_$_storageScope";
 
   String get _trainingTrackerStorageKey =>
-      "${PrefUtils.prefName}tg_training_tracker_c${widget.resolvedClubId}_t${widget.resolvedTeamId}";
+      "${PrefUtils.prefName}tg_training_tracker_$_storageScope";
+
+  String get _personalGraphicsStorageKey =>
+      "${PrefUtils.prefName}tg_personal_graphics_u${widget.resolvedUserId}";
 
   List<_TrainingTemplate> get _allTrainingTemplates => <_TrainingTemplate>[
         ..._builtInTrainingTemplates,
@@ -753,10 +815,13 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
   // Draft keys
   // ==========================
   String get _draftKey {
+    final gid = graphicId ?? 0;
+    if (widget.isPersonalWorkspace) {
+      return "${PrefUtils.prefName}tg_draft_u${widget.resolvedUserId}_personal_g$gid";
+    }
     final cid = widget.resolvedClubId;
     final tid = widget.resolvedTeamId;
-    final gid = graphicId ?? 0;
-    return "${PrefUtils.prefName}tg_draft_c${cid}_t${tid}_g${gid}";
+    return "${PrefUtils.prefName}tg_draft_c${cid}_t${tid}_g$gid";
   }
 
   String get _draftTsKey => "${_draftKey}_ts";
@@ -898,10 +963,13 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
   folderId = (widget.initialFolderId == null || widget.initialFolderId == 0)
       ? 0
       : widget.initialFolderId!;
-  folderTitle = (widget.initialFolderTitle ?? "").trim().isNotEmpty
-      ? widget.initialFolderTitle!.trim()
-      : "Без папки";
-  _folderChosenForSave = (graphicId ?? 0) > 0 ||
+  folderTitle = widget.isPersonalWorkspace
+      ? 'Личный Workspace'
+      : ((widget.initialFolderTitle ?? "").trim().isNotEmpty
+          ? widget.initialFolderTitle!.trim()
+          : "Без папки");
+  _folderChosenForSave = widget.isPersonalWorkspace ||
+      (graphicId ?? 0) > 0 ||
       widget.initialFolderId != null ||
       (widget.initialFolderTitle ?? '').trim().isNotEmpty;
 
@@ -927,7 +995,11 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
   } else {
     if (!widget.selectMode && graphicId != null && graphicId! > 0) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        _loadDocById(graphicId!);
+        if (widget.isPersonalWorkspace) {
+          _loadPersonalGraphicById(graphicId!);
+        } else {
+          _loadDocById(graphicId!);
+        }
       });
     }
   }
@@ -1029,6 +1101,271 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
     return <Map<String, dynamic>>[];
   }
 
+  Future<List<Map<String, dynamic>>> _loadPersonalGraphicsLibrary() async {
+    final userId = widget.resolvedUserId;
+    if (userId > 0 && widget.personalLibraryLoader != null) {
+      try {
+        final cloud = await widget.personalLibraryLoader!(userId);
+        final items = cloud.map((e) => Map<String, dynamic>.from(e)).toList();
+        items.sort((a, b) =>
+            ((b['updated_at_ms'] as num?)?.toInt() ?? 0)
+                .compareTo((a['updated_at_ms'] as num?)?.toInt() ?? 0));
+        // Also keep a local cache so the editor still has a library offline.
+        await PrefUtils.setStringValue(_personalGraphicsStorageKey, jsonEncode(items));
+        return items;
+      } catch (_) {
+        // Fall through to the profile cache when the cloud is unavailable.
+      }
+    }
+    try {
+      final raw = await PrefUtils.getStringValue(_personalGraphicsStorageKey);
+      if (raw == null || raw.trim().isEmpty) return <Map<String, dynamic>>[];
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) return <Map<String, dynamic>>[];
+      final items = decoded
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+      items.sort((a, b) =>
+          ((b['updated_at_ms'] as num?)?.toInt() ?? 0)
+              .compareTo((a['updated_at_ms'] as num?)?.toInt() ?? 0));
+      return items;
+    } catch (_) {
+      return <Map<String, dynamic>>[];
+    }
+  }
+
+  Future<void> _loadPersonalGraphicById(int id) async {
+    setState(() {
+      _docLoading = true;
+      _docError = null;
+    });
+    try {
+      final items = await _loadPersonalGraphicsLibrary();
+      Map<String, dynamic>? found;
+      for (final item in items) {
+        final itemId = item['id'] is num
+            ? (item['id'] as num).toInt()
+            : int.tryParse('${item['id'] ?? ''}');
+        if (itemId == id) {
+          found = item;
+          break;
+        }
+      }
+      if (found == null) throw 'Схема не найдена в личном Workspace';
+      final doc = found['doc_json'] ?? found['document'];
+      if (!_isMeaningfulDoc(doc)) throw 'Схема повреждена или пуста';
+      _applyDocJson(doc);
+      if (mounted) {
+        setState(() {
+          graphicId = id;
+          folderTitle = 'Личный Workspace';
+          _folderChosenForSave = true;
+          _dirty = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() => _docError = e.toString());
+    } finally {
+      if (mounted) setState(() => _docLoading = false);
+    }
+  }
+
+  Future<bool> _savePersonalGraphicInternal() async {
+    if (saving) return false;
+    final createdBy = widget.resolvedUserId;
+    if (createdBy <= 0) {
+      _showEditorNotice(
+        'Нужен вход',
+        'Личный Workspace привязан к профилю пользователя. Войдите в аккаунт.',
+        isError: true,
+      );
+      return false;
+    }
+    if (!mounted) return false;
+    setState(() => saving = true);
+    try {
+      final docJson = state.toJson();
+      docJson['playback'] = _buildPlaybackPayload();
+      final items = await _loadPersonalGraphicsLibrary();
+      final now = DateTime.now();
+      final id = graphicId ?? now.microsecondsSinceEpoch;
+      final title = 'Схема ${now.day.toString().padLeft(2, '0')}.${now.month.toString().padLeft(2, '0')}';
+      var payload = <String, dynamic>{
+        'id': id,
+        'owner_type': 'user',
+        'owner_user_id': createdBy,
+        'club_id': 0,
+        'team_id': 0,
+        'title': title,
+        'updated_at': now.toIso8601String(),
+        'updated_at_ms': now.millisecondsSinceEpoch,
+        'doc_json': docJson,
+      };
+      if (widget.personalGraphicSaver != null) {
+        final cloud = await widget.personalGraphicSaver!(createdBy, payload);
+        if (cloud != null) {
+          payload = <String, dynamic>{...payload, ...cloud};
+          final cloudId = payload['id'];
+          final parsedCloudId = cloudId is num
+              ? cloudId.toInt()
+              : int.tryParse('${cloudId ?? ''}');
+          if (parsedCloudId != null && parsedCloudId > 0) graphicId = parsedCloudId;
+        }
+      }
+      final effectiveIdValue = payload['id'];
+      final effectiveId = effectiveIdValue is num
+          ? effectiveIdValue.toInt()
+          : (int.tryParse('${effectiveIdValue ?? ''}') ?? id);
+      final index = items.indexWhere((item) {
+        final value = item['id'];
+        final itemId = value is num ? value.toInt() : int.tryParse('$value');
+        return itemId == effectiveId;
+      });
+      if (index >= 0) {
+        items[index] = payload;
+      } else {
+        items.insert(0, payload);
+      }
+      // Keep the personal library bounded; documents themselves remain complete.
+      if (items.length > 150) items.removeRange(150, items.length);
+      await PrefUtils.setStringValue(_personalGraphicsStorageKey, jsonEncode(items));
+      if (!mounted) return true;
+      setState(() {
+        graphicId = effectiveId;
+        folderTitle = 'Личный Workspace';
+        _folderChosenForSave = true;
+        _dirty = false;
+      });
+      await _clearDraft();
+      _showEditorNotice('Схема сохранена', 'Личный Workspace · профиль пользователя');
+      return true;
+    } catch (e) {
+      _showEditorNotice('Не удалось сохранить', '$e', isError: true);
+      return false;
+    } finally {
+      if (mounted) setState(() => saving = false);
+    }
+  }
+
+  Future<void> _deletePersonalGraphic(int id) async {
+    final userId = widget.resolvedUserId;
+    if (userId > 0 && widget.personalGraphicDeleter != null) {
+      await widget.personalGraphicDeleter!(userId, id);
+    }
+    final items = await _loadPersonalGraphicsLibrary();
+    items.removeWhere((item) {
+      final value = item['id'];
+      final itemId = value is num ? value.toInt() : int.tryParse('$value');
+      return itemId == id;
+    });
+    await PrefUtils.setStringValue(_personalGraphicsStorageKey, jsonEncode(items));
+  }
+
+  Future<void> _showPersonalLibrary() async {
+    final items = await _loadPersonalGraphicsLibrary();
+    if (!mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => SafeArea(
+        child: Container(
+          margin: const EdgeInsets.all(14),
+          constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * .78),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: TgScreenPalette.border),
+            boxShadow: TgScreenPalette.windowShadow,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(14, 12, 8, 8),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: TgScreenPalette.lightGreen,
+                        borderRadius: BorderRadius.circular(11),
+                      ),
+                      child: const Icon(Icons.person_rounded,
+                          size: 18, color: TgScreenPalette.primaryGreen),
+                    ),
+                    const SizedBox(width: 9),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Личный Workspace', style: TextStyle(fontFamily: AppTypography.fontFamily, fontWeight: FontWeight.w900, fontSize: AppTypography.sectionTitleSize)),
+                          SizedBox(height: 2),
+                          Text('Схемы этого профиля, без привязки к клубу', style: TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textMuted, fontWeight: FontWeight.w600, fontSize: AppTypography.captionSize)),
+                        ],
+                      ),
+                    ),
+                    IconButton(onPressed: () => Navigator.of(ctx).pop(), icon: const Icon(Icons.close_rounded)),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+              Flexible(
+                child: items.isEmpty
+                    ? const Center(
+                        child: Padding(
+                          padding: EdgeInsets.all(28),
+                          child: Text('Пока нет сохранённых схем', style: TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textMuted, fontWeight: FontWeight.w700)),
+                        ),
+                      )
+                    : ListView.separated(
+                        padding: const EdgeInsets.all(10),
+                        itemCount: items.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 6),
+                        itemBuilder: (_, index) {
+                          final item = items[index];
+                          final value = item['id'];
+                          final id = value is num ? value.toInt() : int.tryParse('$value') ?? 0;
+                          final title = '${item['title'] ?? 'Схема'}';
+                          final updated = '${item['updated_at'] ?? ''}';
+                          return Material(
+                            color: const Color(0xFFFAFBFC),
+                            borderRadius: BorderRadius.circular(12),
+                            child: ListTile(
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              leading: const CircleAvatar(
+                                backgroundColor: TgScreenPalette.lightGreen,
+                                child: Icon(Icons.sports_soccer_rounded, color: TgScreenPalette.primaryGreen, size: 18),
+                              ),
+                              title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontFamily: AppTypography.fontFamily, fontWeight: FontWeight.w800)),
+                              subtitle: Text(updated, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textMuted, fontSize: AppTypography.captionSize)),
+                              onTap: id <= 0 ? null : () async {
+                                Navigator.of(ctx).pop();
+                                await _loadPersonalGraphicById(id);
+                              },
+                              trailing: IconButton(
+                                tooltip: 'Удалить',
+                                icon: const Icon(Icons.delete_outline_rounded, size: 18, color: TgScreenPalette.textMuted),
+                                onPressed: id <= 0 ? null : () async {
+                                  await _deletePersonalGraphic(id);
+                                  if (ctx.mounted) Navigator.of(ctx).pop();
+                                  await _showPersonalLibrary();
+                                },
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   void _onStateChange() {
     if (!mounted) return;
 
@@ -1042,8 +1379,10 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
   void dispose() {
     _draftTimer?.cancel();
     _playbackTimer?.cancel();
+    state.clearAnimationPositionOverrides();
     _panelController.removeListener(_onPanelMoved);
     _panelController.dispose();
+    _glbProjection.dispose();
     state.removeListener(_onStateChange);
     state.dispose();
     _animationController.dispose();
@@ -1123,7 +1462,7 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
     final routes = _collectPlaybackRoutes();
     if (routes.isEmpty) {
       _showEditorSnackBar(
-        const SnackBar(content: Text('Для анимации нужны маршруты: линия, кривая или волна.')),
+        const SnackBar(content: Text('Для анимации привяжите игрока или мяч к маршруту в текущем шаге.')),
       );
       return;
     }
@@ -1131,6 +1470,7 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
     setState(() {
       _playbackRunning = true;
     });
+    _applyPlaybackObjectPositions();
     _playbackTimer = Timer.periodic(_playbackTick, (_) {
       if (!mounted) return;
       setState(() {
@@ -1142,11 +1482,13 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
           _currentPlaybackStep = (_currentPlaybackStep + 1) % _playbackSteps.length;
         }
       });
+      _applyPlaybackObjectPositions();
     });
   }
 
   void _stopPlayback() {
     _playbackTimer?.cancel();
+    state.clearAnimationPositionOverrides();
     setState(() {
       _playbackRunning = false;
     });
@@ -1159,6 +1501,7 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
       _currentPlaybackStep = index;
       _playbackProgress = 0.0;
     });
+    state.clearAnimationPositionOverrides();
   }
 
   void _addPlaybackStep() {
@@ -1268,7 +1611,14 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
     _markPlaybackDirty();
   }
 
-  bool _isPlaybackRouteElement(TgElement? e) => e is TgLine || e is TgCurve || e is TgWavy;
+  bool _isPlaybackRouteElement(TgElement? e) =>
+      e is TgLine ||
+      e is TgPolyline ||
+      e is TgCurve ||
+      e is TgWavy ||
+      e is TgSpring ||
+      e is TgSpiral ||
+      e is TgZigzag;
 
   TgStamp? _findStampById(String? id) {
     if (id == null || id.isEmpty) return null;
@@ -1311,7 +1661,7 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
     final selected = state.selected;
     if (!_isPlaybackRouteElement(selected)) {
       _showEditorSnackBar(
-        const SnackBar(content: Text('Выберите линию, кривую или волну для привязки шага.')),
+        const SnackBar(content: Text('Выберите маршрут (линию, кривую, волну, пружину, спираль или зигзаг).')),
       );
       return;
     }
@@ -1385,82 +1735,68 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
     if (e is TgLine) return '$prefix Линия / передача';
     if (e is TgCurve) return '$prefix Кривая';
     if (e is TgWavy) return '$prefix Волна / дриблинг';
+    if (e is TgPolyline) return '$prefix Ломаная';
+    if (e is TgSpring) return '$prefix Пружина';
+    if (e is TgSpiral) return '$prefix Спираль';
+    if (e is TgZigzag) return '$prefix Зигзаг';
     return '$prefix Маршрут';
   }
 
   List<_TgPlaybackRoute> _collectPlaybackRoutes() {
+    // Only explicit bindings are animation routes. A tactical arrow/curve is
+    // never animated merely because it exists on the pitch.
     final raw = state.elements.where((e) {
       if (e.hidden) return false;
-      if (e is TgLine || e is TgCurve || e is TgWavy) return true;
-      return false;
+      if (!_isPlaybackRouteElement(e)) return false;
+      return _playbackRouteStepById.containsKey(e.id) &&
+          _playbackRouteSubjectById.containsKey(e.id);
     }).toList()
       ..sort((a, b) => (a.createdAt ?? 0).compareTo(b.createdAt ?? 0));
 
-    final stamps = state.elements.whereType<TgStamp>().where((e) => !e.hidden).toList();
-    final playerStamps = stamps.where(_isPlaybackPlayerStamp).toList();
-    final ballStamps = stamps.where(_isPlaybackBallStamp).toList();
-
     if (raw.isEmpty) return const <_TgPlaybackRoute>[];
-    final totalSteps = _playbackSteps.isEmpty ? 1 : _playbackSteps.length;
     final routes = <_TgPlaybackRoute>[];
-    for (int i = 0; i < raw.length; i++) {
-      final e = raw[i];
+    for (final e in raw) {
       final startPoint = _routeStartPoint(e);
       final endPoint = _routeEndPoint(e);
-      final stepIndex = _playbackRouteStepById[e.id] ?? (((i * totalSteps ~/ raw.length).clamp(0, totalSteps - 1)) as int);
+      final stepIndex = (_playbackRouteStepById[e.id] ?? 0)
+          .clamp(0, _playbackSteps.length - 1) as int;
       final manualSubject = _findStampById(_playbackRouteSubjectById[e.id]);
-      final nearestPlayer = _nearestStamp(playerStamps, startPoint);
-      final nearestBall = _nearestStamp(ballStamps, startPoint);
-      final playerDistance = nearestPlayer == null ? double.infinity : (nearestPlayer.pos - startPoint).distance;
-      final ballDistance = nearestBall == null ? double.infinity : (nearestBall.pos - startPoint).distance;
-      final preferBall = manualSubject != null
-          ? _isPlaybackBallStamp(manualSubject)
-          : (_looksLikeBallRoute(e) || ballDistance < 54 || ballDistance + 16 < playerDistance);
-      final binding = manualSubject != null
-          ? _TgPlaybackBinding.fromStamp(manualSubject, fallbackColor: _routeColor(e), forceBall: _isPlaybackBallStamp(manualSubject))
-          : preferBall && nearestBall != null
-              ? _TgPlaybackBinding.fromStamp(nearestBall, fallbackColor: const Color(0xFF0F172A), forceBall: true)
-              : nearestPlayer != null
-                  ? _TgPlaybackBinding.fromStamp(nearestPlayer, fallbackColor: _routeColor(e), forceBall: false)
-                  : _TgPlaybackBinding.generic(label: 'Маршрут', color: _routeColor(e));
+      if (manualSubject == null) continue;
+      final binding = _TgPlaybackBinding.fromStamp(
+        manualSubject,
+        fallbackColor: _routeColor(e),
+        forceBall: _isPlaybackBallStamp(manualSubject),
+      );
 
-      final manual = _playbackRouteStepById.containsKey(e.id) || _playbackRouteSubjectById.containsKey(e.id);
-      if (e is TgLine) {
-        routes.add(_TgPlaybackRoute(
-          routeId: e.id,
-          stepIndex: stepIndex,
-          color: e.color,
-          binding: binding,
-          startPoint: startPoint,
-          endPoint: endPoint,
-          manual: manual,
-          pointAt: (t) => Offset.lerp(e.a, e.b, t) ?? e.a,
-        ));
-      } else if (e is TgCurve) {
-        routes.add(_TgPlaybackRoute(
-          routeId: e.id,
-          stepIndex: stepIndex,
-          color: e.color,
-          binding: binding,
-          startPoint: startPoint,
-          endPoint: endPoint,
-          manual: manual,
-          pointAt: (t) => e.pointAt(t),
-        ));
-      } else if (e is TgWavy) {
-        routes.add(_TgPlaybackRoute(
-          routeId: e.id,
-          stepIndex: stepIndex,
-          color: e.color,
-          binding: binding,
-          startPoint: startPoint,
-          endPoint: endPoint,
-          manual: manual,
-          pointAt: (t) => Offset.lerp(e.start, e.endPoint, Curves.easeInOut.transform(t)) ?? e.start,
-        ));
-      }
+      const manual = true;
+      routes.add(_TgPlaybackRoute(
+        routeId: e.id,
+        stepIndex: stepIndex,
+        color: _routeColor(e),
+        binding: binding,
+        startPoint: startPoint,
+        endPoint: endPoint,
+        manual: manual,
+        pointAt: (t) => _routePointAt(e, t),
+      ));
     }
     return routes;
+  }
+
+  void _applyPlaybackObjectPositions({int? step, double? progress}) {
+    final activeStep = (step ?? _currentPlaybackStep)
+        .clamp(0, math.max(0, _playbackSteps.length - 1)) as int;
+    final t = Curves.easeInOut.transform(
+      (progress ?? _playbackProgress).clamp(0.0, 1.0).toDouble(),
+    );
+    final overrides = <String, Offset>{};
+    for (final route in _collectPlaybackRoutes()) {
+      if (route.stepIndex != activeStep) continue;
+      final subjectId = _playbackRouteSubjectById[route.routeId];
+      if (subjectId == null || subjectId.isEmpty) continue;
+      overrides[subjectId] = route.pointAt(t);
+    }
+    state.setAnimationPositionOverrides(overrides);
   }
 
   bool _isPlaybackBallStamp(TgStamp stamp) {
@@ -1505,23 +1841,109 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
 
   Offset _routeStartPoint(TgElement e) {
     if (e is TgLine) return e.a;
+    if (e is TgPolyline && e.points.isNotEmpty) return e.points.first;
     if (e is TgCurve && e.points.isNotEmpty) return e.points.first;
     if (e is TgWavy) return e.start;
+    if (e is TgSpring) return e.start;
+    if (e is TgSpiral) return e.start;
+    if (e is TgZigzag) return e.start;
     return Offset.zero;
   }
 
   Offset _routeEndPoint(TgElement e) {
     if (e is TgLine) return e.b;
+    if (e is TgPolyline && e.points.isNotEmpty) return e.points.last;
     if (e is TgCurve && e.points.isNotEmpty) return e.points.last;
     if (e is TgWavy) return e.endPoint;
+    if (e is TgSpring) return e.endPoint;
+    if (e is TgSpiral) return e.endPoint;
+    if (e is TgZigzag) return e.endPoint;
     return Offset.zero;
   }
 
   Color _routeColor(TgElement e) {
     if (e is TgLine) return e.color;
+    if (e is TgPolyline) return e.color;
     if (e is TgCurve) return e.color;
     if (e is TgWavy) return e.color;
+    if (e is TgSpring) return e.color;
+    if (e is TgSpiral) return e.color;
+    if (e is TgZigzag) return e.color;
     return TgScreenPalette.primaryGreen;
+  }
+
+  Offset _routePointAt(TgElement e, double inputT) {
+    final t = inputT.clamp(0.0, 1.0).toDouble();
+    if (e is TgLine) return Offset.lerp(e.a, e.b, t) ?? e.a;
+    if (e is TgCurve) return e.pointAt(t);
+    if (e is TgPolyline) return _pointOnPolyline(e.points, t);
+    if (e is TgWavy) {
+      final basePoints = <Offset>[e.start, ...e.controlPoints, e.endPoint];
+      final base = _pointOnPolyline(basePoints, t);
+      final ahead = _pointOnPolyline(basePoints, (t + .01).clamp(0.0, 1.0).toDouble());
+      final dir = ahead - base;
+      final len = math.max(1.0, dir.distance).toDouble();
+      final normal = Offset(-dir.dy / len, dir.dx / len);
+      final wave = math.sin(t * math.pi * 7 + e.phase) * e.amplitude * .45;
+      return base + normal * wave;
+    }
+    if (e is TgSpring) {
+      final dir = e.endPoint - e.start;
+      final len = math.max(1.0, dir.distance).toDouble();
+      final normal = Offset(-dir.dy / len, dir.dx / len);
+      final base = e.start + dir * t;
+      final angle = t * e.frequency * 2 * math.pi + e.phase;
+      final r = e.amplitude * (1 - .5 * t);
+      return base + normal * (math.sin(angle) * r);
+    }
+    if (e is TgSpiral) {
+      final dir = e.endPoint - e.start;
+      final len = math.max(1.0, dir.distance).toDouble();
+      final normal = Offset(-dir.dy / len, dir.dx / len);
+      final base = e.start + dir * t;
+      final edge = e.fadeEdge.clamp(0.0, .49).toDouble();
+      var fade = 1.0;
+      if (edge > 0) {
+        final a = t < edge ? t / edge : 1.0;
+        final b = t > 1 - edge ? (1 - t) / edge : 1.0;
+        fade = math.min(a, b).clamp(0.0, 1.0).toDouble();
+      }
+      final angle = t * e.turns * 2 * math.pi + e.phase;
+      final r = e.amplitude * (1 + e.grow * t);
+      return base + normal * (math.sin(angle) * r * fade);
+    }
+    if (e is TgZigzag) {
+      final dir = e.endPoint - e.start;
+      final len = math.max(1.0, dir.distance).toDouble();
+      final normal = Offset(-dir.dy / len, dir.dx / len);
+      final base = e.start + dir * t;
+      final wave = math.sin(t * e.frequency * 2 * math.pi + e.phase);
+      return base + normal * ((wave >= 0 ? 1.0 : -1.0) * e.amplitude);
+    }
+    return _routeStartPoint(e);
+  }
+
+  Offset _pointOnPolyline(List<Offset> points, double t) {
+    if (points.isEmpty) return Offset.zero;
+    if (points.length == 1) return points.first;
+    final lengths = <double>[];
+    var total = 0.0;
+    for (int i = 0; i < points.length - 1; i++) {
+      final len = (points[i + 1] - points[i]).distance;
+      lengths.add(len);
+      total += len;
+    }
+    if (total <= .0001) return points.first;
+    var target = total * t.clamp(0.0, 1.0).toDouble();
+    for (int i = 0; i < lengths.length; i++) {
+      final len = lengths[i];
+      if (target <= len || i == lengths.length - 1) {
+        final local = len <= .0001 ? 0.0 : (target / len).clamp(0.0, 1.0).toDouble();
+        return Offset.lerp(points[i], points[i + 1], local) ?? points[i];
+      }
+      target -= len;
+    }
+    return points.last;
   }
 
   String _playbackStepLabel(int index) {
@@ -1973,6 +2395,11 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
       if (progress != null) _playbackProgress = progress.clamp(0.0, 1.0).toDouble();
       _playbackRunning = includeAnimation;
     });
+    if (includeAnimation) {
+      _applyPlaybackObjectPositions();
+    } else {
+      state.clearAnimationPositionOverrides();
+    }
     state.clearSelection();
 
     final png = await _captureBoundaryPng(_exportRepaintKey, pixelRatio: 3.0);
@@ -1990,7 +2417,89 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
         _playbackRunning = oldRunning;
       });
     }
+    if (oldRunning) {
+      _applyPlaybackObjectPositions(step: oldStep, progress: oldProgress);
+    } else {
+      state.clearAnimationPositionOverrides();
+    }
     return png;
+  }
+
+  Future<Uint8List?> _captureCleanExportPdf() async {
+    final oldClean = _exportCleanMode;
+    final oldRunning = _playbackRunning;
+    final oldSelected = Set<String>.from(state.selectedIds);
+    setState(() {
+      _exportCleanMode = true;
+      _playbackRunning = true;
+    });
+    _applyPlaybackObjectPositions();
+    state.clearSelection();
+    try {
+      await WidgetsBinding.instance.endOfFrame;
+      final boundary = _exportRepaintKey.currentContext?.findRenderObject()
+          as RenderRepaintBoundary?;
+      if (boundary == null) return null;
+      final image = await boundary.toImage(pixelRatio: 1.5);
+      final raw = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+      final width = image.width;
+      final height = image.height;
+      image.dispose();
+      if (raw == null) return null;
+      return buildTgRasterPdf(
+        rgba: raw.buffer.asUint8List(),
+        pixelWidth: width,
+        pixelHeight: height,
+      );
+    } finally {
+      if (oldSelected.isEmpty) {
+        state.clearSelection();
+      } else {
+        state.selectMultiple(oldSelected);
+      }
+      if (mounted) {
+        setState(() {
+          _exportCleanMode = oldClean;
+          _playbackRunning = oldRunning;
+        });
+      }
+      if (oldRunning) {
+        _applyPlaybackObjectPositions();
+      } else {
+        state.clearAnimationPositionOverrides();
+      }
+    }
+  }
+
+  Future<String?> _saveExportWithDialog({
+    required String fileName,
+    required Uint8List bytes,
+    required String mimeType,
+    List<String>? extensions,
+  }) async {
+    try {
+      final path = await FilePicker.saveFile(
+        dialogTitle: 'Сохранить экспорт Sportoteka',
+        fileName: fileName,
+        bytes: bytes,
+        type: extensions == null ? FileType.any : FileType.custom,
+        allowedExtensions: extensions,
+      );
+      return path;
+    } catch (e) {
+      // Fallback keeps export available on a platform where the native save
+      // dialog is temporarily unavailable.
+      try {
+        return await saveTgExportFile(
+          fileName,
+          bytes,
+          mimeType: mimeType,
+          folderName: _exportFolderName(),
+        );
+      } catch (_) {
+        rethrow;
+      }
+    }
   }
 
   String _exportFolderName() {
@@ -2000,16 +2509,20 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
   }
 
   Future<void> _exportCurrentPng() async {
-    final folder = _exportFolderName();
     final png = await _captureCleanExportPng(step: _currentPlaybackStep, progress: _playbackProgress, includeAnimation: true);
     if (!mounted) return;
     if (png == null) {
       _showEditorSnackBar(const SnackBar(content: Text('Не удалось собрать PNG')), isError: true);
       return;
     }
-    final saved = await saveTgExportFile('current_frame.png', png, mimeType: 'image/png', folderName: folder);
-    if (!mounted) return;
-    _showEditorSnackBar(SnackBar(content: Text('PNG экспортирован: $saved')));
+    final saved = await _saveExportWithDialog(
+      fileName: 'sportoteka_scheme.png',
+      bytes: png,
+      mimeType: 'image/png',
+      extensions: const ['png'],
+    );
+    if (!mounted || saved == null) return;
+    _showEditorSnackBar(SnackBar(content: Text('PNG сохранён: $saved')));
   }
 
   Future<void> _exportStepPngs() async {
@@ -2054,30 +2567,47 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
     _showEditorSnackBar(SnackBar(content: Text('Экспортировано кадров: $exported')));
   }
 
+  Future<void> _exportCurrentPdf() async {
+    final pdf = await _captureCleanExportPdf();
+    if (!mounted) return;
+    if (pdf == null) {
+      _showEditorSnackBar(
+        const SnackBar(content: Text('Не удалось собрать PDF')),
+        isError: true,
+      );
+      return;
+    }
+    final saved = await _saveExportWithDialog(
+      fileName: 'sportoteka_scheme.pdf',
+      bytes: pdf,
+      mimeType: 'application/pdf',
+      extensions: const ['pdf'],
+    );
+    if (!mounted || saved == null) return;
+    _showEditorSnackBar(SnackBar(content: Text('PDF сохранён: $saved')));
+  }
+
   Future<void> _exportSceneJson() async {
     try {
-      final saved = await TgSceneExport.save(state);
-      if (!mounted) return;
-      await showDialog<void>(
-        context: context,
-        builder: (dialogContext) => AlertDialog(
-          title: const Text('JSON сцены сохранён'),
-          content: SelectableText(saved),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Clipboard.setData(ClipboardData(text: saved));
-                Navigator.of(dialogContext).pop();
-              },
-              child: const Text('Копировать путь'),
-            ),
-            TextButton(onPressed: () => Navigator.of(dialogContext).pop(), child: const Text('Готово')),
-          ],
-        ),
+      final document = TgSceneExport.build(state);
+      document['playback'] = _buildPlaybackPayload();
+      final bytes = Uint8List.fromList(
+        utf8.encode(const JsonEncoder.withIndent('  ').convert(document)),
       );
+      final saved = await _saveExportWithDialog(
+        fileName: 'sportoteka_scene.json',
+        bytes: bytes,
+        mimeType: 'application/json',
+        extensions: const ['json'],
+      );
+      if (!mounted || saved == null) return;
+      _showEditorSnackBar(SnackBar(content: Text('JSON сцены сохранён: $saved')));
     } catch (error) {
       if (mounted) {
-        _showEditorSnackBar(SnackBar(content: Text('JSON: $error')), isError: true);
+        _showEditorSnackBar(
+          SnackBar(content: Text('JSON: $error')),
+          isError: true,
+        );
       }
     }
   }
@@ -2126,7 +2656,7 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                         children: [
                           Text('Экспорт схемы', style: TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textPrimary, fontSize: AppTypography.sectionTitleSize, fontWeight: FontWeight.w900)),
                           SizedBox(height: 2),
-                          Text('Кадры можно сохранить как PNG, данные сцены — как JSON. GLB потребует отдельного подключения моделей.', style: TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textMuted, fontSize: AppTypography.secondarySize, height: 1.25, fontWeight: FontWeight.w500)),
+                          Text('PNG и PDF сохраняются через системное «Сохранить как…». JSON содержит сцену и привязки анимации.', style: TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textMuted, fontSize: AppTypography.secondarySize, height: 1.25, fontWeight: FontWeight.w500)),
                         ],
                       ),
                     ),
@@ -2175,7 +2705,7 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                 _ExportOptionTile(
                   icon: Icons.memory_rounded,
                   title: 'JSON сцены',
-                  subtitle: 'Координаты поля, объектов, камеры и слоёв для 3D-модуля.',
+                  subtitle: 'Координаты поля, объектов, камеры и слоёв для переноса и архива.',
                   active: true,
                   onTap: () async {
                     Navigator.of(ctx).pop();
@@ -2183,10 +2713,21 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                   },
                 ),
                 const SizedBox(height: 8),
-                const _ExportOptionTile(
+                _ExportOptionTile(
                   icon: Icons.picture_as_pdf_rounded,
-                  title: 'PDF / GIF / видео',
-                  subtitle: 'Следующий этап: сборка PDF и GIF/MP4 из экспортированных кадров.',
+                  title: 'PDF текущей схемы',
+                  subtitle: 'A4 landscape: поле, объекты и текущий кадр анимации без панелей.',
+                  active: true,
+                  onTap: () async {
+                    Navigator.of(ctx).pop();
+                    await _exportCurrentPdf();
+                  },
+                ),
+                const SizedBox(height: 8),
+                const _ExportOptionTile(
+                  icon: Icons.video_file_outlined,
+                  title: 'GIF / MP4',
+                  subtitle: 'Кадры уже экспортируются; кодек видео лучше подключать отдельным сервисом, чтобы не утяжелять Flutter-клиент.',
                 ),
               ],
                 ),
@@ -3722,6 +4263,13 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
 
   Future<void> _saveTrainingPlanToCmr() async {
     if (saving) return;
+    if (widget.isPersonalWorkspace) {
+      _showEditorNotice(
+        'Клубный CMR недоступен в личном режиме',
+        'Сам план остаётся в личном редакторе. Для публикации в CMR откройте схему из Workspace команды.',
+      );
+      return;
+    }
     await _loadTrainingPlan();
     if (_trainingPlanExercises.isEmpty) {
       final add = await _showWorkflowPanel<bool>(
@@ -4217,6 +4765,10 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
   Future<bool> _saveGraphicInternal() async {
     if (saving) return false;
 
+    if (widget.isPersonalWorkspace) {
+      return _savePersonalGraphicInternal();
+    }
+
     // Новая схема без явного места сохранения сначала открывает Sportoteka OS.
     // Там можно перейти в нужную папку или создать новую. Отмена не закрывает
     // редактор и не сбрасывает dirty-state.
@@ -4550,6 +5102,53 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
     );
   }
 
+  Future<void> _openFlutter3DPro() async {
+    if (!mounted) return;
+    state.setPresentationMode(false);
+    state.set3DParams(
+      enabled: false,
+      rotationX: 0.0,
+      rotationY: 0.0,
+      rotationZ: 0.0,
+      perspective: 0.00135,
+      cameraZoom: 0.96,
+    );
+    _glbProjection.value = null;
+    setState(() => _glbFieldMode = true);
+  }
+
+  void _setGlbFieldMode(bool enabled) {
+    if (!mounted) return;
+    if (enabled) {
+      state.setPresentationMode(false);
+      state.set3DParams(
+        enabled: false,
+        rotationX: 0.0,
+        rotationY: 0.0,
+        rotationZ: 0.0,
+        perspective: 0.00135,
+        cameraZoom: 0.96,
+      );
+      _glbProjection.value = null;
+    }
+    setState(() => _glbFieldMode = enabled);
+  }
+
+  void _updateGlbProjection(List<double> storage) {
+    if (!_glbFieldMode || storage.length != 16) return;
+    _pendingGlbProjection = List<double>.from(storage);
+    if (_glbProjectionUpdateScheduled) return;
+    _glbProjectionUpdateScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _glbProjectionUpdateScheduled = false;
+      if (!mounted || !_glbFieldMode) return;
+      final pending = _pendingGlbProjection;
+      _pendingGlbProjection = null;
+      if (pending == null || pending.length != 16) return;
+      _glbProjection.value = vector.Matrix4.fromList(pending);
+    });
+  }
+
   // ==========================
   // UI Build
   // ==========================
@@ -4602,6 +5201,12 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
   }
 
   void _setBoard3D(bool enabled) {
+    if (_glbFieldMode) {
+      setState(() => _glbFieldMode = false);
+    }
+    if (state.presentationMode) {
+      state.setPresentationMode(false);
+    }
     final canvas = _canvasKey.currentState;
     if (canvas != null) {
       canvas.set3DEnabled(enabled);
@@ -4617,8 +5222,157 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
     );
   }
 
+  Widget _buildPersonalProfileRequiredScreen() {
+    return Scaffold(
+      backgroundColor: TgScreenPalette.background,
+      body: SafeArea(
+        child: Center(
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 500),
+            margin: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(color: TgScreenPalette.borderLight),
+              boxShadow: TgScreenPalette.windowShadow,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const CircleAvatar(
+                  radius: 29,
+                  backgroundColor: TgScreenPalette.lightGreen,
+                  child: Icon(Icons.person_outline_rounded,
+                      color: TgScreenPalette.primaryGreen, size: 28),
+                ),
+                const SizedBox(height: 14),
+                const Text(
+                  'Нужен профиль пользователя',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontFamily: AppTypography.fontFamily,
+                    color: TgScreenPalette.textPrimary,
+                    fontSize: 19,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 7),
+                const Text(
+                  'Для личного редактора передайте userId текущего профиля. Это отделяет личные схемы, шаблоны и планы разных пользователей.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontFamily: AppTypography.fontFamily,
+                    color: TgScreenPalette.textMuted,
+                    fontSize: AppTypography.bodySize,
+                    height: 1.4,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                OutlinedButton.icon(
+                  onPressed: () => Navigator.of(context).maybePop(),
+                  icon: const Icon(Icons.arrow_back_rounded, size: 17),
+                  label: const Text('Назад'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildModuleAccessScreen() {
+    return Scaffold(
+      backgroundColor: TgScreenPalette.background,
+      body: SafeArea(
+        child: Center(
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 520),
+            margin: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(color: TgScreenPalette.borderLight),
+              boxShadow: TgScreenPalette.windowShadow,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 58,
+                  height: 58,
+                  decoration: const BoxDecoration(
+                    color: TgScreenPalette.lightGreen,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.draw_rounded,
+                      color: TgScreenPalette.primaryGreen, size: 27),
+                ),
+                const SizedBox(height: 15),
+                const Text(
+                  'Графический редактор',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontFamily: AppTypography.fontFamily,
+                    color: TgScreenPalette.textPrimary,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 7),
+                const Text(
+                  'Модуль не подключён для этого профиля. После активации здесь будут доступны личный Workspace, схемы, анимация, PDF и режим «Стадион».',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontFamily: AppTypography.fontFamily,
+                    color: TgScreenPalette.textMuted,
+                    fontSize: AppTypography.bodySize,
+                    height: 1.4,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () => Navigator.of(context).maybePop(),
+                        icon: const Icon(Icons.arrow_back_rounded, size: 17),
+                        label: const Text('Назад'),
+                      ),
+                    ),
+                    if (widget.onManageSubscription != null) ...[
+                      const SizedBox(width: 8),
+                      Expanded(
+                        flex: 2,
+                        child: FilledButton.icon(
+                          onPressed: widget.onManageSubscription,
+                          icon: const Icon(Icons.workspace_premium_outlined, size: 17),
+                          label: const Text('Подключить модуль'),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (!widget.moduleAccessGranted) {
+      return _buildModuleAccessScreen();
+    }
+    if (widget.isPersonalWorkspace && widget.resolvedUserId <= 0) {
+      return _buildPersonalProfileRequiredScreen();
+    }
     if (widget.selectMode) {
       return _buildPickerScreen();
     }
@@ -4644,7 +5398,7 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
               folderTitle: folderTitle,
               onBack: () => Navigator.of(context).maybePop(),
               onFit: null,
-              onPickFolder: _pickFolder,
+              onPickFolder: widget.isPersonalWorkspace ? _showPersonalLibrary : _pickFolder,
               onSave: null,
               onTogglePanel: null,
               onExport: null,
@@ -4968,6 +5722,8 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                     onOpenAnimation: _toggleAnimationPanel,
                     animationOpen: _animationPanelOpen,
                     onSet3D: _setBoard3D,
+                    onOpen3DPro: _openFlutter3DPro,
+                    gameViewActive: _glbFieldMode,
                     onPickFieldTexture: _pickFieldTexture,
                     onClearFieldTexture: state.clearCustomFieldTexture,
                   ),
@@ -5009,11 +5765,57 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
 
                                       return RepaintBoundary(
                                         key: _repaintKey,
-                                        child: TgCanvas(
-                                          key: _canvasKey,
-                                          state: state,
-                                          onRequestEditSelected: _openPropertiesPanel,
-                                        ),
+                                        child: _glbFieldMode
+                                            ? Listener(
+                                                behavior: HitTestBehavior.translucent,
+                                                onPointerDown: _glbFieldController.handlePointerDown,
+                                                onPointerMove: _glbFieldController.handlePointerMove,
+                                                onPointerUp: _glbFieldController.handlePointerUp,
+                                                onPointerCancel: _glbFieldController.handlePointerCancel,
+                                                onPointerSignal: _glbFieldController.handlePointerSignal,
+                                                child: Stack(
+                                                  children: [
+                                                  const Positioned.fill(
+                                                    child: DecoratedBox(
+                                                      decoration: BoxDecoration(
+                                                        color: Color(0xFF26463A),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  Positioned.fill(
+                                                    child: TrainingGraphicsGlbFieldView(
+                                                      state: state,
+                                                      playbackRunning: _playbackRunning,
+                                                      onTogglePlayback: _togglePlayback,
+                                                      enableCameraInput: false,
+                                                      showStatusBadge: false,
+                                                      controller: _glbFieldController,
+                                                      onProjectionChanged: _updateGlbProjection,
+                                                    ),
+                                                  ),
+                                                  Positioned.fill(
+                                                    child: ValueListenableBuilder<vector.Matrix4?>(
+                                                      valueListenable: _glbProjection,
+                                                      builder: (context, projection, _) {
+                                                        return TgCanvas(
+                                                          key: _canvasKey,
+                                                          state: state,
+                                                          hideFieldBase: true,
+                                                          ignoreNonPrimaryMouseButtons: true,
+                                                          externalFieldTransform: projection,
+                                                          onRequestEditSelected: _openPropertiesPanel,
+                                                        );
+                                                      },
+                                                    ),
+                                                  ),
+                                                  ],
+                                                ),
+                                              )
+                                            : TgCanvas(
+                                                key: _canvasKey,
+                                                state: state,
+                                                onRequestEditSelected: _openPropertiesPanel,
+                                              ),
                                       );
                                     },
                                   ),
@@ -5031,7 +5833,7 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                               folderTitle: folderTitle,
                               onBack: _handleBack,
                               onFit: _fitField,
-                              onPickFolder: _pickFolder,
+                              onPickFolder: widget.isPersonalWorkspace ? _showPersonalLibrary : _pickFolder,
                               onSave: _saveGraphic,
                               onTogglePanel: _togglePanel,
                               onExport: () => _showProExportCenter(),
@@ -5052,6 +5854,18 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                               state: state,
                             ),
                           ),
+                          if (!_exportCleanMode)
+                            Positioned(
+                              top: microUi ? 42 : 54,
+                              right: reservedRight + 10,
+                              child: _FieldViewModeSwitch(
+                                state: state,
+                                glbActive: _glbFieldMode,
+                                on2D: () => _setBoard3D(false),
+                                onPerspective: () => _setBoard3D(true),
+                                onGlb: () => _setGlbFieldMode(true),
+                              ),
+                            ),
                           if (!_exportCleanMode && _docLoading)
                             const Positioned.fill(
                               child: TgScreenLoadingOverlay(
@@ -5071,21 +5885,22 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                                 onDismiss: () => setState(() => _docError = null),
                               ),
                             ),
-                          Positioned(
-                            left: desktop ? 22 : 12,
-                            right: desktop ? 22 : 12,
-                            top: 60,
-                            bottom: showBottomDrawingToolbar ? 70 : 12,
-                            child: IgnorePointer(
-                              child: _TgPlaybackOverlay(
-                                canvasState: _canvasKey.currentState,
-                                routes: _collectPlaybackRoutes(),
-                                activeStep: _currentPlaybackStep,
-                                progress: _playbackProgress,
-                                visible: _playbackRunning || _collectPlaybackRoutes().isNotEmpty,
+                          if (!_glbFieldMode)
+                            Positioned(
+                              left: desktop ? 22 : 12,
+                              right: desktop ? 22 : 12,
+                              top: 60,
+                              bottom: showBottomDrawingToolbar ? 70 : 12,
+                              child: IgnorePointer(
+                                child: _TgPlaybackOverlay(
+                                  canvasState: _canvasKey.currentState,
+                                  routes: _collectPlaybackRoutes(),
+                                  activeStep: _currentPlaybackStep,
+                                  progress: _playbackProgress,
+                                  visible: _playbackRunning || _collectPlaybackRoutes().isNotEmpty,
+                                ),
                               ),
                             ),
-                          ),
                           if (showBottomDrawingToolbar)
                             Positioned(
                             left: bottomToolLeftInset,
@@ -5120,10 +5935,34 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                                       : (dockAsSide ? dockControlRightInset : (tightUi ? 12 : 16))),
                               bottom: showBottomDrawingToolbar ? 58 : 14,
                               child: _TgTrackerCameraControl(
-                                onOrbitDelta: (delta) => _canvasKey.currentState?.orbit3D(delta),
-                                onZoomIn: () => _canvasKey.currentState?.zoom3DIn(),
-                                onZoomOut: () => _canvasKey.currentState?.zoom3DOut(),
-                                onReset: () => _canvasKey.currentState?.reset3DView(),
+                                onOrbitDelta: (delta) {
+                                  if (_glbFieldMode) {
+                                    _glbFieldController.orbitBy(delta);
+                                  } else {
+                                    _canvasKey.currentState?.orbit3D(delta);
+                                  }
+                                },
+                                onZoomIn: () {
+                                  if (_glbFieldMode) {
+                                    _glbFieldController.zoomIn();
+                                  } else {
+                                    _canvasKey.currentState?.zoom3DIn();
+                                  }
+                                },
+                                onZoomOut: () {
+                                  if (_glbFieldMode) {
+                                    _glbFieldController.zoomOut();
+                                  } else {
+                                    _canvasKey.currentState?.zoom3DOut();
+                                  }
+                                },
+                                onReset: () {
+                                  if (_glbFieldMode) {
+                                    _glbFieldController.reset();
+                                  } else {
+                                    _canvasKey.currentState?.reset3DView();
+                                  }
+                                },
                               ),
                             ),
                           if (!_exportCleanMode && !_animationPanelOpen && state.selected != null && (!_isPanelExpanded || _isPanelCollapsed))
@@ -5195,6 +6034,7 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                                 teamPlayers: _teamPlayersFor3D,
                                 teamPlayersLoading: _teamPlayersLoading,
                                 teamPlayersError: _teamPlayersError,
+                                onOpen3DPro: _openFlutter3DPro,
                                 initialPanel: _legacyPanelInitial,
                                 panelOpenRevision: _legacyPanelRevision,
                                 onPanelOpened: _openLegacyPanel,
@@ -6886,8 +7726,8 @@ class _TopTitleBar extends StatelessWidget {
               ),
               const SizedBox(width: 4),
               _HeaderActionButton(
-                icon: Icons.folder_open_rounded,
-                label: 'Папка',
+                icon: folderTitle == 'Личный Workspace' ? Icons.person_outline_rounded : Icons.folder_open_rounded,
+                label: folderTitle == 'Личный Workspace' ? 'Мои' : 'Папка',
                 onTap: onPickFolder,
                 foreground: TgScreenPalette.textSecondary,
                 background: Colors.white,
@@ -6915,43 +7755,44 @@ class _TopTitleBar extends StatelessWidget {
 }
 
 
-class _BoardModeSwitch extends StatelessWidget {
-  const _BoardModeSwitch({required this.state});
+class _FieldViewModeSwitch extends StatelessWidget {
+  const _FieldViewModeSwitch({
+    required this.state,
+    required this.glbActive,
+    required this.on2D,
+    required this.onPerspective,
+    required this.onGlb,
+  });
+
   final TgState state;
+  final bool glbActive;
+  final VoidCallback on2D;
+  final VoidCallback onPerspective;
+  final VoidCallback onGlb;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: TgScreenPalette.buttonHeight,
+      height: 34,
       padding: const EdgeInsets.all(3),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(4),
+        color: Colors.white.withOpacity(.94),
+        borderRadius: BorderRadius.circular(9),
         border: Border.all(color: TgScreenPalette.borderLight),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(.08),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _seg('3D', state.is3DMode, () {
-            state.set3DParams(
-              enabled: true,
-              rotationX: -0.34,
-              rotationY: 0.0,
-              rotationZ: 0.0,
-              perspective: 0.00135,
-              cameraZoom: 0.96,
-            );
-          }),
-          _seg('2D', !state.is3DMode, () {
-            state.set3DParams(
-              enabled: false,
-              rotationX: 0.0,
-              rotationY: 0.0,
-              rotationZ: 0.0,
-              perspective: 0.00135,
-              cameraZoom: 0.96,
-            );
-          }),
+          _seg('2D', !glbActive && !state.is3DMode, on2D),
+          _seg('Персп.', !glbActive && state.is3DMode, onPerspective),
+          _seg('3D поле', glbActive, onGlb),
         ],
       ),
     );
@@ -6960,20 +7801,21 @@ class _BoardModeSwitch extends StatelessWidget {
   Widget _seg(String text, bool active, VoidCallback onTap) {
     return Material(
       color: active ? TgScreenPalette.lightGreen : Colors.transparent,
-      borderRadius: BorderRadius.circular(4),
+      borderRadius: BorderRadius.circular(7),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(4),
-        child: Container(
-          width: 32,
-          alignment: Alignment.center,
+        borderRadius: BorderRadius.circular(7),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
           child: Text(
             text,
             style: TextStyle(
-              color: active ? TgScreenPalette.primaryGreen : TgScreenPalette.textPrimary,
-              fontFamily: TgScreenPalette.fontFamily,
-              fontWeight: FontWeight.w800,
-              fontSize: AppTypography.badgeSize,
+              fontFamily: AppTypography.fontFamily,
+              color: active
+                  ? TgScreenPalette.primaryGreen
+                  : TgScreenPalette.textSecondary,
+              fontSize: 11.5,
+              fontWeight: active ? FontWeight.w800 : FontWeight.w700,
             ),
           ),
         ),
@@ -6981,7 +7823,6 @@ class _BoardModeSwitch extends StatelessWidget {
     );
   }
 }
-
 
 class _TgTrackerCameraControl extends StatelessWidget {
   const _TgTrackerCameraControl({
@@ -7384,6 +8225,7 @@ class _SaveButton extends StatelessWidget {
     );
   }
 }
+
 
 class _AttachButton extends StatelessWidget {
   const _AttachButton({required this.count, required this.onTap});
@@ -9147,17 +9989,13 @@ class _TgPlaybackPainter extends CustomPainter {
         ..style = PaintingStyle.stroke
         ..strokeCap = StrokeCap.round;
       canvas.drawLine(start, pos, pathPaint);
-      switch (route.binding.subject) {
-        case _TgPlaybackSubject.ball:
-          _drawBall(canvas, pos);
-          break;
-        case _TgPlaybackSubject.player:
-          _drawPlayer(canvas, pos, route.binding);
-          break;
-        case _TgPlaybackSubject.generic:
-          _drawGeneric(canvas, pos, route.binding);
-          break;
-      }
+      // The actual bound stamp is moved by TgState.animationPositionOverrides.
+      // Keep only a subtle progress halo here; drawing a second player/ball
+      // would create the old "duplicate object" animation effect.
+      final halo = Paint()
+        ..color = route.binding.color.withOpacity(0.18)
+        ..style = PaintingStyle.fill;
+      canvas.drawCircle(pos, route.binding.subject == _TgPlaybackSubject.ball ? 13 : 18, halo);
     }
   }
 

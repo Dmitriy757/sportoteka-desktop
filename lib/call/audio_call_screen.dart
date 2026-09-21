@@ -957,9 +957,11 @@ class _AudioCallScreenState extends State<AudioCallScreen> {
             children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 13, 16, 0),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: _buildSportotekaCallBrand(),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: Center(
+                    child: _buildSportotekaCallBrand(),
+                  ),
                 ),
               ),
               Container(
@@ -1006,30 +1008,36 @@ class _AudioCallScreenState extends State<AudioCallScreen> {
               const SizedBox(height: 19),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: Text(
-                  _peerDisplayName,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w700,
-                    height: 1.12,
-                    letterSpacing: -.35,
+                child: SizedBox(
+                  width: double.infinity,
+                  child: Text(
+                    _peerDisplayName,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w700,
+                      height: 1.12,
+                      letterSpacing: -.35,
+                    ),
+                    textAlign: TextAlign.center,
                   ),
-                  textAlign: TextAlign.center,
                 ),
               ),
               if (username.isNotEmpty) ...[
                 const SizedBox(height: 6),
-                Text(
-                  '@$username',
-                  style: TextStyle(
-                    color: const Color(0xFF57D895).withValues(alpha: .95),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
+                SizedBox(
+                  width: double.infinity,
+                  child: Text(
+                    '@$username',
+                    style: TextStyle(
+                      color: const Color(0xFF57D895).withValues(alpha: .95),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    textAlign: TextAlign.center,
                   ),
-                  textAlign: TextAlign.center,
                 ),
               ],
               const SizedBox(height: 8),

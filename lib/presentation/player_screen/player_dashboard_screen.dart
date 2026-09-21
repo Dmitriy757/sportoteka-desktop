@@ -20,6 +20,7 @@ import 'package:sportoteka/presentation/player_game_zone/player_match_games_scre
 import 'package:sportoteka/presentation/player_game_zone/player_highlights_screen.dart';
 import 'package:sportoteka/presentation/tracker/player/player_my_trainings_screen.dart';
 import 'package:sportoteka/presentation/player_screen/player_self_assessment_screen.dart';
+import 'package:sportoteka/presentation/player_matches_screen/player_matches_screen.dart';
 import 'package:sportoteka/presentation/chat_screen/chat_screen.dart';
 import 'package:sportoteka/presentation/workspace_hub/workspace_hub_screen.dart';
 
@@ -74,6 +75,11 @@ class _PlayerDashboardScreenState extends State<PlayerDashboardScreen> {
   String? summaryError;
 
   PlayerWorkspaceSection selectedSection = PlayerWorkspaceSection.home;
+
+  // Отдельный мобильный Navigator держит все окна игрока внутри одного shell.
+  // Благодаря этому нижний Dock не исчезает при открытии календаря, состава,
+  // матчей, чата и вложенных экранов.
+  static const int _mobileNavigatorId = 71;
 
   late final List<_PlayerNavGroup> _navGroups = [
     _PlayerNavGroup('Команда', [
@@ -751,100 +757,218 @@ class _PlayerDashboardScreenState extends State<PlayerDashboardScreen> {
   }
 
   Widget _buildMobileWorkspace() {
-    return Scaffold(
-      backgroundColor: _P.bg,
-      extendBody: true,
-      body: SafeArea(
-        top: true,
-        bottom: false,
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: _PlayerWorkspaceWallpaper(
-                teamName: teamName,
-                teamLogo: teamLogoUrl,
-                compact: true,
-              ),
+    return WillPopScope(
+      onWillPop: _handleMobileSystemBack,
+      child: Scaffold(
+        backgroundColor: _P.bg,
+        resizeToAvoidBottomInset: true,
+        // В мобильной версии Dock является частью постоянного shell,
+        // поэтому контент не уходит под него и меню не исчезает.
+        extendBody: false,
+        body: SafeArea(
+          top: true,
+          bottom: false,
+          child: MediaQuery.removePadding(
+            context: context,
+            removeTop: true,
+            removeBottom: true,
+            child: Navigator(
+              key: Get.nestedKey(_mobileNavigatorId),
+              observers: <NavigatorObserver>[GetObserver()],
+              onGenerateRoute: (settings) {
+                return MaterialPageRoute<void>(
+                  settings: const RouteSettings(name: 'player-home'),
+                  builder: (_) => _buildMobileSectionPage(
+                    PlayerWorkspaceSection.home,
+                  ),
+                );
+              },
             ),
-            Positioned.fill(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(2, 4, 2, 82),
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 180),
-                  switchInCurve: Curves.easeOutCubic,
-                  switchOutCurve: Curves.easeOutCubic,
-                  child: _buildContent(key: ValueKey('mobile-${selectedSection.name}')),
-                ),
-              ),
-            ),
-          ],
+          ),
         ),
+        bottomNavigationBar: _buildMobileBottomNav(),
       ),
-      bottomNavigationBar: _buildMobileBottomNav(),
     );
   }
 
-  Widget _buildContent({Key? key}) {
+  Map<String, dynamic> _mobileRouteArguments() => <String, dynamic>{
+        'team_id': widget.teamId,
+        'teamId': widget.teamId,
+        'team_name': teamName,
+        'teamName': teamName,
+        'user_id': widget.userId,
+        'userId': widget.userId,
+        'player_id': widget.userId,
+        'playerId': widget.userId,
+      };
+
+  Widget _buildMobileSectionPage(PlayerWorkspaceSection section) {
+    switch (section) {
+      case PlayerWorkspaceSection.home:
+        return _buildMobileHomeContent(
+          key: const ValueKey<String>('player-mobile-home'),
+        );
+
+      case PlayerWorkspaceSection.roster:
+        return ColoredBox(
+          color: _P.bg,
+          child: TeamRosterScreen(
+            teamId: widget.teamId,
+            teamName: teamName,
+            embedded: true,
+          ),
+        );
+
+      case PlayerWorkspaceSection.calendar:
+        return ColoredBox(
+          color: _P.bg,
+          child: PlayerTeamCalendarScreen(
+            teamId: widget.teamId,
+            teamName: teamName,
+            embedded: true,
+          ),
+        );
+
+      case PlayerWorkspaceSection.matches:
+        // PlayerDashboard — это кабинет игрока, поэтому сразу открываем
+        // игроковый экран матчей внутри постоянного мобильного shell.
+        return const PlayerMatchesScreen();
+
+      case PlayerWorkspaceSection.trainings:
+        return ColoredBox(
+          color: _P.bg,
+          child: PlayerMyTrainingsScreen(
+            teamId: widget.teamId,
+            teamName: teamName,
+            userId: widget.userId,
+            playerId: widget.userId,
+          ),
+        );
+
+      case PlayerWorkspaceSection.selfAssessment:
+        return ColoredBox(
+          color: _P.bg,
+          child: PlayerSelfAssessmentScreen(
+            teamId: widget.teamId,
+            userId: widget.userId,
+            playerId: widget.userId,
+            embedded: true,
+          ),
+        );
+
+      case PlayerWorkspaceSection.rating:
+        return const TeamRatingScreen();
+
+      case PlayerWorkspaceSection.challenges:
+        return const PlayerChallengesScreen();
+
+      case PlayerWorkspaceSection.battles:
+        return const PlayerBattlesScreen();
+
+      case PlayerWorkspaceSection.quizzes:
+        return const PlayerQuizzesScreen();
+
+      case PlayerWorkspaceSection.miniGames:
+        return const PlayerMatchGamesScreen();
+
+      case PlayerWorkspaceSection.highlights:
+        return const PlayerHighlightsScreen();
+
+      case PlayerWorkspaceSection.chat:
+        return ColoredBox(
+          color: _P.bg,
+          child: ChatScreen(
+            userId: widget.userId,
+          ),
+        );
+    }
+  }
+
+  Widget _buildMobileHomeContent({Key? key}) {
     return RefreshIndicator(
       key: key,
       onRefresh: _refreshAll,
       color: _P.primaryGreen,
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: EdgeInsets.zero,
-        children: [
-          _buildTopBar(),
-          const SizedBox(height: 12),
-          if (selectedSection == PlayerWorkspaceSection.home) ...[
-            _buildHeroPanel(),
-            const SizedBox(height: 12),
-            _buildGameZoneSummaryCard(),
-            const SizedBox(height: 12),
-            _buildModuleSection(
-              title: 'Команда',
-              items: _navGroups[0].items.where((e) => e.section != PlayerWorkspaceSection.home).toList(),
-            ),
-            const SizedBox(height: 12),
-            _buildModuleSection(
-              title: 'Личное развитие',
-              items: _navGroups[1].items,
-            ),
-            const SizedBox(height: 12),
-            _buildModuleSection(
-              title: 'Игровая зона',
-              items: _navGroups[2].items,
-            ),
-          ] else ...[
-            _buildSectionLanding(selectedSection),
-          ],
-          const SizedBox(height: 22),
+        padding: const EdgeInsets.fromLTRB(6, 0, 6, 24),
+        children: <Widget>[
+          _buildTopBar(section: PlayerWorkspaceSection.home),
+          const SizedBox(height: 10),
+          _buildHeroPanel(),
+          const SizedBox(height: 10),
+          _buildGameZoneSummaryCard(),
+          const SizedBox(height: 10),
+          _buildModuleSection(
+            title: 'Команда',
+            items: _navGroups[0]
+                .items
+                .where((e) => e.section != PlayerWorkspaceSection.home)
+                .toList(),
+          ),
+          const SizedBox(height: 10),
+          _buildModuleSection(
+            title: 'Личное развитие',
+            items: _navGroups[1].items,
+          ),
+          const SizedBox(height: 10),
+          _buildModuleSection(
+            title: 'Игровая зона',
+            items: _navGroups[2].items,
+          ),
+          const SizedBox(height: 18),
         ],
       ),
     );
   }
 
-  Widget _buildTopBar() {
-    final item =
-        _itemFor(selectedSection);
+  Future<bool> _handleMobileSystemBack() async {
+    final nested = Get.nestedKey(_mobileNavigatorId)?.currentState;
+    if (nested != null && nested.canPop()) {
+      nested.pop();
+      return false;
+    }
+
+    if (selectedSection != PlayerWorkspaceSection.home) {
+      _replaceMobileSection(PlayerWorkspaceSection.home);
+      return false;
+    }
+
+    return true;
+  }
+
+  void _replaceMobileSection(PlayerWorkspaceSection section) {
+    if (!mounted) return;
+
+    setState(() => selectedSection = section);
+
+    final nested = Get.nestedKey(_mobileNavigatorId)?.currentState;
+    if (nested == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _replaceMobileSection(section);
+      });
+      return;
+    }
+
+    Get.offAll<void>(
+      () => _buildMobileSectionPage(section),
+      id: _mobileNavigatorId,
+      arguments: _mobileRouteArguments(),
+    );
+  }
+
+  Widget _buildTopBar({
+    PlayerWorkspaceSection section = PlayerWorkspaceSection.home,
+  }) {
+    final item = _itemFor(section);
 
     return Container(
-      constraints:
-          const BoxConstraints(
-        minHeight: 58,
-      ),
-      padding:
-          const EdgeInsets.symmetric(
-        horizontal: 10,
-        vertical: 8,
-      ),
-      decoration:
-          const BoxDecoration(
+      constraints: const BoxConstraints(minHeight: 58),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+      decoration: const BoxDecoration(
         color: Colors.white,
         border: Border(
-          bottom: BorderSide(
-            color: _P.divider,
-            width: .65,
-          ),
+          bottom: BorderSide(color: _P.divider, width: .55),
         ),
       ),
       child: Row(
@@ -863,7 +987,7 @@ class _PlayerDashboardScreenState extends State<PlayerDashboardScreen> {
                   maxLines: 1,
                   overflow:
                       TextOverflow.ellipsis,
-                  style: _P.title(13),
+                  style: AppTypography.screenTitle(color: _P.text),
                 ),
                 const SizedBox(height: 2),
                 Text(
@@ -871,7 +995,7 @@ class _PlayerDashboardScreenState extends State<PlayerDashboardScreen> {
                   maxLines: 1,
                   overflow:
                       TextOverflow.ellipsis,
-                  style: _P.subtle(8.8),
+                  style: _P.menuSubtitle(active: false).copyWith(fontSize: 11.2),
                 ),
               ],
             ),
@@ -1011,17 +1135,17 @@ class _PlayerDashboardScreenState extends State<PlayerDashboardScreen> {
                   _SmallActionChip(
                     icon: Icons.fitness_center_rounded,
                     label: 'Мои тренировки',
-                    onTap: () => _selectSection(PlayerWorkspaceSection.trainings),
+                    onTap: () => _activateSection(PlayerWorkspaceSection.trainings),
                   ),
                   _SmallActionChip(
                     icon: Icons.sports_soccer_rounded,
                     label: 'Матчи',
-                    onTap: () => _selectSection(PlayerWorkspaceSection.matches),
+                    onTap: () => _activateSection(PlayerWorkspaceSection.matches),
                   ),
                   _SmallActionChip(
                     icon: Icons.emoji_events_rounded,
                     label: 'Рейтинг',
-                    onTap: () => _selectSection(PlayerWorkspaceSection.rating),
+                    onTap: () => _activateSection(PlayerWorkspaceSection.rating),
                   ),
                 ],
               ),
@@ -1190,7 +1314,7 @@ class _PlayerDashboardScreenState extends State<PlayerDashboardScreen> {
               title: 'Челлендж дня',
               subtitle: challenge['title']?.toString() ?? '',
               buttonText: 'Открыть',
-              onTap: () => _selectSection(PlayerWorkspaceSection.challenges),
+              onTap: () => _activateSection(PlayerWorkspaceSection.challenges),
             ),
           ],
           if (quiz != null) ...[
@@ -1200,7 +1324,7 @@ class _PlayerDashboardScreenState extends State<PlayerDashboardScreen> {
               title: 'Квиз дня',
               subtitle: quiz['title']?.toString() ?? '',
               buttonText: 'Пройти',
-              onTap: () => _selectSection(PlayerWorkspaceSection.quizzes),
+              onTap: () => _activateSection(PlayerWorkspaceSection.quizzes),
             ),
           ],
           if (battle != null) ...[
@@ -1210,7 +1334,7 @@ class _PlayerDashboardScreenState extends State<PlayerDashboardScreen> {
               title: 'Ближайшая битва',
               subtitle: battle['title']?.toString() ?? '',
               buttonText: 'Смотреть',
-              onTap: () => _selectSection(PlayerWorkspaceSection.battles),
+              onTap: () => _activateSection(PlayerWorkspaceSection.battles),
             ),
           ],
           if (challenge == null && quiz == null && battle == null) ...[
@@ -1220,7 +1344,7 @@ class _PlayerDashboardScreenState extends State<PlayerDashboardScreen> {
               title: 'Рейтинг команды',
               subtitle: 'Открой игровую зону и посмотри текущие очки.',
               buttonText: 'Смотреть',
-              onTap: () => _selectSection(PlayerWorkspaceSection.rating),
+              onTap: () => _activateSection(PlayerWorkspaceSection.rating),
             ),
           ],
         ],
@@ -1296,7 +1420,7 @@ class _PlayerDashboardScreenState extends State<PlayerDashboardScreen> {
           _ModuleList(
             items: items,
             currentSection: selectedSection,
-            onSelect: _selectSection,
+            onSelect: _activateSection,
           ),
         ],
       ),
@@ -1393,7 +1517,7 @@ class _PlayerDashboardScreenState extends State<PlayerDashboardScreen> {
             _ModuleList(
               items: quickItems,
               currentSection: selectedSection,
-              onSelect: _selectSection,
+              onSelect: _activateSection,
             ),
           ],
         ],
@@ -1548,46 +1672,50 @@ class _PlayerDashboardScreenState extends State<PlayerDashboardScreen> {
   }
 
   Widget _buildMobileBottomNav() {
-    final width =
-        MediaQuery.of(context).size.width;
-    final horizontal =
-        width < 380 ? 14.0 : 22.0;
-    final activeIndex =
-        _mobileBottomMenuIndex();
+    final width = MediaQuery.sizeOf(context).width;
+    final horizontal = width <= 360
+        ? 10.0
+        : width <= 390
+            ? 14.0
+            : 18.0;
+    final activeIndex = _mobileBottomMenuIndex();
 
     Widget dockIcon({
       required int index,
       required IconData icon,
       required VoidCallback onTap,
     }) {
-      final active =
-          activeIndex == index;
+      final active = activeIndex == index;
 
       return Expanded(
-        child: GestureDetector(
-          behavior:
-              HitTestBehavior.opaque,
-          onTap: onTap,
-          child: Center(
-            child: AnimatedContainer(
-              duration:
-                  const Duration(milliseconds: 170),
-              curve: Curves.easeOutCubic,
-              width: active ? 44 : 34,
-              height: 36,
-              decoration: BoxDecoration(
-                color: active
-                    ? const Color(0xB8EAF8F0)
-                    : Colors.transparent,
-                borderRadius:
-                    BorderRadius.circular(999),
-              ),
-              child: Icon(
-                icon,
-                size: active ? 22 : 21,
-                color: active
-                    ? const Color(0xFF111827)
-                    : const Color(0xFF344054),
+        child: Semantics(
+          button: true,
+          selected: active,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(999),
+            child: SizedBox(
+              height: 48,
+              child: Center(
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 160),
+                  curve: Curves.easeOutCubic,
+                  width: active ? 44 : 36,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: active ? _P.greenSoft : Colors.transparent,
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(
+                      color: active ? _P.greenBorder : Colors.transparent,
+                      width: .7,
+                    ),
+                  ),
+                  child: Icon(
+                    icon,
+                    size: active ? 21.5 : 20.5,
+                    color: active ? _P.greenDark : _P.graphiteSoft,
+                  ),
+                ),
               ),
             ),
           ),
@@ -1595,105 +1723,57 @@ class _PlayerDashboardScreenState extends State<PlayerDashboardScreen> {
       );
     }
 
-    final bottom =
-        MediaQuery.of(context)
-            .padding
-            .bottom;
-
-    final bottomInset =
-        bottom > 0
-            ? math.max(
-                12.0,
-                math.min(
-                  16.0,
-                  bottom * .45,
+    return ColoredBox(
+      color: Colors.white,
+      child: SafeArea(
+        top: false,
+        bottom: true,
+        minimum: const EdgeInsets.only(bottom: 6),
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(horizontal, 6, horizontal, 0),
+          child: Container(
+            height: 58,
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(color: _P.divider.withOpacity(.72), width: .7),
+              boxShadow: _P.windowShadow,
+            ),
+            child: Row(
+              children: <Widget>[
+                dockIcon(
+                  index: 0,
+                  icon: Icons.home_rounded,
+                  onTap: () => _activateSection(PlayerWorkspaceSection.home),
                 ),
-              )
-            : 10.0;
-
-    return SafeArea(
-      top: false,
-      bottom: false,
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(
-          horizontal,
-          0,
-          horizontal,
-          bottomInset,
-        ),
-        child: Container(
-          height: 56,
-          padding: const EdgeInsets.symmetric(
-            horizontal: 7,
-          ),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius:
-                BorderRadius.circular(30),
-            boxShadow: <BoxShadow>[
-              BoxShadow(
-                color:
-                    Colors.black.withOpacity(.08),
-                blurRadius: 28,
-                spreadRadius: -12,
-                offset:
-                    const Offset(0, 13),
-              ),
-            ],
-          ),
-          child: Row(
-            children: <Widget>[
-              dockIcon(
-                index: 0,
-                icon: Icons.home_rounded,
-                onTap: () =>
-                    _activateSection(
-                  PlayerWorkspaceSection.home,
+                dockIcon(
+                  index: 1,
+                  icon: Icons.groups_2_outlined,
+                  onTap: () => _activateSection(PlayerWorkspaceSection.roster),
                 ),
-              ),
-              dockIcon(
-                index: 1,
-                icon:
-                    Icons.groups_2_outlined,
-                onTap: () =>
-                    _activateSection(
-                  PlayerWorkspaceSection.roster,
+                dockIcon(
+                  index: 2,
+                  icon: Icons.sports_soccer_outlined,
+                  onTap: () => _activateSection(PlayerWorkspaceSection.matches),
                 ),
-              ),
-              dockIcon(
-                index: 2,
-                icon:
-                    Icons.sports_soccer_outlined,
-                onTap: () =>
-                    _activateSection(
-                  PlayerWorkspaceSection.matches,
+                dockIcon(
+                  index: 3,
+                  icon: Icons.calendar_month_outlined,
+                  onTap: () => _activateSection(PlayerWorkspaceSection.calendar),
                 ),
-              ),
-              dockIcon(
-                index: 3,
-                icon:
-                    Icons.calendar_month_outlined,
-                onTap: () =>
-                    _activateSection(
-                  PlayerWorkspaceSection.calendar,
+                dockIcon(
+                  index: 4,
+                  icon: Icons.forum_outlined,
+                  onTap: () => _activateSection(PlayerWorkspaceSection.chat),
                 ),
-              ),
-              dockIcon(
-                index: 4,
-                icon: Icons.forum_outlined,
-                onTap: () =>
-                    _activateSection(
-                  PlayerWorkspaceSection.chat,
+                dockIcon(
+                  index: 5,
+                  icon: Icons.more_horiz_rounded,
+                  onTap: _openMobileMoreMenu,
                 ),
-              ),
-              dockIcon(
-                index: 5,
-                icon:
-                    Icons.more_horiz_rounded,
-                onTap:
-                    _openMobileMoreMenu,
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -1719,21 +1799,16 @@ class _PlayerDashboardScreenState extends State<PlayerDashboardScreen> {
   ) async {
     if (!mounted) return;
 
-    final width =
-        MediaQuery.sizeOf(context).width;
-
-    if (width >= 760) {
+    // На планшете/macOS сохраняем рабочую область как раньше.
+    if (_isProfessionalLayout(context)) {
       _selectSection(section);
       return;
     }
 
-    if (section ==
-        PlayerWorkspaceSection.home) {
-      _selectSection(section);
-      return;
-    }
-
-    await _openRealModule(section);
+    // На телефоне все корневые окна живут внутри вложенного Navigator.
+    // Это одновременно даёт один тап без промежуточного launcher-экрана
+    // и сохраняет нижний Dock на месте.
+    _replaceMobileSection(section);
   }
 
   _PlayerNavItem _itemFor(PlayerWorkspaceSection section) {
@@ -1982,144 +2057,110 @@ class _P {
   static const Color bg = Colors.white;
   static const Color panel = Colors.white;
   static const Color card = Colors.white;
-  static const Color soft =
-      Color(0xFFF7F9F8);
-  static const Color soft2 =
-      Color(0xFFF2F5F3);
+  static const Color soft = Color(0xFFFAFBFA);
+  static const Color soft2 = Color(0xFFF4F6F4);
 
-  static const Color text =
-      Color(0xFF0B0F14);
-  static const Color muted =
-      Color(0xFF667085);
-  static const Color muted2 =
-      Color(0xFF98A2B3);
-  static const Color subtleColor =
-      Color(0xFF667085);
-  static const Color lightMuted =
-      Color(0xFF98A2B3);
+  static const Color text = Color(0xFF0B0F14);
+  static const Color muted = Color(0xFF374151);
+  static const Color muted2 = Color(0xFF6B7280);
+  static const Color subtleColor = Color(0xFF6B7280);
+  static const Color lightMuted = Color(0xFF6B7280);
+  static const Color graphite = Color(0xFF111827);
+  static const Color graphiteSoft = Color(0xFF4B5563);
 
-  static const Color divider =
-      Color(0xFFEDF0EE);
-  static const Color border =
-      Color(0xFFEDF0EE);
-  static const Color borderSoft =
-      Color(0xFFEDF0EE);
+  static const Color divider = Color(0xFFE9ECEA);
+  static const Color border = Color(0xFFE9ECEA);
+  static const Color borderSoft = Color(0xFFE9ECEA);
 
-  static const Color primaryGreen =
-      Color(0xFF00A750);
-  static const Color greenSoft =
-      Color(0xFFF3FAF6);
-  static const Color greenDark =
-      Color(0xFF067A46);
+  static const Color primaryGreen = Color(0xFF00A750);
+  static const Color greenSoft = Color(0xFFF3FAF6);
+  static const Color greenSoft2 = Color(0xFFF8FEFA);
+  static const Color greenDark = Color(0xFF067A46);
+  static const Color greenBorder = Color(0xFFD7F0E2);
 
-  static const Color blue =
-      Color(0xFF067A46);
-  static const Color blueSoft =
-      Color(0xFFF3FAF6);
-  static const Color purple =
-      Color(0xFF067A46);
-  static const Color purpleSoft =
-      Color(0xFFF3FAF6);
-  static const Color orange =
-      Color(0xFFF59E0B);
-  static const Color orangeSoft =
-      Color(0xFFFFF7ED);
-  static const Color teal =
-      Color(0xFF00A750);
-  static const Color tealSoft =
-      Color(0xFFF3FAF6);
-  static const Color red =
-      Color(0xFFD92D20);
-  static const Color redSoft =
-      Color(0xFFFFF1F1);
+  static const Color blue = Color(0xFF067A46);
+  static const Color blueSoft = Color(0xFFF3FAF6);
+  static const Color purple = Color(0xFF067A46);
+  static const Color purpleSoft = Color(0xFFF3FAF6);
+  static const Color orange = Color(0xFFF59E0B);
+  static const Color orangeSoft = Color(0xFFFFF7ED);
+  static const Color teal = Color(0xFF00A750);
+  static const Color tealSoft = Color(0xFFF3FAF6);
+  static const Color red = Color(0xFFD92D20);
+  static const Color redSoft = Color(0xFFFFF1F1);
 
-  static List<BoxShadow> get cardShadow =>
-      <BoxShadow>[
+  static List<BoxShadow> get windowShadow => <BoxShadow>[
         BoxShadow(
-          color:
-              Colors.black.withOpacity(
-            .025,
-          ),
-          blurRadius: 18,
-          spreadRadius: -12,
-          offset:
-              const Offset(0, 8),
+          color: Colors.black.withOpacity(.035),
+          blurRadius: 28,
+          spreadRadius: -18,
+          offset: const Offset(0, 16),
         ),
       ];
 
-  static TextStyle title(
-    double size,
-  ) =>
-      AppTypography.custom(
+  static List<BoxShadow> get cardShadow => <BoxShadow>[
+        BoxShadow(
+          color: Colors.black.withOpacity(.015),
+          blurRadius: 16,
+          spreadRadius: -11,
+          offset: const Offset(0, 9),
+        ),
+      ];
+
+  static TextStyle title(double size) => AppTypography.custom(
         size: size,
         weight: FontWeight.w600,
         color: text,
-        height: 1.1,
+        height: 1.18,
+        letterSpacing: 0,
+        features: const <FontFeature>[FontFeature.tabularFigures()],
       );
 
   static TextStyle section() =>
-      AppTypography.custom(
-        size: 11.2,
-        weight: FontWeight.w600,
-        color: text,
-        height: 1.12,
-      );
+      AppTypography.subsectionTitle(color: text);
 
-  static TextStyle value(
-    double size,
-  ) =>
-      AppTypography.custom(
+  static TextStyle value(double size) => AppTypography.custom(
         size: size,
         weight: FontWeight.w600,
         color: text,
-        height: 1.08,
-      ).copyWith(
-        fontFeatures:
-            const <FontFeature>[
-          FontFeature
-              .tabularFigures(),
-        ],
+        height: 1.18,
+        letterSpacing: 0,
+        features: const <FontFeature>[FontFeature.tabularFigures()],
       );
 
-  static TextStyle mutedText(
-    double size,
-  ) =>
-      AppTypography.custom(
+  static TextStyle mutedText(double size) => AppTypography.custom(
         size: size,
         weight: FontWeight.w400,
-        color: muted,
-        height: 1.25,
+        color: muted2,
+        height: 1.32,
+        letterSpacing: 0,
       );
 
-  static TextStyle subtle(
-    double size,
-  ) =>
-      AppTypography.custom(
+  static TextStyle subtle(double size) => AppTypography.custom(
         size: size,
         weight: FontWeight.w400,
-        color: muted,
-        height: 1.22,
+        color: muted2,
+        height: 1.32,
+        letterSpacing: 0,
       );
 
   static TextStyle caption() =>
-      AppTypography.custom(
-        size: 8.6,
-        weight: FontWeight.w600,
-        color: muted2,
-        height: 1.1,
-      );
+      AppTypography.captionMedium(color: subtleColor);
 
   static TextStyle action() =>
-      AppTypography.custom(
-        size: 9.6,
-        weight: FontWeight.w600,
-        color: text,
-        height: 1.1,
+      AppTypography.action(color: text);
+
+  static TextStyle menuTitle({required bool active}) => AppTypography.menuTitle(
+        color: active ? greenDark : text,
+        weight: active ? FontWeight.w600 : FontWeight.w500,
       );
 
-  static Color accentForSection(
-    PlayerWorkspaceSection section,
-  ) {
+  static TextStyle menuSubtitle({required bool active}) =>
+      AppTypography.menuSubtitle(
+        color: active ? greenDark.withOpacity(.68) : muted2,
+      );
+
+  static Color accentForSection(PlayerWorkspaceSection section) {
     switch (section) {
       case PlayerWorkspaceSection.home:
       case PlayerWorkspaceSection.roster:
@@ -2139,15 +2180,9 @@ class _P {
     }
   }
 
-  static Color softFor(
-    Color color,
-  ) {
-    if (color == red) {
-      return redSoft;
-    }
-    if (color == orange) {
-      return orangeSoft;
-    }
+  static Color softFor(Color color) {
+    if (color == red) return redSoft;
+    if (color == orange) return orangeSoft;
     return greenSoft;
   }
 }

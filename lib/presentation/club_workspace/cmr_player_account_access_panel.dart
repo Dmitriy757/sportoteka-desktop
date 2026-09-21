@@ -59,6 +59,28 @@ class _CmrPlayerAccountAccessPanelState
             widget.player['id'],
       );
 
+  Future<int> _actorUserId() async {
+    final direct = widget.currentUserId ?? 0;
+    if (direct > 0) return direct;
+    return await PrefUtils.getUserId() ?? 0;
+  }
+
+  bool get _isChildAccount {
+    final mode = _text(_account?['account_mode'] ?? widget.player['account_mode']);
+    final login = _text(_account?['login'] ?? widget.player['login']);
+    final email = _text(_account?['email'] ?? widget.player['email']);
+    return mode == 'child' ||
+        _account?['child_account'] == true ||
+        (login.isNotEmpty && email.isEmpty);
+  }
+
+  Future<void> _copyValue(String value, String message) async {
+    if (value.trim().isEmpty) return;
+    await Clipboard.setData(ClipboardData(text: value));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
   @override
   void initState() {
     super.initState();
@@ -115,7 +137,7 @@ class _CmrPlayerAccountAccessPanelState
   }
 
   Future<void> _load() async {
-    final actor = widget.currentUserId ?? await PrefUtils.getUserId() ?? 0;
+    final actor = await _actorUserId();
     if (widget.clubId <= 0 || actor <= 0 || (_userId <= 0 && _playerId <= 0)) {
       if (mounted) {
         setState(() {
@@ -185,12 +207,18 @@ class _CmrPlayerAccountAccessPanelState
   Future<void> _reissuePassword() async {
     if (_working) return;
 
+    final email = _text(_account?['email'] ?? widget.player['email']);
+    final login = _text(_account?['login'] ?? widget.player['login']);
+    final childAccount = _isChildAccount;
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Перевыпустить пароль?'),
-        content: const Text(
-          'Будет создан новый временный пароль. Старый пароль сразу перестанет работать. Новый пароль будет отправлен игроку на email.',
+        content: Text(
+          childAccount
+              ? 'Будет создан новый временный пароль детского аккаунта. Старый пароль сразу перестанет работать. Новый пароль нужно скопировать и передать родителю или игроку.'
+              : 'Будет создан новый временный пароль. Старый пароль сразу перестанет работать.${email.isNotEmpty ? ' Новый пароль будет отправлен игроку на email.' : ' Новый пароль нужно будет передать игроку вручную.'}',
         ),
         actions: [
           TextButton(
@@ -209,9 +237,10 @@ class _CmrPlayerAccountAccessPanelState
 
     setState(() => _working = true);
     try {
+      final actor = await _actorUserId();
       final result = await _post('password.php', {
         'club_id': widget.clubId,
-        'actor_user_id': widget.currentUserId ?? 0,
+        'actor_user_id': actor,
         'user_id': _userId,
         'player_id': _playerId,
       });
@@ -227,20 +256,45 @@ class _CmrPlayerAccountAccessPanelState
       }
 
       final password = _text(result['temporary_password']);
-      final email = _text(result['email'] ?? _account?['email']);
+      final resultEmail = _text(result['email'] ?? email);
+      final resultLogin = _text(result['login'] ?? login);
+      final resultChild = result['child_account'] == true ||
+          _text(result['account_mode']) == 'child' ||
+          (resultLogin.isNotEmpty && resultEmail.isEmpty);
       final mailSent = result['mail_sent'] == true;
 
       await showDialog<void>(
         context: context,
         barrierDismissible: false,
         builder: (dialogContext) => AlertDialog(
-          title: const Text('Новый пароль игрока'),
+          title: Text(resultChild ? 'Новый пароль ребёнка' : 'Новый пароль игрока'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (email.isNotEmpty) Text(email),
-              const SizedBox(height: 12),
+              if (resultLogin.isNotEmpty) ...[
+                const Text('Логин:'),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Expanded(
+                      child: SelectableText(
+                        resultLogin,
+                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Копировать логин',
+                      onPressed: () => Clipboard.setData(ClipboardData(text: resultLogin)),
+                      icon: const Icon(Icons.copy_rounded, size: 18),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+              ] else if (resultEmail.isNotEmpty) ...[
+                Text(resultEmail),
+                const SizedBox(height: 10),
+              ],
               const Text('Временный пароль:'),
               const SizedBox(height: 6),
               SelectableText(
@@ -253,9 +307,11 @@ class _CmrPlayerAccountAccessPanelState
               ),
               const SizedBox(height: 10),
               Text(
-                mailSent
-                    ? 'Пароль отправлен игроку на email.'
-                    : 'Письмо не отправлено. Скопируйте пароль и передайте игроку вручную.',
+                resultChild
+                    ? 'Письмо не требуется. Скопируйте логин и новый пароль и передайте их родителю или игроку.'
+                    : mailSent
+                        ? 'Пароль отправлен игроку на email.'
+                        : 'Письмо не отправлено. Скопируйте пароль и передайте игроку вручную.',
               ),
             ],
           ),
@@ -267,7 +323,7 @@ class _CmrPlayerAccountAccessPanelState
                       await Clipboard.setData(ClipboardData(text: password));
                     },
               icon: const Icon(Icons.copy_rounded),
-              label: const Text('Копировать'),
+              label: const Text('Копировать пароль'),
             ),
             FilledButton(
               onPressed: () => Navigator.of(dialogContext).pop(),
@@ -276,6 +332,8 @@ class _CmrPlayerAccountAccessPanelState
           ],
         ),
       );
+
+      await _load();
     } finally {
       if (mounted) setState(() => _working = false);
     }
@@ -286,7 +344,9 @@ class _CmrPlayerAccountAccessPanelState
     if (!_loading && !_authorized) return const SizedBox.shrink();
 
     final email = _text(_account?['email'] ?? widget.player['email']);
+    final login = _text(_account?['login'] ?? widget.player['login']);
     final team = _text(_account?['team_name']);
+    final childAccount = _isChildAccount;
 
     return Container(
       width: double.infinity,
@@ -329,7 +389,46 @@ class _CmrPlayerAccountAccessPanelState
                     style: const TextStyle(color: Color(0xFFD92D20), fontSize: 11.5),
                   )
                 else ...[
-                  if (email.isNotEmpty)
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF3FAF6),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          childAccount ? 'Детский аккаунт' : 'Аккаунт по email',
+                          style: const TextStyle(
+                            fontSize: 10.3,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF067A46),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  if (login.isNotEmpty)
+                    Row(
+                      children: [
+                        const Icon(Icons.alternate_email_rounded, size: 15, color: Color(0xFF667085)),
+                        const SizedBox(width: 7),
+                        Expanded(
+                          child: SelectableText(
+                            login,
+                            style: const TextStyle(fontSize: 11.8, fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: 'Копировать логин',
+                          visualDensity: VisualDensity.compact,
+                          onPressed: () => _copyValue(login, 'Логин скопирован'),
+                          icon: const Icon(Icons.copy_rounded, size: 16, color: Color(0xFF067A46)),
+                        ),
+                      ],
+                    )
+                  else if (email.isNotEmpty)
                     Text(email, style: const TextStyle(fontSize: 11.5)),
                   if (team.isNotEmpty) ...[
                     const SizedBox(height: 3),

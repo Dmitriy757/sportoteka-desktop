@@ -458,7 +458,10 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
 
           final visibility =
               (raw['visibility'] ?? '').toString().trim().toLowerCase();
-          if (visibility == 'profile') return false;
+          // Community accepts ONLY explicitly public feed posts.
+          // club_internal must never appear here even if a future backend
+          // endpoint accidentally returns mixed visibility values.
+          if (visibility != 'feed') return false;
 
           final postType =
               (raw['post_type'] ?? '').toString().trim().toLowerCase();

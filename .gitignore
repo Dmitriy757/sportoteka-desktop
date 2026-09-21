@@ -57,3 +57,4 @@ android/unityLibrary/.gradle/
 unity_builds/
 android/unityLibrary/src/main/jniLibs/
 android/unityLibrary/build/
+lib.zip

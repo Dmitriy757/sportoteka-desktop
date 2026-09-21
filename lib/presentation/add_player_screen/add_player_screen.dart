@@ -34,6 +34,8 @@ class AddPlayerScreen extends StatefulWidget {
   State<AddPlayerScreen> createState() => _AddPlayerScreenState();
 }
 
+enum _PlayerAccountMode { email, childLogin }
+
 class _AddPlayerScreenState extends State<AddPlayerScreen> {
   static const String apiBase = "https://sportotekaapp.ru/api";
   static const String uploadPhotoUrl = "$apiBase/upload_player_photo.php";
@@ -42,6 +44,7 @@ class _AddPlayerScreenState extends State<AddPlayerScreen> {
   final TextEditingController firstNameController = TextEditingController();
   final TextEditingController lastNameController = TextEditingController();
   final TextEditingController emailController = TextEditingController();
+  final TextEditingController loginController = TextEditingController();
   final TextEditingController birthDateController = TextEditingController();
   final TextEditingController nationalityController = TextEditingController();
   final TextEditingController statValueController = TextEditingController();
@@ -69,12 +72,16 @@ class _AddPlayerScreenState extends State<AddPlayerScreen> {
   final Map<String, String> playerStats = {};
   File? selectedImage;
   bool isLoading = false;
+  _PlayerAccountMode accountMode = _PlayerAccountMode.email;
+
+  bool get _isChildAccount => accountMode == _PlayerAccountMode.childLogin;
 
   @override
   void dispose() {
     firstNameController.dispose();
     lastNameController.dispose();
     emailController.dispose();
+    loginController.dispose();
     birthDateController.dispose();
     nationalityController.dispose();
     statValueController.dispose();
@@ -161,49 +168,94 @@ class _AddPlayerScreenState extends State<AddPlayerScreen> {
 
   Future<void> _showCreatedPlayerCredentials({
     required String email,
+    required String login,
     required String password,
     required bool mailSent,
+    required bool childAccount,
   }) async {
     if (!mounted || password.trim().isEmpty) return;
+
+    final identifier = childAccount ? login : email;
+    final copyText = childAccount
+        ? 'Логин: $login\nПароль: $password'
+        : 'Email: $email\nПароль: $password';
 
     await showDialog<void>(
       context: context,
       barrierDismissible: false,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Аккаунт игрока создан'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(email),
-            const SizedBox(height: 12),
-            const Text('Временный пароль:'),
-            const SizedBox(height: 6),
-            SelectableText(
-              password,
-              style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 1.1,
+        title: Text(
+          childAccount ? 'Детский аккаунт создан' : 'Аккаунт игрока создан',
+        ),
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 430),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                childAccount ? 'Логин для входа' : 'Email для входа',
+                style: AppTypography.captionMedium(color: _C.muted),
               ),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              mailSent
-                  ? 'Пароль уже отправлен игроку на email.'
-                  : 'Письмо не отправлено. Скопируйте пароль и передайте игроку вручную.',
-            ),
-          ],
+              const SizedBox(height: 5),
+              SelectableText(
+                identifier,
+                style: AppTypography.custom(
+                  size: 15,
+                  weight: FontWeight.w600,
+                  color: _C.text,
+                ),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                'Временный пароль',
+                style: AppTypography.captionMedium(color: _C.muted),
+              ),
+              const SizedBox(height: 5),
+              SelectableText(
+                password,
+                style: AppTypography.custom(
+                  size: 20,
+                  weight: FontWeight.w700,
+                  color: _C.text,
+                  letterSpacing: 1.1,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(11),
+                decoration: BoxDecoration(
+                  color: _C.soft,
+                  borderRadius: BorderRadius.circular(11),
+                ),
+                child: Text(
+                  childAccount
+                      ? 'Email ребёнку не требуется. Передайте логин и временный пароль ребёнку или его родителю. Родителя можно привязать к этому игроку отдельным Parent Key.'
+                      : (mailSent
+                          ? 'Пароль уже отправлен игроку на email.'
+                          : 'Письмо не отправлено. Скопируйте пароль и передайте игроку вручную.'),
+                  style: AppTypography.captionMedium(color: _C.muted),
+                ),
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton.icon(
             onPressed: () async {
-              await Clipboard.setData(ClipboardData(text: password));
+              await Clipboard.setData(ClipboardData(text: copyText));
+              if (dialogContext.mounted) {
+                ScaffoldMessenger.of(dialogContext).showSnackBar(
+                  const SnackBar(content: Text('Данные для входа скопированы')),
+                );
+              }
             },
             icon: const Icon(Icons.copy_rounded),
             label: const Text('Копировать'),
           ),
           FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: _C.primaryGreen),
             onPressed: () => Navigator.of(dialogContext).pop(),
             child: const Text('Готово'),
           ),
@@ -216,6 +268,7 @@ class _AddPlayerScreenState extends State<AddPlayerScreen> {
     final firstName = firstNameController.text.trim();
     final lastName = lastNameController.text.trim();
     final email = emailController.text.trim();
+    final requestedLogin = loginController.text.trim().toLowerCase();
     final dob = birthDateController.text.trim();
     final nationality = nationalityController.text.trim();
     final position = positionController.text.trim();
@@ -225,10 +278,34 @@ class _AddPlayerScreenState extends State<AddPlayerScreen> {
         .map((e) => "${e.key}: ${e.value}")
         .join(", ");
 
-    if ([firstName, lastName, email, dob, nationality].any((e) => e.isEmpty)) {
+    if ([firstName, lastName, dob, nationality].any((e) => e.isEmpty)) {
       Get.snackbar(
         'Ошибка',
-        'Заполните все обязательные поля',
+        'Заполните имя, фамилию, дату рождения и гражданство',
+        snackPosition: SnackPosition.BOTTOM,
+        margin: const EdgeInsets.all(16),
+        borderRadius: 14,
+      );
+      return;
+    }
+
+    if (!_isChildAccount && email.isEmpty) {
+      Get.snackbar(
+        'Ошибка',
+        'Для обычного аккаунта укажите email',
+        snackPosition: SnackPosition.BOTTOM,
+        margin: const EdgeInsets.all(16),
+        borderRadius: 14,
+      );
+      return;
+    }
+
+    if (_isChildAccount &&
+        requestedLogin.isNotEmpty &&
+        !RegExp(r'^[a-z0-9._-]{3,40}$').hasMatch(requestedLogin)) {
+      Get.snackbar(
+        'Логин',
+        'Используйте 3–40 символов: латинские буквы, цифры, точка, дефис или подчёркивание. Либо оставьте поле пустым — логин создастся автоматически.',
         snackPosition: SnackPosition.BOTTOM,
         margin: const EdgeInsets.all(16),
         borderRadius: 14,
@@ -242,16 +319,18 @@ class _AddPlayerScreenState extends State<AddPlayerScreen> {
       final uploadedPhotoUrl = await _uploadPhotoIfNeeded();
 
       debugPrint(
-        "ADD PLAYER => team_id=${widget.teamId}, teamName=${widget.teamName}, email=$email",
+        "ADD PLAYER => team_id=${widget.teamId}, account_mode=${_isChildAccount ? 'child' : 'email'}",
       );
 
       final response = await http.post(
         Uri.parse(addPlayerUrl),
-        headers: {'Content-Type': 'application/json'},
+        headers: const {'Content-Type': 'application/json'},
         body: jsonEncode({
           'first_name': firstName,
           'last_name': lastName,
-          'email': email,
+          'email': _isChildAccount ? '' : email,
+          'login': _isChildAccount ? requestedLogin : '',
+          'account_mode': _isChildAccount ? 'child' : 'email',
           'birth_date': dob,
           'nationality': nationality,
           'sport_data': sportData,
@@ -271,72 +350,93 @@ class _AddPlayerScreenState extends State<AddPlayerScreen> {
       if (response.statusCode >= 200 &&
           response.statusCode < 300 &&
           data['status'] == 'success') {
-          final accountCreated = data['account_created'] == true;
-          final temporaryPassword =
-              (data['temporary_password'] ?? '').toString().trim();
-          final mailSent = data['mail_sent'] == true;
+        final accountCreated = data['account_created'] == true;
+        final temporaryPassword =
+            (data['temporary_password'] ?? '').toString().trim();
+        final mailSent = data['mail_sent'] == true;
+        final createdLogin = (data['login'] ??
+                (data['player'] is Map ? data['player']['login'] : '') ??
+                '')
+            .toString()
+            .trim();
+        final createdEmail = (data['email'] ??
+                (data['player'] is Map ? data['player']['email'] : '') ??
+                (_isChildAccount ? '' : email))
+            .toString()
+            .trim();
+        final childAccount =
+            (data['account_mode'] ?? '').toString() == 'child' ||
+                data['child_account'] == true ||
+                _isChildAccount;
 
-          Get.snackbar(
-            'Успех',
-            accountCreated
-                ? 'Игрок добавлен. Для него создан аккаунт SPORTOTEKA.'
-                : 'Игрок добавлен. Используется существующий аккаунт SPORTOTEKA — пароль не изменён.',
-            snackPosition: SnackPosition.BOTTOM,
-            margin: const EdgeInsets.all(16),
-            borderRadius: 14,
-            colorText: Colors.white,
-            backgroundColor: _C.primaryGreen,
+        Get.snackbar(
+          'Успех',
+          accountCreated
+              ? (childAccount
+                  ? 'Игрок добавлен. Создан детский аккаунт с входом по логину.'
+                  : 'Игрок добавлен. Для него создан аккаунт SPORTOTEKA.')
+              : 'Игрок добавлен. Используется существующий аккаунт SPORTOTEKA — пароль не изменён.',
+          snackPosition: SnackPosition.BOTTOM,
+          margin: const EdgeInsets.all(16),
+          borderRadius: 14,
+          colorText: Colors.white,
+          backgroundColor: _C.primaryGreen,
+        );
+
+        if (accountCreated && temporaryPassword.isNotEmpty) {
+          await _showCreatedPlayerCredentials(
+            email: createdEmail,
+            login: createdLogin,
+            password: temporaryPassword,
+            mailSent: mailSent,
+            childAccount: childAccount,
           );
+        }
 
-          if (accountCreated && temporaryPassword.isNotEmpty) {
-            await _showCreatedPlayerCredentials(
-              email: email,
-              password: temporaryPassword,
-              mailSent: mailSent,
-            );
-          }
+        final rawPlayer = data['player'] ?? data['data'];
+        final createdPlayer = <String, dynamic>{
+          if (rawPlayer is Map) ...Map<String, dynamic>.from(rawPlayer),
+          'id': (rawPlayer is Map ? rawPlayer['id'] : null) ??
+              data['player_id'] ??
+              data['id'],
+          'player_id': (rawPlayer is Map ? rawPlayer['player_id'] : null) ??
+              data['player_id'] ??
+              data['id'],
+          'user_id': (rawPlayer is Map ? rawPlayer['user_id'] : null) ??
+              data['user_id'],
+          'account_created': data['account_created'] == true,
+          'account_mode': childAccount ? 'child' : 'email',
+          'child_account': childAccount,
+          'login': createdLogin,
+          'first_name': firstName,
+          'last_name': lastName,
+          'email': createdEmail,
+          'birth_date': dob,
+          'nationality': nationality,
+          'sport_data': sportData,
+          'team_id': widget.teamId,
+          'teamId': widget.teamId,
+          'team_name': widget.teamName,
+          'teamName': widget.teamName,
+          'position': position,
+          'jersey_number': jerseyNumber,
+          'number': jerseyNumber,
+          'photo_url': uploadedPhotoUrl,
+          'photo': uploadedPhotoUrl,
+        };
 
-          final rawPlayer = data['player'] ?? data['data'];
-          final createdPlayer = <String, dynamic>{
-            if (rawPlayer is Map) ...Map<String, dynamic>.from(rawPlayer),
-            'id': (rawPlayer is Map ? rawPlayer['id'] : null) ??
-                data['player_id'] ??
-                data['id'],
-            'player_id': (rawPlayer is Map ? rawPlayer['player_id'] : null) ??
-                data['player_id'] ??
-                data['id'],
-            'user_id': (rawPlayer is Map ? rawPlayer['user_id'] : null) ??
-                data['user_id'],
-            'account_created': data['account_created'] == true,
-            'first_name': firstName,
-            'last_name': lastName,
-            'email': email,
-            'birth_date': dob,
-            'nationality': nationality,
-            'sport_data': sportData,
-            'team_id': widget.teamId,
-            'teamId': widget.teamId,
-            'team_name': widget.teamName,
-            'teamName': widget.teamName,
-            'position': position,
-            'jersey_number': jerseyNumber,
-            'number': jerseyNumber,
-            'photo_url': uploadedPhotoUrl,
-            'photo': uploadedPhotoUrl,
-          };
-
-          if (widget.embeddedInWorkspace) {
-            await widget.onSaved?.call(createdPlayer);
-          } else if (mounted) {
-            Navigator.pop(context, true);
-          }
+        if (widget.embeddedInWorkspace) {
+          await widget.onSaved?.call(createdPlayer);
+        } else if (mounted) {
+          Navigator.pop(context, true);
+        }
       } else {
         throw Exception(data['message'] ?? 'Не удалось добавить игрока');
       }
     } catch (e) {
       Get.snackbar(
         'Ошибка',
-        e.toString(),
+        e.toString().replaceFirst('Exception: ', ''),
         snackPosition: SnackPosition.BOTTOM,
         margin: const EdgeInsets.all(16),
         borderRadius: 14,
@@ -691,7 +791,9 @@ class _AddPlayerScreenState extends State<AddPlayerScreen> {
           _InfoTile(
             icon: Icons.person_add_alt_1_rounded,
             title: 'Создание аккаунта',
-            value: 'Пароль создаётся автоматически и отправляется на email',
+            value: _isChildAccount
+                ? 'Логин + временный пароль, email не требуется'
+                : 'Пароль создаётся автоматически и отправляется на email',
             color: _C.primaryGreen,
           ),
           const SizedBox(height: 10),
@@ -771,20 +873,73 @@ class _AddPlayerScreenState extends State<AddPlayerScreen> {
           children: [
             _FormSection(
               title: 'Основная информация',
-              subtitle: 'ФИО, email, дата рождения и гражданство игрока',
+              subtitle: _isChildAccount
+                  ? 'ФИО, дата рождения и детский вход без email'
+                  : 'ФИО, email, дата рождения и гражданство игрока',
               icon: Icons.info_outline_rounded,
               color: _C.primaryGreen,
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   twoFields(
                     _buildTextField(firstNameController, 'Имя'),
                     _buildTextField(lastNameController, 'Фамилия'),
                   ),
-                  _buildTextField(
-                    emailController,
-                    'Email',
-                    icon: Icons.mail_outline_rounded,
+                  _PlayerAccountModeSelector(
+                    value: accountMode,
+                    onChanged: isLoading
+                        ? null
+                        : (value) {
+                            setState(() {
+                              accountMode = value;
+                              if (_isChildAccount) {
+                                emailController.clear();
+                              } else {
+                                loginController.clear();
+                              }
+                            });
+                          },
                   ),
+                  const SizedBox(height: 12),
+                  if (_isChildAccount) ...[
+                    _buildTextField(
+                      loginController,
+                      'Логин ребёнка (необязательно)',
+                      icon: Icons.badge_outlined,
+                    ),
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.all(11),
+                      decoration: BoxDecoration(
+                        color: _C.footballGreenSoft,
+                        borderRadius: BorderRadius.circular(11),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(
+                            Icons.child_care_rounded,
+                            size: 17,
+                            color: _C.greenDark,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Email не нужен. Если логин оставить пустым, SPORTOTEKA создаст его по имени и фамилии и покажет вместе с временным паролем. После создания игрока в его карточке можно сразу выдать Parent Key родителю.',
+                              style: AppTypography.captionMedium(
+                                color: _C.muted,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ] else
+                    _buildTextField(
+                      emailController,
+                      'Email',
+                      icon: Icons.mail_outline_rounded,
+                    ),
                   twoFields(
                     _buildTextField(
                       birthDateController,
@@ -1020,6 +1175,142 @@ class _AddPlayerScreenState extends State<AddPlayerScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+
+class _PlayerAccountModeSelector extends StatelessWidget {
+  final _PlayerAccountMode value;
+  final ValueChanged<_PlayerAccountMode>? onChanged;
+
+  const _PlayerAccountModeSelector({
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: _C.soft,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _C.border, width: .65),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _PlayerAccountModeButton(
+              title: 'Email',
+              subtitle: 'Обычный аккаунт',
+              icon: Icons.mail_outline_rounded,
+              active: value == _PlayerAccountMode.email,
+              onTap: onChanged == null
+                  ? null
+                  : () => onChanged!(_PlayerAccountMode.email),
+            ),
+          ),
+          const SizedBox(width: 5),
+          Expanded(
+            child: _PlayerAccountModeButton(
+              title: 'Детский',
+              subtitle: 'Вход по логину',
+              icon: Icons.child_care_rounded,
+              active: value == _PlayerAccountMode.childLogin,
+              onTap: onChanged == null
+                  ? null
+                  : () => onChanged!(_PlayerAccountMode.childLogin),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PlayerAccountModeButton extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final bool active;
+  final VoidCallback? onTap;
+
+  const _PlayerAccountModeButton({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.active,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: active ? Colors.white : Colors.transparent,
+      borderRadius: BorderRadius.circular(9),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(9),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+          decoration: BoxDecoration(
+            color: active ? Colors.white : Colors.transparent,
+            borderRadius: BorderRadius.circular(9),
+            border: Border.all(
+              color: active ? _C.border : Colors.transparent,
+              width: .65,
+            ),
+            boxShadow: active
+                ? [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(.025),
+                      blurRadius: 12,
+                      offset: const Offset(0, 5),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Row(
+            children: [
+              Icon(
+                icon,
+                size: 17,
+                color: active ? _C.primaryGreen : _C.muted,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.action(
+                        color: active ? _C.text : _C.muted,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.custom(
+                        size: 9.4,
+                        weight: FontWeight.w400,
+                        color: _C.muted,
+                        height: 1.2,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

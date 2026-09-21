@@ -1538,7 +1538,8 @@ class AiDetectedEvent {
     final startRaw = json['start_ms'] ?? json['time_ms'] ?? json['timeMs'] ?? 0;
     final startMs = asInt(startRaw);
     final endMs = asInt(json['end_ms'] ?? json['end_time_ms'] ?? startMs);
-    final confidence = asDouble(json['confidence']);
+    final parsedConfidence = asDouble(json['confidence']);
+    final confidence = parsedConfidence > 0 ? parsedConfidence : 0.78;
     final success = json.containsKey('success')
         ? asBool(json['success'])
         : asBool(json['is_positive']);
@@ -1584,6 +1585,8 @@ class AiDetectedEvent {
         'target_player_id': json['target_player_id'],
         'track_id': json['track_id'],
         'target_track_id': json['target_track_id'],
+        'player_id': json['player_id'],
+        'target_player_id': json['target_player_id'],
         'description': json['description'] ?? json['note'],
         'id': json['id'],
       },
@@ -2345,6 +2348,102 @@ aiPlayerStats
 
   notifyListeners();
 }
+  void mergeServerFrameAnalysis(Map<String, dynamic> json) {
+    final rawEvents = _aiJsonList(json['events']).isNotEmpty
+        ? _aiJsonList(json['events'])
+        : _aiJsonList(json['recent_events']);
+
+    final eventKeys = autoEvents.map((e) {
+      final id = e.meta?['id'];
+      final track = e.meta?['track_id'];
+      return id != null && '$id'.isNotEmpty
+          ? 'id:$id'
+          : '${e.type}|${e.timeMs}|${track ?? ''}';
+    }).toSet();
+
+    final suggestionKeys = ttdSuggestions.map((e) {
+      final id = e.meta?['id'];
+      final track = e.meta?['track_id'];
+      return id != null && '$id'.isNotEmpty
+          ? 'id:$id'
+          : '${e.code}|${e.timeMs}|${track ?? ''}';
+    }).toSet();
+
+    for (final raw in rawEvents.whereType<Map>()) {
+      final map = Map<String, dynamic>.from(raw);
+      final event = AiDetectedEvent.fromBackendJson(map);
+
+      final rawEventId = event.meta?['id'];
+      final eventKey = rawEventId != null && '$rawEventId'.isNotEmpty
+          ? 'id:$rawEventId'
+          : '${event.type}|${event.timeMs}|${event.meta?['track_id'] ?? ''}';
+
+      if (eventKeys.add(eventKey)) {
+        autoEvents.add(event);
+      }
+
+      if (_isFootballTtdEvent(map)) {
+        final suggestion = AiTtdSuggestion.fromBackendJson(map);
+        final rawSuggestionId = suggestion.meta?['id'];
+        final suggestionKey =
+            rawSuggestionId != null && '$rawSuggestionId'.isNotEmpty
+                ? 'id:$rawSuggestionId'
+                : '${suggestion.code}|${suggestion.timeMs}|${suggestion.meta?['track_id'] ?? ''}';
+
+        if (suggestionKeys.add(suggestionKey)) {
+          ttdSuggestions.add(suggestion);
+        }
+      }
+    }
+
+    autoEvents.sort((a, b) => a.timeMs.compareTo(b.timeMs));
+    ttdSuggestions.sort((a, b) => a.timeMs.compareTo(b.timeMs));
+
+    if (autoEvents.length > 2000) {
+      autoEvents.removeRange(0, autoEvents.length - 2000);
+    }
+    if (ttdSuggestions.length > 2000) {
+      ttdSuggestions.removeRange(0, ttdSuggestions.length - 2000);
+    }
+
+    final stats = json['stats'];
+    if (stats is Map) {
+      aiMatchStats = Map<String, dynamic>.from(stats);
+    }
+
+    notifyListeners();
+  }
+
+  bool _isFootballTtdEvent(Map<String, dynamic> event) {
+    final type = (event['type'] ?? event['event_type'] ?? event['code'] ?? '')
+        .toString()
+        .toLowerCase()
+        .trim();
+
+    if (type.isEmpty) return false;
+
+    const exact = <String>{
+      'goal', 'assist', 'pass', 'shot', 'shot_on_goal',
+      'interception', 'interception_ball', 'recovery', 'recovery_ball',
+      'dribble', 'feint_dribble', 'tackle', 'tackle_duel', 'duel',
+      'header', 'header_play', 'throw_in', 'throw_ins', 'mistake',
+      'yellow_card', 'red_card', 'card_yellow', 'card_red',
+      'save', 'gk_save', 'gk_saves', 'goalkeeper_save',
+      'goalkeeper_exit', 'gk_exit', 'gk_close_combat',
+      'gk_interceptions', 'gk_pass_short', 'gk_pass_medium', 'gk_pass_long',
+    };
+
+    if (exact.contains(type)) return true;
+
+    return type.startsWith('pass_') ||
+        type.startsWith('gk_') ||
+        type.contains('interception') ||
+        type.contains('recovery') ||
+        type.contains('shot') ||
+        type.contains('dribble') ||
+        type.contains('tackle');
+  }
+
   void clearServerAnalysis() {
     autoEvents.clear();
     ttdSuggestions.clear();
@@ -3669,9 +3768,59 @@ class TrackMotionResult {
 class AiVideoAnalysisController extends ChangeNotifier {
   final AiVideoAnalysisService service;
 
+  StreamSubscription<AiFramePacket>? _liveFrameSubscription;
+  StreamSubscription<Map<String, dynamic>>? _messageSubscription;
+
   AiVideoAnalysisController({
     required this.service,
-  });
+  }) {
+    _liveFrameSubscription = service.framePackets.listen((packet) {
+      if (_disposed) return;
+      currentFramePacket = packet;
+      if (packet.jobId.trim().isNotEmpty) {
+        jobId = packet.jobId;
+      }
+
+      final rawProgress = packet.raw['progress'];
+      final progress = rawProgress is num
+          ? rawProgress.toInt()
+          : int.tryParse('${rawProgress ?? ''}') ?? jobStatus?.progress ?? 1;
+      jobStatus = AiJobStatusResponse.fromJson(<String, dynamic>{
+        ...packet.raw,
+        'job_id': packet.jobId,
+        'status': 'processing',
+        'progress': progress.clamp(1, 99),
+      });
+
+      errorText = null;
+      _safeNotify();
+    });
+
+    _messageSubscription = service.messages.listen((message) {
+      if (_disposed) return;
+
+      final type = (message['type'] ?? '').toString();
+      if (message['match_live_id'] != null) {
+        final id = message['match_live_id'].toString().trim();
+        if (id.isNotEmpty) jobId = id;
+      }
+
+      if (type == 'status' || type == 'match_started') {
+        final normalized = <String, dynamic>{
+          ...message,
+          'job_id': message['job_id'] ?? message['match_live_id'] ?? jobId ?? '',
+          'progress': (message['status'] == 'done' || message['status'] == 'completed')
+              ? 100
+              : (message['progress'] ?? jobStatus?.progress ?? 1),
+        };
+        jobStatus = AiJobStatusResponse.fromJson(normalized);
+      } else if (type == 'error') {
+        errorText = (message['message'] ?? message['error'] ?? 'Video AI error').toString();
+      }
+
+      _safeNotify();
+    });
+  }
 
   String? jobId;
   bool isCreatingJob = false;
@@ -3702,8 +3851,10 @@ class AiVideoAnalysisController extends ChangeNotifier {
 
   Future<String?> createAnalysisJob({
     int? matchId,
+    int? teamId,
     String? videoUrl,
     String? localVideoPath,
+    Map<String, dynamic>? teamColors,
   }) async {
     isCreatingJob = true;
     errorText = null;
@@ -3713,8 +3864,10 @@ class AiVideoAnalysisController extends ChangeNotifier {
       final response = await service.createJob(
         AiJobCreateRequest(
           matchId: matchId,
+          teamId: teamId,
           videoUrl: videoUrl,
           localVideoPath: localVideoPath,
+          teamColors: teamColors,
         ),
       );
 
@@ -3911,6 +4064,22 @@ class AiVideoAnalysisController extends ChangeNotifier {
     });
   }
 
+  Future<void> bindPlayer({
+    required String trackId,
+    required int playerId,
+    required String playerName,
+  }) async {
+    try {
+      await service.bindPlayer(
+        trackId: trackId,
+        playerId: playerId,
+        playerName: playerName,
+      );
+    } catch (e) {
+      debugPrint('bindPlayer failed: $e');
+    }
+  }
+
   Future<bool> submitCalibration(List<AiCalibrationPoint> points) async {
     if (!hasJob) return false;
 
@@ -3983,6 +4152,9 @@ class AiVideoAnalysisController extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _frameDebounce?.cancel();
+    unawaited(_liveFrameSubscription?.cancel() ?? Future<void>.value());
+    unawaited(_messageSubscription?.cancel() ?? Future<void>.value());
+    unawaited(service.close());
     super.dispose();
   }
 }
@@ -5372,10 +5544,52 @@ class PlayerTrackingPainter extends CustomPainter {
     );
   }
 
+  Rect? _displayRectForTrack(PlayerTrack track) {
+    if (track.points.isEmpty) return track.currentBoundingBox;
+
+    final last = track.points.last;
+    final lastRect = last.rect ?? track.lockedBox;
+    if (lastRect == null || track.points.length < 2) return lastRect;
+
+    final prev = track.points[track.points.length - 2];
+    final prevRect = prev.rect ?? lastRect;
+    final dtMs = last.timeMs - prev.timeMs;
+    if (dtMs <= 0) return lastRect;
+
+    // If the video clock is between two measurements, interpolate all bbox
+    // edges. This makes the rectangle move every rendered video frame instead
+    // of jumping only when a new AI packet arrives.
+    if (currentTimeMs >= prev.timeMs && currentTimeMs <= last.timeMs) {
+      final t = ((currentTimeMs - prev.timeMs) / dtMs).clamp(0.0, 1.0).toDouble();
+      final eased = Curves.easeOutCubic.transform(t);
+      return Rect.lerp(prevRect, lastRect, eased) ?? lastRect;
+    }
+
+    // The detector may arrive 100–250 ms behind playback. Briefly extrapolate
+    // the player's centre using the latest measured motion. Keep the size from
+    // the most recent box to avoid breathing/jitter from YOLO box dimensions.
+    if (currentTimeMs > last.timeMs) {
+      final aheadMs = (currentTimeMs - last.timeMs).clamp(0, 240);
+      if (aheadMs <= 0) return lastRect;
+
+      final motion = lastRect.center - prevRect.center;
+      var shift = motion * (aheadMs / dtMs) * 0.86;
+
+      // Protect against ID switches / one bad detection creating a huge jump.
+      const maxPredictionPx = 72.0;
+      if (shift.distance > maxPredictionPx && shift.distance > 0) {
+        shift = shift / shift.distance * maxPredictionPx;
+      }
+      return lastRect.shift(shift);
+    }
+
+    return lastRect;
+  }
+
   void _drawBoundingBox(Canvas canvas, PlayerTrack track, bool isSelected) {
     if (!controller.showBoundingBoxes) return;
 
-    final rect = track.currentBoundingBox;
+    final rect = _displayRectForTrack(track);
     if (rect == null) return;
 
     final strokePaint = Paint()
@@ -5400,7 +5614,7 @@ class PlayerTrackingPainter extends CustomPainter {
   void _drawLabel(Canvas canvas, PlayerTrack track, bool isSelected) {
     if (!controller.showLabels) return;
 
-    final rect = track.currentBoundingBox;
+    final rect = _displayRectForTrack(track);
     if (rect == null) return;
 
     final label = (track.boundPlayerName.isNotEmpty
@@ -5441,7 +5655,7 @@ class PlayerTrackingPainter extends CustomPainter {
   void _drawSpeed(Canvas canvas, PlayerTrack track, bool isSelected) {
     if (!controller.showSpeed || track.points.isEmpty) return;
 
-    final rect = track.currentBoundingBox;
+    final rect = _displayRectForTrack(track);
     if (rect == null) return;
 
     final speedText = '${track.points.last.speed.toStringAsFixed(1)} км/ч';
@@ -9392,7 +9606,7 @@ class _AiAnalyticsPanelWidgetState extends State<AiAnalyticsPanelWidget>
           if (items.isEmpty)
             Padding(
               padding: const EdgeInsets.only(bottom: 10),
-              child: _emptyText('AI пока не предложил действий в этом разделе.'),
+              child: _emptyText('AI пока не нашёл действий в этом разделе. Они появятся здесь автоматически во время анализа.'),
             ),
           ...items.map((e) => _ttdSuggestionTile(e, color)),
           const SizedBox(height: 8),
@@ -27577,15 +27791,13 @@ class VideoMatchReviewPlaybackController extends ChangeNotifier {
   void openAiVideo() {
     final state = _state;
     if (state == null) return;
-    // AI — часть той же видеосцены. При открытии сразу запускаем локальный
-    // YOLO-overlay: рамки игроков/мяча и Track ID появляются поверх видео,
-    // а тяжёлый серверный анализ событий/TTD запускается отдельно.
+    // В production используем только SPORTOTEKA Video AI WebSocket.
+    // Старые REST /ai/analyze_frame* здесь намеренно не запускаются.
     state._tabController.animateTo(0);
     state.setState(() {
       state._activeOverlayPanel = ReviewOverlayPanel.analytics;
       state._coachBoardEnabled = false;
     });
-    unawaited(state._ensureYoloOverlayRunning());
     _syncFromState();
   }
 
@@ -27595,9 +27807,8 @@ class VideoMatchReviewPlaybackController extends ChangeNotifier {
   Future<void> startAiAnalysis() async {
     final state = _state;
     if (state == null || state._aiLoading) return;
-    // YOLO должен быть видим сразу на видео, независимо от того, завершился
-    // ли полный серверный анализ матча.
-    await state._ensureYoloOverlayRunning();
+    // Единственный transport для production Video AI — рабочий WebSocket:
+    // wss://sportotekaapp.ru/ws-video-analysis/
     await state._startServerAiAnalysis();
     _syncFromState();
   }
@@ -27766,7 +27977,52 @@ class _VideoMatchReviewScreenState extends State<VideoMatchReviewScreen>
   bool get _effectiveInternalVideoControls => true;
      
      void _bindAiTrackToPlayer() {
-  debugPrint('bind ai track tapped');
+  unawaited(_bindAiTrackToPlayerAsync());
+}
+
+Future<void> _bindAiTrackToPlayerAsync() async {
+  final track = _aiTracking.selectedTrack ?? _aiTracking.lockedTrack;
+  if (track == null) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Сначала выбери трек игрока на видео')),
+      );
+    }
+    return;
+  }
+
+  await _pickOwnPlayerForAi();
+  if (_selectedPlayer == null) return;
+
+  final playerId = _i(_selectedPlayer!['id']);
+  if (playerId <= 0) return;
+
+  final playerName = _playerFullName(_selectedPlayer!);
+
+  track.boundPlayerId = playerId;
+  track.boundPlayerName = playerName;
+  _aiTrackPlayerBindings[track.id] = playerId;
+  _aiTrackPlayerNames[track.id] = playerName;
+
+  _aiTracking.bindSelectedTrackToPlayer(
+    playerId: playerId,
+    playerName: playerName,
+  );
+
+  await _aiServerController.bindPlayer(
+    trackId: track.id,
+    playerId: playerId,
+    playerName: playerName,
+  );
+
+  _scheduleAutoPersistAiTtd();
+
+  if (mounted) {
+    setState(() {});
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('$playerName привязан к треку ${track.id}')),
+    );
+  }
 }
 
 void _jumpToTime(int timeMs) {
@@ -28074,12 +28330,37 @@ void _pushCoachUndo() {
   }
 }
 
+Future<void> _pauseForEditing({bool syncAiFrame = true}) async {
+  if (!_controller.value.isInitialized) return;
+
+  _aiOverlayFrozen = true;
+  await _controller.pause();
+  final currentMs = _controller.value.position.inMilliseconds;
+
+  if (syncAiFrame && _useServerAi && _aiServerController.hasJob) {
+    final packet = await _aiServerController.loadFramePacket(currentMs);
+    if (packet != null && mounted && (packet.timeMs - currentMs).abs() <= 1200) {
+      _applyServerPacketToOverlay(packet);
+    }
+  }
+
+  if (mounted) {
+    setState(() {
+      if (_aiTracking.isRunning || _aiLoading) {
+        _aiStatusText = 'Разбор на паузе • AI продолжает обработку в фоне';
+      }
+    });
+    _notifyPlaybackBridge();
+  }
+}
+
 void _toggleCoachBoard() {
-  if (_controller.value.isInitialized) {
-    _controller.pause();
+  final enabling = !_coachBoardEnabled;
+  if (enabling) {
+    unawaited(_pauseForEditing());
   }
   setState(() {
-    _coachBoardEnabled = !_coachBoardEnabled;
+    _coachBoardEnabled = enabling;
     _showOverlayUi = true;
   });
   ScaffoldMessenger.of(context).showSnackBar(
@@ -28092,9 +28373,7 @@ void _toggleCoachBoard() {
 }
 
 void _coachPauseAndNote() {
-  if (_controller.value.isInitialized) {
-    _controller.pause();
-  }
+  unawaited(_pauseForEditing());
   final time = _controller.value.isInitialized
       ? _formatAiTime(_controller.value.position.inMilliseconds)
       : '0:00';
@@ -28301,6 +28580,17 @@ int? _lastAppliedServerFrameSignature;
 final Map<String, List<TrackPoint>> _serverAiTrackHistory = <String, List<TrackPoint>>{};
 final Map<String, PlayerTrack> _serverAiLastTracks = <String, PlayerTrack>{};
 int _lastServerAiPacketTimeMs = -1;
+static const double _aiAutoSaveMinConfidence = 0.62;
+final Map<String, int> _aiTrackPlayerBindings = <String, int>{};
+final Map<String, String> _aiTrackPlayerNames = <String, String>{};
+final Set<String> _aiPersistedTtdKeys = <String>{};
+final Set<String> _aiSavingTtdKeys = <String>{};
+bool _aiPersistenceIndexLoaded = false;
+bool _aiAutoSaveRunning = false;
+Timer? _aiAutoSaveTimer;
+bool _aiAlreadyAnalyzed = false;
+DateTime? _aiAnalyzedAt;
+
   
   Widget _buildActionRailOnly() {
   return Align(
@@ -28391,17 +28681,72 @@ String? _buildLocalVideoPathFromUrl(String? url) {
   return '/var/www/sportoteka$relative';
 }
 
+String get _aiAnalyzedPrefsKey =>
+    'sportoteka_ai_analyzed_${widget.teamId}_${widget.matchId}';
+
+String get _aiAnalyzedAtPrefsKey =>
+    'sportoteka_ai_analyzed_at_${widget.teamId}_${widget.matchId}';
+
+Future<void> _restoreAiAnalyzedMarker() async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final analyzed = prefs.getBool(_aiAnalyzedPrefsKey) ?? false;
+    final analyzedAtRaw = prefs.getString(_aiAnalyzedAtPrefsKey);
+
+    if (!mounted) return;
+
+    setState(() {
+      _aiAlreadyAnalyzed = analyzed;
+      _aiAnalyzedAt = analyzedAtRaw == null
+          ? null
+          : DateTime.tryParse(analyzedAtRaw);
+
+      if (analyzed) {
+        _aiUploadProgress = 1.0;
+        _aiStatusText = 'Матч проанализирован • результат сохранён';
+      }
+    });
+    _notifyPlaybackBridge();
+  } catch (e) {
+    debugPrint('AI marker restore warning: $e');
+  }
+}
+
+Future<void> _saveAiAnalyzedMarker() async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final now = DateTime.now();
+    await prefs.setBool(_aiAnalyzedPrefsKey, true);
+    await prefs.setString(_aiAnalyzedAtPrefsKey, now.toIso8601String());
+
+    if (!mounted) return;
+    setState(() {
+      _aiAlreadyAnalyzed = true;
+      _aiAnalyzedAt = now;
+    });
+  } catch (e) {
+    debugPrint('AI marker save warning: $e');
+  }
+}
+
 Future<void> _startServerAiAnalysis() async {
   if (_aiLoading) return;
 
-  // Визуальный детектор запускается сразу и независимо от тяжёлого анализа
-  // матча. Поэтому bbox/мяч появляются поверх видео до завершения job.
-  unawaited(_ensureYoloOverlayRunning());
+  _aiSavingTtdKeys.clear();
+  _aiPersistenceIndexLoaded = false;
+  _aiAutoSaveTimer?.cancel();
+  _aiAutoSaveTimer = null;
+
+  // Рамки теперь приходят напрямую из рабочего SPORTOTEKA Video AI WebSocket
+  // (analysis_frame -> players -> bbox). Старый REST /analyze_frame здесь не запускаем.
 
   if (mounted) {
     setState(() {
       _aiLoading = true;
-      _aiStatusText = 'Запуск AI анализа...';
+      _aiUploading = true;
+      _aiUploadProgress = 0.01;
+      _aiStatusText = 'Запускаю полный AI-анализ: игроки, мяч, события и ТТД...';
+      _activeOverlayPanel = ReviewOverlayPanel.analytics;
     });
     _notifyPlaybackBridge();
   }
@@ -28409,10 +28754,20 @@ Future<void> _startServerAiAnalysis() async {
   try {
     final localVideoPath = _buildLocalVideoPathFromUrl(widget.videoUrl);
 
+    String colorToHex(Color color) {
+      final rgb = color.value & 0x00FFFFFF;
+      return '#${rgb.toRadixString(16).padLeft(6, '0').toUpperCase()}';
+    }
+
     final createdJobId = await _aiServerController.createAnalysisJob(
       matchId: widget.matchId,
+      teamId: widget.teamId,
       videoUrl: widget.videoUrl,
       localVideoPath: localVideoPath,
+      teamColors: <String, dynamic>{
+        'home': colorToHex(_myTeamConfig.primaryColor),
+        'away': colorToHex(_opponentTeamConfig.primaryColor),
+      },
     );
     if (!mounted) return;
 debugPrint('STEP 1 createdJobId = $createdJobId'); 
@@ -28420,6 +28775,7 @@ debugPrint('STEP 1 createdJobId = $createdJobId');
       if (mounted) {
         setState(() {
           _aiLoading = false;
+          _aiUploading = false;
           _aiStatusText =
               'Ошибка запуска AI: ${_aiServerController.errorText ?? 'unknown'}';
         });
@@ -28434,7 +28790,8 @@ debugPrint('STEP 1 createdJobId = $createdJobId');
 
     // Не ставим 5 fps для длинного матча: сервер начинает считать часами,
     // а во время незавершённого job Flutter может получать пустые кадры.
-    // Для плавности движение интерполируется на клиенте между AI-кадрами.
+    // Для плавности bbox интерполируется/кратко прогнозируется на клиенте
+    // между AI-кадрами, поэтому оверлей обновляется с частотой отрисовки видео.
     final liveSamplingFps = videoDurationMinutes > 20
         ? 0.7
         : videoDurationMinutes > 8
@@ -28454,6 +28811,7 @@ debugPrint('STEP 2 tracking=${identityHashCode(_aiTracking)}');
       if (mounted) {
         setState(() {
           _aiLoading = false;
+          _aiUploading = false;
           _aiStatusText =
               'Не удалось запустить обработку: ${_aiServerController.errorText ?? 'unknown'}';
         });
@@ -28493,9 +28851,14 @@ debugPrint('STEP 3 AFTER APPLY aiMatchStats = ${_aiTracking.aiMatchStats}');
     if (mounted) {
       setState(() {
         _aiLoading = false;
-        _aiStatusText = 'AI готов: $eventsCount событий, $ttdCount ТТД';
+        _aiUploading = false;
+        _aiUploadProgress = 1.0;
+        _aiAlreadyAnalyzed = true;
+        _aiStatusText =
+            'Матч проанализирован • $eventsCount событий • $ttdCount ТТД';
       });
       _notifyPlaybackBridge();
+      unawaited(_saveAiAnalyzedMarker());
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -28522,6 +28885,7 @@ debugPrint('STEP 3 AFTER APPLY aiMatchStats = ${_aiTracking.aiMatchStats}');
     if (mounted) {
       setState(() {
         _aiLoading = false;
+        _aiUploading = false;
         _aiStatusText = 'Ошибка AI: $e';
       });
       _notifyPlaybackBridge();
@@ -28549,6 +28913,299 @@ int _aiSafeCount(dynamic value) {
     }
   }
   return 0;
+}
+
+void _scheduleAutoPersistAiTtd() {
+  if (!mounted || _aiAutoSaveTimer != null) return;
+
+  _aiAutoSaveTimer = Timer(const Duration(milliseconds: 700), () {
+    _aiAutoSaveTimer = null;
+    unawaited(_autoPersistAiTtd());
+  });
+}
+
+Future<void> _loadAiPersistenceIndex() async {
+  if (_aiPersistenceIndexLoaded) return;
+
+  try {
+    final response = await http.post(
+      Uri.parse(ApiConstants.getMatchTtdReportUrl),
+      body: {'match_id': widget.matchId.toString()},
+    ).timeout(const Duration(seconds: 15));
+
+    final data = Formatters.decodeResponse(response);
+
+    void addExisting(dynamic raw) {
+      if (raw is! Map) return;
+      final event = Map<String, dynamic>.from(raw);
+      final playerId = _i(event['player_id']);
+      final code = _normalizeMetricCode(
+        (event['event_type'] ?? event['ttd_code'] ?? event['code'] ?? '')
+            .toString(),
+      );
+      final secondsRaw = event['timecode_seconds'] ??
+          event['video_time_seconds'] ??
+          event['time_seconds'];
+      final seconds = secondsRaw is num
+          ? secondsRaw.toDouble()
+          : double.tryParse('${secondsRaw ?? ''}') ?? 0.0;
+
+      if (playerId > 0 && code.isNotEmpty) {
+        _aiPersistedTtdKeys.add(
+          _aiTtdStorageKey(playerId, code, (seconds * 1000).round()),
+        );
+      }
+    }
+
+    final episodes = data['episodes'];
+    if (episodes is List) {
+      for (final episode in episodes) {
+        if (episode is! Map) continue;
+        final children = episode['children'];
+        if (children is List) {
+          for (final child in children) {
+            addExisting(child);
+          }
+        }
+      }
+    }
+
+    final events = data['events'];
+    if (events is List) {
+      for (final event in events) {
+        addExisting(event);
+      }
+    }
+  } catch (e) {
+    debugPrint('AI TTD existing-index warning: $e');
+  } finally {
+    _aiPersistenceIndexLoaded = true;
+  }
+}
+
+String _aiTtdStorageKey(int playerId, String code, int timeMs) {
+  final second = (timeMs / 1000.0).round();
+  return '$playerId|${_normalizeMetricCode(code)}|$second';
+}
+
+int _resolveAiSuggestionPlayerId(AiTtdSuggestion suggestion) {
+  final meta = suggestion.meta ?? const <String, dynamic>{};
+  final team = (meta['team'] ?? '').toString().trim().toLowerCase();
+  final ownTeam = _sideTagToString(_myTeamConfig.sideTag).toLowerCase();
+
+  if (team.isNotEmpty && team != ownTeam) return 0;
+
+  final direct = _i(meta['player_id']);
+  if (direct > 0) return direct;
+
+  final participants = meta['participants'];
+  if (participants is List) {
+    for (final raw in participants) {
+      if (raw is! Map) continue;
+      final participant = Map<String, dynamic>.from(raw);
+      final role = (participant['role'] ?? participant['kind'] ?? '')
+          .toString()
+          .toLowerCase();
+      if (role == 'target' || role == 'receiver') continue;
+      final id = _i(participant['player_id'] ?? participant['id']);
+      if (id > 0) return id;
+    }
+  }
+
+  final trackId = (meta['track_id'] ?? '').toString().trim();
+  if (trackId.isNotEmpty) {
+    final remembered = _aiTrackPlayerBindings[trackId];
+    if (remembered != null && remembered > 0) return remembered;
+
+    for (final track in _aiTracking.tracks) {
+      if (track.id == trackId && (track.boundPlayerId ?? 0) > 0) {
+        return track.boundPlayerId!;
+      }
+    }
+  }
+
+  return 0;
+}
+
+String? _persistableAiMetricCode(AiTtdSuggestion suggestion) {
+  final raw = suggestion.code.trim().toLowerCase();
+  final meta = suggestion.meta ?? const <String, dynamic>{};
+
+  if (raw == 'pass') {
+    var direction = (meta['direction'] ?? meta['pass_direction'] ?? '')
+        .toString()
+        .trim()
+        .toLowerCase();
+    var length = (meta['length_type'] ??
+            meta['pass_length'] ??
+            meta['length'] ??
+            '')
+        .toString()
+        .trim()
+        .toLowerCase();
+
+    if (direction.contains('back') || direction.contains('назад')) {
+      direction = 'back';
+    } else if (direction.contains('side') ||
+        direction.contains('lateral') ||
+        direction.contains('попер')) {
+      direction = 'side';
+    } else {
+      direction = 'forward';
+    }
+
+    if (length.contains('long') || length.contains('длин')) {
+      length = 'long';
+    } else if (length.contains('medium') || length.contains('сред')) {
+      length = 'medium';
+    } else {
+      length = 'short';
+    }
+
+    return _normalizeMetricCode('pass_${direction}_$length');
+  }
+
+  if (raw == 'shot' || raw.contains('shot_on_goal')) {
+    return 'shot_on_goal';
+  }
+  if (raw == 'interception' || raw == 'interception_ball') {
+    return _normalizeMetricCode('interception_ball');
+  }
+  if (raw == 'recovery' || raw == 'recovery_ball') {
+    return _normalizeMetricCode('recovery_ball');
+  }
+  if (raw == 'dribble' || raw == 'feint_dribble') {
+    return 'feint_dribble';
+  }
+  if (raw == 'tackle' || raw == 'duel' || raw == 'tackle_duel') {
+    return 'tackle_duel';
+  }
+  if (raw == 'header' || raw == 'header_play') {
+    return 'header_play';
+  }
+  if (raw == 'throw_in' || raw == 'throw_ins') {
+    return 'throw_ins';
+  }
+
+  const direct = <String>{
+    'goal', 'assist', 'pass_avp', 'mistake',
+    'forward_short', 'forward_medium', 'forward_long',
+    'side_short', 'side_medium', 'side_long',
+    'back_short', 'back_medium', 'back_long',
+    'saves', 'conceded', 'hand_distribution', 'coming_out',
+    'close_combat', 'interceptions', 'outside_box',
+    'pass_short', 'pass_medium', 'pass_long',
+  };
+
+  final normalized = _normalizeMetricCode(raw);
+  return direct.contains(normalized) ? normalized : null;
+}
+
+Future<void> _autoPersistAiTtd() async {
+  if (_aiAutoSaveRunning || !mounted) return;
+  _aiAutoSaveRunning = true;
+
+  try {
+    await _loadAiPersistenceIndex();
+
+    var saved = 0;
+    final suggestions =
+        List<AiTtdSuggestion>.from(_aiTracking.ttdSuggestions);
+
+    for (final suggestion in suggestions) {
+      if (suggestion.confidence < _aiAutoSaveMinConfidence) continue;
+
+      final playerId = _resolveAiSuggestionPlayerId(suggestion);
+      if (playerId <= 0) continue;
+
+      final code = _persistableAiMetricCode(suggestion);
+      if (code == null || code.isEmpty) continue;
+
+      final key = _aiTtdStorageKey(playerId, code, suggestion.timeMs);
+      if (_aiPersistedTtdKeys.contains(key) ||
+          _aiSavingTtdKeys.contains(key)) {
+        continue;
+      }
+
+      _aiSavingTtdKeys.add(key);
+      try {
+        final ok = await _saveAiTtdDirect(
+          suggestion: suggestion,
+          playerId: playerId,
+          metricCode: code,
+        );
+        if (ok) {
+          _aiPersistedTtdKeys.add(key);
+          saved += 1;
+        }
+      } finally {
+        _aiSavingTtdKeys.remove(key);
+      }
+    }
+
+    if (saved > 0) {
+      debugPrint(
+        'AI AUTO TTD saved=$saved total=${_aiPersistedTtdKeys.length}',
+      );
+      _scheduleLightReload();
+    }
+  } catch (e) {
+    debugPrint('AI AUTO TTD error: $e');
+  } finally {
+    _aiAutoSaveRunning = false;
+  }
+}
+
+Future<bool> _saveAiTtdDirect({
+  required AiTtdSuggestion suggestion,
+  required int playerId,
+  required String metricCode,
+}) async {
+  try {
+    final duration =
+        Duration(milliseconds: math.max(0, suggestion.timeMs));
+    final rating = suggestion.confidence >= 0.85
+        ? 8
+        : suggestion.confidence >= 0.70
+            ? 7
+            : 6;
+
+    final req = http.MultipartRequest(
+      'POST',
+      Uri.parse(ApiConstants.addEventUrl),
+    );
+
+    req.fields['match_id'] = widget.matchId.toString();
+    req.fields['team_id'] = widget.teamId.toString();
+    req.fields['player_id'] = playerId.toString();
+    req.fields['coach_id'] = widget.coachId.toString();
+    req.fields['event_type'] = _normalizeMetricCode(metricCode);
+    req.fields['event_title'] = suggestion.title;
+    req.fields['note'] =
+        'SPORTOTEKA AI • авто • уверенность ${(suggestion.confidence * 100).round()}%';
+    req.fields['minute'] = duration.inMinutes.toString();
+    req.fields['second'] = duration.inSeconds.remainder(60).toString();
+    req.fields['timecode_seconds'] =
+        (suggestion.timeMs / 1000.0).toStringAsFixed(3);
+    req.fields['rating'] = rating.toString();
+    req.fields['is_positive'] = suggestion.success ? '1' : '0';
+
+    final streamed =
+        await req.send().timeout(const Duration(seconds: 30));
+    final response = await http.Response.fromStream(streamed);
+    final data = Formatters.decodeResponse(response);
+
+    if (data['success'] == true) return true;
+
+    debugPrint(
+      'AI AUTO TTD save rejected: code=$metricCode '
+      'player=$playerId response=$data',
+    );
+  } catch (e) {
+    debugPrint('AI AUTO TTD save failed: $e');
+  }
+
+  return false;
 }
 
 void _onVideoPositionChanged() {
@@ -28648,6 +29305,20 @@ Widget _buildPassNetworkBadge() {
 void _onAiServerControllerChanged() {
   if (!mounted || _isApplyingServerFramePacket) return;
 
+  final status = _aiServerController.jobStatus;
+  if (status != null) {
+    final nextProgress = (status.progress / 100.0).clamp(0.0, 1.0).toDouble();
+    final running = !status.isDone && !status.isFailed;
+    if ((_aiUploadProgress - nextProgress).abs() > 0.0005 ||
+        _aiUploading != running) {
+      setState(() {
+        _aiUploadProgress = nextProgress;
+        _aiUploading = running;
+      });
+      _notifyPlaybackBridge();
+    }
+  }
+
   final packet = _aiServerController.currentFramePacket;
   if (packet == null) return;
 
@@ -28661,14 +29332,48 @@ void _onAiServerControllerChanged() {
   if (signature == _lastAppliedServerFrameSignature) return;
   _lastAppliedServerFrameSignature = signature;
 
+  _aiTracking.mergeServerFrameAnalysis(packet.raw);
+  _scheduleAutoPersistAiTtd();
+
+  if (_controller.value.isInitialized) {
+    final playbackMs = _controller.value.position.inMilliseconds;
+    final deltaMs = (packet.timeMs - playbackMs).abs();
+
+    // When the coach pauses the video to edit/draw, incoming server frames may
+    // continue to be analysed in the background. Do not let their rectangles
+    // move over a frozen video frame. Only a packet close to the paused
+    // timestamp is allowed to update the overlay.
+    if (!_controller.value.isPlaying && deltaMs > 260) {
+      return;
+    }
+
+    // While video is playing, never draw a remote timestamp over the current
+    // frame. Ask the cache for the nearest packet instead.
+    if (_controller.value.isPlaying && deltaMs > 1200) {
+      if (!_isLoadingServerFrame) {
+        _isLoadingServerFrame = true;
+        unawaited(
+          _aiServerController.loadFramePacket(playbackMs).whenComplete(() {
+            if (mounted) {
+              setState(() => _isLoadingServerFrame = false);
+            }
+          }),
+        );
+      }
+      return;
+    }
+  }
+
   _applyServerPacketToOverlay(packet);
 
   if (!mounted) return;
   setState(() {
     _isLoadingServerFrame = false;
     if (packet.tracks.isNotEmpty) {
+      final progressPercent = (_aiUploadProgress * 100).round();
       _aiStatusText =
-          'AI кадр ${Formatters.formatDuration(Duration(milliseconds: packet.timeMs))}: ${packet.tracks.length} игроков';
+          'AI $progressPercent% • ${Formatters.formatDuration(Duration(milliseconds: packet.timeMs))} • '
+          '${packet.tracks.length} игроков • ${_aiTracking.ttdSuggestions.length} ТТД';
     }
   });
   _notifyPlaybackBridge();
@@ -28676,6 +29381,13 @@ void _onAiServerControllerChanged() {
 
 void _applyServerPacketToOverlay(AiFramePacket packet) {
   if (!mounted) return;
+
+  if (_aiOverlayFrozen) {
+    _pendingFrozenAiPacket = packet;
+    _lastServerAiPacketTimeMs = packet.timeMs;
+    return;
+  }
+
   debugPrint('APPLY PACKET: ${packet.tracks.length} tracks, time=${packet.timeMs}');
 
   final mappedTracks = mapServerTracksToPlayerTracks(packet.tracks);
@@ -28726,14 +29438,16 @@ void _applyServerPacketToOverlay(AiFramePacket packet) {
   // в футбольном видео бывают перекрытия, камера и дальний план. Держим
   // последний bbox короткое время, чтобы квадраты не моргали и не пропадали.
   _serverAiLastTracks.removeWhere(
-    (id, track) => frameTimeMs - track.lastSeenTimeMs > 1600,
+    (id, track) => frameTimeMs - track.lastSeenTimeMs > 900,
   );
 
   final stabilizedTracks = <PlayerTrack>[
     ..._serverAiLastTracks.values,
   ];
 
+  _autoBindTracksByJersey(stabilizedTracks);
   _aiTracking.tracks = stabilizedTracks;
+  _applyServerBallPacket(packet);
 
   if (stabilizedTracks.isNotEmpty) {
     final selectedId = _aiTracking.selectedTrackId;
@@ -28747,6 +29461,17 @@ void _applyServerPacketToOverlay(AiFramePacket packet) {
     _aiTracking.lockedTrack = selected;
     _aiTracking.selectedTrackId = selected.id;
     _aiTracking.selectedTrack = selected;
+
+    if (selected.boundPlayerId != null) {
+      final roster = _matchPlayers.isNotEmpty ? _matchPlayers : _players;
+      for (final player in roster) {
+        if (_i(player['id']) == selected.boundPlayerId) {
+          _selectedPlayer = player;
+          break;
+        }
+      }
+    }
+
     _aiTracking.lockedRect = selected.currentBoundingBox;
     _aiTracking.lockedPosition = selected.currentPosition;
     _aiTracking.isLocked = true;
@@ -28763,6 +29488,134 @@ void _applyServerPacketToOverlay(AiFramePacket packet) {
   _aiTracking.notifyListeners();
   if (mounted) setState(() => _isLoadingServerFrame = false);
   _isApplyingServerFramePacket = false;
+}
+
+void _applyServerBallPacket(AiFramePacket packet) {
+  final raw = packet.ball;
+  if (raw == null || raw.isEmpty) return;
+
+  double asDouble(dynamic value) {
+    if (value is num) return value.toDouble();
+    return double.tryParse('${value ?? ''}') ?? 0.0;
+  }
+
+  Rect? rect;
+  final bbox = raw['bbox'] ?? raw['box'] ?? raw['rect'];
+
+  if (bbox is List && bbox.length >= 4) {
+    final x1 = asDouble(bbox[0]);
+    final y1 = asDouble(bbox[1]);
+    final x2 = asDouble(bbox[2]);
+    final y2 = asDouble(bbox[3]);
+    if (x2 > x1 && y2 > y1) {
+      rect = Rect.fromLTRB(x1, y1, x2, y2);
+    }
+  } else if (bbox is Map) {
+    final b = Map<String, dynamic>.from(bbox);
+    final x1 = asDouble(b['left'] ?? b['x1'] ?? b['x']);
+    final y1 = asDouble(b['top'] ?? b['y1'] ?? b['y']);
+    final x2 = b['right'] != null || b['x2'] != null
+        ? asDouble(b['right'] ?? b['x2'])
+        : x1 + asDouble(b['width'] ?? b['w']);
+    final y2 = b['bottom'] != null || b['y2'] != null
+        ? asDouble(b['bottom'] ?? b['y2'])
+        : y1 + asDouble(b['height'] ?? b['h']);
+    if (x2 > x1 && y2 > y1) {
+      rect = Rect.fromLTRB(x1, y1, x2, y2);
+    }
+  }
+
+  if (rect == null) {
+    final center = raw['center'];
+    if (center is Map) {
+      final c = Map<String, dynamic>.from(center);
+      final x = asDouble(c['x']);
+      final y = asDouble(c['y']);
+      if (x > 0 || y > 0) {
+        rect = Rect.fromCenter(center: Offset(x, y), width: 10, height: 10);
+      }
+    }
+  }
+
+  if (rect == null) return;
+
+  final normalized = _normalizeServerRectToAnalysisSpace(
+    rect,
+    _analysisFrameSize(),
+  );
+  if (normalized == null) return;
+
+  final confidence =
+      asDouble(raw['confidence'] ?? raw['conf']).clamp(0.0, 1.0).toDouble();
+
+  _aiTracking.updateBall(
+    rect: normalized,
+    timeMs: packet.timeMs,
+    confidence: confidence,
+  );
+}
+
+int? _rosterJerseyNumber(Map<String, dynamic> player) {
+  for (final key in const [
+    'jersey_number',
+    'player_number',
+    'game_number',
+    'number',
+  ]) {
+    final raw = player[key];
+    if (raw == null) continue;
+    final value = raw is num ? raw.toInt() : int.tryParse(raw.toString().trim());
+    if (value != null && value > 0 && value <= 99) return value;
+  }
+  return null;
+}
+
+void _autoBindTracksByJersey(List<PlayerTrack> tracks) {
+  final roster = _matchPlayers.isNotEmpty ? _matchPlayers : _players;
+  if (roster.isEmpty) return;
+
+  final ownTeamTag = _sideTagToString(_myTeamConfig.sideTag).toLowerCase();
+  final byNumber = <int, List<Map<String, dynamic>>>{};
+
+  for (final player in roster) {
+    final number = _rosterJerseyNumber(player);
+    if (number == null) continue;
+    byNumber.putIfAbsent(number, () => <Map<String, dynamic>>[]).add(player);
+  }
+
+  for (final track in tracks) {
+    if (track.boundPlayerId != null && track.boundPlayerId! > 0) continue;
+
+    final number = track.jerseyNumber;
+    if (number == null || number <= 0) continue;
+
+    final teamTag = (track.teamTag ?? '').trim().toLowerCase();
+    // Состав в этом экране — наша команда. Не привязываем номер соперника
+    // к футболисту с таким же номером из нашего состава.
+    if (teamTag.isNotEmpty && teamTag != ownTeamTag) continue;
+
+    final candidates = byNumber[number] ?? const <Map<String, dynamic>>[];
+    if (candidates.length != 1) continue;
+
+    final player = candidates.first;
+    final playerId = _i(player['id']);
+    if (playerId <= 0) continue;
+
+    track.boundPlayerId = playerId;
+    final name = _playerFullName(player);
+    track.boundPlayerName = name.isNotEmpty ? name : '№$number';
+
+    _aiTrackPlayerBindings[track.id] = playerId;
+    _aiTrackPlayerNames[track.id] = track.boundPlayerName;
+
+    unawaited(
+      _aiServerController.bindPlayer(
+        trackId: track.id,
+        playerId: playerId,
+        playerName: track.boundPlayerName,
+      ),
+    );
+  }
 }
 
 PlayerTrack _buildLiveServerTrack(PlayerTrack rawTrack, int frameTimeMs) {
@@ -28834,7 +29687,15 @@ PlayerTrack _buildLiveServerTrack(PlayerTrack rawTrack, int frameTimeMs) {
 
   _serverAiTrackHistory[rawTrack.id] = trimmedHistory;
 
+  final rememberedPlayerId =
+      rawTrack.boundPlayerId ?? _aiTrackPlayerBindings[rawTrack.id];
+  final rememberedPlayerName = rememberedPlayerId != null
+      ? (_aiTrackPlayerNames[rawTrack.id] ?? rawTrack.boundPlayerName)
+      : rawTrack.boundPlayerName;
+
   return rawTrack.copyWith(
+    boundPlayerId: rememberedPlayerId,
+    boundPlayerName: rememberedPlayerName,
     points: trimmedHistory,
     speed: motion.speedKmh,
     createdAtMs: trimmedHistory.first.timeMs,
@@ -29052,8 +29913,8 @@ double _estimateMetersPerPixel(double y) {
 
   double _openedPanelWidth() {
     if (_activeOverlayPanel == ReviewOverlayPanel.none) return 0;
-    return 420 + 82 + 14; 
-    // panel width + right rail area + outer gap
+    return 460 + 82 + 14;
+    // На desktop даём ТТД/AI больше воздуха; сам layout всё равно адаптивный.
   }
 
 
@@ -29070,6 +29931,11 @@ double _estimateMetersPerPixel(double y) {
   bool _reviewMapShowAveragePositions = false;
 
   bool _coachBoardEnabled = false;
+  // Во время ручного разбора замораживаем именно визуальный AI-оверлей.
+  // Серверный анализ продолжает считаться в фоне, поэтому пользователь не
+  // теряет прогресс матча, а рамки/карта не «уезжают» из-под редактора.
+  bool _aiOverlayFrozen = false;
+  AiFramePacket? _pendingFrozenAiPacket;
   TacticalToolType _coachTool = TacticalToolType.passArrow;
   Color _coachDrawColor = const Color(0xFFFFD166);
   double _coachStrokeWidth = 4.0;
@@ -29080,6 +29946,16 @@ double _estimateMetersPerPixel(double y) {
   bool _aiFrameProcessing = false;
   bool _isCalibrating = false;
   bool _videoReady = false;
+  double _videoPrepareProgress = 0.02;
+  String _videoPrepareStage = 'Подключение к видео';
+  Timer? _videoPrepareTimer;
+  Timer? _videoInitWatchdog;
+  DateTime? _videoPrepareStartedAt;
+  bool _videoInitSlow = false;
+  String? _videoInitError;
+  int _videoInitAttempt = 0;
+  bool _usingHlsPlayback = false;
+  String? _activePlaybackUrl;
   bool _loading = true;
   bool _saving = false;
   bool _quickSaving = false;
@@ -29167,12 +30043,12 @@ bool _undoInProgress = false;
 
 double _adaptivePanelWidth(double screenWidth) {
   if (screenWidth < 900) {
-    return 300;
+    return 320;
   }
   if (screenWidth < 1200) {
-    return 360;
+    return 380;
   }
-  return 420;
+  return 460;
 }
 
 
@@ -30026,7 +30902,7 @@ double _adaptiveGap(double screenWidth) {
             if (!compact) ...[
               _buildReviewTopButton('Эпизод', Icons.add_photo_alternate_outlined, _createEpisodeFromCurrentFrame, false),
               const SizedBox(width: 8),
-              _buildReviewTopButton(_aiLoading ? 'AI...' : 'AI анализ', Icons.auto_awesome_rounded, _aiLoading ? null : _startServerAiAnalysis, true),
+              _buildReviewTopButton(_aiLoading ? 'AI ${(_aiUploadProgress * 100).round()}%' : 'Полный AI-анализ', Icons.auto_awesome_rounded, _aiLoading ? null : _startServerAiAnalysis, true),
               const SizedBox(width: 8),
             ],
             _buildReviewTopIcon(Icons.tune_rounded, onTap: () => _togglePanel(ReviewOverlayPanel.analytics)),
@@ -30565,7 +31441,6 @@ double _adaptiveGap(double screenWidth) {
                                 _buildVideoSection(),
                                 _buildSelectedPlayerOverlayCard(),
                                 _buildSelectedEpisodeOverlayBadge(),
-                                _buildBottomPlayersStrip(),
                               ],
                             ),
                           ),
@@ -31404,6 +32279,13 @@ void _toggleOverlay() {
   void _togglePanel(ReviewOverlayPanel panel) {
     if (!mounted) return;
 
+    final opening = _activeOverlayPanel != panel;
+    if (opening &&
+        (panel == ReviewOverlayPanel.ttd ||
+            panel == ReviewOverlayPanel.episodes)) {
+      unawaited(_pauseForEditing(syncAiFrame: true));
+    }
+
     setState(() {
       if (_activeOverlayPanel == panel) {
         _activeOverlayPanel = ReviewOverlayPanel.none;
@@ -31568,6 +32450,39 @@ Widget _buildAiQuickLaunchCard() {
             ),
           ),
         ],
+        if (_aiAlreadyAnalyzed) ...[
+          const SizedBox(height: 12),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: const Color(0xFFEAF7F0),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.check_circle_rounded,
+                  size: 18,
+                  color: Color(0xFF1F7A4D),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _aiAnalyzedAt == null
+                        ? 'Матч проанализирован. Результат сохранён.'
+                        : 'Матч проанализирован • ${_aiAnalyzedAt!.day.toString().padLeft(2, '0')}.${_aiAnalyzedAt!.month.toString().padLeft(2, '0')} ${_aiAnalyzedAt!.hour.toString().padLeft(2, '0')}:${_aiAnalyzedAt!.minute.toString().padLeft(2, '0')}',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF1F7A4D),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
         const SizedBox(height: 14),
         Row(
           children: [
@@ -31581,7 +32496,13 @@ Widget _buildAiQuickLaunchCard() {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Icon(Icons.smart_toy_outlined),
-                label: Text(_aiLoading ? 'AI работает...' : 'Запустить AI'),
+                label: Text(
+                  _aiLoading
+                      ? 'AI ${(_aiUploadProgress * 100).round()}% • ${_aiTracking.ttdSuggestions.length} ТТД'
+                      : _aiAlreadyAnalyzed
+                          ? 'Запустить анализ ещё раз'
+                          : 'Запустить полный AI-анализ',
+                ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF1F7A4D),
                   foregroundColor: Colors.white,
@@ -32453,25 +33374,31 @@ void initState() {
   _aiServerController = AiVideoAnalysisController(
     service: AiVideoAnalysisService(
       baseUrl: 'https://sportotekaapp.ru/ai',
+      webSocketUrl: 'wss://sportotekaapp.ru/ws-video-analysis/',
     ),
   )..addListener(_onAiServerControllerChanged);
 
   _loadInitialData();
+  unawaited(_restoreAiAnalyzedMarker());
 }
 
 
 @override
 void dispose() {
+  _controller.removeListener(_handleVideoControllerChanged);
   _controller.removeListener(_onVideoPositionChanged);
   widget.playbackController?._detach(this);
 
   _playerSearchCtrl.dispose();
   _tabController.dispose();
   _debounceTimer?.cancel();
+  _aiAutoSaveTimer?.cancel();
   _ttdUpdateNotifier.dispose();
   _editTtdNoteCtrl.dispose();
   _tapMarkerTimer?.cancel();
   _overlayAutoHideTimer?.cancel();
+  _videoPrepareTimer?.cancel();
+  _videoInitWatchdog?.cancel();
 
   _controller.dispose();
   _noteCtrl.dispose();
@@ -32498,22 +33425,257 @@ void _setupControllers() {
       if (mounted) setState(() {});
     });
 
-  _controller = VideoPlayerController.networkUrl(Uri.parse(widget.videoUrl))
-    ..initialize().then((_) {
-      if (!mounted) return;
-      setState(() => _videoReady = true);
-      _notifyPlaybackBridge();
-    });
-
-  _controller.addListener(() {
-    _notifyPlaybackBridge();
-    if (mounted) setState(() {});
-  });
-
-  _controller.addListener(_onVideoPositionChanged);
+  _startNetworkVideoController();
   widget.playbackController?._attach(this);
 
   _playerSearchCtrl.addListener(_applyPlayerFilter);
+}
+
+Uri? _buildHlsPlaybackUri() {
+  final original = Uri.tryParse(widget.videoUrl);
+  if (original == null) return null;
+
+  final path = original.path;
+  final lower = path.toLowerCase();
+  const marker = '/uploads/team_matches/';
+  if (!lower.endsWith('.mp4') || !path.contains(marker)) return null;
+
+  final slash = path.lastIndexOf('/');
+  if (slash < 0 || slash >= path.length - 4) return null;
+
+  final fileName = path.substring(slash + 1);
+  final stem = fileName.substring(0, fileName.length - 4);
+  final parent = path.substring(0, slash + 1);
+
+  return original.replace(
+    path: '${parent}hls/$stem/index.m3u8',
+    query: null,
+    fragment: null,
+  );
+}
+
+void _attachVideoControllerListeners() {
+  _controller.addListener(_handleVideoControllerChanged);
+  _controller.addListener(_onVideoPositionChanged);
+}
+
+void _detachVideoControllerListeners() {
+  _controller.removeListener(_handleVideoControllerChanged);
+  _controller.removeListener(_onVideoPositionChanged);
+}
+
+Future<bool> _hlsExists(Uri uri) async {
+  try {
+    final response = await http.head(uri).timeout(const Duration(seconds: 3));
+    return response.statusCode >= 200 && response.statusCode < 300;
+  } catch (_) {
+    return false;
+  }
+}
+
+Future<void> _replaceVideoController(Uri uri) async {
+  final old = _controller;
+  _detachVideoControllerListeners();
+  try {
+    await old.dispose();
+  } catch (_) {}
+
+  _controller = VideoPlayerController.networkUrl(uri);
+  _attachVideoControllerListeners();
+  _activePlaybackUrl = uri.toString();
+}
+
+Future<void> _initializePreferredVideoSource(int attempt) async {
+  final mp4Uri = Uri.parse(widget.videoUrl);
+  final hlsUri = _buildHlsPlaybackUri();
+
+  final candidates = <MapEntry<Uri, bool>>[];
+
+  if (hlsUri != null) {
+    if (mounted && attempt == _videoInitAttempt) {
+      setState(() => _videoPrepareStage = 'Проверяю быстрый видеопоток');
+    }
+
+    if (await _hlsExists(hlsUri)) {
+      candidates.add(MapEntry(hlsUri, true));
+    }
+  }
+
+  candidates.add(MapEntry(mp4Uri, false));
+  Object? lastError;
+
+  for (final candidate in candidates) {
+    if (!mounted || attempt != _videoInitAttempt) return;
+
+    final uri = candidate.key;
+    final isHls = candidate.value;
+
+    try {
+      await _replaceVideoController(uri);
+      if (!mounted || attempt != _videoInitAttempt) return;
+
+      setState(() {
+        _usingHlsPlayback = isHls;
+        _activePlaybackUrl = uri.toString();
+        _videoPrepareStage =
+            isHls ? 'Запускаю быстрый поток' : 'Открываю исходное MP4';
+        _videoInitError = null;
+      });
+
+      debugPrint(
+        'VIDEO PLAYBACK: try ${isHls ? 'HLS' : 'MP4'} $uri',
+      );
+
+      await _controller.initialize().timeout(
+        Duration(seconds: isHls ? 9 : 20),
+      );
+
+      if (!mounted || attempt != _videoInitAttempt) return;
+
+      _videoPrepareTimer?.cancel();
+      _videoInitWatchdog?.cancel();
+
+      setState(() {
+        _videoReady = true;
+        _videoPrepareProgress = 1.0;
+        _videoPrepareStage = isHls ? 'Поток готов' : 'Видео готово';
+        _videoInitSlow = false;
+        _videoInitError = null;
+      });
+
+      _notifyPlaybackBridge();
+      return;
+    } catch (error, stackTrace) {
+      lastError = error;
+
+      debugPrint(
+        'VIDEO PLAYBACK: ${isHls ? 'HLS' : 'MP4'} failed: $error',
+      );
+      debugPrintStack(stackTrace: stackTrace);
+
+      try {
+        _detachVideoControllerListeners();
+        await _controller.dispose();
+      } catch (_) {}
+
+      if (!mounted || attempt != _videoInitAttempt) return;
+
+      if (isHls) {
+        setState(() {
+          _videoPrepareStage =
+              'HLS не ответил — автоматически переключаюсь на MP4';
+          _videoInitSlow = false;
+          _videoInitError = null;
+        });
+      }
+    }
+  }
+
+  if (!mounted || attempt != _videoInitAttempt) return;
+
+  _videoPrepareTimer?.cancel();
+  _videoInitWatchdog?.cancel();
+
+  setState(() {
+    _videoInitSlow = true;
+    _videoInitError =
+        lastError?.toString() ?? 'Плеер не смог открыть видео';
+    _videoPrepareStage = 'Видео не открылось';
+  });
+}
+
+
+void _startNetworkVideoController() {
+  _videoPrepareTimer?.cancel();
+  _videoInitWatchdog?.cancel();
+
+  final attempt = ++_videoInitAttempt;
+  _videoPrepareStartedAt = DateTime.now();
+  _videoPrepareProgress = 0.0;
+  _videoPrepareStage = 'Открываю видео';
+  _videoInitSlow = false;
+  _videoInitError = null;
+  _videoReady = false;
+  _usingHlsPlayback = false;
+  _activePlaybackUrl = widget.videoUrl;
+
+  _controller = VideoPlayerController.networkUrl(Uri.parse(widget.videoUrl));
+  _attachVideoControllerListeners();
+
+  _videoPrepareTimer = Timer.periodic(const Duration(milliseconds: 500), (_) {
+    if (!mounted || _videoReady || attempt != _videoInitAttempt) return;
+    final elapsed = DateTime.now().difference(
+      _videoPrepareStartedAt ?? DateTime.now(),
+    );
+    final seconds = elapsed.inMilliseconds / 1000.0;
+
+    String stage;
+    if (seconds < 2.0) {
+      stage = 'Соединение с сервером';
+    } else if (seconds < 5.0) {
+      stage = _usingHlsPlayback
+          ? 'Читаю плейлист HLS'
+          : 'Проверяю быстрый видеопоток';
+    } else if (seconds < 10.0) {
+      stage = _usingHlsPlayback
+          ? 'Получаю первый видеофрагмент'
+          : 'Подготавливаю первый кадр';
+    } else {
+      stage = 'Видео открывается дольше обычного';
+    }
+
+    if (_videoPrepareStage != stage) {
+      setState(() => _videoPrepareStage = stage);
+    }
+  });
+
+  _videoInitWatchdog = Timer(const Duration(seconds: 10), () {
+    if (!mounted || _videoReady || attempt != _videoInitAttempt) return;
+    setState(() {
+      _videoInitSlow = true;
+      _videoPrepareStage = 'Видео открывается дольше обычного';
+    });
+  });
+
+  unawaited(_initializePreferredVideoSource(attempt));
+}
+
+void _handleVideoControllerChanged() {
+  if (_controller.value.isInitialized) {
+    final durationMs = _controller.value.duration.inMilliseconds;
+    if (durationMs > 0 && _controller.value.buffered.isNotEmpty) {
+      final bufferedEndMs = _controller.value.buffered
+          .map((range) => range.end.inMilliseconds)
+          .fold<int>(0, (a, b) => a > b ? a : b);
+      _videoPrepareProgress =
+          (bufferedEndMs / durationMs).clamp(0.0, 1.0).toDouble();
+    }
+  }
+  _notifyPlaybackBridge();
+  if (mounted) setState(() {});
+}
+
+Future<void> _retryVideoInitialization() async {
+  if (_videoReady) return;
+  _videoPrepareTimer?.cancel();
+  _videoInitWatchdog?.cancel();
+  _videoInitAttempt += 1; // invalidate callbacks from the old controller
+
+  final oldController = _controller;
+  if (mounted) {
+    setState(() {
+      _videoInitSlow = false;
+      _videoInitError = null;
+      _videoPrepareStage = 'Переподключение к видео';
+      _videoPrepareProgress = 0.0;
+    });
+  }
+
+  try {
+    await oldController.dispose();
+  } catch (_) {}
+  if (!mounted) return;
+  _startNetworkVideoController();
 }
 
 void _notifyPlaybackBridge() {
@@ -33312,6 +34474,7 @@ Future<void> _bindAiTrackToSelectedPlayer() async {
 
   // ==================== МЕТОДЫ ДЛЯ РЕДАКТИРОВАНИЯ ТТД ====================
   Future<void> _editTtdEvent(Map<String, dynamic> ttdEvent) async {
+    await _pauseForEditing();
     final eventId = _i(ttdEvent['id']);
     final eventType = _s(ttdEvent['event_type']);
     final eventTitle = _s(ttdEvent['event_title']);
@@ -34000,6 +35163,9 @@ Future<void> _showTtdEventsList(String metricCode, String metricTitle) async {
   }
 
 Future<void> _warmupDetections() async {
+  // Legacy frame-by-frame REST detector is disabled when server WebSocket AI is enabled.
+  if (_useServerAi) return;
+
   List<DetectedPlayerBox> detections = const [];
   int usedTimeMs = _currentVideoTimeMs();
 
@@ -34509,6 +35675,11 @@ String _aiColorHex(Color color) {
 }
 
 Future<PythonTrackingResult> _detectWithSportotekaAi(int timeMs) async {
+  // Safety gate: the legacy REST detector must never run in server WebSocket mode.
+  if (_useServerAi) {
+    return PythonTrackingResult.empty('legacy REST detector disabled');
+  }
+
   final homeColor = _aiColorHex(_myTeamConfig.primaryColor);
   final awayColor = _aiColorHex(_opponentTeamConfig.primaryColor);
 
@@ -34557,6 +35728,9 @@ Future<List<DetectedPlayerBox>> _detectPlayersForFrame(
   Size? overlaySize,
   BoxFit? fit,
 }) async {
+  // Production path: analysis_frame packets arrive over Video AI WebSocket.
+  // Never POST to /ai/analyze_frame* while _useServerAi is enabled.
+  if (_useServerAi) return const [];
   if (!_videoReady) return const [];
   if (_aiFrameProcessing) return const [];
 
@@ -34684,6 +35858,8 @@ Future<List<DetectedPlayerBox>> _detectPlayersForFrame(
 }
 
 Future<void> _ensureYoloOverlayRunning() async {
+  // Legacy local/REST overlay only. Server mode receives bbox via WebSocket.
+  if (_useServerAi) return;
   if (!_videoReady || !_controller.value.isInitialized) return;
   if (_aiTracking.isRunning) return;
 
@@ -34781,6 +35957,7 @@ void _startAiLoopDirectly({
   required Size overlaySize,
   required BoxFit fit,
 }) {
+  if (_useServerAi) return;
   if (_aiTracking.isRunning) return;
 
   _aiTracking.sampleMs = 600;
@@ -34836,6 +36013,7 @@ void _startAiLoopDirectly({
     if (_creatingEpisode) return;
     if (!_videoReady) return;
 
+    await _pauseForEditing();
     setState(() => _creatingEpisode = true);
 
     try {
@@ -34936,6 +36114,7 @@ Future<void> _clearSelectedEpisode() async {
 }
 
   Future<void> _editEpisode(Map<String, dynamic> episode) async {
+    await _pauseForEditing();
     _titleCtrl.text = _s(episode["event_title"]);
     _noteCtrl.text = _s(episode["note"]);
 
@@ -36167,11 +37346,107 @@ Future<void> _openTeamIdentitySheet() async {
   );
 }
 
+Widget _buildVideoLoadingPlaceholder({bool dark = true}) {
+  final foreground = dark ? Colors.white : ReviewUiPalette.text;
+  final muted = dark ? Colors.white70 : ReviewUiPalette.textMuted;
+
+  return Container(
+    color: dark ? Colors.black : ReviewUiPalette.bg,
+    alignment: Alignment.center,
+    padding: const EdgeInsets.all(24),
+    child: ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 380),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            width: 42,
+            height: 42,
+            child: CircularProgressIndicator(
+              // Real byte progress is unavailable before AVPlayer initializes.
+              // An indeterminate loader is more truthful than a fake 92%.
+              value: null,
+              strokeWidth: 4,
+              color: ReviewUiPalette.primary,
+              backgroundColor: dark ? Colors.white12 : ReviewUiPalette.line,
+            ),
+          ),
+          const SizedBox(height: 14),
+          Text(
+            _videoInitError == null ? 'Подготовка видео' : 'Видео не открылось',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: foreground,
+              fontSize: 15,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            _videoPrepareStage,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: muted,
+              fontSize: 11.5,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _usingHlsPlayback ? 'Быстрый поток HLS' : 'MP4',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: (_usingHlsPlayback ? ReviewUiPalette.primary : muted).withOpacity(0.9),
+              fontSize: 10,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 10),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: LinearProgressIndicator(
+              value: null,
+              minHeight: 5,
+              backgroundColor: dark ? Colors.white12 : ReviewUiPalette.line,
+              valueColor: const AlwaysStoppedAnimation<Color>(
+                ReviewUiPalette.primary,
+              ),
+            ),
+          ),
+          if (_videoInitSlow || _videoInitError != null) ...[
+            const SizedBox(height: 14),
+            Text(
+              _videoInitError != null
+                  ? 'Проверь доступность MP4 и попробуй переподключить видео.'
+                  : _usingHlsPlayback
+                  ? 'Первый фрагмент HLS ещё не готов. Можно переподключить поток.'
+                  : 'MP4 не инициализировался вовремя. Для больших матчей приложение автоматически предпочитает HLS, если он подготовлен на сервере.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: muted.withOpacity(0.86),
+                fontSize: 10.5,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextButton.icon(
+              onPressed: _retryVideoInitialization,
+              icon: const Icon(Icons.refresh_rounded, size: 17),
+              label: const Text('Переподключить видео'),
+              style: TextButton.styleFrom(
+                foregroundColor: ReviewUiPalette.primary,
+              ),
+            ),
+          ],
+        ],
+      ),
+    ),
+  );
+}
+
 Widget _buildVideoSection() {
   if (!_videoReady) {
-    return const Center(
-      child: CircularProgressIndicator(),
-    );
+    return _buildVideoLoadingPlaceholder();
   }
 
   return Stack(
@@ -36766,120 +38041,136 @@ Widget _buildPlayersPanelWithBottomSelection() {
   }
   
   Widget _buildQuickTtdDockCompact() {
-  return RepaintBoundary(
-    child: ValueListenableBuilder(
-      valueListenable: _ttdUpdateNotifier,
-      builder: (context, _, __) {
-        return Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(26),
-            border: Border.all(color: const Color(0xFFE2E8F0)),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.04),
-                blurRadius: 14,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
-          // ⭐ ВЕСЬ КОНТЕНТ ПРОКРУЧИВАЕТСЯ ⭐
-          child: SingleChildScrollView(
-            physics: const BouncingScrollPhysics(
-              parent: AlwaysScrollableScrollPhysics(),
+    return RepaintBoundary(
+      child: ValueListenableBuilder(
+        valueListenable: _ttdUpdateNotifier,
+        builder: (context, _, __) {
+          return Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.035),
+                  blurRadius: 12,
+                  offset: const Offset(0, 6),
+                ),
+              ],
             ),
             child: Column(
               children: [
+                // Верх ТТД остаётся всегда видимым — больше не нужно
+                // прокручивать маленькое окно вверх/вниз ради игрока и вкладок.
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 10, 14, 6),
+                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
                   child: Row(
                     children: [
-                      const Expanded(child: SizedBox()),
+                      const Icon(Icons.bolt_rounded,
+                          size: 17, color: Color(0xFF1F7A4D)),
+                      const SizedBox(width: 7),
+                      const Expanded(
+                        child: Text(
+                          'Быстрые ТТД',
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w900,
+                            color: Color(0xFF0F172A),
+                          ),
+                        ),
+                      ),
                       if (_quickSaving)
                         const SizedBox(
-                          width: 16,
-                          height: 16,
+                          width: 15,
+                          height: 15,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         ),
                     ],
                   ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
                   child: _buildQuickSelectedInfoCard(),
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 8),
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
-                  child: _buildMiniAnalyticsBoard(), // Этот метод не меняем
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: _buildMiniAnalyticsBoard(),
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 8),
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
                   child: _buildQuickTtdSectionTabs(),
                 ),
-                const SizedBox(height: 10),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
-                  child: TextField(
-                    controller: _noteCtrl,
-                    maxLines: 2,
-                    minLines: 1,
-                    style: const TextStyle(fontSize: 12),
-                    decoration: InputDecoration(
-                      hintText: 'Комментарий к действию',
-                      isDense: true,
-                      filled: true,
-                      fillColor: const Color(0xFFF8FAFC),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 12,
-                      ),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide.none,
-                      ),
+                const SizedBox(height: 8),
+                Container(height: 1, color: const Color(0xFFF1F5F9)),
+                Expanded(
+                  child: SingleChildScrollView(
+                    primary: false,
+                    physics: const BouncingScrollPhysics(
+                      parent: AlwaysScrollableScrollPhysics(),
+                    ),
+                    padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+                    child: Column(
+                      children: [
+                        TextField(
+                          controller: _noteCtrl,
+                          maxLines: 2,
+                          minLines: 1,
+                          style: const TextStyle(fontSize: 12),
+                          decoration: InputDecoration(
+                            hintText: 'Комментарий к действию',
+                            isDense: true,
+                            filled: true,
+                            fillColor: const Color(0xFFF8FAFC),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 11,
+                              vertical: 10,
+                            ),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide.none,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        _buildQuickTtdSectionBody(),
+                        if (_ttdPanelMessage != null) ...[
+                          const SizedBox(height: 8),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: _ttdPanelMessageIsError
+                                  ? Colors.red.withOpacity(0.08)
+                                  : Colors.green.withOpacity(0.08),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              _ttdPanelMessage!,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: _ttdPanelMessageIsError
+                                    ? Colors.red.shade700
+                                    : Colors.green.shade700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
                 ),
-                const SizedBox(height: 10),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-                  child: _buildQuickTtdSectionBody(),
-                ),
-                if (_ttdPanelMessage != null)
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: _ttdPanelMessageIsError
-                          ? Colors.red.withOpacity(0.08)
-                          : Colors.green.withOpacity(0.08),
-                      borderRadius: const BorderRadius.vertical(
-                        bottom: Radius.circular(26),
-                      ),
-                    ),
-                    child: Text(
-                      _ttdPanelMessage!,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: _ttdPanelMessageIsError
-                            ? Colors.red.shade700
-                            : Colors.green.shade700,
-                      ),
-                    ),
-                  ),
               ],
             ),
-          ),
-        );
-      },
-    ),
-  );
-}
+          );
+        },
+      ),
+    );
+  }
   
   Widget _buildQuickTtdSectionTabs() {
    final sections = [
@@ -37984,20 +39275,17 @@ Widget _buildPossessionBadge() {
   }
 
  Widget _buildQuickTtdSectionBody() {
-  return SingleChildScrollView(
-    physics: const BouncingScrollPhysics(),
-    child: (() {
-      switch (_quickTtdSection) {
-        case 'pass':
-          return _buildQuickPassSection();
-        case 'gk':
-          return _buildQuickGoalkeeperSection();
-        case 'main':
-        default:
-          return _buildQuickMainSection();
-      }
-    })(),
-  );
+  // Прокруткой управляет внешний инспектор ТТД. Не создаём вложенный scroll,
+  // иначе колесо/трекпад в узкой правой панели ощущаются рваными.
+  switch (_quickTtdSection) {
+    case 'pass':
+      return _buildQuickPassSection();
+    case 'gk':
+      return _buildQuickGoalkeeperSection();
+    case 'main':
+    default:
+      return _buildQuickMainSection();
+  }
 }
   Widget _buildQuickTtdDock() {
     return Container(
@@ -38498,11 +39786,9 @@ if (_showAiPanelInline) ...[
 
    Widget _buildFullscreenVideoOverlay() {
     if (!_videoReady) {
-      return const ColoredBox(
+      return ColoredBox(
         color: Colors.black,
-        child: Center(
-          child: CircularProgressIndicator(color: Colors.white),
-        ),
+        child: _buildVideoLoadingPlaceholder(),
       );
     }
 
@@ -38563,7 +39849,10 @@ if (_showAiPanelInline) ...[
                                       fit: BoxFit.cover,
                                     );
 
-                                    
+                                    if (_useServerAi) {
+                                      return;
+                                    }
+
                                     await _warmupDetections();
                                     _aiTracking.selectTrackByTap(mappedTap);
 

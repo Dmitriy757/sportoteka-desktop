@@ -75,8 +75,9 @@ class _CmrStaffAddRightPanelState extends State<CmrStaffAddRightPanel> {
   static const Map<String, String> _roles = <String, String>{
     'main': 'Главный тренер',
     'extra': 'Тренер',
+    'goalkeeper': 'Тренер по вратарям',
     'assistant': 'Ассистент',
-    'doctor': 'Медик',
+    'doctor': 'Врач спортивной медицины',
     'press_assistant': 'Пресс-служба',
     'manager': 'Администратор',
   };
@@ -558,10 +559,12 @@ class _CmrStaffAddRightPanelState extends State<CmrStaffAddRightPanel> {
     switch (_profile) {
       case 'main':
         return 'Добавить главного тренера';
+      case 'goalkeeper':
+        return 'Добавить тренера по вратарям';
       case 'assistant':
         return 'Добавить ассистента';
       case 'doctor':
-        return 'Добавить медика';
+        return 'Добавить врача спортивной медицины';
       case 'manager':
         return 'Добавить администратора';
       default:

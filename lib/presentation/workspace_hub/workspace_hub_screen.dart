@@ -71,6 +71,12 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
   bool _staffHasRows = false;
   String? _staffStatusError;
 
+  // Логотип и название каждого рабочего клуба загружаем отдельно.
+  // Это важно для мультиклубного режима: карточка клуба не должна
+  // подменяться аватаркой тренера или логотипом первой команды.
+  final Map<int, String> _staffClubLogoById = <int, String>{};
+  final Map<int, String> _staffClubNameById = <int, String>{};
+
   // Legacy press остаётся только для ещё не мигрированных аккаунтов.
   final List<Map<String, dynamic>> _pressAssignments = <Map<String, dynamic>>[];
 
@@ -128,6 +134,9 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
       if (userId > 0) {
         await _loadUserFromServer(userId);
         await _loadStaffAccesses(userId);
+        if (_staffHasRows) {
+          await _loadStaffClubBranding();
+        }
 
         // Критично: если staff_access существует (даже revoked),
         // старые press/team-trainer назначения НЕ могут вернуть доступ.
@@ -399,6 +408,67 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
       _staffAccesses.add(
         Map<String, dynamic>.from(data['access'] as Map),
       );
+    }
+  }
+
+  Future<void> _loadStaffClubBranding() async {
+    _staffClubLogoById.clear();
+    _staffClubNameById.clear();
+
+    final clubIds = _staffAccesses
+        .map((access) => _asInt(access['club_id'] ?? access['clubId']))
+        .where((id) => id > 0)
+        .toSet()
+        .toList(growable: false);
+
+    for (final clubId in clubIds) {
+      try {
+        final response = await http
+            .post(
+              Uri.parse('$_apiBase/get_club_profile.php'),
+              body: <String, String>{'club_id': '$clubId'},
+            )
+            .timeout(const Duration(seconds: 10));
+
+        if (response.statusCode != 200) continue;
+
+        final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+        if (decoded is! Map) continue;
+
+        final root = Map<String, dynamic>.from(decoded);
+        final raw = root['club'] is Map
+            ? Map<String, dynamic>.from(root['club'] as Map)
+            : root['data'] is Map
+                ? Map<String, dynamic>.from(root['data'] as Map)
+                : root;
+
+        final name = _cleanString(
+          raw['club_name'] ?? raw['name'] ?? raw['title'],
+        );
+
+        final logo = _normalizeMediaUrl(
+          raw['club_logo_url'] ??
+              raw['clubLogoUrl'] ??
+              raw['club_logo'] ??
+              raw['clubLogo'] ??
+              raw['logo_url'] ??
+              raw['logoUrl'] ??
+              raw['logo'] ??
+              raw['photo'] ??
+              raw['avatar_url'] ??
+              raw['avatarUrl'] ??
+              raw['avatar'],
+        );
+
+        if (name.isNotEmpty) {
+          _staffClubNameById[clubId] = name;
+        }
+        if (logo != null && logo.isNotEmpty) {
+          _staffClubLogoById[clubId] = logo;
+        }
+      } catch (e) {
+        debugPrint('WorkspaceHub club branding error club_id=$clubId: $e');
+      }
     }
   }
 
@@ -789,6 +859,36 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
     }
   }
 
+  String _staffClubName(Map<String, dynamic> access) {
+    final clubId = _asInt(access['club_id'] ?? access['clubId']);
+
+    final loadedName = _staffClubNameById[clubId]?.trim() ?? '';
+    if (loadedName.isNotEmpty) return loadedName;
+
+    final clubName = _cleanString(
+      access['club_name'] ?? access['clubName'],
+    );
+    if (clubName.isNotEmpty) return clubName;
+
+    return clubId > 0 ? 'Клуб #$clubId' : 'Рабочий клуб';
+  }
+
+  String _staffHubSubtitle(Map<String, dynamic> access) {
+    final teams = _staffTeams(access);
+    final names = teams
+        .map((team) => _cleanString(team['team_name'] ?? team['name']))
+        .where((name) => name.isNotEmpty)
+        .toList(growable: false);
+
+    final scope = names.isEmpty
+        ? 'команды пока не назначены'
+        : names.length <= 2
+            ? names.join(', ')
+            : '${names.take(2).join(', ')} +${names.length - 2}';
+
+    return '${_staffRoleTitle(access)} · $scope';
+  }
+
   String _staffCardTitle(Map<String, dynamic> access) {
     switch (_staffRoleCode(access)) {
       case 'main':
@@ -866,16 +966,26 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
   }
 
   String? _staffImage(Map<String, dynamic> access) {
-    final teams = _staffTeams(access);
-    if (teams.isEmpty) return _clubLogoUrl ?? _teamLogoUrl ?? _userAvatarUrl;
-    return _normalizeMediaUrl(
-          teams.first['team_logo'] ??
-              teams.first['logo'] ??
-              teams.first['logo_url'],
-        ) ??
-        _clubLogoUrl ??
-        _teamLogoUrl ??
-        _userAvatarUrl;
+    final clubId = _asInt(access['club_id'] ?? access['clubId']);
+
+    final loadedClubLogo = _staffClubLogoById[clubId]?.trim() ?? '';
+    if (loadedClubLogo.isNotEmpty) return loadedClubLogo;
+
+    // Если my_status.php позже начнёт отдавать логотип клуба прямо
+    // в access, HUB подхватит его без дополнительных изменений.
+    final directClubLogo = _normalizeMediaUrl(
+      access['club_logo_url'] ??
+          access['clubLogoUrl'] ??
+          access['club_logo'] ??
+          access['clubLogo'],
+    );
+    if (directClubLogo != null && directClubLogo.isNotEmpty) {
+      return directClubLogo;
+    }
+
+    // Намеренно НЕ используем avatar пользователя и team_logo.
+    // В карточке рабочего клуба должен быть только логотип самого клуба.
+    return null;
   }
 
   Future<void> _openStaffWorkspace(Map<String, dynamic> access) async {
@@ -892,6 +1002,16 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
     final teamId = _asInt(first['team_id'] ?? first['id']);
     final teamName = _cleanString(first['team_name'] ?? first['name']);
     final clubName = _cleanString(access['club_name'] ?? _clubName);
+
+    // HUB является единственной точкой выбора рабочего клуба.
+    if (clubId > 0) {
+      await PrefUtils.setUserClubId(clubId);
+      await PrefUtils.setActiveStaffClubId(clubId);
+    }
+    if (clubName.isNotEmpty) {
+      await PrefUtils.setUserClubName(clubName);
+      await PrefUtils.setActiveStaffClubName(clubName);
+    }
 
     if (roleCode == 'press_assistant') {
       Get.to<void>(
@@ -1200,7 +1320,7 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
 
   String get _choiceSubtitle {
     if (_staffHasRows) {
-      return 'Рабочий доступ подтверждается здесь. Личный профиль доступен всегда.';
+      return 'Выберите рабочий клуб или откройте личный профиль. Каждый клуб имеет свой Staff Key и свои команды.';
     }
     if (_isParent) {
       return 'Откройте родительский кабинет или добавьте доступ по Parent Key.';
@@ -1282,20 +1402,66 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
     return _AccessGateState.unavailable;
   }
 
+  Widget _staffClubChoiceHeader({required bool compact}) {
+    final activeCount = _staffAccesses.where(_staffAccessActive).length;
+    if (activeCount <= 0) return const SizedBox.shrink();
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: compact ? 9 : 10),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  activeCount > 1
+                      ? 'Рабочие клубы · $activeCount'
+                      : 'Рабочий клуб',
+                  style: AppTypography.custom(
+                    size: compact ? 11.8 : 12.2,
+                    weight: FontWeight.w700,
+                    color: _text,
+                    height: 1.15,
+                    letterSpacing: 0,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  activeCount > 1
+                      ? 'Выберите клуб для входа в его команды'
+                      : 'Вход в назначенную рабочую область',
+                  style: AppTypography.custom(
+                    size: compact ? 9.7 : 10.1,
+                    weight: FontWeight.w400,
+                    color: _secondary,
+                    height: 1.2,
+                    letterSpacing: 0,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _staffAccessCard(
     Map<String, dynamic> access, {
     required bool compact,
   }) {
+    final active = _staffAccessActive(access);
+
     return _WorkspaceAccessGateCard(
-      title: _staffCardTitle(access),
-      subtitle: _staffSubtitle(access),
+      // Выбор рабочего клуба находится только в HUB.
+      title: active ? _staffClubName(access) : _staffCardTitle(access),
+      subtitle: active ? _staffHubSubtitle(access) : _staffSubtitle(access),
       imageUrl: _staffImage(access),
       compact: compact,
       state: _staffGateState(access),
       keyHint: 'Введите Staff Key',
-      onOpen: _staffAccessActive(access)
-          ? () => _openStaffWorkspace(access)
-          : null,
+      onOpen: active ? () => _openStaffWorkspace(access) : null,
       onActivate: _staffAccessPending(access) &&
               !_staffAccessRevoked(access)
           ? _activateStaffKey
@@ -1510,6 +1676,7 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
               ],
 
               if (_staffHasRows) ...[
+                _staffClubChoiceHeader(compact: false),
                 for (final access in _staffAccesses) ...[
                   _staffAccessCard(access, compact: false),
                   const SizedBox(height: 12),
@@ -1596,6 +1763,7 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
                       ],
 
                       if (_staffHasRows) ...[
+                        _staffClubChoiceHeader(compact: true),
                         for (final access in _staffAccesses) ...[
                           _staffAccessCard(access, compact: true),
                           const SizedBox(height: 10),

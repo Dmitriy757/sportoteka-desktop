@@ -59,26 +59,77 @@ String _trainerName(Map<String, dynamic> t) {
   return name.isEmpty ? 'Тренер' : name;
 }
 
-String _trainerRole(Map<String, dynamic> t) {
-  final assignmentRole =
-      _s(t['profile'] ?? t['link_profile'] ?? t['staff_role']);
-  final assignmentLower = assignmentRole.toLowerCase();
-  if (assignmentLower.contains('press') || assignmentLower.contains('пресс')) {
+String _roleTitleFromCode(String raw) {
+  final v = raw.trim().toLowerCase();
+  if (v.isEmpty || v == 'extra' || v == 'coach' || v == 'trainer') {
+    return 'Тренер';
+  }
+  if (v == 'main' || v == 'head' || v.contains('глав')) {
+    return 'Главный тренер';
+  }
+  if (v == 'goalkeeper' ||
+      v == 'goalkeeper_coach' ||
+      v == 'gk' ||
+      v.contains('вратар')) {
+    return 'Тренер по вратарям';
+  }
+  if (v == 'doctor' ||
+      v == 'medic' ||
+      v.contains('sports_medicine') ||
+      v.contains('врач') ||
+      v.contains('мед')) {
+    return 'Врач спортивной медицины';
+  }
+  if (v == 'assistant' || v.contains('ассист') || v.contains('помощ')) {
+    return 'Ассистент';
+  }
+  if (v == 'press_assistant' ||
+      v == 'press' ||
+      v == 'press_service' ||
+      v.contains('пресс')) {
     return 'Пресс-служба';
   }
+  if (v == 'manager' || v == 'admin' || v.contains('админист')) {
+    return 'Администратор';
+  }
+  return raw.trim();
+}
+
+String _trainerRole(Map<String, dynamic> t) {
+  final currentClubRole = _s(t['_current_club_role']);
+  if (currentClubRole.isNotEmpty) {
+    return _roleTitleFromCode(currentClubRole);
+  }
+
+  // Если список teams уже нормализован под текущий клуб, роль берём именно
+  // из текущего назначения, а не из исторических данных общего профиля.
+  final teams = _trainerTeams(t);
+  if (teams.isNotEmpty) {
+    final profiles = teams
+        .map((team) => _s(team['profile'] ?? team['link_profile'] ?? team['role_code']))
+        .where((value) => value.isNotEmpty)
+        .toList();
+    if (profiles.any((value) => value.toLowerCase() == 'main')) {
+      return 'Главный тренер';
+    }
+    if (profiles.isNotEmpty) return _roleTitleFromCode(profiles.first);
+  }
+
+  final assignmentRole =
+      _s(t['profile'] ?? t['link_profile'] ?? t['staff_role']);
+  if (assignmentRole.isNotEmpty) {
+    // Эти поля описывают именно назначение, поэтому не смешиваем их с
+    // произвольной карьерной должностью из общего профиля.
+    return _roleTitleFromCode(assignmentRole);
+  }
+
   final raw = _s(t['position'] ??
       t['role_title'] ??
       t['specialization'] ??
       t['staff_role'] ??
       t['role'] ??
       t['profile']);
-  if (raw.isEmpty || raw == 'extra') return 'Тренер';
-  if (raw == 'main') return 'Главный тренер';
-  if (raw == 'doctor') return 'Медик';
-  if (raw == 'assistant') return 'Ассистент';
-  if (raw == 'press_assistant' || raw == 'press' || raw == 'press_service')
-    return 'Пресс-служба';
-  return raw;
+  return raw.isEmpty ? 'Тренер' : _roleTitleFromCode(raw);
 }
 
 String _trainerPhoto(Map<String, dynamic> t) => _normalizeImage(_s(t['photo'] ??
@@ -88,13 +139,29 @@ String _trainerPhoto(Map<String, dynamic> t) => _normalizeImage(_s(t['photo'] ??
     t['avatar_url']));
 
 bool _isMain(Map<String, dynamic> trainer) {
+  final currentClubRole = _s(trainer['_current_club_role']).toLowerCase();
+  if (currentClubRole.isNotEmpty) {
+    return currentClubRole == 'main' ||
+        currentClubRole == 'head' ||
+        currentClubRole.contains('глав');
+  }
+
+  // Когда teams присутствует, он считается источником текущих назначений.
+  // Это не даёт роли главного тренера из другого клуба "протечь" в текущий.
+  if (trainer['teams'] is List) {
+    for (final team in _trainerTeams(trainer)) {
+      final raw = _s(team['profile'] ?? team['link_profile'] ?? team['role_code'])
+          .toLowerCase();
+      if (raw == 'main' || raw == 'head' || raw.contains('глав')) return true;
+    }
+    return false;
+  }
+
   if (_b(trainer['is_main_any']) || _b(trainer['is_main'])) return true;
   final raw =
       '${_s(trainer['profile'])} ${_s(trainer['link_profile'])} ${_s(trainer['role'])}'
           .toLowerCase();
-  if (raw.contains('main') || raw.contains('head') || raw.contains('глав'))
-    return true;
-  return false;
+  return raw.contains('main') || raw.contains('head') || raw.contains('глав');
 }
 
 String _trainerEmail(Map<String, dynamic> t) => _s(t['email']);
@@ -109,6 +176,143 @@ String _trainerBio(Map<String, dynamic> t) =>
 String _trainerCity(Map<String, dynamic> t) => _s(t['city'] ?? t['town']);
 String _trainerSpecialization(Map<String, dynamic> t) =>
     _s(t['specialization'] ?? t['speciality'] ?? t['category']);
+
+String _locationKeyValue(String raw) => raw
+    .trim()
+    .toLowerCase()
+    .replaceAll('ё', 'е')
+    .replaceAll(RegExp(r'[«»„“”]'), '')
+    .replaceAll('"', '')
+    .replaceAll("'", '')
+    .replaceAll(RegExp(r'\s*[–—-]\s*'), '-')
+    .replaceAll(RegExp(r'\s+'), ' ')
+    .replaceAll(RegExp(r'[.,;:]+$'), '')
+    .trim();
+
+String _firstLocationValue(Map<String, dynamic> source) {
+  for (final key in const <String>[
+    'location',
+    'venue',
+    'address',
+    'place',
+    'stadium',
+    'base',
+    'training_base',
+    'training_location',
+  ]) {
+    final value = _s(source[key]);
+    if (value.isNotEmpty) return value;
+  }
+  return '';
+}
+
+int _teamIdValue(Map<String, dynamic> team) =>
+    _i(team['id'] ?? team['team_id'] ?? team['teamId']);
+
+List<String> _manualTrainerLocationsForClub(
+  Map<String, dynamic> trainer,
+  int clubId,
+) {
+  if (clubId <= 0) return const <String>[];
+  final stored = _s(trainer['work_locations'] ?? trainer['locations']);
+  if (stored.isEmpty) return const <String>[];
+
+  final marker = '#club:$clubId|';
+  final seen = <String>{};
+  final out = <String>[];
+  for (final raw in stored.split(RegExp(r'[\r\n]+'))) {
+    final line = raw.trim();
+    if (!line.startsWith(marker)) continue;
+    final value = line.substring(marker.length).trim();
+    final key = _locationKeyValue(value);
+    if (value.isEmpty || key.isEmpty || !seen.add(key)) continue;
+    out.add(value);
+  }
+  return out;
+}
+
+List<String> _automaticTrainerLocationsForClub(
+  Map<String, dynamic> trainer,
+  int clubId,
+  List<Map<String, dynamic>> allTeams,
+) {
+  final assignments = _trainerTeams(trainer);
+  final schedule = _trainerSchedule(trainer);
+  final out = <String>[];
+  final seen = <String>{};
+
+  Map<String, dynamic>? canonicalTeam(int id) {
+    if (id <= 0) return null;
+    for (final team in allTeams) {
+      if (_teamIdValue(team) == id) return team;
+    }
+    return null;
+  }
+
+  void add(String teamName, String location) {
+    if (location.trim().isEmpty) return;
+    final label = teamName.trim().isEmpty
+        ? location.trim()
+        : '${teamName.trim()} — ${location.trim()}';
+    final key = _locationKeyValue(label);
+    if (key.isEmpty || !seen.add(key)) return;
+    out.add(label);
+  }
+
+  for (final assignment in assignments) {
+    final teamId = _teamIdValue(assignment);
+    final teamName = _teamName(assignment);
+    final canonical = canonicalTeam(teamId) ?? assignment;
+
+    // Сначала паспорт/карточка команды.
+    add(teamName, _firstLocationValue(canonical));
+
+    // Затем календарь только этой команды.
+    for (final event in schedule) {
+      final eventTeamId = _i(event['team_id'] ?? event['teamId']);
+      final eventTeamName = _s(event['team_name']);
+      final sameTeam = teamId > 0
+          ? eventTeamId == teamId
+          : _locationKeyValue(eventTeamName) == _locationKeyValue(teamName);
+      if (!sameTeam) continue;
+      add(teamName, _firstLocationValue(event));
+    }
+  }
+
+  // Старые события без team_id связываем только по точному имени команды.
+  for (final event in schedule) {
+    final eventTeamName = _s(event['team_name']);
+    if (eventTeamName.isEmpty) continue;
+
+    final assignment = assignments.cast<Map<String, dynamic>?>().firstWhere(
+          (team) =>
+              team != null &&
+              _locationKeyValue(_teamName(team)) ==
+                  _locationKeyValue(eventTeamName),
+          orElse: () => null,
+        );
+
+    if (assignment == null) continue;
+    add(_teamName(assignment), _firstLocationValue(event));
+  }
+
+  return out;
+}
+
+List<String> _resolvedTrainerLocationsForClub(
+  Map<String, dynamic> trainer,
+  int clubId,
+  List<Map<String, dynamic>> allTeams,
+) {
+  final manual = _manualTrainerLocationsForClub(trainer, clubId);
+  if (manual.isNotEmpty) return manual;
+
+  return _automaticTrainerLocationsForClub(
+    trainer,
+    clubId,
+    allTeams,
+  );
+}
 
 // Staff Access на сервере привязан именно к users.id.
 // В ответах API поле `id` может быть id записи тренера/назначения,
@@ -196,22 +400,27 @@ String _teamName(Map<String, dynamic> team) =>
 String _teamLogo(Map<String, dynamic> team) => _normalizeImage(
     _s(team['logo_url'] ?? team['logo'] ?? team['team_logo'] ?? team['photo']));
 
-String _profileTitle(String raw) {
-  final v = raw.trim().toLowerCase();
-  if (v == 'main' || v == 'head' || v.contains('глав')) return 'Главный тренер';
-  if (v.contains('press') || v.contains('пресс')) return 'Пресс-служба';
-  if (v.contains('assistant') || v.contains('ассист')) return 'Ассистент';
-  if (v.contains('doctor') || v.contains('med') || v.contains('мед'))
-    return 'Медик';
-  if (v.contains('manager') || v.contains('admin')) return 'Администратор';
-  return 'Тренер';
-}
+String _profileTitle(String raw) => _roleTitleFromCode(raw);
 
 String _teamsText(Map<String, dynamic> trainer) {
   final teams = _trainerTeams(trainer);
   if (teams.isEmpty) return 'Команда не назначена';
-  if (teams.length == 1) return _teamName(teams.first);
-  return '${_teamName(teams.first)} +${teams.length - 1}';
+  if (teams.length <= 2) return teams.map(_teamName).join(', ');
+  return '${_teamName(teams[0])}, ${_teamName(teams[1])} +${teams.length - 2}';
+}
+
+String _trainerRoleDescriptor(Map<String, dynamic> trainer) {
+  final role = _trainerRole(trainer);
+  if (role != 'Главный тренер') return role;
+
+  final teams = _trainerTeams(trainer);
+  if (teams.length != 1) return role;
+
+  final name = _teamName(teams.first);
+  final match = RegExp(r'\b(20\d{2})\b').firstMatch(name);
+  if (match == null) return role;
+
+  return 'Главный тренер юношеской команды ${match.group(1)} года рождения';
 }
 
 // ==================== Цветовая схема ====================
@@ -645,6 +854,8 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
   Map<String, dynamic>? _editingTrainer;
 
   Map<String, dynamic>? _openedTrainerProfile;
+  TrainerProfileSection _openedTrainerInitialSection =
+      TrainerProfileSection.card;
   bool _addTrainerOpen = false;
   bool _staffAdminOpen = false;
   Map<String, dynamic>? _assigningTrainer;
@@ -715,6 +926,9 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
 
   Future<void> _load() async {
     if (!mounted) return;
+
+    final previouslySelectedKey = _selectedTrainerKey;
+
     setState(() {
       _loading = true;
       _error = null;
@@ -723,13 +937,45 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
     try {
       final clubList = await _loadClubTrainers();
       final teamList = await _loadTeamTrainers();
-      final merged = _mergeTrainers([...clubList, ...teamList]);
+      final merged = _mergeTrainers([...clubList, ...teamList])
+          .map(_sanitizeTrainerForCurrentClub)
+          .toList();
+
       if (!mounted) return;
+
+      Map<String, dynamic>? selectedForHydration;
+      if (merged.isNotEmpty) {
+        if (previouslySelectedKey.isNotEmpty) {
+          for (final trainer in merged) {
+            if (_trainerIdentity(trainer) == previouslySelectedKey) {
+              selectedForHydration = trainer;
+              break;
+            }
+          }
+        }
+        selectedForHydration ??= merged.first;
+      }
+
+      final hydrationTarget = selectedForHydration;
+
       setState(() {
         _trainerProfileFutures.clear();
         _trainers = merged;
         _loading = false;
+
+        if (hydrationTarget != null) {
+          _selectedTrainerKey = _trainerIdentity(hydrationTarget);
+        } else {
+          _selectedTrainerKey = '';
+        }
       });
+
+      // Правый инспектор может быть виден сразу, ещё до первого клика по
+      // тренеру. Поэтому сразу догружаем профиль + расписание выбранного
+      // сотрудника, иначе блок «Рабочие локации» ошибочно показывал 0.
+      if (hydrationTarget != null) {
+        await _hydrateTrainerForInspector(hydrationTarget);
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -737,6 +983,42 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
         _error = 'Не удалось загрузить тренеров: $e';
       });
     }
+  }
+
+  Future<void> _hydrateTrainerForInspector(
+    Map<String, dynamic> trainer,
+  ) async {
+    final key = _trainerIdentity(trainer);
+    if (key.isEmpty) return;
+
+    final profileData = await _loadTrainerProfileForCard(trainer);
+    if (!mounted) return;
+
+    // Пока шёл запрос пользователь мог выбрать другого тренера.
+    if (_selectedTrainerKey.isNotEmpty && _selectedTrainerKey != key) {
+      return;
+    }
+
+    final profileKey = _trainerIdentity(profileData);
+
+    setState(() {
+      final idx = _trainers.indexWhere(
+        (item) =>
+            _trainerIdentity(item) == key ||
+            (profileKey.isNotEmpty &&
+                _trainerIdentity(item) == profileKey),
+      );
+
+      if (idx >= 0) {
+        _trainers[idx] = <String, dynamic>{
+          ..._trainers[idx],
+          ...profileData,
+        };
+      }
+
+      _selectedTrainerKey =
+          profileKey.isEmpty ? key : profileKey;
+    });
   }
 
   Future<List<Map<String, dynamic>>> _loadClubTrainers() async {
@@ -863,8 +1145,6 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
             .toLowerCase();
     if (raw.contains('press') || raw.contains('пресс'))
       return _CmrStaffFilter.press;
-    if (raw.contains('press') || raw.contains('пресс'))
-      return _CmrStaffFilter.press;
     if (raw.contains('мед') ||
         raw.contains('врач') ||
         raw.contains('doctor') ||
@@ -958,8 +1238,9 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
 
   Future<void> _handleOpenTrainer(
     Map<String, dynamic> trainer,
-    bool mobile,
-  ) async {
+    bool mobile, {
+    TrainerProfileSection initialSection = TrainerProfileSection.card,
+  }) async {
     final key = _trainerIdentity(trainer);
 
     // ВАЖНО: открываем подробный профиль СРАЗУ.
@@ -971,6 +1252,7 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
         _selectedTrainerKey = key;
         _addTrainerOpen = false;
         _staffAdminOpen = false;
+        _openedTrainerInitialSection = initialSection;
         _openedTrainerProfile = Map<String, dynamic>.from(trainer);
       });
     }
@@ -1026,6 +1308,7 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
     if (!mounted) return;
     setState(() {
       _openedTrainerProfile = null;
+      _openedTrainerInitialSection = TrainerProfileSection.card;
       _editingTrainer = null;
       _addTrainerOpen = false;
       _staffAdminOpen = false;
@@ -1048,6 +1331,7 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
           clubName: widget.clubName,
           embeddedInWorkspace: true,
           allowEdit: _canEditTrainerProfile(opened),
+          initialSection: _openedTrainerInitialSection,
           onClose: _closeTrainerProfile,
           onMessage: () => _messageTrainer(opened),
           onAssign: null,
@@ -1414,8 +1698,52 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
                         SizedBox(width: listWidth, child: list),
                         Container(width: 1, color: _CmrColors.line),
                         Expanded(
-                          child: _sideChatId > 0 && _sideChatUserId > 0
-                              ? _TrainerChatSidePanel(
+                          child: _editingTrainer != null
+                              ? _TrainerEditSidePanel(
+                                  trainer: _editingTrainer!,
+                                  clubId: widget.clubId,
+                                  compact: compact,
+                                  fillAvailableWidth: true,
+                                  automaticLocations:
+                                      _automaticTrainerLocationsForClub(
+                                    _editingTrainer!,
+                                    widget.clubId,
+                                    widget.teams,
+                                  ),
+                                  onClose: () {
+                                    if (mounted) {
+                                      setState(() => _editingTrainer = null);
+                                    }
+                                  },
+                                  onLoadProfile: _loadTrainerEditProfile,
+                                  onSaveProfile: _saveTrainerEditProfile,
+                                  onSaveAccount: ({
+                                    required String firstName,
+                                    required String lastName,
+                                  }) =>
+                                      _updateClubStaffAccountFromRightPanel(
+                                    trainer: _editingTrainer!,
+                                    firstName: firstName,
+                                    lastName: lastName,
+                                  ),
+                                  onResetPassword: ({
+                                    required String newPassword,
+                                  }) =>
+                                      _resetClubStaffPasswordFromRightPanel(
+                                    trainer: _editingTrainer!,
+                                    newPassword: newPassword,
+                                  ),
+                                  onSaved: () async {
+                                    if (mounted) {
+                                      setState(() => _editingTrainer = null);
+                                    }
+                                    await _afterMutation(
+                                      'Профиль тренера обновлён',
+                                    );
+                                  },
+                                )
+                              : _sideChatId > 0 && _sideChatUserId > 0
+                                  ? _TrainerChatSidePanel(
                                   chatId: _sideChatId,
                                   userId: _sideChatUserId,
                                   chatName: _sideChatName,
@@ -1537,8 +1865,6 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
                                               allTeams: widget.teams,
                                               onAccessChanged: _load,
                                               clubName: widget.clubName,
-                                              selectedTeamName:
-                                                  widget.selectedTeamName,
                                               canManageAccess:
                                                   _canManageAllTrainers(),
                                               onMessage: selected == null
@@ -1585,6 +1911,14 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
                                                         selected,
                                                         false,
                                                       ),
+                                              onOpenDocuments: selected == null
+                                                  ? null
+                                                  : () => _handleOpenTrainer(
+                                                        selected,
+                                                        false,
+                                                        initialSection:
+                                                            TrainerProfileSection.documents,
+                                                      ),
                                             ),
                         ),
                       ],
@@ -1596,11 +1930,17 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
         return Stack(
           children: [
             content,
-            if (_editingTrainer != null)
+            if (mobile && _editingTrainer != null)
               Positioned.fill(
                 child: _TrainerEditSidePanel(
                   trainer: _editingTrainer!,
-                  compact: mobile || constraints.maxWidth < 980,
+                  clubId: widget.clubId,
+                  compact: true,
+                  automaticLocations: _automaticTrainerLocationsForClub(
+                    _editingTrainer!,
+                    widget.clubId,
+                    widget.teams,
+                  ),
                   onClose: () {
                     if (mounted) setState(() => _editingTrainer = null);
                   },
@@ -1701,6 +2041,159 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
   int _teamId(Map<String, dynamic> team) =>
       _i(team['id'] ?? team['team_id'] ?? team['teamId']);
 
+  int _teamClubId(Map<String, dynamic> team) =>
+      _i(team['club_id'] ?? team['clubId']);
+
+  String _normalizedTeamName(Map<String, dynamic> team) =>
+      _teamName(team).trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+
+  Set<int> get _currentClubTeamIds => widget.teams
+      .map(_teamId)
+      .where((id) => id > 0)
+      .toSet();
+
+  Set<String> get _currentClubTeamNames => widget.teams
+      .map(_normalizedTeamName)
+      .where((name) => name.isNotEmpty && name != 'команда')
+      .toSet();
+
+  bool _teamBelongsToCurrentClub(Map<String, dynamic> team) {
+    final explicitClubId = _teamClubId(team);
+    if (explicitClubId > 0) return explicitClubId == widget.clubId;
+
+    final teamId = _teamId(team);
+    final clubIds = _currentClubTeamIds;
+    if (teamId > 0 && clubIds.isNotEmpty) return clubIds.contains(teamId);
+
+    // Старые ответы API иногда не содержат club_id/team_id. В таком случае
+    // допускаем только точное совпадение с командой из текущего workspace.
+    final name = _normalizedTeamName(team);
+    return name.isNotEmpty && _currentClubTeamNames.contains(name);
+  }
+
+  List<Map<String, dynamic>> _currentClubTeamsForTrainer(
+    Map<String, dynamic> trainer,
+  ) {
+    final out = <Map<String, dynamic>>[];
+    final seen = <String>{};
+
+    for (final raw in _trainerTeams(trainer)) {
+      final team = Map<String, dynamic>.from(raw);
+      if (!_teamBelongsToCurrentClub(team)) continue;
+
+      final teamId = _teamId(team);
+      final key = teamId > 0 ? 'id:$teamId' : 'name:${_normalizedTeamName(team)}';
+      if (!seen.add(key)) continue;
+
+      // Подмешиваем каноническое имя/логотип из текущего клуба, чтобы в UI
+      // не оставались старые подписи из общего профиля тренера.
+      Map<String, dynamic>? canonical;
+      if (teamId > 0) {
+        for (final clubTeam in widget.teams) {
+          if (_teamId(clubTeam) == teamId) {
+            canonical = clubTeam;
+            break;
+          }
+        }
+      }
+
+      if (canonical != null) {
+        team['team_id'] = teamId;
+        team['id'] = teamId;
+        team['team_name'] = _teamName(canonical);
+        team['name'] = _teamName(canonical);
+        team['team_logo'] = _teamLogo(canonical);
+        team['club_id'] = widget.clubId;
+      }
+
+      out.add(team);
+    }
+
+    return out;
+  }
+
+  List<Map<String, dynamic>> _currentClubPressTeamsForTrainer(
+    Map<String, dynamic> trainer,
+  ) {
+    final out = <Map<String, dynamic>>[];
+    final seen = <String>{};
+    for (final raw in _trainerPressTeams(trainer)) {
+      final team = Map<String, dynamic>.from(raw);
+      if (!_teamBelongsToCurrentClub(team)) continue;
+      final teamId = _teamId(team);
+      final key = teamId > 0 ? 'id:$teamId' : 'name:${_normalizedTeamName(team)}';
+      if (!seen.add(key)) continue;
+      out.add(team);
+    }
+    return out;
+  }
+
+  String _currentClubRoleCode(List<Map<String, dynamic>> teams) {
+    final profiles = teams
+        .map((team) => _s(team['profile'] ?? team['link_profile'] ?? team['role_code']))
+        .where((value) => value.isNotEmpty)
+        .toList();
+    if (profiles.any((value) => value.toLowerCase() == 'main')) return 'main';
+
+    // При нескольких назначениях берём наиболее специализированную роль
+    // для краткой подписи, а сами команды всё равно отображаются отдельно.
+    const priority = <String>[
+      'goalkeeper',
+      'doctor',
+      'assistant',
+      'manager',
+      'admin',
+      'extra',
+    ];
+    for (final code in priority) {
+      if (profiles.any((value) => value.toLowerCase() == code)) return code;
+    }
+    return profiles.isEmpty ? '' : profiles.first;
+  }
+
+  Map<String, dynamic> _sanitizeTrainerForCurrentClub(
+    Map<String, dynamic> trainer,
+  ) {
+    final copy = Map<String, dynamic>.from(trainer);
+    final currentTeams = _currentClubTeamsForTrainer(copy);
+
+    copy['teams'] = currentTeams;
+    copy['assignments'] = currentTeams;
+
+    // В CMR клуба показываем только назначения внутри текущего клуба.
+    // История работы в других клубах при необходимости хранится в описании тренера,
+    // поэтому карьерные назначения не передаём дальше в интерфейс.
+    copy.remove('career_assignments');
+    copy.remove('all_assignments');
+    copy.remove('_career_assignments');
+
+    final currentPress = _currentClubPressTeamsForTrainer(copy);
+    copy['press_teams'] = currentPress;
+    copy['press_assignments'] = currentPress;
+    copy['is_press_assistant'] = currentPress.isNotEmpty;
+
+    final roleCode = _currentClubRoleCode(currentTeams);
+    copy['_current_club_role'] = roleCode;
+    copy['is_main'] = roleCode == 'main';
+    copy['is_main_any'] = roleCode == 'main';
+
+    // Эти legacy-поля часто приходили от другой команды/другого клуба.
+    // Наличие teams=[] не позволит _trainerTeams() снова использовать их,
+    // но обнуляем их и для дочерних экранов, читающих поля напрямую.
+    if (currentTeams.isEmpty) {
+      copy['team_id'] = 0;
+      copy['team_name'] = '';
+      copy['team_logo'] = '';
+    } else {
+      final first = currentTeams.first;
+      copy['team_id'] = _teamId(first);
+      copy['team_name'] = _teamName(first);
+      copy['team_logo'] = _teamLogo(first);
+    }
+
+    return copy;
+  }
+
   Future<Map<String, dynamic>> _postForm(
       String url, Map<String, String> body) async {
     final resp = await http
@@ -1800,21 +2293,27 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
       } catch (_) {}
     }
 
+    // ВАЖНО: здесь сохраняем ПОЛНЫЙ календарь назначенных команд,
+    // как это делает CmrTrainerProfileScreen. Рабочие локации могут быть
+    // указаны в уже прошедших событиях, поэтому фильтрация до «ближайших»
+    // событий на этом уровне приводила к расхождению: в рабочем профиле
+    // локации были, а в правом CMR-инспекторе показывался 0.
     DateTime? parseDate(dynamic value) =>
         DateTime.tryParse(_s(value).replaceAll(' ', 'T'));
-    final now = DateTime.now();
-    final floor = DateTime(now.year, now.month, now.day)
-        .subtract(const Duration(days: 1));
-    final upcoming = rows.where((event) {
-      final date = parseDate(event['start_at'] ?? event['date']);
-      return date != null && !date.isBefore(floor);
-    }).toList()
-      ..sort((a, b) {
-        final da = parseDate(a['start_at'] ?? a['date']) ?? DateTime(2100);
-        final db = parseDate(b['start_at'] ?? b['date']) ?? DateTime(2100);
-        return da.compareTo(db);
-      });
-    return upcoming.take(30).toList();
+
+    rows.sort((a, b) {
+      final da = parseDate(
+            a['start_at'] ?? a['date'] ?? a['event_date'],
+          ) ??
+          DateTime(2100);
+      final db = parseDate(
+            b['start_at'] ?? b['date'] ?? b['event_date'],
+          ) ??
+          DateTime(2100);
+      return da.compareTo(db);
+    });
+
+    return rows;
   }
 
   Future<Map<String, dynamic>> _loadTrainerProfileForCard(
@@ -1823,8 +2322,15 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
     if (trainerId <= 0) return trainer;
 
     try {
-      final data =
-          await _postJson(getTrainerProfileUrl, {'trainer_id': trainerId});
+      final data = await _postJson(
+        getTrainerProfileUrl,
+        <String, dynamic>{
+          'trainer_id': trainerId,
+          // Новый backend может фильтровать назначения сразу на сервере.
+          // Старый endpoint просто проигнорирует дополнительное поле.
+          'club_id': widget.clubId,
+        },
+      );
       final raw =
           _pickMap(data, const ['profile', 'trainer', 'user', 'data']) ?? data;
       final merged = <String, dynamic>{...trainer};
@@ -1836,10 +2342,14 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
           }
         });
       }
-      merged['_schedule'] = await _loadTrainerSchedule(merged);
-      return merged;
+
+      final sanitized = _sanitizeTrainerForCurrentClub(merged);
+      sanitized['_schedule'] = await _loadTrainerSchedule(sanitized);
+      return sanitized;
     } catch (_) {
-      final fallback = Map<String, dynamic>.from(trainer);
+      final fallback = _sanitizeTrainerForCurrentClub(
+        Map<String, dynamic>.from(trainer),
+      );
       fallback['_schedule'] = await _loadTrainerSchedule(fallback);
       return fallback;
     }
@@ -2392,13 +2902,44 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
       return;
     }
 
+    // Перед открытием правого редактора догружаем профиль и расписание.
+    // Благодаря этому список рабочих локаций в редакторе и в инспекторе
+    // совпадает с подробным рабочим профилем тренера.
+    Map<String, dynamic> editData = Map<String, dynamic>.from(trainer);
+    try {
+      editData = await _loadTrainerProfileForCard(editData);
+    } catch (_) {}
+
     if (!mounted) return;
-    setState(() => _editingTrainer = Map<String, dynamic>.from(trainer));
+
+    final key = _trainerIdentity(editData);
+    setState(() {
+      _editingTrainer = Map<String, dynamic>.from(editData);
+      if (key.isNotEmpty) {
+        _selectedTrainerKey = key;
+      }
+
+      final idx = _trainers.indexWhere(
+        (item) => _trainerIdentity(item) == key,
+      );
+      if (idx >= 0) {
+        _trainers[idx] = <String, dynamic>{
+          ..._trainers[idx],
+          ...editData,
+        };
+      }
+    });
   }
 
   Future<Map<String, dynamic>> _loadTrainerEditProfile(int trainerId) async {
     final data =
-        await _postJson(getTrainerProfileUrl, {'trainer_id': trainerId});
+        await _postJson(
+          getTrainerProfileUrl,
+          <String, dynamic>{
+            'trainer_id': trainerId,
+            'club_id': widget.clubId,
+          },
+        );
     return _pickMap(data, const ['profile', 'trainer', 'user', 'data']) ?? data;
   }
 
@@ -2410,6 +2951,7 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
     required String birthday,
     required String experience,
     required String bio,
+    required String workLocations,
     XFile? pickedPhoto,
   }) async {
     final canEdit = _canManageAllTrainers() ||
@@ -2441,6 +2983,7 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
         'birthday': birthday.trim(),
         'experience': experience.trim(),
         'bio': bio.trim(),
+        'work_locations': workLocations.trim(),
       });
 
       if (pickedPhoto != null) {
@@ -2945,7 +3488,12 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
     }
 
     if (trainerId <= 0 || teamId <= 0) return false;
+    if (!_currentClubTeamIds.contains(teamId)) {
+      Get.snackbar('Команды', 'Нельзя назначить тренера в команду другого клуба');
+      return false;
+    }
     return _saveAction(() => _postJson(linkTrainerToTeamUrl, {
+          'club_id': widget.clubId,
           'team_id': teamId,
           'trainer_id': trainerId,
           'profile': profile,
@@ -2969,7 +3517,7 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
     }
 
     final trainerId = _trainerId(trainer);
-    final teams = _trainerTeams(trainer);
+    final teams = _currentClubTeamsForTrainer(trainer);
 
     if (trainerId <= 0) {
       Get.snackbar('Команды', 'Не найден ID тренера');
@@ -2977,7 +3525,7 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
     }
 
     if (teams.isEmpty) {
-      Get.snackbar('Команды', 'У тренера нет назначений');
+      Get.snackbar('Команды', 'У тренера нет назначений в текущем клубе');
       return;
     }
 
@@ -3017,12 +3565,20 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
     required int trainerId,
     required int teamId,
   }) async {
+    if (!_currentClubTeamIds.contains(teamId)) {
+      return <String, dynamic>{
+        'success': false,
+        'message': 'Команда не относится к текущему клубу',
+      };
+    }
+
     // unlink_trainer_from_team.php принимает JSON.
     // Не повторяем запрос как form POST: это маскировало реальную
     // серверную ошибку сообщением "team_id required".
     return _postJson(
       unlinkTrainerFromTeamUrl,
       {
+        'club_id': widget.clubId,
         'team_id': teamId,
         'trainer_id': trainerId,
       },
@@ -3170,8 +3726,14 @@ class _CmrClubTrainersPanelState extends State<CmrClubTrainersPanel> {
         _CmrColors.green
       ),
       ('extra', 'Тренер / специалист', Icons.sports_rounded, _CmrColors.blue),
+      (
+        'goalkeeper',
+        'Тренер по вратарям',
+        Icons.sports_soccer_rounded,
+        _CmrColors.cyan,
+      ),
       ('assistant', 'Ассистент', Icons.support_agent_rounded, _CmrColors.amber),
-      ('doctor', 'Медик', Icons.health_and_safety_rounded, _CmrColors.red),
+      ('doctor', 'Врач спортивной медицины', Icons.health_and_safety_rounded, _CmrColors.red),
       (
         'manager',
         'Администратор',
@@ -3719,7 +4281,7 @@ class _TrainerFilterBar extends StatelessWidget {
       _CmrStaffFilter.assistants:
           const _StaffFilterData('Ассистенты', Icons.support_agent_rounded),
       _CmrStaffFilter.doctors:
-          const _StaffFilterData('Медики', Icons.health_and_safety_rounded),
+          const _StaffFilterData('Врачи', Icons.health_and_safety_rounded),
       _CmrStaffFilter.press:
           const _StaffFilterData('Пресс-служба', Icons.campaign_outlined),
       _CmrStaffFilter.noTeam:
@@ -3835,7 +4397,6 @@ class _TrainerTile extends StatelessWidget {
     final team = _teamsText(trainer);
     final photo = _trainerPhoto(trainer);
     final main = _isMain(trainer);
-    final experience = _trainerExperience(trainer);
     final pressTeams = _trainerPressTeams(trainer);
     final pressText = pressTeams.isEmpty
         ? 'Не назначен в пресс-службу'
@@ -3849,7 +4410,6 @@ class _TrainerTile extends StatelessWidget {
         : <String>[
             main ? 'Главный тренер' : role,
             team,
-            if (experience.isNotEmpty && !mobile) experience,
           ];
     final cleanSubtitleParts =
         subtitleParts.where((e) => e.trim().isNotEmpty).toList();
@@ -4257,6 +4817,12 @@ class _TrainerAssignRightPanelState extends State<_TrainerAssignRightPanel> {
       _CmrColors.blue,
     ),
     (
+      'goalkeeper',
+      'Тренер по вратарям',
+      Icons.sports_soccer_rounded,
+      _CmrColors.cyan,
+    ),
+    (
       'assistant',
       'Ассистент',
       Icons.support_agent_rounded,
@@ -4264,7 +4830,7 @@ class _TrainerAssignRightPanelState extends State<_TrainerAssignRightPanel> {
     ),
     (
       'doctor',
-      'Медик',
+      'Врач спортивной медицины',
       Icons.health_and_safety_rounded,
       _CmrColors.red,
     ),
@@ -4432,10 +4998,12 @@ class _TrainerAssignRightPanelState extends State<_TrainerAssignRightPanel> {
     switch (value.trim().toLowerCase()) {
       case 'main':
         return 'Главный тренер';
+      case 'goalkeeper':
+        return 'Тренер по вратарям';
       case 'assistant':
         return 'Ассистент';
       case 'doctor':
-        return 'Медик';
+        return 'Врач спортивной медицины';
       case 'manager':
       case 'admin':
         return 'Администратор';
@@ -5184,10 +5752,12 @@ class _TrainerAddRightPanelState extends State<_TrainerAddRightPanel> {
     switch (value) {
       case 'main':
         return 'Главный тренер';
+      case 'goalkeeper':
+        return 'Тренер по вратарям';
       case 'assistant':
         return 'Ассистент';
       case 'doctor':
-        return 'Медик';
+        return 'Врач спортивной медицины';
       case 'press_assistant':
         return 'Пресс-служба';
       case 'manager':
@@ -5202,6 +5772,7 @@ class _TrainerAddRightPanelState extends State<_TrainerAddRightPanel> {
     const roles = <String>[
       'main',
       'extra',
+      'goalkeeper',
       'assistant',
       'doctor',
       'manager',
@@ -6071,7 +6642,6 @@ class _TrainerDetailPanel extends StatelessWidget {
   final int clubId;
   final List<Map<String, dynamic>> allTeams;
   final String clubName;
-  final String selectedTeamName;
   final bool canManageAccess;
   final Future<void> Function()? onAccessChanged;
   final VoidCallback? onMessage;
@@ -6081,13 +6651,13 @@ class _TrainerDetailPanel extends StatelessWidget {
   final VoidCallback? onRemoveClub;
   final VoidCallback? onAddTrainer;
   final VoidCallback? onOpenDetailedProfile;
+  final VoidCallback? onOpenDocuments;
 
   const _TrainerDetailPanel({
     required this.trainer,
     required this.clubId,
     required this.allTeams,
     required this.clubName,
-    required this.selectedTeamName,
     required this.canManageAccess,
     required this.onAccessChanged,
     required this.onMessage,
@@ -6097,6 +6667,7 @@ class _TrainerDetailPanel extends StatelessWidget {
     required this.onRemoveClub,
     required this.onAddTrainer,
     required this.onOpenDetailedProfile,
+    required this.onOpenDocuments,
   });
 
   @override
@@ -6112,17 +6683,22 @@ class _TrainerDetailPanel extends StatelessWidget {
 
     final name = _trainerName(t);
     final role = _trainerRole(t);
+    final roleDescriptor = _trainerRoleDescriptor(t);
     final photo = _trainerPhoto(t);
     final teams = _trainerTeams(t);
     final phone = _trainerPhone(t);
     final email = _trainerEmail(t);
     final birthday = _trainerBirthday(t);
-    final experience = _trainerExperience(t);
     final city = _trainerCity(t);
     final specialization = _trainerSpecialization(t);
     final bio = _trainerBio(t);
     final main = _isMain(t);
     final schedule = _trainerSchedule(t);
+    final locations = _resolvedTrainerLocationsForClub(
+      t,
+      clubId,
+      allTeams,
+    );
 
     return Container(
       decoration: _CmrDecor.seamlessPane(),
@@ -6133,7 +6709,7 @@ class _TrainerDetailPanel extends StatelessWidget {
           children: [
             _TrainerDetailHeader(
               name: name,
-              role: role,
+              role: roleDescriptor,
               photo: photo,
               clubName: clubName,
               main: main,
@@ -6164,37 +6740,39 @@ class _TrainerDetailPanel extends StatelessWidget {
               onEdit: onEdit,
               onMessage: onMessage,
               onAssign: onAssign,
+              onDocuments: onOpenDocuments,
             ),
             const SizedBox(height: 18),
             _TrainerMetricsStrip(
               teams: teams.length,
-              experience: experience.isEmpty ? '—' : experience,
+              role: role,
               main: main,
               contacts: [email, phone].where((e) => e.trim().isNotEmpty).length,
             ),
             const SizedBox(height: 18),
-            _TrainerScheduleSection(schedule: schedule),
+            _TrainerScheduleSection(
+              schedule: schedule,
+              locations: locations,
+              onEditLocations: onEdit,
+            ),
             const SizedBox(height: 18),
             _TrainerDetailSection(
               title: 'Данные тренера',
               children: [
                 _TrainerDetailRow(
-                    icon: Icons.badge_rounded, label: 'Роль', value: role),
+                    icon: Icons.badge_rounded,
+                    label: 'Роль',
+                    value: roleDescriptor),
                 _TrainerDetailRow(
                     icon: Icons.apartment_rounded,
                     label: 'Клуб',
                     value: clubName),
                 _TrainerDetailRow(
                     icon: Icons.groups_2_rounded,
-                    label: 'Команды',
+                    label: 'Текущие команды',
                     value: teams.isEmpty
                         ? 'Команда не назначена'
                         : teams.map(_teamName).join(', ')),
-                if (selectedTeamName.trim().isNotEmpty)
-                  _TrainerDetailRow(
-                      icon: Icons.flag_rounded,
-                      label: 'Активная команда',
-                      value: selectedTeamName),
                 _TrainerDetailRow(
                     icon: Icons.location_city_rounded,
                     label: 'Город',
@@ -6483,11 +7061,13 @@ class _TrainerActionsGroup extends StatelessWidget {
   final VoidCallback? onEdit;
   final VoidCallback? onMessage;
   final VoidCallback? onAssign;
+  final VoidCallback? onDocuments;
 
   const _TrainerActionsGroup({
     required this.onEdit,
     required this.onMessage,
     required this.onAssign,
+    required this.onDocuments,
   });
 
   @override
@@ -6505,6 +7085,12 @@ class _TrainerActionsGroup extends StatelessWidget {
             subtitle: 'Фото, роль, опыт и описание',
             onTap: onEdit,
             accent: true,
+          ),
+          _TrainerInspectorAction(
+            icon: Icons.folder_copy_outlined,
+            title: 'Документы тренера',
+            subtitle: 'Добавить файл или документ в Workspace',
+            onTap: onDocuments,
           ),
           _TrainerInspectorAction(
             icon: Icons.chat_bubble_outline_rounded,
@@ -6699,22 +7285,31 @@ class _TrainerQuietDangerAction extends StatelessWidget {
 
 class _TrainerMetricsStrip extends StatelessWidget {
   final int teams;
-  final String experience;
+  final String role;
   final bool main;
   final int contacts;
 
   const _TrainerMetricsStrip({
     required this.teams,
-    required this.experience,
+    required this.role,
     required this.main,
     required this.contacts,
   });
 
   @override
   Widget build(BuildContext context) {
+    final shortRole = role == 'Врач спортивной медицины'
+        ? 'Врач'
+        : role == 'Тренер по вратарям'
+            ? 'Вратари'
+            : role == 'Главный тренер'
+                ? 'Главный'
+                : role == 'Тренер / специалист'
+                    ? 'Тренер'
+                    : role;
     final items = <({String value, String label})>[
       (value: '$teams', label: 'Команды'),
-      (value: experience, label: 'Опыт'),
+      (value: shortRole, label: 'Роль'),
       (value: main ? 'Да' : 'Нет', label: 'Главный'),
       (value: '$contacts/2', label: 'Контакты'),
     ];
@@ -6763,10 +7358,14 @@ class _TrainerMetricsStrip extends StatelessWidget {
 
 class _TrainerScheduleSection extends StatelessWidget {
   final List<Map<String, dynamic>> schedule;
+  final List<String>? locations;
+  final VoidCallback? onEditLocations;
   final bool compact;
 
   const _TrainerScheduleSection({
     required this.schedule,
+    this.locations,
+    this.onEditLocations,
     this.compact = false,
   });
 
@@ -6781,15 +7380,50 @@ class _TrainerScheduleSection extends StatelessWidget {
 
   String _timeLabel(DateTime date) => '${_two(date.hour)}:${_two(date.minute)}';
 
+  String _eventLocation(Map<String, dynamic> event) =>
+      _firstLocationValue(event);
+
+  List<String> _scheduleLocations() {
+    final map = <String, String>{};
+    for (final event in schedule) {
+      final location = _eventLocation(event);
+      if (location.isEmpty) continue;
+      final team = _s(event['team_name']);
+      final label = team.isEmpty ? location : '$team — $location';
+      map.putIfAbsent(_locationKeyValue(label), () => label);
+    }
+    return map.values.toList();
+  }
+
   @override
   Widget build(BuildContext context) {
-    final locations = schedule
-        .map((e) => _s(e['location']))
-        .where((e) => e.isNotEmpty)
-        .toSet()
-        .toList();
+    // Для локаций нужен полный календарь, а в блоке расписания показываем
+    // только будущие/актуальные события. Это синхронизирует CMR-инспектор
+    // с подробным рабочим профилем тренера.
+    final resolvedLocations = locations ?? _scheduleLocations();
 
-    final shown = schedule.take(compact ? 3 : 5).toList();
+    final now = DateTime.now();
+    final floor = DateTime(now.year, now.month, now.day)
+        .subtract(const Duration(days: 1));
+    final upcoming = schedule.where((event) {
+      final date = _date(
+        event['start_at'] ?? event['date'] ?? event['event_date'],
+      );
+      return date != null && !date.isBefore(floor);
+    }).toList()
+      ..sort((a, b) {
+        final da = _date(
+              a['start_at'] ?? a['date'] ?? a['event_date'],
+            ) ??
+            DateTime(2100);
+        final db = _date(
+              b['start_at'] ?? b['date'] ?? b['event_date'],
+            ) ??
+            DateTime(2100);
+        return da.compareTo(db);
+      });
+
+    final shown = upcoming.take(compact ? 3 : 5).toList();
 
     return Container(
       width: double.infinity,
@@ -6807,30 +7441,99 @@ class _TrainerScheduleSection extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'Локации и расписание',
+                  'Рабочие локации',
                   style: _CmrText.section(),
                 ),
               ),
               Text(
-                '${schedule.length}',
+                '${resolvedLocations.length}',
                 style: _CmrText.caption(),
               ),
+              if (onEditLocations != null) ...[
+                const SizedBox(width: 7),
+                Material(
+                  color: _CmrColors.greenSoft,
+                  borderRadius: BorderRadius.circular(8),
+                  child: InkWell(
+                    onTap: onEditLocations,
+                    borderRadius: BorderRadius.circular(8),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 9,
+                        vertical: 6,
+                      ),
+                      child: Text(
+                        'Изменить',
+                        style: _CmrText.action().copyWith(
+                          color: _CmrColors.greenDark,
+                          fontSize: 10.2,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ],
           ),
-          const SizedBox(height: 5),
-          Text(
-            locations.isEmpty
-                ? 'Локации появятся из календаря команд.'
-                : locations.take(3).join(' · '),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: _CmrText.muted(10.8),
-          ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 7),
+          if (resolvedLocations.isEmpty)
+            Text(
+              'Локации пока не указаны. Можно задать их вручную или использовать места из команд и календаря.',
+              style: _CmrText.muted(10.8),
+            )
+          else
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: resolvedLocations
+                  .take(compact ? 3 : 6)
+                  .map(
+                    (location) => Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 9,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _CmrColors.soft,
+                        borderRadius: BorderRadius.circular(9),
+                      ),
+                      child: Text(
+                        location,
+                        style: _CmrText.muted(10.2).copyWith(
+                          color: _CmrColors.text,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  )
+                  .toList(),
+            ),
+          const SizedBox(height: 12),
           const Divider(
             height: 1,
             thickness: .55,
             color: _CmrColors.line,
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              const _CmrGlowDot(
+                color: _CmrColors.green,
+                size: 5.5,
+                halo: false,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Ближайшее расписание',
+                  style: _CmrText.value(11.2),
+                ),
+              ),
+              Text(
+                '${upcoming.length}',
+                style: _CmrText.caption(),
+              ),
+            ],
           ),
           if (shown.isEmpty)
             Padding(
@@ -6852,7 +7555,7 @@ class _TrainerScheduleSection extends StatelessWidget {
                       ? 'Занятие'
                       : _s(event['title']);
                   final team = _s(event['team_name']);
-                  final location = _s(event['location']);
+                  final location = _eventLocation(event);
 
                   return Padding(
                     padding: const EdgeInsets.symmetric(vertical: 7),
@@ -6864,8 +7567,7 @@ class _TrainerScheduleSection extends StatelessWidget {
                           child: Text(
                             start == null
                                 ? '—'
-                                : '${_dateLabel(start)}\n'
-                                    '${_timeLabel(start)}',
+                                : '${_dateLabel(start)}\n${_timeLabel(start)}',
                             style: _CmrText.value(10.8),
                           ),
                         ),
@@ -7225,7 +7927,10 @@ class _TrainerEmptyState extends StatelessWidget {
 
 class _TrainerEditSidePanel extends StatefulWidget {
   final Map<String, dynamic> trainer;
+  final int clubId;
   final bool compact;
+  final bool fillAvailableWidth;
+  final List<String> automaticLocations;
   final VoidCallback onClose;
   final Future<Map<String, dynamic>> Function(int trainerId) onLoadProfile;
   final Future<bool> Function({
@@ -7236,6 +7941,7 @@ class _TrainerEditSidePanel extends StatefulWidget {
     required String birthday,
     required String experience,
     required String bio,
+    required String workLocations,
     XFile? pickedPhoto,
   }) onSaveProfile;
   final Future<bool> Function({
@@ -7249,7 +7955,10 @@ class _TrainerEditSidePanel extends StatefulWidget {
 
   const _TrainerEditSidePanel({
     required this.trainer,
+    required this.clubId,
     required this.compact,
+    this.fillAvailableWidth = false,
+    this.automaticLocations = const <String>[],
     required this.onClose,
     required this.onLoadProfile,
     required this.onSaveProfile,
@@ -7269,6 +7978,10 @@ class _TrainerEditSidePanelState extends State<_TrainerEditSidePanel> {
   late final TextEditingController _birthdayC;
   late final TextEditingController _experienceC;
   late final TextEditingController _bioC;
+  late final TextEditingController _addLocationC;
+  final List<TextEditingController> _manualLocationControllers =
+      <TextEditingController>[];
+  final Set<String> _selectedAutomaticLocationKeys = <String>{};
   late final TextEditingController _newPasswordC;
   late final TextEditingController _repeatPasswordC;
   final ImagePicker _picker = ImagePicker();
@@ -7282,6 +7995,7 @@ class _TrainerEditSidePanelState extends State<_TrainerEditSidePanel> {
   bool _hideRepeatPassword = true;
   String _savedFirstName = '';
   String _savedLastName = '';
+  String _storedWorkLocations = '';
 
   @override
   void initState() {
@@ -7295,6 +8009,10 @@ class _TrainerEditSidePanelState extends State<_TrainerEditSidePanel> {
     _experienceC =
         TextEditingController(text: _trainerExperience(widget.trainer));
     _bioC = TextEditingController(text: _trainerBio(widget.trainer));
+    _storedWorkLocations =
+        _s(widget.trainer['work_locations'] ?? widget.trainer['locations']);
+    _addLocationC = TextEditingController();
+    _resetLocationEditorState();
     _newPasswordC = TextEditingController();
     _repeatPasswordC = TextEditingController();
     _savedFirstName = _firstNameC.text.trim();
@@ -7316,6 +8034,9 @@ class _TrainerEditSidePanelState extends State<_TrainerEditSidePanel> {
       _birthdayC.text = _trainerBirthday(widget.trainer);
       _experienceC.text = _trainerExperience(widget.trainer);
       _bioC.text = _trainerBio(widget.trainer);
+      _storedWorkLocations =
+          _s(widget.trainer['work_locations'] ?? widget.trainer['locations']);
+      _resetLocationEditorState();
       _newPasswordC.clear();
       _repeatPasswordC.clear();
       _savedFirstName = _firstNameC.text.trim();
@@ -7335,6 +8056,10 @@ class _TrainerEditSidePanelState extends State<_TrainerEditSidePanel> {
     _birthdayC.dispose();
     _experienceC.dispose();
     _bioC.dispose();
+    _addLocationC.dispose();
+    for (final controller in _manualLocationControllers) {
+      controller.dispose();
+    }
     _newPasswordC.dispose();
     _repeatPasswordC.dispose();
     super.dispose();
@@ -7352,6 +8077,157 @@ class _TrainerEditSidePanelState extends State<_TrainerEditSidePanel> {
     if (id > 0) return 'id:$id';
     final email = _trainerEmail(trainer).toLowerCase();
     return email.isEmpty ? _trainerName(trainer).toLowerCase() : 'email:$email';
+  }
+
+  String get _locationMarker => '#club:${widget.clubId}|';
+
+  List<String> _manualLocationsFromStored(String stored) {
+    final out = <String>[];
+    final seen = <String>{};
+    for (final raw in stored.split(RegExp(r'[\r\n]+'))) {
+      final line = raw.trim();
+      if (!line.startsWith(_locationMarker)) continue;
+      final value = line.substring(_locationMarker.length).trim();
+      final key = _locationKeyValue(value);
+      if (value.isEmpty || key.isEmpty || !seen.add(key)) continue;
+      out.add(value);
+    }
+    return out;
+  }
+
+  List<String> get _automaticLocationValues {
+    final out = <String>[];
+    final seen = <String>{};
+
+    for (final raw in widget.automaticLocations) {
+      final value = raw.trim();
+      final key = _locationKeyValue(value);
+      if (value.isEmpty || key.isEmpty || !seen.add(key)) continue;
+      out.add(value);
+    }
+
+    return out;
+  }
+
+  void _resetLocationEditorState() {
+    for (final controller in _manualLocationControllers) {
+      controller.dispose();
+    }
+    _manualLocationControllers.clear();
+    _selectedAutomaticLocationKeys.clear();
+    _addLocationC.clear();
+
+    final automatic = _automaticLocationValues;
+    final automaticKeys = automatic
+        .map(_locationKeyValue)
+        .where((key) => key.isNotEmpty)
+        .toSet();
+
+    final manual = _manualLocationsFromStored(_storedWorkLocations);
+
+    if (manual.isEmpty) {
+      _selectedAutomaticLocationKeys.addAll(automaticKeys);
+      return;
+    }
+
+    for (final value in manual) {
+      final key = _locationKeyValue(value);
+      if (key.isEmpty) continue;
+
+      if (automaticKeys.contains(key)) {
+        _selectedAutomaticLocationKeys.add(key);
+      } else {
+        _manualLocationControllers.add(
+          TextEditingController(text: value),
+        );
+      }
+    }
+  }
+
+  void _addLocationRow() {
+    final value = _addLocationC.text.trim();
+    final key = _locationKeyValue(value);
+
+    if (value.isEmpty || key.isEmpty) return;
+
+    final duplicateAutomatic =
+        _selectedAutomaticLocationKeys.contains(key);
+    final duplicateManual = _manualLocationControllers.any(
+      (controller) =>
+          _locationKeyValue(controller.text.trim()) == key,
+    );
+
+    if (duplicateAutomatic || duplicateManual) {
+      _addLocationC.clear();
+      return;
+    }
+
+    setState(() {
+      _manualLocationControllers.add(
+        TextEditingController(text: value),
+      );
+      _addLocationC.clear();
+    });
+  }
+
+  String _workLocationsForSave() {
+    final keep = _storedWorkLocations
+        .split(RegExp(r'[\r\n]+'))
+        .map((value) => value.trim())
+        .where(
+          (value) =>
+              value.isNotEmpty &&
+              !value.startsWith(_locationMarker),
+        )
+        .toList();
+
+    final automatic = _automaticLocationValues;
+    final automaticKeys = automatic
+        .map(_locationKeyValue)
+        .where((key) => key.isNotEmpty)
+        .toSet();
+
+    final customValues = <String>[];
+    final customSeen = <String>{};
+
+    for (final controller in _manualLocationControllers) {
+      final value = controller.text.trim();
+      final key = _locationKeyValue(value);
+      if (value.isEmpty || key.isEmpty || !customSeen.add(key)) continue;
+      customValues.add(value);
+    }
+
+    final allAutomaticSelected =
+        _selectedAutomaticLocationKeys.length == automaticKeys.length &&
+            automaticKeys.every(
+              _selectedAutomaticLocationKeys.contains,
+            );
+
+    // Полный автоматический набор без пользовательских строк означает,
+    // что ручной override не нужен: CMR продолжит обновляться от календаря.
+    if (allAutomaticSelected && customValues.isEmpty) {
+      return keep.join('\n');
+    }
+
+    final seen = <String>{};
+
+    for (final location in automatic) {
+      final key = _locationKeyValue(location);
+      if (key.isEmpty ||
+          !_selectedAutomaticLocationKeys.contains(key) ||
+          !seen.add(key)) {
+        continue;
+      }
+      keep.add('$_locationMarker${location.trim()}');
+    }
+
+    for (final value in customValues) {
+      final key = _locationKeyValue(value);
+      if (key.isEmpty || !seen.add(key)) continue;
+      keep.add('$_locationMarker$value');
+    }
+
+    return keep.join('\n');
   }
 
   Future<void> _load() async {
@@ -7374,6 +8250,7 @@ class _TrainerEditSidePanelState extends State<_TrainerEditSidePanel> {
           _s(p['experience'] ?? p['experience_text'] ?? p['work_experience']);
       final bio =
           _s(p['bio'] ?? p['description'] ?? p['about'] ?? p['about_me']);
+      final workLocations = _s(p['work_locations'] ?? p['locations']);
       final photo = _normalizeImage(
           _s(p['photo'] ?? p['photo_url'] ?? p['avatar'] ?? p['avatar_url']));
 
@@ -7386,6 +8263,8 @@ class _TrainerEditSidePanelState extends State<_TrainerEditSidePanel> {
         if (birthday.isNotEmpty) _birthdayC.text = birthday;
         if (experience.isNotEmpty) _experienceC.text = experience;
         if (bio.isNotEmpty) _bioC.text = bio;
+        _storedWorkLocations = workLocations;
+        _resetLocationEditorState();
         if (photo.isNotEmpty) _currentPhoto = photo;
         _loading = false;
       });
@@ -7433,6 +8312,7 @@ class _TrainerEditSidePanelState extends State<_TrainerEditSidePanel> {
       birthday: _birthdayC.text,
       experience: _experienceC.text,
       bio: _bioC.text,
+      workLocations: _workLocationsForSave(),
       pickedPhoto: _pickedPhoto,
     );
 
@@ -7440,6 +8320,8 @@ class _TrainerEditSidePanelState extends State<_TrainerEditSidePanel> {
       if (mounted) setState(() => _saving = false);
       return;
     }
+
+    _storedWorkLocations = _workLocationsForSave();
 
     final namesChanged =
         firstName != _savedFirstName || lastName != _savedLastName;
@@ -7562,6 +8444,295 @@ class _TrainerEditSidePanelState extends State<_TrainerEditSidePanel> {
     );
   }
 
+  Widget _locationEditorBlock() {
+    final automatic = _automaticLocationValues;
+
+    Widget selector({
+      required bool selected,
+      required VoidCallback onTap,
+    }) {
+      return Material(
+        color: Colors.transparent,
+        shape: const CircleBorder(),
+        child: InkWell(
+          onTap: onTap,
+          customBorder: const CircleBorder(),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 140),
+            width: 23,
+            height: 23,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: selected ? _CmrColors.green : Colors.white,
+              border: Border.all(
+                color: selected
+                    ? _CmrColors.green
+                    : _CmrColors.line,
+                width: selected ? 1 : .8,
+              ),
+            ),
+            child: selected
+                ? const Icon(
+                    Icons.check_rounded,
+                    color: Colors.white,
+                    size: 14,
+                  )
+                : null,
+          ),
+        ),
+      );
+    }
+
+    Widget removeButton(VoidCallback onTap) {
+      return IconButton(
+        tooltip: 'Удалить',
+        onPressed: onTap,
+        visualDensity: VisualDensity.compact,
+        icon: const Icon(
+          Icons.delete_outline_rounded,
+          color: _CmrColors.muted2,
+          size: 18,
+        ),
+      );
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: _CmrDecor.softCard(radius: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              const _CmrGlowDot(
+                color: _CmrColors.greenDark,
+                size: 6,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Рабочие локации',
+                  style: _CmrText.value(11.4),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 5),
+          Text(
+            'Зелёный круг — оставить. Корзина исключает локацию из карточки тренера.',
+            style: _CmrText.muted(9.2),
+          ),
+          const SizedBox(height: 10),
+          if (automatic.isNotEmpty) ...<Widget>[
+            Text(
+              'Автоматически из команд и календаря',
+              style: _CmrText.muted(9.6).copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 7),
+            for (final location in automatic) ...<Widget>[
+              Builder(
+                builder: (_) {
+                  final key = _locationKeyValue(location);
+                  final selected =
+                      _selectedAutomaticLocationKeys.contains(key);
+
+                  return AnimatedOpacity(
+                    duration: const Duration(milliseconds: 140),
+                    opacity: selected ? 1 : .48,
+                    child: Container(
+                      margin: const EdgeInsets.only(bottom: 7),
+                      padding: const EdgeInsets.fromLTRB(9, 6, 4, 6),
+                      decoration: BoxDecoration(
+                        color: selected
+                            ? _CmrColors.greenSoft
+                            : Colors.white,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: selected
+                              ? _CmrColors.green.withOpacity(.18)
+                              : _CmrColors.line,
+                          width: .7,
+                        ),
+                      ),
+                      child: Row(
+                        children: <Widget>[
+                          selector(
+                            selected: selected,
+                            onTap: () {
+                              setState(() {
+                                if (selected) {
+                                  _selectedAutomaticLocationKeys.remove(key);
+                                } else {
+                                  _selectedAutomaticLocationKeys.add(key);
+                                }
+                              });
+                            },
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              location,
+                              style: _CmrText.value(10.2),
+                            ),
+                          ),
+                          removeButton(
+                            () => setState(
+                              () => _selectedAutomaticLocationKeys.remove(key),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ],
+            const SizedBox(height: 4),
+          ] else ...<Widget>[
+            Text(
+              'Автоматические локации пока не найдены.',
+              style: _CmrText.muted(9.6),
+            ),
+            const SizedBox(height: 8),
+          ],
+          Text(
+            'Добавить вручную',
+            style: _CmrText.muted(9.6).copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 7),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Expanded(
+                child: TextField(
+                  controller: _addLocationC,
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => _addLocationRow(),
+                  style: AppTypography.formText(
+                    color: _CmrColors.text,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: 'Название или адрес локации',
+                    hintStyle: AppTypography.formHint(
+                      color: _CmrColors.muted2,
+                    ),
+                    filled: true,
+                    fillColor: Colors.white,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 11,
+                      vertical: 11,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(
+                        color: _CmrColors.line,
+                      ),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(
+                        color: _CmrColors.line,
+                      ),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(
+                        color: _CmrColors.green,
+                        width: 1,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 7),
+              SizedBox(
+                height: 44,
+                child: _CmrTextActionButton(
+                  label: 'Добавить',
+                  color: _CmrColors.greenDark,
+                  onTap: _addLocationRow,
+                ),
+              ),
+            ],
+          ),
+          if (_manualLocationControllers.isNotEmpty) ...<Widget>[
+            const SizedBox(height: 9),
+            for (var i = 0;
+                i < _manualLocationControllers.length;
+                i++) ...<Widget>[
+              Container(
+                margin: const EdgeInsets.only(bottom: 7),
+                padding: const EdgeInsets.fromLTRB(9, 5, 4, 5),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: _CmrColors.line,
+                    width: .7,
+                  ),
+                ),
+                child: Row(
+                  children: <Widget>[
+                    selector(
+                      selected: true,
+                      onTap: () {},
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TextField(
+                        controller: _manualLocationControllers[i],
+                        maxLines: 2,
+                        minLines: 1,
+                        style: AppTypography.formText(
+                          color: _CmrColors.text,
+                        ),
+                        decoration: InputDecoration(
+                          hintText: 'Локация',
+                          hintStyle: AppTypography.formHint(
+                            color: _CmrColors.muted2,
+                          ),
+                          isDense: true,
+                          filled: true,
+                          fillColor: _CmrColors.soft,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 9,
+                            vertical: 8,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide.none,
+                          ),
+                        ),
+                      ),
+                    ),
+                    removeButton(
+                      () {
+                        final controller =
+                            _manualLocationControllers.removeAt(i);
+                        controller.dispose();
+                        setState(() {});
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+          const SizedBox(height: 4),
+          Text(
+            'Если оставить весь автоматический набор и не добавлять свои строки, локации продолжат обновляться автоматически.',
+            style: _CmrText.muted(8.9),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final name = _trainerName(widget.trainer);
@@ -7570,9 +8741,14 @@ class _TrainerEditSidePanelState extends State<_TrainerEditSidePanel> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final mobile = constraints.maxWidth < 640;
-        final width = mobile
-            ? math.max(0.0, constraints.maxWidth - 16)
-            : math.min(448.0, math.max(390.0, constraints.maxWidth * .38));
+        final width = widget.fillAvailableWidth
+            ? constraints.maxWidth
+            : mobile
+                ? math.max(0.0, constraints.maxWidth - 16)
+                : math.min(
+                    620.0,
+                    math.max(440.0, constraints.maxWidth * .56),
+                  );
         final radius = mobile ? 18.0 : 20.0;
 
         return Align(
@@ -7755,6 +8931,8 @@ class _TrainerEditSidePanelState extends State<_TrainerEditSidePanel> {
                                 icon: Icons.notes_rounded,
                                 maxLines: 5,
                               ),
+                              const SizedBox(height: 10),
+                              _locationEditorBlock(),
                               const SizedBox(height: 18),
                               Container(
                                 padding: const EdgeInsets.all(12),
@@ -9243,7 +10421,7 @@ class _CompactFilters extends StatelessWidget {
       (_CmrStaffFilter.main, 'Главные'),
       (_CmrStaffFilter.coaches, 'Тренеры'),
       (_CmrStaffFilter.assistants, 'Ассистенты'),
-      (_CmrStaffFilter.doctors, 'Медики'),
+      (_CmrStaffFilter.doctors, 'Врачи'),
       (_CmrStaffFilter.press, 'Пресс-служба'),
       (_CmrStaffFilter.noTeam, 'Без команды'),
     ];

@@ -67,6 +67,9 @@ class TgState extends ChangeNotifier {
 
   // ===== 3D параметры =====
   bool is3DMode = true;
+  // Презентационный режим использует тот же Canvas и те же объекты,
+  // но добавляет спокойное стадионное окружение вокруг поля.
+  bool presentationMode = false;
   double rotationX = -0.34;
   double rotationY = 0.0;
   double rotationZ = 0.0;
@@ -141,6 +144,18 @@ class TgState extends ChangeNotifier {
   void toggle3DMode() {
     set3DParams(enabled: !is3DMode);
   }
+
+  void setPresentationMode(bool enabled) {
+    presentationMode = enabled;
+    if (enabled) {
+      is3DMode = true;
+      rotationX = rotationX.clamp(-.52, -.22).toDouble();
+      perspective = perspective.clamp(0.0009, 0.0018).toDouble();
+    }
+    notifyListeners();
+  }
+
+  void togglePresentationMode() => setPresentationMode(!presentationMode);
 
   void reset3D() {
     set3DParams(
@@ -611,6 +626,35 @@ class TgState extends ChangeNotifier {
   // ===== elements / selection =====
   final List<TgElement> _elements = <TgElement>[];
   List<TgElement> get elements => List.unmodifiable(_elements);
+
+  // Transient animation positions are presentation-only. They are deliberately
+  // excluded from undo/redo and JSON so playback moves the real scene object
+  // visually without modifying the saved tactical scheme.
+  final Map<String, Offset> _animationPositionOverrides = <String, Offset>{};
+  Offset? animationPositionFor(String elementId) =>
+      _animationPositionOverrides[elementId];
+
+  void setAnimationPositionOverrides(Map<String, Offset> values) {
+    if (_sameAnimationOverrides(values)) return;
+    _animationPositionOverrides
+      ..clear()
+      ..addAll(values);
+    notifyListeners();
+  }
+
+  void clearAnimationPositionOverrides() {
+    if (_animationPositionOverrides.isEmpty) return;
+    _animationPositionOverrides.clear();
+    notifyListeners();
+  }
+
+  bool _sameAnimationOverrides(Map<String, Offset> values) {
+    if (values.length != _animationPositionOverrides.length) return false;
+    for (final entry in values.entries) {
+      if (_animationPositionOverrides[entry.key] != entry.value) return false;
+    }
+    return true;
+  }
 
   String _activeTacticalLayer = 'tactical';
   String get activeTacticalLayer => _activeTacticalLayer;
@@ -2936,20 +2980,10 @@ class TgState extends ChangeNotifier {
       if (hit == null) {
         clearSelection();
       } else {
+        // A normal tap only selects the object. Control-point editing is an
+        // explicit action from the properties panel (Object / Points), so a
+        // coach can move/scale/rotate curves just like every other element.
         selectById(hit);
-        final selectedElem = selected;
-
-        if (selectedElem is TgEditableCurve) {
-          editSelectedCurvePoints();
-        } else if (selectedElem is TgZigzag) {
-          editZigzagPoints();
-        } else if (selectedElem is TgSpring) {
-          editSpringPoints();
-        } else if (selectedElem is TgSpiral) {
-          editSpiralPoints();
-        } else if (selectedElem is TgWavy) {
-          editWavyPoints();
-        }
       }
       return;
     }
@@ -3655,6 +3689,7 @@ class TgState extends ChangeNotifier {
       "elements": _elements.map(_elementToJson).toList(),
       "selected_ids": selectedIds.toList(),
       "is_3d_mode": is3DMode,
+      "presentation_mode": presentationMode,
       "rotation_x": rotationX,
       "rotation_y": rotationY,
       "rotation_z": rotationZ,
@@ -3721,6 +3756,8 @@ class TgState extends ChangeNotifier {
 
     final hasSaved3DMode = json.containsKey("is_3d_mode");
     is3DMode = hasSaved3DMode ? json["is_3d_mode"] == true : true;
+    presentationMode = json["presentation_mode"] == true;
+    if (presentationMode) is3DMode = true;
     rotationX = _asDouble(json["rotation_x"], is3DMode ? -0.34 : 0.0);
     rotationY = _asDouble(json["rotation_y"], 0.0);
     rotationZ = _asDouble(json["rotation_z"], 0.0);
@@ -3787,6 +3824,7 @@ class TgState extends ChangeNotifier {
       activeStampAsset: _activeStampAsset,
       viewport: transform.value.value.clone(),
       is3DMode: is3DMode,
+      presentationMode: presentationMode,
       rotationX: rotationX,
       rotationY: rotationY,
       rotationZ: rotationZ,
@@ -3820,6 +3858,7 @@ class TgState extends ChangeNotifier {
     transform.value.value = s.viewport.clone();
 
     is3DMode = s.is3DMode;
+    presentationMode = s.presentationMode;
     rotationX = s.rotationX;
     rotationY = s.rotationY;
     rotationZ = s.rotationZ;
@@ -4457,6 +4496,7 @@ class _TgSnapshot {
     required this.activeStampAsset,
     required this.viewport,
     required this.is3DMode,
+    required this.presentationMode,
     required this.rotationX,
     required this.rotationY,
     required this.rotationZ,
@@ -4488,6 +4528,7 @@ class _TgSnapshot {
   final Matrix4 viewport;
 
   final bool is3DMode;
+  final bool presentationMode;
   final double rotationX;
   final double rotationY;
   final double rotationZ;

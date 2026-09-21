@@ -52,6 +52,10 @@ class _StaffKeyActivationScreenState extends State<StaffKeyActivationScreen> {
     }).toList();
   }
 
+  List<Map<String, dynamic>> get _active {
+    return StaffAccessService.activeAccesses(_state);
+  }
+
   Future<void> _load() async {
     if (!mounted) return;
 
@@ -292,6 +296,72 @@ class _StaffKeyActivationScreenState extends State<StaffKeyActivationScreen> {
                                   fontWeight: FontWeight.w700,
                                 ),
                               ),
+                            ],
+                            if (_active.isNotEmpty) ...[
+                              const SizedBox(height: 18),
+                              const Divider(height: 1, color: _line),
+                              const SizedBox(height: 16),
+                              const Text(
+                                'Активные рабочие пространства',
+                                style: TextStyle(
+                                  color: _text,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              for (final access in _active)
+                                Container(
+                                  margin: const EdgeInsets.only(bottom: 7),
+                                  padding: const EdgeInsets.all(11),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFF7F8F7),
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(color: _line),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      const Icon(
+                                        Icons.apartment_rounded,
+                                        color: _greenDark,
+                                        size: 19,
+                                      ),
+                                      const SizedBox(width: 9),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              '${access['club_name'] ?? 'Клуб'}',
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: const TextStyle(
+                                                color: _text,
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 3),
+                                            Text(
+                                              '${access['role_title'] ?? 'Сотрудник'} · '
+                                              '${(access['teams'] is List) ? (access['teams'] as List).length : 0} команд(ы)',
+                                              style: const TextStyle(
+                                                color: _muted,
+                                                fontSize: 10.4,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      const Icon(
+                                        Icons.check_circle_rounded,
+                                        color: _green,
+                                        size: 18,
+                                      ),
+                                    ],
+                                  ),
+                                ),
                             ],
                             if (_error != null) ...[
                               const SizedBox(height: 12),

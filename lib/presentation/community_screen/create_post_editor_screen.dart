@@ -68,6 +68,12 @@ class CreatePostEditorScreen extends StatefulWidget {
   final String authorLabel;
   final bool pressMode;
   final String visibility;
+
+  /// For visibility=club_internal. Empty list means whole club.
+  final List<int> targetTeamIds;
+  final List<Map<String, dynamic>> availableTargetTeams;
+  final bool allowWholeClubTarget;
+
   final PostComposerController? composerController;
   final bool hideChrome;
   final bool forceSimpleComposer;
@@ -89,6 +95,9 @@ class CreatePostEditorScreen extends StatefulWidget {
     this.authorLabel = '',
     this.pressMode = false,
     this.visibility = 'feed',
+    this.targetTeamIds = const <int>[],
+    this.availableTargetTeams = const <Map<String, dynamic>>[],
+    this.allowWholeClubTarget = false,
     this.composerController,
     this.hideChrome = false,
     this.forceSimpleComposer = false,
@@ -114,6 +123,12 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
 
   int _userId = 0;
 
+  bool _targetWholeClub = false;
+  final Set<int> _selectedTargetTeamIds = <int>{};
+
+  bool get _internalNewsMode =>
+      widget.visibility.trim().toLowerCase() == 'club_internal';
+
   final RegExp _urlRegExp = RegExp(
     r'((https?:\/\/)|(www\.))([^\s]+)',
     caseSensitive: false,
@@ -126,6 +141,25 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
     _blocks = List<PostBlock>.from(widget.initialBlocks);
     _caption.text = _plainCaptionFromBlocks(_blocks);
     _coverUrl = widget.initialCoverUrl;
+    _selectedTargetTeamIds.addAll(
+      widget.targetTeamIds.where((id) => id > 0),
+    );
+    _targetWholeClub = _internalNewsMode && _selectedTargetTeamIds.isEmpty;
+    if (_internalNewsMode &&
+        !_targetWholeClub &&
+        _selectedTargetTeamIds.isEmpty &&
+        widget.availableTargetTeams.isNotEmpty) {
+      final firstId = _targetTeamId(widget.availableTargetTeams.first);
+      if (firstId > 0) _selectedTargetTeamIds.add(firstId);
+    }
+    if (_internalNewsMode &&
+        _targetWholeClub &&
+        !widget.allowWholeClubTarget &&
+        widget.availableTargetTeams.isNotEmpty) {
+      _targetWholeClub = false;
+      final firstId = _targetTeamId(widget.availableTargetTeams.first);
+      if (firstId > 0) _selectedTargetTeamIds.add(firstId);
+    }
     widget.composerController?._attach(_save);
     _initUser();
   }
@@ -1094,14 +1128,144 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
     }
   }
 
-  void _applyPressContext(http.MultipartRequest req) {
-    if (!widget.pressMode) return;
-    req.fields['press_mode'] = '1';
-    req.fields['workspace'] = 'press';
-    req.fields['club_id'] = widget.clubId.toString();
+  int _targetTeamId(Map<String, dynamic> team) {
+    final raw = team['id'] ?? team['team_id'] ?? team['teamId'];
+    if (raw is int) return raw;
+    if (raw is num) return raw.toInt();
+    return int.tryParse('${raw ?? ''}'.trim()) ?? 0;
+  }
+
+  String _targetTeamName(Map<String, dynamic> team) {
+    final value = '${team['name'] ?? team['team_name'] ?? team['teamName'] ?? ''}'.trim();
+    return value.isEmpty || value == 'null' ? 'Команда' : value;
+  }
+
+  String _targetTeamNameById(int id) {
+    for (final team in widget.availableTargetTeams) {
+      if (_targetTeamId(team) == id) return _targetTeamName(team);
+    }
+    return '';
+  }
+
+  List<int> get _effectiveTargetTeamIds {
+    if (!_internalNewsMode || _targetWholeClub) return const <int>[];
+    final ids = _selectedTargetTeamIds.where((id) => id > 0).toList()..sort();
+    return ids;
+  }
+
+  void _applyPublicationContext(http.MultipartRequest req) {
+    if (widget.pressMode) {
+      req.fields['press_mode'] = '1';
+      req.fields['workspace'] = 'press';
+    }
+
+    if (widget.clubId > 0) req.fields['club_id'] = widget.clubId.toString();
+    if (widget.authorLabel.trim().isNotEmpty) {
+      req.fields['author'] = widget.authorLabel.trim();
+    }
+
+    final visibility = widget.visibility.trim().isEmpty
+        ? 'feed'
+        : widget.visibility.trim();
+    req.fields['visibility'] = visibility;
+
+    if (_internalNewsMode) {
+      final ids = _effectiveTargetTeamIds;
+      req.fields['target_team_ids'] = jsonEncode(ids);
+      if (ids.length == 1) {
+        final id = ids.first;
+        req.fields['team_id'] = id.toString();
+        final name = _targetTeamNameById(id);
+        req.fields['team'] = name;
+      } else {
+        req.fields['team_id'] = '0';
+        req.fields['team'] = '';
+      }
+      return;
+    }
+
     req.fields['team_id'] = widget.teamId.toString();
     req.fields['team'] = widget.teamName;
-    req.fields['author'] = widget.authorLabel;
+  }
+
+  Widget _buildInternalAudienceSelector() {
+    final ids = _effectiveTargetTeamIds;
+    final status = _targetWholeClub
+        ? 'Весь клуб'
+        : ids.isEmpty
+            ? 'Не выбрано'
+            : ids.length == 1
+                ? (_targetTeamNameById(ids.first).isEmpty
+                    ? '1 команда'
+                    : _targetTeamNameById(ids.first))
+                : '${ids.length} команды';
+
+    return _editorSection(
+      title: 'Получатели',
+      subtitle: 'Эта новость не попадёт в общую Community-ленту',
+      dotColor: (_targetWholeClub || ids.isNotEmpty)
+          ? const Color(0xFF00A750)
+          : const Color(0xFFD92D20),
+      statusText: status,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (widget.allowWholeClubTarget)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: ChoiceChip(
+                label: const Text('Весь клуб'),
+                selected: _targetWholeClub,
+                onSelected: _saving
+                    ? null
+                    : (selected) {
+                        if (!selected) return;
+                        setState(() {
+                          _targetWholeClub = true;
+                          _selectedTargetTeamIds.clear();
+                        });
+                      },
+              ),
+            ),
+          if (widget.availableTargetTeams.isNotEmpty)
+            Wrap(
+              spacing: 7,
+              runSpacing: 7,
+              children: [
+                for (final team in widget.availableTargetTeams)
+                  Builder(
+                    builder: (_) {
+                      final id = _targetTeamId(team);
+                      final selected = _selectedTargetTeamIds.contains(id);
+                      return FilterChip(
+                        label: Text(_targetTeamName(team)),
+                        selected: selected,
+                        onSelected: _saving || id <= 0
+                            ? null
+                            : (value) {
+                                setState(() {
+                                  _targetWholeClub = false;
+                                  if (value) {
+                                    _selectedTargetTeamIds.add(id);
+                                  } else {
+                                    _selectedTargetTeamIds.remove(id);
+                                  }
+                                });
+                              },
+                      );
+                    },
+                  ),
+              ],
+            ),
+          if (!widget.allowWholeClubTarget &&
+              widget.availableTargetTeams.isEmpty)
+            Text(
+              'Нет доступных команд для публикации.',
+              style: _editorText(10.2, color: const Color(0xFFD92D20)),
+            ),
+        ],
+      ),
+    );
   }
 
   Future<void> _save() async {
@@ -1115,6 +1279,18 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
     }
     if (_userId <= 0) {
       _snack("Не найден user_id");
+      return;
+    }
+    if (_internalNewsMode &&
+        !_targetWholeClub &&
+        _effectiveTargetTeamIds.isEmpty) {
+      _snack("Выберите хотя бы одну команду");
+      return;
+    }
+    if (_internalNewsMode &&
+        _targetWholeClub &&
+        !widget.allowWholeClubTarget) {
+      _snack("Нет права публикации для всего клуба");
       return;
     }
 
@@ -1147,12 +1323,7 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
         req.fields["user_id"] = _userId.toString();
         req.fields["title"] = title;
         req.fields["body"] = htmlBody;
-        _applyPressContext(req);
-        if (widget.teamId > 0) req.fields["team_id"] = widget.teamId.toString();
-        if (widget.clubId > 0) req.fields["club_id"] = widget.clubId.toString();
-        if (widget.teamName.trim().isNotEmpty)
-          req.fields["team"] = widget.teamName.trim();
-        if (widget.pressMode) req.fields["press_mode"] = "1";
+        _applyPublicationContext(req);
 
         if (_newCoverFile != null) {
           req.files.add(
@@ -1189,13 +1360,8 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
       req.fields["category"] = widget.sportName;
       req.fields["team"] = widget.teamName.trim();
       req.fields["author"] = widget.authorLabel.trim();
-      if (widget.teamId > 0) req.fields["team_id"] = widget.teamId.toString();
-      if (widget.clubId > 0) req.fields["club_id"] = widget.clubId.toString();
-      if (widget.pressMode) req.fields["press_mode"] = "1";
       req.fields["user_id"] = _userId.toString();
-      _applyPressContext(req);
-      req.fields["visibility"] =
-          widget.visibility.trim().isEmpty ? "feed" : widget.visibility.trim();
+      _applyPublicationContext(req);
       req.fields["post_type"] = "post";
 
       if (_newCoverFile != null) {
@@ -1995,7 +2161,7 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
                     ],
                     Expanded(
                       child: Text(
-                        widget.isEdit ? 'Редактирование' : 'Новая публикация',
+                        widget.isEdit ? 'Редактирование' : (_internalNewsMode ? 'Новая новость клуба' : 'Новая публикация'),
                         textAlign: isPhone ? TextAlign.center : TextAlign.start,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -2091,7 +2257,7 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
           titleSpacing: isPhone ? 0 : 14,
           title: isPhone
               ? Text(
-                  widget.isEdit ? 'Редактирование' : 'Новая публикация',
+                  widget.isEdit ? 'Редактирование' : (_internalNewsMode ? 'Новая новость клуба' : 'Новая публикация'),
                   style: _editorText(
                     13.2,
                     weight: FontWeight.w600,
@@ -2104,7 +2270,7 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
                     _brandDots(),
                     const SizedBox(width: 8),
                     Text(
-                      widget.isEdit ? 'Редактирование поста' : 'Новый пост',
+                      widget.isEdit ? 'Редактирование поста' : (_internalNewsMode ? 'Новая новость клуба' : 'Новый пост'),
                       style: _editorText(
                         14,
                         weight: FontWeight.w600,
@@ -2183,6 +2349,10 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
 
   List<Widget> _buildEditorChildren() {
     return <Widget>[
+      if (_internalNewsMode) ...[
+        _buildInternalAudienceSelector(),
+        const SizedBox(height: 8),
+      ],
       _editorSection(
         title: 'Заголовок',
         subtitle: 'Коротко сформулируйте тему публикации',

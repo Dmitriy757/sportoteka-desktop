@@ -356,13 +356,13 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 7),
                   Text(
-                    'Введите данные вашей учётной записи',
+                    'Введите email или логин и пароль',
                     style: AppTypography.body(color: _secondary),
                   ),
                   SizedBox(height: mobile ? 26 : 32),
-                  _fieldLabel('Эл. почта'),
+                  _fieldLabel('Email или логин'),
                   const SizedBox(height: 7),
-                  _buildEmailField(),
+                  _buildIdentifierField(),
                   const SizedBox(height: 18),
                   _fieldLabel('Пароль'),
                   const SizedBox(height: 7),
@@ -389,16 +389,32 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  Widget _buildEmailField() {
+  Widget _buildIdentifierField() {
     return _LoginTextField(
+      // Контроллер исторически называется emailController. Оставляем его,
+      // чтобы не ломать LoginController и другие места проекта. Теперь он
+      // хранит единый идентификатор: email взрослого пользователя или логин
+      // детского аккаунта игрока.
       controller: controller.emailController,
-      hintText: 'Введите email',
-      keyboardType: TextInputType.emailAddress,
+      hintText: 'Введите email или логин',
+      keyboardType: TextInputType.text,
       textInputAction: TextInputAction.next,
-      autofillHints: const [AutofillHints.email],
+      autofillHints: const [AutofillHints.username, AutofillHints.email],
       validator: (value) {
-        if (value == null || !isValidEmail(value, isRequired: true)) {
+        final identifier = value?.trim() ?? '';
+        if (identifier.isEmpty) {
+          return 'Введите email или логин.';
+        }
+
+        // Если пользователь вводит строку с @, это должен быть корректный
+        // email. Без @ значение считается логином детского аккаунта.
+        if (identifier.contains('@') &&
+            !isValidEmail(identifier, isRequired: true)) {
           return 'Введите корректный email.';
+        }
+
+        if (!identifier.contains('@') && identifier.length < 3) {
+          return 'Логин должен содержать не менее 3 символов.';
         }
         return null;
       },
@@ -632,10 +648,10 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> onTapLogIn() async {
-    final email = controller.emailController.text.trim();
+    final identifier = controller.emailController.text.trim();
     final password = controller.passwordController.text.trim();
 
-    if (email.isEmpty || password.isEmpty) {
+    if (identifier.isEmpty || password.isEmpty) {
       Get.snackbar('Ошибка', 'Пожалуйста, заполните все поля');
       return;
     }
@@ -647,7 +663,11 @@ class _LoginScreenState extends State<LoginScreen> {
         Uri.parse('https://sportotekaapp.ru/api/login.php'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
-          'email': email,
+          // Новый API принимает identifier. Поле email дублируем для
+          // совместимости, если на сервере на короткое время останется
+          // предыдущая версия login.php во время обновления.
+          'identifier': identifier,
+          'email': identifier,
           'password': password,
         }),
       );
@@ -719,7 +739,7 @@ class _LoginScreenState extends State<LoginScreen> {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted) return;
 
-          // Login подтверждает только email + пароль.
+          // Login подтверждает email/логин + пароль.
           // Все рабочие ключи вводятся уже в Workspace Hub:
           // Staff Key / Club Key / Parent Key.
           Get.offAll<void>(

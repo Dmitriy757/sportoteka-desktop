@@ -21,6 +21,8 @@ class TgLeftToolbar extends StatelessWidget {
     required this.onOpenAnimation,
     required this.animationOpen,
     required this.onSet3D,
+    required this.onOpen3DPro,
+    required this.gameViewActive,
     required this.onPickFieldTexture,
     required this.onClearFieldTexture,
   });
@@ -38,6 +40,8 @@ class TgLeftToolbar extends StatelessWidget {
   final VoidCallback onOpenAnimation;
   final bool animationOpen;
   final ValueChanged<bool> onSet3D;
+  final VoidCallback onOpen3DPro;
+  final bool gameViewActive;
   final VoidCallback onPickFieldTexture;
   final VoidCallback onClearFieldTexture;
 
@@ -267,18 +271,26 @@ class TgLeftToolbar extends StatelessWidget {
                       ),
                       _gap(),
                       _item(
-                        icon: Icons.view_in_ar_rounded,
-                        label: '3D PRO',
-                        subtitle: 'перспектива и джойстик камеры',
-                        active: state.is3DMode,
+                        icon: Icons.stadium_rounded,
+                        label: '3D поле',
+                        subtitle: 'дополнительный режим поля в этом же окне',
+                        active: gameViewActive,
+                        onTap: onOpen3DPro,
+                      ),
+                      _gap(),
+                      _item(
+                        icon: Icons.threed_rotation_rounded,
+                        label: 'Перспектива',
+                        subtitle: 'рабочий ракурс без смены объектов',
+                        active: !gameViewActive && state.is3DMode,
                         onTap: () => onSet3D(true),
                       ),
                       _gap(),
                       _item(
                         icon: Icons.crop_landscape_rounded,
                         label: '2D',
-                        subtitle: 'плоский вид поля',
-                        active: !state.is3DMode,
+                        subtitle: 'плоский рабочий вид поля',
+                        active: !gameViewActive && !state.is3DMode,
                         onTap: () => onSet3D(false),
                       ),
                     ],

@@ -3,7 +3,7 @@ description: Sportoteka Flutter App
 
 publish_to: "none"
 
-version: 4.0.43+104
+version: 4.0.45+105
 
 environment:
   sdk: ">=3.1.0 <4.0.0"
@@ -85,6 +85,7 @@ dependencies:
   app_badge_plus: ^1.3.4
   flutter_callkit_incoming: ^3.1.5
   audioplayers: ^6.4.0
+  thermion_flutter: ^0.3.4
   
 
 
@@ -148,6 +149,7 @@ flutter:
     - assets/staff/pavlyuchuk.jpg
     - assets/images/bron.png
     - assets/training/field.png
+    - assets/training/3d/
     - assets/training/stamps/player_m/run.png
     - assets/training/stamps/player_m/pass.png
     - assets/training/stamps/player_m/stand.png

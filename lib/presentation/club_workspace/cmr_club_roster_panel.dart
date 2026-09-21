@@ -1364,7 +1364,13 @@ class _CmrClubRosterPanelState extends State<CmrClubRosterPanel> {
       final haystack = [
         _playerName(player),
         _playerPosition(player),
-        _first(player, const ['number', 'player_number', 'shirt_number']),
+        _first(player, const [
+          'number',
+          'player_number',
+          'shirt_number',
+          'jersey_number',
+          'jerseyNumber',
+        ]),
         _first(player, const ['email', 'phone']),
         _first(player, const ['sport_data', 'sportData']),
       ].join(' ').toLowerCase();
@@ -3020,7 +3026,7 @@ class _PlayerStatusBadge extends StatelessWidget {
 
 // ==================== Правая панель игрока ====================
 
-class _PlayerDetailPanel extends StatelessWidget {
+class _PlayerDetailPanel extends StatefulWidget {
   final Map<String, dynamic>? player;
   final String teamName;
   final int clubId;
@@ -3044,8 +3050,216 @@ class _PlayerDetailPanel extends StatelessWidget {
   });
 
   @override
+  State<_PlayerDetailPanel> createState() => _PlayerDetailPanelState();
+}
+
+class _PlayerDetailPanelState extends State<_PlayerDetailPanel> {
+  static const String _apiBase = 'https://sportotekaapp.ru/api';
+  static const String _schoolProfileTitle = '__SPORTOTEKA_SCHOOL_PROFILE__';
+  static const String _schoolProfilePrefix = '__SPORTOTEKA_SCHOOL_PROFILE_JSON__';
+
+  Map<String, dynamic>? _hydratedPlayer;
+  int _hydrateRevision = 0;
+
+  Map<String, dynamic>? get player => widget.player;
+  String get teamName => widget.teamName;
+  int get clubId => widget.clubId;
+  int get teamId => widget.teamId;
+  int? get currentUserId => widget.currentUserId;
+  VoidCallback? get onOpenFullProfile => widget.onOpenFullProfile;
+  Future<void> Function()? get onDeletePlayer => widget.onDeletePlayer;
+  VoidCallback? get onClose => widget.onClose;
+  ScrollController? get scrollController => widget.scrollController;
+
+  @override
+  void initState() {
+    super.initState();
+    _hydratedPlayer = widget.player == null
+        ? null
+        : Map<String, dynamic>.from(widget.player!);
+    _hydratePlayerData();
+  }
+
+  @override
+  void didUpdateWidget(covariant _PlayerDetailPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final oldIdentity = _playerIdentityForDetails(oldWidget.player);
+    final newIdentity = _playerIdentityForDetails(widget.player);
+    if (oldIdentity != newIdentity) {
+      _hydratedPlayer = widget.player == null
+          ? null
+          : Map<String, dynamic>.from(widget.player!);
+      _hydratePlayerData();
+      return;
+    }
+
+    // Родитель может обновить уже выбранного игрока после сохранения профиля.
+    // Сразу подмешиваем новые поля, не дожидаясь сетевого запроса.
+    if (widget.player != null) {
+      _hydratedPlayer = <String, dynamic>{
+        ...?_hydratedPlayer,
+        ...widget.player!,
+      };
+    }
+  }
+
+  int _detailInt(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse('${value ?? ''}'.trim()) ?? 0;
+  }
+
+  String _detailText(dynamic value) {
+    final text = '${value ?? ''}'.trim();
+    return text == 'null' ? '' : text;
+  }
+
+  Future<Map<String, dynamic>> _detailGet(
+    String endpoint,
+    Map<String, String> query,
+  ) async {
+    try {
+      final response = await http
+          .get(Uri.parse('$_apiBase/$endpoint').replace(queryParameters: query))
+          .timeout(const Duration(seconds: 12));
+      final raw = response.body.trim();
+      if (raw.isEmpty || raw.startsWith('<')) return <String, dynamic>{};
+      final decoded = jsonDecode(raw);
+      return decoded is Map
+          ? Map<String, dynamic>.from(decoded)
+          : <String, dynamic>{};
+    } catch (_) {
+      return <String, dynamic>{};
+    }
+  }
+
+  List<Map<String, dynamic>> _detailList(
+    Map<String, dynamic> data,
+    List<String> keys,
+  ) {
+    for (final key in keys) {
+      final value = data[key];
+      if (value is List) {
+        return value
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
+      }
+      if (value is Map) {
+        for (final nestedKey in const ['records', 'items', 'rows', 'data']) {
+          final nested = value[nestedKey];
+          if (nested is List) {
+            return nested
+                .whereType<Map>()
+                .map((e) => Map<String, dynamic>.from(e))
+                .toList();
+          }
+        }
+      }
+    }
+    return <Map<String, dynamic>>[];
+  }
+
+  Map<String, dynamic> _decodeSchoolProfile(
+    Map<String, dynamic> medicalResponse,
+  ) {
+    final records = _detailList(
+      medicalResponse,
+      const ['records', 'items', 'rows', 'data'],
+    );
+    for (final record in records) {
+      if (_detailText(record['title']) != _schoolProfileTitle) continue;
+      final note = _detailText(
+        record['note'] ?? record['description'] ?? record['comment'],
+      );
+      if (!note.startsWith(_schoolProfilePrefix)) return <String, dynamic>{};
+      try {
+        final decoded = jsonDecode(note.substring(_schoolProfilePrefix.length));
+        if (decoded is Map) return Map<String, dynamic>.from(decoded);
+      } catch (_) {
+        return <String, dynamic>{};
+      }
+    }
+    return <String, dynamic>{};
+  }
+
+  Map<String, dynamic> _extractMetrics(Map<String, dynamic> response) {
+    dynamic source = response['metrics'] ?? response['player'] ?? response['data'];
+    if (source is Map) {
+      final mapped = Map<String, dynamic>.from(source);
+      final nested = mapped['metrics'] ?? mapped['player'];
+      if (nested is Map) return Map<String, dynamic>.from(nested);
+      return mapped;
+    }
+    return response;
+  }
+
+  Future<void> _hydratePlayerData() async {
+    final base = widget.player;
+    final revision = ++_hydrateRevision;
+    if (base == null) return;
+
+    final playerId = _detailInt(
+      base['player_id'] ?? base['playerId'] ?? base['id'] ?? base['user_id'],
+    );
+    final userId = _detailInt(base['user_id'] ?? base['userId'] ?? playerId);
+    if (playerId <= 0) return;
+
+    final responses = await Future.wait<Map<String, dynamic>>([
+      _detailGet('medical/get_player_metrics.php', <String, String>{
+        'player_id': '$playerId',
+        if (userId > 0) 'user_id': '$userId',
+      }),
+      _detailGet('medical/get_medical_records.php', <String, String>{
+        'player_id': '$playerId',
+        if (userId > 0) 'user_id': '$userId',
+      }),
+    ]);
+
+    if (!mounted || revision != _hydrateRevision) return;
+
+    final metrics = _extractMetrics(responses[0]);
+    final schoolProfile = _decodeSchoolProfile(responses[1]);
+    final height = _detailText(metrics['height'] ?? metrics['height_cm']);
+    final weight = _detailText(metrics['weight'] ?? metrics['weight_kg']);
+
+    // В служебной записи школьного профиля старые версии могли хранить
+    // пустые age/birth_date. Нельзя такими значениями затирать возраст,
+    // который уже пришёл в составе команды.
+    final merged = Map<String, dynamic>.from(base);
+    for (final entry in schoolProfile.entries) {
+      final key = entry.key;
+      final value = entry.value;
+      final text = _detailText(value);
+      if (text.isEmpty) continue;
+
+      final lowerKey = key.toLowerCase();
+      if ((lowerKey == 'age' || lowerKey == 'age_years' || lowerKey == 'player_age') &&
+          (text == '0' || text == '0.0')) {
+        continue;
+      }
+      if ((lowerKey.contains('birth') || lowerKey == 'dob' || lowerKey == 'date_of_birth') &&
+          (text == '0000-00-00' || text == '0000-00-00 00:00:00')) {
+        continue;
+      }
+
+      merged[key] = value;
+    }
+
+    setState(() {
+      _hydratedPlayer = <String, dynamic>{
+        ...merged,
+        if (height.isNotEmpty) 'height': height,
+        if (height.isNotEmpty) 'height_cm': height,
+        if (weight.isNotEmpty) 'weight': weight,
+        if (weight.isNotEmpty) 'weight_kg': weight,
+      };
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final p = player;
+    final p = _hydratedPlayer ?? player;
     if (p == null) {
       return Container(
         decoration: onClose == null
@@ -3061,9 +3275,18 @@ class _PlayerDetailPanel extends StatelessWidget {
     final photo = _playerPhotoUrl(p);
     final number = _jerseyNumber(p);
     final birth = _first(p, const ['birth_date', 'birthDate', 'birthday', 'date_birth']);
-    final age = _ageLabel(p);
-    final height = _first(p, const ['height']);
-    final weight = _first(p, const ['weight']);
+
+    // Возраст в списке состава уже считается правильно из исходной записи игрока.
+    // После дополнительной подгрузки мед./школьного профиля в p могли прийти
+    // служебные значения вроде "—" и затереть корректный age. Поэтому для
+    // правой карточки сначала используем возраст из исходной записи состава,
+    // а обогащённый профиль оставляем только как fallback.
+    final rosterAge = _ageLabel(player ?? const <String, dynamic>{});
+    final hydratedAge = _ageLabel(p);
+    final age = rosterAge.isNotEmpty ? rosterAge : hydratedAge;
+
+    final height = _first(p, const ['height', 'height_cm', 'heightCm']);
+    final weight = _first(p, const ['weight', 'weight_kg', 'weightKg']);
     final citizenship = _first(p, const ['citizenship', 'country', 'nationality']);
     final email = _first(p, const ['email']);
     final phone = _first(p, const ['phone']);
@@ -3122,8 +3345,8 @@ class _PlayerDetailPanel extends StatelessWidget {
         const SizedBox(height: 18),
         _PlayerMetricsStrip(
           age: age.isEmpty ? '—' : age,
-          height: height.isEmpty ? '—' : '$height см',
-          weight: weight.isEmpty ? '—' : '$weight кг',
+          height: _measurementLabel(height, 'см'),
+          weight: _measurementLabel(weight, 'кг'),
           number: number.isEmpty ? '—' : '№ $number',
         ),
         const SizedBox(height: 18),
@@ -4613,7 +4836,54 @@ String _playerPosition(Map<String, dynamic> player) {
 }
 
 String _jerseyNumber(Map<String, dynamic> player) {
-  return _first(player, const ['number', 'player_number', 'shirt_number']);
+  return _first(
+    player,
+    const [
+      'number',
+      'player_number',
+      'shirt_number',
+      'jersey_number',
+      'jerseyNumber',
+    ],
+  );
+}
+
+String _playerIdentityForDetails(Map<String, dynamic>? player) {
+  if (player == null) return '';
+  for (final key in const [
+    'player_id',
+    'playerId',
+    'id',
+    'user_id',
+    'userId',
+  ]) {
+    final value = _s(player[key]);
+    if (value.isNotEmpty && value != '0') return '$key:$value';
+  }
+  return _playerName(player);
+}
+
+String _measurementLabel(String raw, String unit) {
+  final text = raw.trim();
+  if (text.isEmpty) return '—';
+  final normalized = text.replaceAll(',', '.');
+  final value = double.tryParse(normalized);
+  if (value == null) return '$text $unit';
+
+  String formatted;
+  if ((value - value.roundToDouble()).abs() < 0.000001) {
+    formatted = value.round().toString();
+  } else {
+    formatted = value.toStringAsFixed(2);
+    while (formatted.contains('.') && formatted.endsWith('0')) {
+      formatted = formatted.substring(0, formatted.length - 1);
+    }
+    if (formatted.endsWith('.')) {
+      formatted = formatted.substring(0, formatted.length - 1);
+    }
+    formatted = formatted.replaceAll('.', ',');
+  }
+  return '$formatted $unit';
 }
 
 String _absoluteUrl(String raw) {
@@ -4733,20 +5003,48 @@ String _playerActivityLabel(Map<String, dynamic> player) {
 }
 
 String _ageLabel(Map<String, dynamic> player) {
-  final direct = _first(player, const ['age']);
-  if (direct.isNotEmpty && direct != '0') {
-    final years = int.tryParse(direct);
-    if (years != null) return '$years ${_yearWord(years)}';
-    return direct;
+  final direct = _first(
+    player,
+    const ['age', 'age_years', 'ageYears', 'player_age', 'playerAge'],
+  );
+  final normalizedDirect = direct.trim().toLowerCase();
+  final directMissing = normalizedDirect.isEmpty ||
+      normalizedDirect == '0' ||
+      normalizedDirect == '0.0' ||
+      normalizedDirect == '-' ||
+      normalizedDirect == '—' ||
+      normalizedDirect == 'null' ||
+      normalizedDirect == 'не указано' ||
+      normalizedDirect == 'не указан';
+
+  if (!directMissing) {
+    final years = int.tryParse(direct) ??
+        int.tryParse(RegExp(r'\d{1,2}').firstMatch(direct)?.group(0) ?? '');
+    if (years != null && years > 0 && years <= 80) {
+      return '$years ${_yearWord(years)}';
+    }
   }
 
-  final birthRaw = _first(player, const ['birth_date', 'birthDate', 'birthday', 'date_birth']);
+  final birthRaw = _first(
+    player,
+    const [
+      'birth_date',
+      'birthDate',
+      'birthdate',
+      'birthday',
+      'date_birth',
+      'dateOfBirth',
+      'date_of_birth',
+      'dob',
+    ],
+  );
   final birth = _parseDate(birthRaw);
   if (birth == null) return '';
 
   final now = DateTime.now();
   var years = now.year - birth.year;
-  final hadBirthday = now.month > birth.month || (now.month == birth.month && now.day >= birth.day);
+  final hadBirthday =
+      now.month > birth.month || (now.month == birth.month && now.day >= birth.day);
   if (!hadBirthday) years--;
   if (years <= 0 || years > 80) return '';
   return '$years ${_yearWord(years)}';

@@ -18,6 +18,12 @@ class PrefUtils {
   static String userClubIdKey = "${prefName}userClubId";    // ДОБАВЛЕНО
   static String userClubNameKey = "${prefName}userClubName"; // ДОБАВЛЕНО
 
+  // Активный клуб Staff Access для сотрудника, который может работать
+  // сразу в нескольких клубах. Это именно выбранный рабочий контекст,
+  // а не принадлежность пользователя одному клубу.
+  static String activeStaffClubIdKey = "${prefName}activeStaffClubId";
+  static String activeStaffClubNameKey = "${prefName}activeStaffClubName";
+
   static String agreedEulaKey = "${prefName}agreedEula";
 
 
@@ -127,6 +133,35 @@ static Future<int?> getUnreadChatsCount() async {
   static Future<String> getUserClubName() async {
     final p = await _instance();
     return p.getString(userClubNameKey) ?? 'Мой клуб';
+  }
+
+  static Future<void> setActiveStaffClubId(int clubId) async {
+    final p = await _instance();
+    if (clubId > 0) {
+      await p.setInt(activeStaffClubIdKey, clubId);
+    } else {
+      await p.remove(activeStaffClubIdKey);
+    }
+  }
+
+  static Future<int?> getActiveStaffClubId() async {
+    final p = await _instance();
+    return p.getInt(activeStaffClubIdKey);
+  }
+
+  static Future<void> setActiveStaffClubName(String clubName) async {
+    final p = await _instance();
+    final value = clubName.trim();
+    if (value.isEmpty) {
+      await p.remove(activeStaffClubNameKey);
+    } else {
+      await p.setString(activeStaffClubNameKey, value);
+    }
+  }
+
+  static Future<String> getActiveStaffClubName() async {
+    final p = await _instance();
+    return p.getString(activeStaffClubNameKey) ?? '';
   }
 
   // ---------------------------
@@ -245,6 +280,8 @@ static Future<int?> getUnreadChatsCount() async {
     await p.remove(teamIdKey);
     await p.remove(userClubIdKey);     // ДОБАВЛЕНО
     await p.remove(userClubNameKey);   // ДОБАВЛЕНО
+    await p.remove(activeStaffClubIdKey);
+    await p.remove(activeStaffClubNameKey);
     await p.remove(userRole);
     await p.remove(userFirstName);
     await p.remove(userLastName);
@@ -269,6 +306,8 @@ extension PrefUtilsInstanceCompat on PrefUtils {
   Future<void> setUserEmail(String v) => PrefUtils.setUserEmail(v);
   Future<void> setUserClubId(int v) => PrefUtils.setUserClubId(v);      // ДОБАВЛЕНО
   Future<void> setUserClubName(String v) => PrefUtils.setUserClubName(v); // ДОБАВЛЕНО
+  Future<void> setActiveStaffClubId(int v) => PrefUtils.setActiveStaffClubId(v);
+  Future<void> setActiveStaffClubName(String v) => PrefUtils.setActiveStaffClubName(v);
 
   // instance getters (синхронные раньше у тебя были — сделаем безопасно через cached prefs)
   String getUserRole() => PrefUtils._prefs?.getString(PrefUtils.userRole) ?? '';
@@ -277,6 +316,8 @@ extension PrefUtilsInstanceCompat on PrefUtils {
   String getUserEmail() => PrefUtils._prefs?.getString(PrefUtils.userEmail) ?? '';
   int getUserClubId() => PrefUtils._prefs?.getInt(PrefUtils.userClubIdKey) ?? 0;         // ДОБАВЛЕНО
   String getUserClubName() => PrefUtils._prefs?.getString(PrefUtils.userClubNameKey) ?? 'Мой клуб'; // ДОБАВЛЕНО
+  int getActiveStaffClubId() => PrefUtils._prefs?.getInt(PrefUtils.activeStaffClubIdKey) ?? 0;
+  String getActiveStaffClubName() => PrefUtils._prefs?.getString(PrefUtils.activeStaffClubNameKey) ?? '';
 
   // theme_helper у тебя вызывает PrefUtils().getThemeData() синхронно —
   // дадим sync чтение из кэша, чтобы компилилось.

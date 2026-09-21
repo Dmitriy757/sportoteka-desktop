@@ -246,12 +246,19 @@ class _OutgoingCallScreenState extends State<OutgoingCallScreen> {
         backgroundColor: const Color(0xFF0B1220),
         body: SafeArea(
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const Spacer(),
-              const CircleAvatar(
-                radius: 48,
-                backgroundColor: Color(0xFF1E2A44),
-                child: Icon(Icons.person_rounded, size: 52, color: Colors.white70),
+              const Center(
+                child: CircleAvatar(
+                  radius: 48,
+                  backgroundColor: Color(0xFF1E2A44),
+                  child: Icon(
+                    Icons.person_rounded,
+                    size: 52,
+                    color: Colors.white70,
+                  ),
+                ),
               ),
               const SizedBox(height: 24),
               Text(
@@ -272,14 +279,21 @@ class _OutgoingCallScreenState extends State<OutgoingCallScreen> {
                 ),
               ),
               const Spacer(),
-              TextButton.icon(
-                onPressed: _hangup,
-                icon: Icon(_error == null ? Icons.call_end_rounded : Icons.close),
-                label: Text(_error == null ? 'Завершить' : 'Закрыть'),
-                style: TextButton.styleFrom(
-                  foregroundColor: Colors.white,
-                  backgroundColor: const Color(0xFFD92D20),
-                  padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
+              Center(
+                child: TextButton.icon(
+                  onPressed: _hangup,
+                  icon: Icon(
+                    _error == null ? Icons.call_end_rounded : Icons.close,
+                  ),
+                  label: Text(_error == null ? 'Завершить' : 'Закрыть'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    backgroundColor: const Color(0xFFD92D20),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 28,
+                      vertical: 16,
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(height: 44),

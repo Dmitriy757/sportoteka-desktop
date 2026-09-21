@@ -423,7 +423,7 @@ class CmrClubTeamsPanel extends StatefulWidget {
   State<CmrClubTeamsPanel> createState() => _CmrClubTeamsPanelState();
 }
 
-enum _TeamsFilter { all, active, football, emptyLogo }
+enum _TeamsFilter { all, boys, girls, active, football, emptyLogo }
 enum _TeamsRightMode { overview, create, edit }
 
 class _CmrClubTeamsPanelState extends State<CmrClubTeamsPanel> {
@@ -667,7 +667,7 @@ class _CmrClubTeamsPanelState extends State<CmrClubTeamsPanel> {
 
   List<Map<String, dynamic>> get _visibleTeams {
     final q = _searchC.text.trim().toLowerCase();
-    return _effectiveTeams.where((team) {
+    final rows = _effectiveTeams.where((team) {
       final haystack = [
         _teamName(team),
         _teamSubtitle(team),
@@ -675,6 +675,8 @@ class _CmrClubTeamsPanelState extends State<CmrClubTeamsPanel> {
         _s(team['category']),
         _s(team['age_group']),
         _s(team['description']),
+        _s(team['gender']),
+        _s(team['team_gender']),
       ].join(' ').toLowerCase();
       final matchesSearch = q.isEmpty || haystack.contains(q);
       if (!matchesSearch) return false;
@@ -682,8 +684,12 @@ class _CmrClubTeamsPanelState extends State<CmrClubTeamsPanel> {
       switch (_filter) {
         case _TeamsFilter.all:
           return true;
+        case _TeamsFilter.boys:
+          return !_teamIsFemale(team);
+        case _TeamsFilter.girls:
+          return _teamIsFemale(team);
         case _TeamsFilter.active:
-          return _teamId(team) == widget.selectedTeamId;
+          return _teamId(team) == _activeTeamId;
         case _TeamsFilter.football:
           final raw = '${_teamSubtitle(team)} ${_s(team['sport'])} ${_s(team['category'])}'.toLowerCase();
           return raw.contains('фут') || raw.contains('football') || raw.contains('soccer');
@@ -691,6 +697,11 @@ class _CmrClubTeamsPanelState extends State<CmrClubTeamsPanel> {
           return _teamLogo(team).isEmpty;
       }
     }).toList();
+
+    // Базовый порядок: сначала юноши/мужские команды, затем женские/девичьи.
+    // Внутри каждой группы — от старшей возрастной команды к младшей.
+    rows.sort(_compareTeamsByAgeAndGender);
+    return rows;
   }
 
   int? get _activeTeamId {
@@ -999,9 +1010,20 @@ class _CmrClubTeamsPanelState extends State<CmrClubTeamsPanel> {
         }
 
         final visibleTeams = _visibleTeams;
-        final mobile = width < 640;
+
+        // На планшетах, включая небольшие Android-планшеты и iPad mini,
+        // сохраняем двухпанельный режим: список команд слева, команда справа.
+        // Однопанельный picker оставляем только для действительно узких
+        // телефонных экранов.
+        final platform = Theme.of(context).platform;
+        final touchPlatform = platform == TargetPlatform.iOS ||
+            platform == TargetPlatform.android;
+        final tabletDevice = touchPlatform && media.shortestSide >= 600;
+
+        final mobile = width < 640 && !tabletDevice;
         final compact = width < 880;
-        final pickerMode = width < 1024;
+        final pickerMode = width < 700 && !tabletDevice;
+
         final selected = pickerMode ? _selectedTeamAny : _selectedTeam;
         final displaySelectedTeamName =
             selected == null ? widget.selectedTeamName : _teamName(selected);
@@ -1011,8 +1033,15 @@ class _CmrClubTeamsPanelState extends State<CmrClubTeamsPanel> {
             : (_playersCountByTeam[_teamId(selected)] ??
                 _teamPlayersCount(selected));
 
-        final listWidth =
-            mobile ? width : math.min(480.0, math.max(320.0, width * .42));
+        // На маленьком планшете не отдаём левой панели слишком много места,
+        // иначе правая рабочая область становится зажатой.
+        final listWidth = mobile
+            ? width
+            : width < 700
+                ? math.min(270.0, math.max(245.0, width * .42))
+                : width < 900
+                    ? math.min(320.0, math.max(285.0, width * .39))
+                    : math.min(480.0, math.max(320.0, width * .42));
 
         Widget overviewForSelected() {
           if (selected == null) {
@@ -1691,6 +1720,10 @@ class _CmrEditTeamPaneState extends State<_CmrEditTeamPane> {
   final TextEditingController _seasonC = TextEditingController();
   final TextEditingController _locationC = TextEditingController();
   final TextEditingController _coachC = TextEditingController();
+  final TextEditingController _assistantCoachC = TextEditingController();
+  final TextEditingController _goalkeeperCoachC = TextEditingController();
+  final TextEditingController _fitnessCoachC = TextEditingController();
+  final TextEditingController _analystC = TextEditingController();
   final TextEditingController _statusC = TextEditingController();
   final TextEditingController _descriptionC = TextEditingController();
 
@@ -1722,6 +1755,10 @@ class _CmrEditTeamPaneState extends State<_CmrEditTeamPane> {
     _seasonC.text = _rawTeamSeason(widget.team);
     _locationC.text = _rawTeamCity(widget.team);
     _coachC.text = _rawTeamCoach(widget.team);
+    _assistantCoachC.text = _rawTeamAssistantCoach(widget.team);
+    _goalkeeperCoachC.text = _rawTeamGoalkeeperCoach(widget.team);
+    _fitnessCoachC.text = _rawTeamFitnessCoach(widget.team);
+    _analystC.text = _rawTeamAnalyst(widget.team);
     _statusC.text = _rawTeamStatus(widget.team);
     _descriptionC.text = _teamLongDescription(widget.team);
     _logoBytes = null;
@@ -1737,6 +1774,10 @@ class _CmrEditTeamPaneState extends State<_CmrEditTeamPane> {
     _seasonC.dispose();
     _locationC.dispose();
     _coachC.dispose();
+    _assistantCoachC.dispose();
+    _goalkeeperCoachC.dispose();
+    _fitnessCoachC.dispose();
+    _analystC.dispose();
     _statusC.dispose();
     _descriptionC.dispose();
     super.dispose();
@@ -1771,6 +1812,10 @@ class _CmrEditTeamPaneState extends State<_CmrEditTeamPane> {
     final season = _seasonC.text.trim();
     final location = _locationC.text.trim();
     final coach = _coachC.text.trim();
+    final assistantCoach = _assistantCoachC.text.trim();
+    final goalkeeperCoach = _goalkeeperCoachC.text.trim();
+    final fitnessCoach = _fitnessCoachC.text.trim();
+    final analyst = _analystC.text.trim();
     final status = _statusC.text.trim();
     final description = _descriptionC.text.trim();
 
@@ -1817,6 +1862,14 @@ class _CmrEditTeamPaneState extends State<_CmrEditTeamPane> {
         'headCoach': coach,
         'coach': coach,
         'trainer_name': coach,
+        'assistant_coach': assistantCoach,
+        'assistantCoach': assistantCoach,
+        'goalkeeper_coach': goalkeeperCoach,
+        'goalkeeperCoach': goalkeeperCoach,
+        'fitness_coach': fitnessCoach,
+        'fitnessCoach': fitnessCoach,
+        'analyst': analyst,
+        'team_analyst': analyst,
         'status': status,
         'team_status': status,
         'description': description,
@@ -1874,6 +1927,10 @@ class _CmrEditTeamPaneState extends State<_CmrEditTeamPane> {
           'season': season,
           'location': location,
           'head_coach': coach,
+          'assistant_coach': assistantCoach,
+          'goalkeeper_coach': goalkeeperCoach,
+          'fitness_coach': fitnessCoach,
+          'analyst': analyst,
           'team_status': status,
           'description': description,
         },
@@ -1919,6 +1976,14 @@ class _CmrEditTeamPaneState extends State<_CmrEditTeamPane> {
         'location': location,
         'head_coach': coach,
         'coach': coach,
+        'assistant_coach': assistantCoach,
+        'assistantCoach': assistantCoach,
+        'goalkeeper_coach': goalkeeperCoach,
+        'goalkeeperCoach': goalkeeperCoach,
+        'fitness_coach': fitnessCoach,
+        'fitnessCoach': fitnessCoach,
+        'analyst': analyst,
+        'team_analyst': analyst,
         'status': status,
         'description': description,
         'team_description': description,
@@ -2162,6 +2227,69 @@ class _CmrEditTeamPaneState extends State<_CmrEditTeamPane> {
                           label: 'Статус',
                           controller: _statusC,
                           hint: 'Активна',
+                        ),
+                      ],
+                    );
+                    if (!twoColumns) {
+                      return Column(
+                        children: [
+                          left,
+                          const SizedBox(height: 14),
+                          right,
+                        ],
+                      );
+                    }
+                    return Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(child: left),
+                        const SizedBox(width: 14),
+                        Expanded(child: right),
+                      ],
+                    );
+                  },
+                ),
+                const SizedBox(height: 18),
+                Row(
+                  children: [
+                    const _CmrDotCluster(),
+                    const SizedBox(width: 9),
+                    Expanded(
+                      child: Text('Тренерский штаб', style: _CmrText.section()),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                LayoutBuilder(
+                  builder: (context, c) {
+                    final twoColumns = !compact && c.maxWidth >= 620;
+                    final left = Column(
+                      children: [
+                        _field(
+                          label: 'Ассистент тренера',
+                          controller: _assistantCoachC,
+                          hint: 'Фамилия Имя',
+                        ),
+                        const SizedBox(height: 14),
+                        _field(
+                          label: 'Тренер по физподготовке',
+                          controller: _fitnessCoachC,
+                          hint: 'Фамилия Имя',
+                        ),
+                      ],
+                    );
+                    final right = Column(
+                      children: [
+                        _field(
+                          label: 'Тренер вратарей',
+                          controller: _goalkeeperCoachC,
+                          hint: 'Фамилия Имя',
+                        ),
+                        const SizedBox(height: 14),
+                        _field(
+                          label: 'Аналитик / видеоаналитик',
+                          controller: _analystC,
+                          hint: 'Фамилия Имя',
                         ),
                       ],
                     );
@@ -2742,7 +2870,7 @@ class _TeamsPickerSheetState extends State<_TeamsPickerSheet> {
 
   List<Map<String, dynamic>> get _visibleTeams {
     final q = _searchC.text.trim().toLowerCase();
-    return widget.teams.where((team) {
+    final rows = widget.teams.where((team) {
       final haystack = [
         _teamName(team),
         _teamSubtitle(team),
@@ -2750,11 +2878,17 @@ class _TeamsPickerSheetState extends State<_TeamsPickerSheet> {
         _s(team['category']),
         _s(team['age_group']),
         _s(team['description']),
+        _s(team['gender']),
+        _s(team['team_gender']),
       ].join(' ').toLowerCase();
       if (q.isNotEmpty && !haystack.contains(q)) return false;
       switch (_filter) {
         case _TeamsFilter.all:
           return true;
+        case _TeamsFilter.boys:
+          return !_teamIsFemale(team);
+        case _TeamsFilter.girls:
+          return _teamIsFemale(team);
         case _TeamsFilter.active:
           return _teamId(team) == widget.selectedTeamId;
         case _TeamsFilter.football:
@@ -2763,7 +2897,9 @@ class _TeamsPickerSheetState extends State<_TeamsPickerSheet> {
         case _TeamsFilter.emptyLogo:
           return _teamLogo(team).isEmpty;
       }
-    }).toList(growable: false);
+    }).toList(growable: true);
+    rows.sort(_compareTeamsByAgeAndGender);
+    return rows;
   }
 
   @override
@@ -3252,6 +3388,8 @@ class _TeamsFilterBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final items = <_TeamsFilter, String>{
       _TeamsFilter.all: 'Все',
+      _TeamsFilter.boys: 'Юноши',
+      _TeamsFilter.girls: 'Девушки',
       _TeamsFilter.active: 'Активная',
       _TeamsFilter.football: 'Футбол',
       _TeamsFilter.emptyLogo: 'Без логотипа',
@@ -3826,6 +3964,7 @@ class _TeamDetails extends StatelessWidget {
                     key: ValueKey('cmr_team_overview_${clubId}_${_teamId(team)}'),
                     clubId: clubId,
                     fallbackClubId: clubId,
+                    viewerUserId: currentUserId,
                     teamId: _teamId(team),
                     teamName: name,
                     playersCount: resolvedPlayersCount,
@@ -4186,6 +4325,11 @@ class _TeamDetails extends StatelessWidget {
   }) {
     final title = _itemTitle(item);
     final meta = _teamDateText(item);
+    final type = _s(item['post_type'] ?? item['_club_event_type'] ?? item['type']).toLowerCase();
+    final isBirthday = item['is_birthday'] == true ||
+        item['is_birthday'] == 1 ||
+        _s(item['is_birthday']) == '1' ||
+        type == 'birthday';
     final subtitle = _s(
       item['description'] ??
           item['body'] ??
@@ -4194,6 +4338,10 @@ class _TeamDetails extends StatelessWidget {
           item['place'] ??
           item['location'],
     );
+
+    if (isBirthday) {
+      return _TeamFeedTile(item: item, onTap: null);
+    }
 
     return InkWell(
       onTap: onTap,
@@ -4351,6 +4499,14 @@ class _TeamDetails extends StatelessWidget {
           _TeamPassportRow(label: 'Сезон', value: _teamSeason(team)),
           _TeamPassportRow(label: 'Локация', value: _teamCity(team)),
           _TeamPassportRow(label: 'Главный тренер', value: _teamCoach(team)),
+          if (_teamAssistantCoach(team).isNotEmpty)
+            _TeamPassportRow(label: 'Ассистент', value: _teamAssistantCoach(team)),
+          if (_teamGoalkeeperCoach(team).isNotEmpty)
+            _TeamPassportRow(label: 'Тренер вратарей', value: _teamGoalkeeperCoach(team)),
+          if (_teamFitnessCoach(team).isNotEmpty)
+            _TeamPassportRow(label: 'Тренер по физподготовке', value: _teamFitnessCoach(team)),
+          if (_teamAnalyst(team).isNotEmpty)
+            _TeamPassportRow(label: 'Аналитик', value: _teamAnalyst(team)),
           _TeamPassportRow(label: 'Статус', value: _teamStatus(team)),
           SizedBox(height: compact ? 10 : 8),
           Text(
@@ -5672,6 +5828,14 @@ class _TeamPassportBlock extends StatelessWidget {
           _TeamInfoRow(icon: Icons.calendar_today_rounded, label: 'Сезон', value: season),
           _TeamInfoRow(icon: Icons.location_on_rounded, label: 'Локация', value: city),
           _TeamInfoRow(icon: Icons.person_rounded, label: 'Главный тренер', value: coach),
+          if (_teamAssistantCoach(team).isNotEmpty)
+            _TeamInfoRow(icon: Icons.person_add_alt_1_rounded, label: 'Ассистент', value: _teamAssistantCoach(team)),
+          if (_teamGoalkeeperCoach(team).isNotEmpty)
+            _TeamInfoRow(icon: Icons.sports_handball_rounded, label: 'Тренер вратарей', value: _teamGoalkeeperCoach(team)),
+          if (_teamFitnessCoach(team).isNotEmpty)
+            _TeamInfoRow(icon: Icons.fitness_center_rounded, label: 'Физподготовка', value: _teamFitnessCoach(team)),
+          if (_teamAnalyst(team).isNotEmpty)
+            _TeamInfoRow(icon: Icons.analytics_outlined, label: 'Аналитик', value: _teamAnalyst(team)),
           _TeamInfoRow(icon: Icons.verified_rounded, label: 'Статус', value: status),
           const SizedBox(height: 10),
           Container(
@@ -6462,6 +6626,7 @@ class _TeamPlayerWarning {
 class _TeamLiveOverviewBlock extends StatefulWidget {
   final int clubId;
   final int fallbackClubId;
+  final int viewerUserId;
   final int teamId;
   final String teamName;
   final int playersCount;
@@ -6482,6 +6647,7 @@ class _TeamLiveOverviewBlock extends StatefulWidget {
     super.key,
     required this.clubId,
     required this.fallbackClubId,
+    required this.viewerUserId,
     required this.teamId,
     required this.teamName,
     required this.playersCount,
@@ -6586,6 +6752,16 @@ class _TeamLiveOverviewBlockState extends State<_TeamLiveOverviewBlock> {
   }
 
   bool _belongsToSelectedTeam(Map<String, dynamic> item) {
+    final scope = _s(item['_press_scope'] ?? item['scope']).toLowerCase();
+    if (scope == 'club') return true;
+
+    final rawTargets = item['target_team_ids'];
+    if (rawTargets is List) {
+      final ids = rawTargets.map(_intFromAny).where((id) => id > 0).toList();
+      if (ids.isEmpty) return true;
+      return ids.contains(widget.teamId);
+    }
+
     final id = _itemTeamId(item);
     if (id > 0) return id == widget.teamId;
 
@@ -6660,34 +6836,73 @@ class _TeamLiveOverviewBlockState extends State<_TeamLiveOverviewBlock> {
 
   Future<List<Map<String, dynamic>>> _fetchClubNews() async {
     final ownerId = widget.clubId > 0 ? widget.clubId : widget.fallbackClubId;
-    if (ownerId <= 0) return <Map<String, dynamic>>[];
+    if (ownerId <= 0 || widget.viewerUserId <= 0) {
+      return <Map<String, dynamic>>[];
+    }
 
     try {
-      final resp = await http
-          .post(
-            Uri.parse('https://sportotekaapp.ru/api/get_posts_by_user.php'),
-            headers: const {'Content-Type': 'application/json; charset=utf-8'},
-            body: jsonEncode({
-              'user_id': ownerId,
-              'visibility': 'profile',
-              'post_type': 'post',
-            }),
-          )
-          .timeout(const Duration(seconds: 10));
+      final uri = Uri.parse('https://sportotekaapp.ru/api/get_club_news.php')
+          .replace(
+        queryParameters: <String, String>{
+          'viewer_id': '${widget.viewerUserId}',
+          'club_id': '$ownerId',
+          'team_id': '${widget.teamId}',
+          'limit': '12',
+        },
+      );
+      final resp = await http.get(uri).timeout(const Duration(seconds: 10));
       final decoded = _tryDecode(resp.body);
       final list = _extractList(decoded, const ['posts', 'data', 'items']);
 
-      // Посты профиля клуба/школы могут не иметь team_id. В этом случае
-      // показываем их как общую школьную ленту для выбранной команды.
       return list.map((raw) {
         final item = Map<String, dynamic>.from(raw);
-        final caption = _s(item['caption'] ?? item['text'] ?? item['body'] ?? item['description']);
+        final postType = _s(
+          item['post_type'] ??
+              item['_club_event_type'] ??
+              item['type'],
+        ).toLowerCase();
+        final isBirthday = item['is_birthday'] == true ||
+            item['is_birthday'] == 1 ||
+            _s(item['is_birthday']) == '1' ||
+            postType == 'birthday';
+
+        final caption = _s(
+          item['caption'] ??
+              item['text'] ??
+              item['body'] ??
+              item['description'],
+        )
+            .replaceAll(RegExp(r'<[^>]+>'), ' ')
+            .replaceAll(RegExp(r'\s+'), ' ')
+            .trim();
+
         if (_s(item['title']).isEmpty && caption.isNotEmpty) {
-          item['title'] = caption.length > 74 ? '${caption.substring(0, 74)}…' : caption;
+          item['title'] = caption.length > 74
+              ? '${caption.substring(0, 74)}…'
+              : caption;
         }
-        item['description'] = _s(item['description'] ?? item['text'] ?? item['body'] ?? item['caption']);
-        item['created_at'] = item['created_at'] ?? item['date'] ?? item['published_at'];
-        item['type'] = item['type'] ?? 'news';
+
+        item['description'] = caption;
+        item['created_at'] =
+            item['created_at'] ?? item['date'] ?? item['published_at'];
+
+        // День рождения остаётся отдельным внутренним типом. Не превращаем
+        // его в обычную новость, иначе специальная карточка не сработает.
+        item['type'] = isBirthday ? 'birthday' : 'news';
+        item['post_type'] = isBirthday ? 'birthday' : postType;
+        item['is_birthday'] = isBirthday;
+
+        final image = _normalizeImage(
+          _s(
+            item['image'] ??
+                item['photo'] ??
+                item['photo_url'] ??
+                item['avatar'] ??
+                item['avatar_url'],
+          ),
+        );
+        if (image.isNotEmpty) item['image'] = image;
+
         return item;
       }).toList();
     } catch (_) {
@@ -7279,11 +7494,51 @@ class _TeamFeedTile extends StatelessWidget {
 
   const _TeamFeedTile({required this.item, required this.onTap});
 
+  bool get _isBirthday {
+    final type = _s(
+      item['post_type'] ??
+          item['_club_event_type'] ??
+          item['type'],
+    ).toLowerCase();
+
+    return item['is_birthday'] == true ||
+        item['is_birthday'] == 1 ||
+        _s(item['is_birthday']) == '1' ||
+        type == 'birthday';
+  }
+
+  String get _birthdayImage => _normalizeImage(
+        _s(
+          item['image'] ??
+              item['photo'] ??
+              item['photo_url'] ??
+              item['avatar'] ??
+              item['avatar_url'],
+        ),
+      );
+
   @override
   Widget build(BuildContext context) {
     final title = _itemTitle(item);
     final meta = _teamDateText(item);
-    final subtitle = _s(item['description'] ?? item['body'] ?? item['text'] ?? item['comment'] ?? item['place'] ?? item['location']);
+    final subtitle = _s(
+      item['description'] ??
+          item['body'] ??
+          item['text'] ??
+          item['comment'] ??
+          item['place'] ??
+          item['location'],
+    );
+
+    if (_isBirthday) {
+      return _buildBirthdayCard(
+        context,
+        title: title,
+        meta: meta,
+        subtitle: subtitle,
+      );
+    }
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 7),
       child: Material(
@@ -7296,7 +7551,6 @@ class _TeamFeedTile extends StatelessWidget {
             padding: const EdgeInsets.all(9),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
-              
             ),
             child: Row(
               children: [
@@ -7305,7 +7559,8 @@ class _TeamFeedTile extends StatelessWidget {
                   height: 38,
                   decoration: BoxDecoration(
                     color: _CmrColors.green,
-                    borderRadius: BorderRadius.circular(_CmrDecor.interactiveRadius),
+                    borderRadius:
+                        BorderRadius.circular(_CmrDecor.interactiveRadius),
                   ),
                 ),
                 const SizedBox(width: 9),
@@ -7313,7 +7568,12 @@ class _TeamFeedTile extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(title, style: _CmrText.value(11.8), maxLines: 1, overflow: TextOverflow.ellipsis),
+                      Text(
+                        title,
+                        style: _CmrText.value(11.8),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                       const SizedBox(height: 2),
                       Text(
                         subtitle.isEmpty ? meta : '$meta · $subtitle',
@@ -7328,6 +7588,180 @@ class _TeamFeedTile extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildBirthdayCard(
+    BuildContext context, {
+    required String title,
+    required String meta,
+    required String subtitle,
+  }) {
+    final image = _birthdayImage;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Material(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.all(11),
+          decoration: BoxDecoration(
+            color: Color.alphaBlend(
+              _CmrColors.green.withOpacity(.035),
+              Colors.white,
+            ),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: _CmrColors.green.withOpacity(.16),
+              width: .8,
+            ),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Container(
+                    width: 54,
+                    height: 54,
+                    clipBehavior: Clip.antiAlias,
+                    decoration: BoxDecoration(
+                      color: _CmrColors.greenSoft,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: _CmrColors.green.withOpacity(.15),
+                      ),
+                    ),
+                    child: image.isEmpty
+                        ? const Icon(
+                            Icons.cake_rounded,
+                            color: _CmrColors.greenDark,
+                            size: 25,
+                          )
+                        : Image.network(
+                            image,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => const Icon(
+                              Icons.cake_rounded,
+                              color: _CmrColors.greenDark,
+                              size: 25,
+                            ),
+                          ),
+                  ),
+                  Positioned(
+                    right: -4,
+                    bottom: -4,
+                    child: Container(
+                      width: 22,
+                      height: 22,
+                      decoration: BoxDecoration(
+                        color: _CmrColors.green,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 3),
+                      ),
+                      child: const Icon(
+                        Icons.celebration_rounded,
+                        color: Colors.white,
+                        size: 11,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 5,
+                      children: [
+                        _BirthdayFeedBadge(
+                          icon: Icons.cake_rounded,
+                          text: 'День рождения',
+                          accent: true,
+                        ),
+                        const _BirthdayFeedBadge(
+                          icon: Icons.lock_outline_rounded,
+                          text: 'Только клуб',
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 7),
+                    Text(
+                      title,
+                      style: _CmrText.value(13.0).copyWith(
+                        color: _CmrColors.text,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (subtitle.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        subtitle,
+                        style: _CmrText.muted(10.5),
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                    if (meta.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        meta,
+                        style: _CmrText.caption().copyWith(fontSize: 9.5),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BirthdayFeedBadge extends StatelessWidget {
+  final IconData icon;
+  final String text;
+  final bool accent;
+
+  const _BirthdayFeedBadge({
+    required this.icon,
+    required this.text,
+    this.accent = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = accent ? _CmrColors.greenDark : _CmrColors.secondary;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+      decoration: BoxDecoration(
+        color: accent ? _CmrColors.greenSoft : _CmrColors.soft2,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 11, color: color),
+          const SizedBox(width: 4),
+          Text(
+            text,
+            style: _CmrText.chip(
+              size: 9.4,
+              color: color,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -8582,6 +9016,42 @@ String _rawTeamCoach(Map<String, dynamic> team) {
   );
 }
 
+String _rawTeamAssistantCoach(Map<String, dynamic> team) {
+  return _s(
+    team['assistant_coach'] ??
+        team['assistantCoach'] ??
+        team['assistant_trainer'] ??
+        team['assistantTrainer'],
+  );
+}
+
+String _rawTeamGoalkeeperCoach(Map<String, dynamic> team) {
+  return _s(
+    team['goalkeeper_coach'] ??
+        team['goalkeeperCoach'] ??
+        team['gk_coach'] ??
+        team['goalkeeper_trainer'],
+  );
+}
+
+String _rawTeamFitnessCoach(Map<String, dynamic> team) {
+  return _s(
+    team['fitness_coach'] ??
+        team['fitnessCoach'] ??
+        team['physical_coach'] ??
+        team['conditioning_coach'],
+  );
+}
+
+String _rawTeamAnalyst(Map<String, dynamic> team) {
+  return _s(
+    team['analyst'] ??
+        team['team_analyst'] ??
+        team['video_analyst'] ??
+        team['videoAnalyst'],
+  );
+}
+
 String _rawTeamStatus(Map<String, dynamic> team) {
   final explicit = _s(team['status'] ?? team['team_status'] ?? team['state']);
   if (explicit.isNotEmpty) return explicit;
@@ -8616,6 +9086,98 @@ String _teamCity(Map<String, dynamic> team) {
 String _teamCoach(Map<String, dynamic> team) {
   final value = _s(team['head_coach'] ?? team['headCoach'] ?? team['coach'] ?? team['trainer_name'] ?? team['trainerName']);
   return value.isEmpty ? 'Не назначен' : value;
+}
+
+String _teamAssistantCoach(Map<String, dynamic> team) =>
+    _rawTeamAssistantCoach(team);
+
+String _teamGoalkeeperCoach(Map<String, dynamic> team) =>
+    _rawTeamGoalkeeperCoach(team);
+
+String _teamFitnessCoach(Map<String, dynamic> team) =>
+    _rawTeamFitnessCoach(team);
+
+String _teamAnalyst(Map<String, dynamic> team) =>
+    _rawTeamAnalyst(team);
+
+bool _teamIsFemale(Map<String, dynamic> team) {
+  final explicit = _s(
+    team['gender'] ??
+        team['team_gender'] ??
+        team['sex'] ??
+        team['gender_code'],
+  ).toLowerCase();
+  if (explicit == 'f' ||
+      explicit == 'female' ||
+      explicit == 'women' ||
+      explicit == 'woman' ||
+      explicit == 'girls' ||
+      explicit == 'girl' ||
+      explicit == 'жен' ||
+      explicit == 'женский' ||
+      explicit == 'девочки' ||
+      explicit == 'девушки') {
+    return true;
+  }
+
+  final text = [
+    _teamName(team),
+    _teamSubtitle(team),
+    _s(team['category']),
+    _s(team['age_group']),
+  ].join(' ').toLowerCase();
+
+  return RegExp(r'(^|[^a-zа-я0-9])(wu\s*\d{1,2}|women|woman|girls?|female|жен(?:ская|ский|щины)?|девоч(?:ки|ья)|девуш(?:ки|ечья))([^a-zа-я0-9]|$)', caseSensitive: false)
+      .hasMatch(text);
+}
+
+int? _teamBirthYearForSort(Map<String, dynamic> team) {
+  final text = [
+    _teamName(team),
+    _teamSubtitle(team),
+    _s(team['age_group']),
+    _s(team['category']),
+    _s(team['stage']),
+  ].join(' ');
+
+  final years = RegExp(r'(19\d{2}|20\d{2})')
+      .allMatches(text)
+      .map((m) => int.tryParse(m.group(1) ?? ''))
+      .whereType<int>()
+      .where((year) => year >= 1980 && year <= DateTime.now().year)
+      .toList();
+  if (years.isNotEmpty) {
+    // Чем меньше год рождения, тем старше команда.
+    years.sort();
+    return years.first;
+  }
+
+  final ageMatch = RegExp(r'\bW?U[-\s]?(\d{1,2})\b', caseSensitive: false)
+      .firstMatch(text);
+  final age = ageMatch == null ? null : int.tryParse(ageMatch.group(1) ?? '');
+  if (age != null && age >= 5 && age <= 25) {
+    return DateTime.now().year - age;
+  }
+  return null;
+}
+
+int _compareTeamsByAgeAndGender(
+  Map<String, dynamic> a,
+  Map<String, dynamic> b,
+) {
+  final femaleA = _teamIsFemale(a);
+  final femaleB = _teamIsFemale(b);
+  if (femaleA != femaleB) return femaleA ? 1 : -1;
+
+  final yearA = _teamBirthYearForSort(a);
+  final yearB = _teamBirthYearForSort(b);
+  if (yearA != null && yearB != null && yearA != yearB) {
+    return yearA.compareTo(yearB);
+  }
+  if (yearA != null && yearB == null) return -1;
+  if (yearA == null && yearB != null) return 1;
+
+  return _teamName(a).toLowerCase().compareTo(_teamName(b).toLowerCase());
 }
 
 String _teamStatus(Map<String, dynamic> team) {

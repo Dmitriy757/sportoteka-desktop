@@ -1,6 +1,7 @@
 // lib/presentation/chat_screen/chat_screen.dart
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -213,7 +214,15 @@ class _ChatScreenState extends State<ChatScreen> {
 
   _ChatTab _tab = _ChatTab.privateChats;
 
+  // На планшете и ПК чат открываем внутри этого же экрана, а не через
+  // вложенный Navigator. На планшете список остаётся слева, переписка справа;
+  // это совпадает с рабочей логикой CMR и ускоряет переключение между чатами.
+  Map<String, dynamic>? _selectedChat;
+  int? _selectedChatId;
+  String _selectedChatName = '';
+
   final TextEditingController _searchController = TextEditingController();
+  final ScrollController _chatListScrollController = ScrollController();
 
   // ===== TELEGRAM-LIKE LOCAL STATE =====
   final Set<int> _pinned = <int>{};
@@ -239,6 +248,7 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void dispose() {
     _searchController.dispose();
+    _chatListScrollController.dispose();
     _unreadTimer?.cancel();
     super.dispose();
   }
@@ -299,6 +309,23 @@ class _ChatScreenState extends State<ChatScreen> {
 
   // ===== HELPERS =====
   int _asInt(dynamic v) => int.tryParse(v.toString()) ?? 0;
+
+  bool get _useEmbeddedChatLayout {
+    if (!mounted) return false;
+    final localWidth = context.size?.width;
+    final mediaWidth = MediaQuery.maybeOf(context)?.size.width;
+    final width = localWidth ?? mediaWidth ?? 0;
+    return width >= 700;
+  }
+
+  void _closeEmbeddedChat() {
+    if (!mounted) return;
+    setState(() {
+      _selectedChat = null;
+      _selectedChatId = null;
+      _selectedChatName = '';
+    });
+  }
 
   bool _isPrivate(Map<String, dynamic> chat) => (chat['is_private'] == 1 ||
       chat['is_private'] == "1" ||
@@ -889,11 +916,9 @@ class _ChatScreenState extends State<ChatScreen> {
 
     final unread = int.tryParse((chat['unread_count'] ?? '0').toString()) ?? 0;
 
-    // ✅ 1) СРАЗУ снимаем локально (бейдж справа исчезнет мгновенно + BottomBar)
+    // Сразу снимаем локально, чтобы бейдж исчез без задержки.
     if (unread > 0) {
       await _markChatReadLocal(chatId, unread);
-
-      // ✅ 2) Серверный mark_read в фоне (не тормозим открытие)
       _markChatReadServer(chatId);
       final newTotal = _unreadTotal;
       unawaited(PrefUtils.setUnreadChatsCount(newTotal));
@@ -902,6 +927,18 @@ class _ChatScreenState extends State<ChatScreen> {
 
     if (!mounted) return;
 
+    // Планшет/ПК: не пушим новый экран во вложенный Navigator профиля.
+    // Вместо этого открываем переписку в адаптивной области текущего экрана.
+    if (_useEmbeddedChatLayout) {
+      setState(() {
+        _selectedChat = Map<String, dynamic>.from(chat);
+        _selectedChatId = chatId;
+        _selectedChatName = title;
+      });
+      return;
+    }
+
+    // Телефон: обычный полноэкранный маршрут.
     await Navigator.push(
       context,
       MaterialPageRoute(
@@ -914,7 +951,6 @@ class _ChatScreenState extends State<ChatScreen> {
     );
 
     if (!mounted) return;
-    // ✅ 3) После возврата — перезагрузка списка (истина с сервера)
     await _reloadCurrentTab();
     await _fetchUnreadTotal();
   }
@@ -966,13 +1002,31 @@ class _ChatScreenState extends State<ChatScreen> {
 
       if (!mounted) return;
 
+      final title = peerTitleForHeader ?? "Личный чат";
+
+      if (_useEmbeddedChatLayout) {
+        setState(() {
+          _tab = _ChatTab.privateChats;
+          _selectedChatId = chatId;
+          _selectedChatName = title;
+          _selectedChat = <String, dynamic>{
+            'id': chatId,
+            'title': title,
+            'name': title,
+            'is_private': 1,
+          };
+        });
+        unawaited(_reloadCurrentTab());
+        return;
+      }
+
       Navigator.push(
         context,
         MaterialPageRoute(
           builder: (_) => ChatRoomScreen(
             chatId: chatId,
             userId: widget.userId,
-            chatName: peerTitleForHeader ?? "Личный чат",
+            chatName: title,
           ),
         ),
       ).then((_) {
@@ -1994,259 +2048,892 @@ class _ChatScreenState extends State<ChatScreen> {
         child: SafeArea(
           top: true,
           bottom: false,
-          child: Scaffold(
-            extendBody: true,
-            backgroundColor: Colors.white,
-            appBar: AppBar(
-              toolbarHeight: 58,
-              elevation: 0,
-              scrolledUnderElevation: 0,
-              backgroundColor: Colors.white,
-              surfaceTintColor: Colors.transparent,
-              automaticallyImplyLeading: false,
-              titleSpacing: 12,
-              title: Row(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final width = constraints.maxWidth.isFinite
+                  ? constraints.maxWidth
+                  : MediaQuery.sizeOf(context).width;
+
+              final phone = width < 700;
+              final tablet = width >= 700 && width < 1280;
+              final chatsTab = _tab == _ChatTab.privateChats ||
+                  _tab == _ChatTab.groups;
+              final splitMessenger = width >= 700 && chatsTab;
+
+              // И на телефоне, и на планшете список чатов получает собственную
+              // складывающуюся шапку. Большие карточки уходят вверх вместе со
+              // списком, а сверху остаётся только короткая понятная панель.
+              final useCollapsingListHeader =
+                  chatsTab && (phone || tablet);
+              final hideMainAppBar = useCollapsingListHeader;
+
+              return Scaffold(
+                extendBody: true,
+                resizeToAvoidBottomInset: true,
+                backgroundColor: Colors.white,
+                appBar: hideMainAppBar ? null : _buildMainAppBar(subtitle),
+                body: splitMessenger
+                    ? _buildDesktopMessenger(
+                        scrollListHeaderAway: tablet,
+                      )
+                    : _buildMainListContent(
+                        compactPane: !phone && width < 900,
+                        scrollHeaderAway: useCollapsingListHeader,
+                      ),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  PreferredSizeWidget _buildMainAppBar(String subtitle) {
+    return AppBar(
+      toolbarHeight: 58,
+      elevation: 0,
+      scrolledUnderElevation: 0,
+      backgroundColor: Colors.white,
+      surfaceTintColor: Colors.transparent,
+      automaticallyImplyLeading: false,
+      titleSpacing: 12,
+      title: Row(
+        children: <Widget>[
+          const _ChatDots(),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  'Чаты',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: _ChatText.title(15.2),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: _ChatText.body(10.0),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+      actions: <Widget>[
+        Padding(
+          padding: const EdgeInsets.only(right: 5),
+          child: _ChatHeaderAction(
+            label: isSearching ? 'Закрыть' : 'Поиск',
+            active: isSearching,
+            onTap: () {
+              setState(() {
+                if (_tab == _ChatTab.calls ||
+                    _tab == _ChatTab.notifications) {
+                  _tab = _ChatTab.privateChats;
+                  _selectedChat = null;
+                  _selectedChatId = null;
+                  _selectedChatName = '';
+                  isSearching = true;
+                } else {
+                  isSearching = !isSearching;
+                }
+                if (!isSearching) {
+                  _searchController.clear();
+                }
+              });
+              _applyFiltersAndSorting();
+            },
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(right: 10),
+          child: _ChatHeaderAction(
+            label: _tab == _ChatTab.groups ? 'Новая группа' : 'Новый чат',
+            emphasized: true,
+            onTap: () async {
+              if (_tab == _ChatTab.groups) {
+                final ok = await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => CreateGroupChatScreen(
+                      userId: widget.userId,
+                    ),
+                  ),
+                );
+
+                if (ok == true) {
+                  await _reloadCurrentTab();
+                }
+              } else {
+                await _openNewPrivateChatSheet();
+              }
+            },
+          ),
+        ),
+      ],
+      bottom: const PreferredSize(
+        preferredSize: Size.fromHeight(1),
+        child: Divider(
+          height: 1,
+          thickness: .6,
+          color: _ChatStyle.line,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDesktopMessenger({bool scrollListHeaderAway = false}) {
+    final width = MediaQuery.sizeOf(context).width;
+    final listWidth = width < 900
+        ? math.min(330.0, math.max(285.0, width * .40))
+        : width < 1280
+            ? math.min(380.0, math.max(320.0, width * .34))
+            : math.min(420.0, math.max(360.0, width * .30));
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        SizedBox(
+          width: listWidth,
+          child: _buildMainListContent(
+            compactPane: true,
+            scrollHeaderAway: scrollListHeaderAway,
+          ),
+        ),
+        const VerticalDivider(
+          width: 1,
+          thickness: 1,
+          color: _ChatStyle.line,
+        ),
+        Expanded(
+          child: _selectedChatId != null && _selectedChatId! > 0
+              ? _buildEmbeddedChatPane(showBack: false)
+              : _buildDesktopEmptyPane(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDesktopEmptyPane() {
+    return Container(
+      color: Colors.white,
+      alignment: Alignment.center,
+      padding: const EdgeInsets.all(28),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 420),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Container(
+              width: 58,
+              height: 58,
+              decoration: BoxDecoration(
+                color: _ChatStyle.greenSoft,
+                borderRadius: BorderRadius.circular(15),
+              ),
+              child: const Icon(
+                Icons.forum_rounded,
+                color: _ChatStyle.green,
+                size: 27,
+              ),
+            ),
+            const SizedBox(height: 15),
+            Text(
+              'Выберите чат',
+              textAlign: TextAlign.center,
+              style: _ChatText.title(15.0),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Переписка откроется справа. На планшете список чатов '
+              'остаётся слева, чтобы можно было быстро переключаться между диалогами.',
+              textAlign: TextAlign.center,
+              style: _ChatText.body(11.0),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmbeddedChatPane({required bool showBack}) {
+    final chatId = _selectedChatId;
+    if (chatId == null || chatId <= 0) {
+      return _buildDesktopEmptyPane();
+    }
+
+    final chat = _selectedChat;
+    final title =
+        _selectedChatName.trim().isEmpty ? 'Чат' : _selectedChatName.trim();
+    final isPrivate = chat == null ? true : _isPrivate(chat);
+    final avatarUrl = chat == null ? '' : _peerPhoto(chat);
+
+    return Container(
+      color: Colors.white,
+      child: Column(
+        children: <Widget>[
+          _ProfileChatHeader(
+            title: title,
+            subtitle: isPrivate ? 'Личный диалог' : 'Групповой чат',
+            avatarUrl: avatarUrl,
+            isGroup: !isPrivate,
+            onBack: showBack ? _closeEmbeddedChat : null,
+          ),
+          const Divider(
+            height: 1,
+            thickness: .6,
+            color: _ChatStyle.line,
+          ),
+          Expanded(
+            child: ChatRoomScreen(
+              key: ValueKey('profile-chat-$chatId'),
+              chatId: chatId,
+              userId: widget.userId,
+              chatName: title,
+              embedded: true,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMainListContent({
+    bool compactPane = false,
+    bool scrollHeaderAway = false,
+  }) {
+    if (scrollHeaderAway &&
+        (_tab == _ChatTab.privateChats || _tab == _ChatTab.groups)) {
+      return _buildScrollableMainListContent(compactPane: compactPane);
+    }
+
+    return Column(
+      children: <Widget>[
+        if (_newsVisible)
+          Padding(
+            padding: EdgeInsets.fromLTRB(
+              compactPane ? 8 : 10,
+              8,
+              compactPane ? 8 : 10,
+              2,
+            ),
+            child: _sportotekaNewsEntry(),
+          ),
+        Padding(
+          padding: EdgeInsets.fromLTRB(
+            compactPane ? 8 : 10,
+            _newsVisible ? 4 : 8,
+            compactPane ? 8 : 10,
+            2,
+          ),
+          child: _notificationsEntry(),
+        ),
+        if (_tab == _ChatTab.privateChats)
+          Padding(
+            padding: EdgeInsets.fromLTRB(
+              compactPane ? 8 : 10,
+              6,
+              compactPane ? 8 : 10,
+              1,
+            ),
+            child: _sportotekaAiEntry(),
+          ),
+        Padding(
+          padding: EdgeInsets.fromLTRB(
+            compactPane ? 8 : 10,
+            6,
+            compactPane ? 8 : 10,
+            7,
+          ),
+          child: Row(
+            children: <Widget>[
+              Expanded(
+                child: _tabChip(
+                  label: 'Личные',
+                  selected: _tab == _ChatTab.privateChats,
+                  onTap: () async {
+                    if (_tab == _ChatTab.privateChats) return;
+                    setState(() {
+                      _tab = _ChatTab.privateChats;
+                      _selectedChat = null;
+                      _selectedChatId = null;
+                      _selectedChatName = '';
+                      isSearching = false;
+                      _searchController.clear();
+                    });
+                    await _reloadCurrentTab();
+                  },
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: _tabChip(
+                  label: 'Группы',
+                  selected: _tab == _ChatTab.groups,
+                  onTap: () async {
+                    if (_tab == _ChatTab.groups) return;
+                    setState(() {
+                      _tab = _ChatTab.groups;
+                      _selectedChat = null;
+                      _selectedChatId = null;
+                      _selectedChatName = '';
+                      isSearching = false;
+                      _searchController.clear();
+                    });
+                    await _reloadCurrentTab();
+                  },
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: _tabChip(
+                  label: 'Звонки',
+                  selected: _tab == _ChatTab.calls,
+                  onTap: () {
+                    if (_tab == _ChatTab.calls) return;
+                    setState(() {
+                      _tab = _ChatTab.calls;
+                      _selectedChat = null;
+                      _selectedChatId = null;
+                      _selectedChatName = '';
+                      isSearching = false;
+                      _searchController.clear();
+                      isLoading = false;
+                    });
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (isSearching &&
+            (_tab == _ChatTab.privateChats || _tab == _ChatTab.groups))
+          Padding(
+            padding: EdgeInsets.fromLTRB(
+              compactPane ? 8 : 10,
+              0,
+              compactPane ? 8 : 10,
+              7,
+            ),
+            child: Container(
+              height: 42,
+              padding: const EdgeInsets.symmetric(horizontal: 11),
+              decoration: BoxDecoration(
+                color: _ChatStyle.soft,
+                borderRadius: BorderRadius.circular(11),
+              ),
+              child: Row(
                 children: <Widget>[
-                  const _ChatDots(),
-                  const SizedBox(width: 10),
+                  const _ChatDots(
+                    color: _ChatStyle.muted2,
+                    compact: true,
+                  ),
+                  const SizedBox(width: 9),
                   Expanded(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Text(
-                          'Чаты',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: _ChatText.title(15.2),
+                    child: TextField(
+                      controller: _searchController,
+                      autofocus: true,
+                      style: _ChatText.body(
+                        11.2,
+                        color: _ChatStyle.text,
+                        weight: FontWeight.w500,
+                      ),
+                      decoration: InputDecoration(
+                        hintText: _tab == _ChatTab.privateChats
+                            ? 'Поиск диалогов'
+                            : 'Поиск групп',
+                        hintStyle: _ChatText.body(
+                          10.8,
+                          color: _ChatStyle.muted2,
                         ),
-                        const SizedBox(height: 2),
-                        Text(
-                          subtitle,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: _ChatText.body(10.0),
-                        ),
-                      ],
+                        border: InputBorder.none,
+                        isDense: true,
+                        contentPadding: EdgeInsets.zero,
+                      ),
                     ),
                   ),
                 ],
               ),
-              actions: <Widget>[
-                Padding(
-                  padding: const EdgeInsets.only(right: 5),
-                  child: _ChatHeaderAction(
-                    label: isSearching ? 'Закрыть' : 'Поиск',
-                    active: isSearching,
-                    onTap: () {
-                      setState(() {
-                        if (_tab == _ChatTab.calls ||
-                            _tab == _ChatTab.notifications) {
-                          _tab = _ChatTab.privateChats;
-                          isSearching = true;
-                        } else {
-                          isSearching = !isSearching;
-                        }
-                        if (!isSearching) {
-                          _searchController.clear();
-                        }
-                      });
-                      _applyFiltersAndSorting();
-                    },
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.only(right: 10),
-                  child: _ChatHeaderAction(
-                    label:
-                        _tab == _ChatTab.groups ? 'Новая группа' : 'Новый чат',
-                    emphasized: true,
-                    onTap: () async {
-                      if (_tab == _ChatTab.groups) {
-                        final ok = await Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => CreateGroupChatScreen(
-                              userId: widget.userId,
-                            ),
-                          ),
-                        );
-
-                        if (ok == true) {
-                          await _reloadCurrentTab();
-                        }
-                      } else {
-                        await _openNewPrivateChatSheet();
-                      }
-                    },
-                  ),
-                ),
-              ],
-              bottom: const PreferredSize(
-                preferredSize: Size.fromHeight(1),
-                child: Divider(
-                  height: 1,
-                  thickness: .6,
-                  color: _ChatStyle.line,
-                ),
-              ),
             ),
-            body: Column(
-              children: <Widget>[
-                if (_newsVisible)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(10, 8, 10, 2),
-                    child: _sportotekaNewsEntry(),
+          ),
+        Expanded(
+          child: _tab == _ChatTab.notifications
+              ? CmrNotificationsPanel(
+                  userId: widget.userId,
+                  onUnreadChanged: (value) {
+                    if (!mounted) return;
+                    setState(() => _notificationUnread = value);
+                  },
+                )
+              : _tab == _ChatTab.calls
+                  ? CallHistoryPanel(userId: widget.userId)
+                  : isLoading
+                      ? const Center(
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: _ChatStyle.green,
+                          ),
+                        )
+                      : _filtered.isEmpty
+                          ? _emptyState()
+                          : RefreshIndicator(
+                              color: _ChatStyle.green,
+                              onRefresh: _reloadCurrentTab,
+                              child: _TelegramList(
+                                children: List<Widget>.generate(
+                                  _filtered.length,
+                                  (i) =>
+                                      _buildDismissibleCard(_filtered[i]),
+                                ),
+                              ),
+                            ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildScrollableMainListContent({bool compactPane = true}) {
+    Widget tabsRow() {
+      return Row(
+        children: <Widget>[
+          Expanded(
+            child: _tabChip(
+              label: 'Личные',
+              selected: _tab == _ChatTab.privateChats,
+              onTap: () async {
+                if (_tab == _ChatTab.privateChats) return;
+                setState(() {
+                  _tab = _ChatTab.privateChats;
+                  _selectedChat = null;
+                  _selectedChatId = null;
+                  _selectedChatName = '';
+                  isSearching = false;
+                  _searchController.clear();
+                });
+                await _reloadCurrentTab();
+              },
+            ),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: _tabChip(
+              label: 'Группы',
+              selected: _tab == _ChatTab.groups,
+              onTap: () async {
+                if (_tab == _ChatTab.groups) return;
+                setState(() {
+                  _tab = _ChatTab.groups;
+                  _selectedChat = null;
+                  _selectedChatId = null;
+                  _selectedChatName = '';
+                  isSearching = false;
+                  _searchController.clear();
+                });
+                await _reloadCurrentTab();
+              },
+            ),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: _tabChip(
+              label: 'Звонки',
+              selected: _tab == _ChatTab.calls,
+              onTap: () {
+                if (_tab == _ChatTab.calls) return;
+                setState(() {
+                  _tab = _ChatTab.calls;
+                  _selectedChat = null;
+                  _selectedChatId = null;
+                  _selectedChatName = '';
+                  isSearching = false;
+                  _searchController.clear();
+                  isLoading = false;
+                });
+              },
+            ),
+          ),
+        ],
+      );
+    }
+
+    void toggleSidebarSearch() {
+      setState(() {
+        isSearching = !isSearching;
+        if (!isSearching) {
+          _searchController.clear();
+        }
+      });
+      _applyFiltersAndSorting();
+    }
+
+    Future<void> createSidebarChat() async {
+      if (_tab == _ChatTab.groups) {
+        final ok = await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => CreateGroupChatScreen(userId: widget.userId),
+          ),
+        );
+        if (ok == true) {
+          await _reloadCurrentTab();
+        }
+        return;
+      }
+      await _openNewPrivateChatSheet();
+    }
+
+    void scrollHeaderToTop() {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_chatListScrollController.hasClients) return;
+        _chatListScrollController.animateTo(
+          0,
+          duration: const Duration(milliseconds: 240),
+          curve: Curves.easeOutCubic,
+        );
+      });
+    }
+
+    void openNotificationsFromHeader() {
+      setState(() {
+        _tab = _ChatTab.notifications;
+        _selectedChat = null;
+        _selectedChatId = null;
+        _selectedChatName = '';
+        isSearching = false;
+        _searchController.clear();
+        isLoading = false;
+      });
+    }
+
+    void openCallsFromHeader() {
+      setState(() {
+        _tab = _ChatTab.calls;
+        _selectedChat = null;
+        _selectedChatId = null;
+        _selectedChatName = '';
+        isSearching = false;
+        _searchController.clear();
+        isLoading = false;
+      });
+    }
+
+    void toggleCompactSearch() {
+      final opening = !isSearching;
+      toggleSidebarSearch();
+      if (opening) scrollHeaderToTop();
+    }
+
+    final horizontal = compactPane ? 8.0 : 10.0;
+
+    return RefreshIndicator(
+      color: _ChatStyle.green,
+      onRefresh: _reloadCurrentTab,
+      child: CustomScrollView(
+        controller: _chatListScrollController,
+        physics: const AlwaysScrollableScrollPhysics(
+          parent: BouncingScrollPhysics(),
+        ),
+        slivers: <Widget>[
+          SliverPersistentHeader(
+            pinned: true,
+            delegate: _ChatCollapsingHeaderDelegate(
+              minHeight: 48,
+              maxHeight: 62,
+              builder: (context, progress, overlapsContent) {
+                final iconBox = 31.0 - progress * 3.0;
+                final subtitleOpacity =
+                    (1 - progress * 1.8).clamp(0.0, 1.0).toDouble();
+                final normalActionsOpacity =
+                    (1 - progress * 2.1).clamp(0.0, 1.0).toDouble();
+                final compactActionsOpacity =
+                    ((progress - .34) / .66).clamp(0.0, 1.0).toDouble();
+                final countLabel = _tab == _ChatTab.groups
+                    ? '${_filtered.length} групп'
+                    : '${_filtered.length} диалогов';
+
+                return Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    border: Border(
+                      bottom: BorderSide(
+                        color: overlapsContent || progress > .60
+                            ? _ChatStyle.line
+                            : Colors.transparent,
+                        width: .7,
+                      ),
+                    ),
+                    boxShadow: progress > .70
+                        ? const <BoxShadow>[
+                            BoxShadow(
+                              color: Color(0x08000000),
+                              blurRadius: 10,
+                              offset: Offset(0, 3),
+                            ),
+                          ]
+                        : const <BoxShadow>[],
                   ),
-                Padding(
                   padding: EdgeInsets.fromLTRB(
-                    10,
-                    _newsVisible ? 4 : 8,
-                    10,
-                    2,
+                    horizontal,
+                    4 - progress * 2,
+                    horizontal,
+                    5 - progress * 2,
                   ),
-                  child: _notificationsEntry(),
-                ),
-                if (_tab == _ChatTab.privateChats)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(10, 6, 10, 1),
-                    child: _sportotekaAiEntry(),
-                  ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(10, 6, 10, 7),
                   child: Row(
                     children: <Widget>[
-                      Expanded(
-                        child: _tabChip(
-                          label: 'Личные',
-                          selected: _tab == _ChatTab.privateChats,
-                          onTap: () async {
-                            if (_tab == _ChatTab.privateChats) return;
-                            setState(() {
-                              _tab = _ChatTab.privateChats;
-                              isSearching = false;
-                              _searchController.clear();
-                            });
-                            await _reloadCurrentTab();
-                          },
+                      InkWell(
+                        borderRadius: BorderRadius.circular(10),
+                        onTap: scrollHeaderToTop,
+                        child: Container(
+                          width: iconBox,
+                          height: iconBox,
+                          decoration: BoxDecoration(
+                            color: _ChatStyle.greenSoft,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          alignment: Alignment.center,
+                          child: const _ChatDots(
+                            color: _ChatStyle.greenDark,
+                            compact: true,
+                          ),
                         ),
                       ),
-                      const SizedBox(width: 6),
+                      const SizedBox(width: 9),
                       Expanded(
-                        child: _tabChip(
-                          label: 'Группы',
-                          selected: _tab == _ChatTab.groups,
-                          onTap: () async {
-                            if (_tab == _ChatTab.groups) return;
-                            setState(() {
-                              _tab = _ChatTab.groups;
-                              isSearching = false;
-                              _searchController.clear();
-                            });
-                            await _reloadCurrentTab();
-                          },
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Text(
+                              'Чаты',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: _ChatText.title(14.5 - progress * .7),
+                            ),
+                            AnimatedOpacity(
+                              duration: const Duration(milliseconds: 80),
+                              opacity: subtitleOpacity,
+                              child: Padding(
+                                padding: const EdgeInsets.only(top: 2),
+                                child: Text(
+                                  countLabel,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: _ChatText.body(9.8),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      const SizedBox(width: 6),
+                      const SizedBox(width: 5),
+                      SizedBox(
+                        width: 139,
+                        height: 34,
+                        child: Stack(
+                          alignment: Alignment.centerRight,
+                          children: <Widget>[
+                            Opacity(
+                              opacity: normalActionsOpacity,
+                              child: IgnorePointer(
+                                ignoring: progress > .46,
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.end,
+                                  children: <Widget>[
+                                    _SidebarHeaderIcon(
+                                      icon: isSearching
+                                          ? Icons.close_rounded
+                                          : Icons.search_rounded,
+                                      tooltip: isSearching
+                                          ? 'Закрыть поиск'
+                                          : 'Поиск',
+                                      active: isSearching,
+                                      onTap: toggleSidebarSearch,
+                                    ),
+                                    const SizedBox(width: 5),
+                                    _SidebarHeaderIcon(
+                                      icon: _tab == _ChatTab.groups
+                                          ? Icons.group_add_rounded
+                                          : Icons.add_comment_rounded,
+                                      tooltip: _tab == _ChatTab.groups
+                                          ? 'Новая группа'
+                                          : 'Новый чат',
+                                      emphasized: true,
+                                      onTap: () =>
+                                          unawaited(createSidebarChat()),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            Opacity(
+                              opacity: compactActionsOpacity,
+                              child: IgnorePointer(
+                                ignoring: progress < .48,
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.end,
+                                  children: <Widget>[
+                                    _SidebarHeaderIcon(
+                                      icon: Icons.notifications_none_rounded,
+                                      tooltip: 'Уведомления',
+                                      badge: _notificationUnread,
+                                      onTap: openNotificationsFromHeader,
+                                    ),
+                                    const SizedBox(width: 3),
+                                    _SidebarHeaderIcon(
+                                      icon: Icons.call_outlined,
+                                      tooltip: 'Звонки',
+                                      onTap: openCallsFromHeader,
+                                    ),
+                                    const SizedBox(width: 3),
+                                    _SidebarHeaderIcon(
+                                      icon: Icons.auto_awesome_rounded,
+                                      tooltip: 'SPORTOTEKA ИИ',
+                                      ai: true,
+                                      onTap: () =>
+                                          unawaited(_openSportotekaAi()),
+                                    ),
+                                    const SizedBox(width: 3),
+                                    _SidebarHeaderIcon(
+                                      icon: isSearching
+                                          ? Icons.close_rounded
+                                          : Icons.search_rounded,
+                                      tooltip: isSearching
+                                          ? 'Закрыть поиск'
+                                          : 'Поиск',
+                                      active: isSearching,
+                                      onTap: toggleCompactSearch,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+          if (_newsVisible)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(horizontal, 8, horizontal, 2),
+                child: _sportotekaNewsEntry(),
+              ),
+            ),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(
+                horizontal,
+                _newsVisible ? 4 : 8,
+                horizontal,
+                2,
+              ),
+              child: _notificationsEntry(),
+            ),
+          ),
+          if (_tab == _ChatTab.privateChats)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(horizontal, 6, horizontal, 1),
+                child: _sportotekaAiEntry(),
+              ),
+            ),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(horizontal, 6, horizontal, 7),
+              child: tabsRow(),
+            ),
+          ),
+          if (isSearching)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(horizontal, 0, horizontal, 7),
+                child: Container(
+                  height: 42,
+                  padding: const EdgeInsets.symmetric(horizontal: 11),
+                  decoration: BoxDecoration(
+                    color: _ChatStyle.soft,
+                    borderRadius: BorderRadius.circular(11),
+                  ),
+                  child: Row(
+                    children: <Widget>[
+                      const _ChatDots(
+                        color: _ChatStyle.muted2,
+                        compact: true,
+                      ),
+                      const SizedBox(width: 9),
                       Expanded(
-                        child: _tabChip(
-                          label: 'Звонки',
-                          selected: _tab == _ChatTab.calls,
-                          onTap: () {
-                            if (_tab == _ChatTab.calls) return;
-                            setState(() {
-                              _tab = _ChatTab.calls;
-                              isSearching = false;
-                              _searchController.clear();
-                              isLoading = false;
-                            });
-                          },
+                        child: TextField(
+                          controller: _searchController,
+                          autofocus: true,
+                          style: _ChatText.body(
+                            11.2,
+                            color: _ChatStyle.text,
+                            weight: FontWeight.w500,
+                          ),
+                          decoration: InputDecoration(
+                            hintText: _tab == _ChatTab.privateChats
+                                ? 'Поиск диалогов'
+                                : 'Поиск групп',
+                            hintStyle: _ChatText.body(
+                              10.8,
+                              color: _ChatStyle.muted2,
+                            ),
+                            border: InputBorder.none,
+                            isDense: true,
+                            contentPadding: EdgeInsets.zero,
+                          ),
                         ),
                       ),
                     ],
                   ),
                 ),
-                if (isSearching &&
-                    (_tab == _ChatTab.privateChats || _tab == _ChatTab.groups))
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(10, 0, 10, 7),
-                    child: Container(
-                      height: 42,
-                      padding: const EdgeInsets.symmetric(horizontal: 11),
-                      decoration: BoxDecoration(
-                        color: _ChatStyle.soft,
-                        borderRadius: BorderRadius.circular(11),
-                      ),
-                      child: Row(
-                        children: <Widget>[
-                          const _ChatDots(
-                            color: _ChatStyle.muted2,
-                            compact: true,
-                          ),
-                          const SizedBox(width: 9),
-                          Expanded(
-                            child: TextField(
-                              controller: _searchController,
-                              autofocus: true,
-                              style: _ChatText.body(
-                                11.2,
-                                color: _ChatStyle.text,
-                                weight: FontWeight.w500,
-                              ),
-                              decoration: InputDecoration(
-                                hintText: _tab == _ChatTab.privateChats
-                                    ? 'Поиск диалогов'
-                                    : 'Поиск групп',
-                                hintStyle: _ChatText.body(
-                                  10.8,
-                                  color: _ChatStyle.muted2,
-                                ),
-                                border: InputBorder.none,
-                                isDense: true,
-                                contentPadding: EdgeInsets.zero,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                Expanded(
-                  child: _tab == _ChatTab.notifications
-                      ? CmrNotificationsPanel(
-                          userId: widget.userId,
-                          onUnreadChanged: (value) {
-                            if (!mounted) return;
-                            setState(() => _notificationUnread = value);
-                          },
-                        )
-                      : _tab == _ChatTab.calls
-                          ? CallHistoryPanel(userId: widget.userId)
-                          : isLoading
-                              ? const Center(
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: _ChatStyle.green,
-                                  ),
-                                )
-                              : _filtered.isEmpty
-                                  ? _emptyState()
-                                  : RefreshIndicator(
-                                      color: _ChatStyle.green,
-                                      onRefresh: _reloadCurrentTab,
-                                      child: _TelegramList(
-                                        children: List<Widget>.generate(
-                                          _filtered.length,
-                                          (i) => _buildDismissibleCard(
-                                              _filtered[i]),
-                                        ),
-                                      ),
-                                    ),
-                ),
-              ],
+              ),
             ),
-          ),
-        ),
+          if (isLoading)
+            const SliverFillRemaining(
+              hasScrollBody: false,
+              child: Center(
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: _ChatStyle.green,
+                ),
+              ),
+            )
+          else if (_filtered.isEmpty)
+            SliverFillRemaining(
+              hasScrollBody: false,
+              child: _emptyState(),
+            )
+          else
+            SliverPadding(
+              padding: EdgeInsets.fromLTRB(
+                8,
+                3,
+                8,
+                MediaQuery.paddingOf(context).bottom + 100,
+              ),
+              sliver: SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (_, index) => Padding(
+                    padding: EdgeInsets.only(
+                      bottom: index == _filtered.length - 1 ? 0 : 1,
+                    ),
+                    child: _buildDismissibleCard(_filtered[index]),
+                  ),
+                  childCount: _filtered.length,
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -2296,6 +2983,7 @@ class _ChatScreenState extends State<ChatScreen> {
         0;
 
     final id = _asInt(chat['id']);
+    final selected = id == _selectedChatId;
     final pinned = _pinned.contains(id);
     final deleted = _isDeletedChat(chat);
     final showWideActions = MediaQuery.sizeOf(context).width >= 600;
@@ -2325,7 +3013,11 @@ class _ChatScreenState extends State<ChatScreen> {
         .join();
 
     return Material(
-      color: unread > 0 ? _ChatStyle.greenSoft : Colors.white,
+      color: selected
+          ? const Color(0xFFE2F7EA)
+          : unread > 0
+              ? _ChatStyle.greenSoft
+              : Colors.white,
       borderRadius: BorderRadius.circular(10),
       child: InkWell(
         borderRadius: BorderRadius.circular(10),
@@ -2521,6 +3213,9 @@ class _ChatScreenState extends State<ChatScreen> {
           if (_tab == _ChatTab.notifications) return;
           setState(() {
             _tab = _ChatTab.notifications;
+            _selectedChat = null;
+            _selectedChatId = null;
+            _selectedChatName = '';
             isSearching = false;
             _searchController.clear();
             isLoading = false;
@@ -2661,6 +3356,271 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 } // ✅ _ChatScreenState
+
+class _ProfileChatHeader extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final String avatarUrl;
+  final bool isGroup;
+  final VoidCallback? onBack;
+
+  const _ProfileChatHeader({
+    required this.title,
+    required this.subtitle,
+    required this.avatarUrl,
+    required this.isGroup,
+    this.onBack,
+  });
+
+  String get _initials {
+    final parts = title
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((e) => e.isNotEmpty)
+        .take(2)
+        .toList();
+    if (parts.isEmpty) return 'Ч';
+    return parts.map((e) => e.substring(0, 1).toUpperCase()).join();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 58,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      color: Colors.white,
+      child: Row(
+        children: <Widget>[
+          if (onBack != null) ...<Widget>[
+            Material(
+              color: _ChatStyle.soft,
+              borderRadius: BorderRadius.circular(9),
+              child: InkWell(
+                onTap: onBack,
+                borderRadius: BorderRadius.circular(9),
+                child: const SizedBox(
+                  width: 34,
+                  height: 34,
+                  child: Icon(
+                    Icons.chevron_left_rounded,
+                    size: 19,
+                    color: _ChatStyle.text,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 9),
+          ],
+          Container(
+            width: 36,
+            height: 36,
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(
+              color: _ChatStyle.greenSoft,
+              borderRadius: BorderRadius.circular(11),
+            ),
+            child: avatarUrl.isNotEmpty
+                ? Image.network(
+                    avatarUrl,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Center(
+                      child: isGroup
+                          ? const _ChatDots(compact: true)
+                          : Text(
+                              _initials,
+                              style: _ChatText.title(
+                                10.7,
+                                color: _ChatStyle.greenDark,
+                              ),
+                            ),
+                    ),
+                  )
+                : Center(
+                    child: isGroup
+                        ? const _ChatDots(compact: true)
+                        : Text(
+                            _initials,
+                            style: _ChatText.title(
+                              10.7,
+                              color: _ChatStyle.greenDark,
+                            ),
+                          ),
+                  ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: _ChatText.title(13.8),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: _ChatText.body(9.8),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Container(
+            width: 6,
+            height: 6,
+            decoration: const BoxDecoration(
+              color: _ChatStyle.green,
+              shape: BoxShape.circle,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ChatCollapsingHeaderDelegate extends SliverPersistentHeaderDelegate {
+  final double minHeight;
+  final double maxHeight;
+  final Widget Function(BuildContext context, double progress, bool overlapsContent)
+      builder;
+
+  const _ChatCollapsingHeaderDelegate({
+    required this.minHeight,
+    required this.maxHeight,
+    required this.builder,
+  });
+
+  @override
+  double get minExtent => minHeight;
+
+  @override
+  double get maxExtent => math.max(maxHeight, minHeight).toDouble();
+
+  @override
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
+    final range = math.max(1.0, maxExtent - minExtent).toDouble();
+    final progress = (shrinkOffset / range).clamp(0.0, 1.0).toDouble();
+    return builder(context, progress, overlapsContent);
+  }
+
+  @override
+  bool shouldRebuild(covariant _ChatCollapsingHeaderDelegate oldDelegate) {
+    return oldDelegate.minHeight != minHeight ||
+        oldDelegate.maxHeight != maxHeight ||
+        oldDelegate.builder != builder;
+  }
+}
+
+class _SidebarHeaderIcon extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+  final bool active;
+  final bool emphasized;
+  final bool ai;
+  final int badge;
+
+  const _SidebarHeaderIcon({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+    this.active = false,
+    this.emphasized = false,
+    this.ai = false,
+    this.badge = 0,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = emphasized || active
+        ? _ChatStyle.greenSoft
+        : _ChatStyle.soft;
+    final fg = emphasized || active
+        ? _ChatStyle.greenDark
+        : _ChatStyle.muted;
+
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(10),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(10),
+          child: SizedBox(
+            width: 32,
+            height: 32,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: <Widget>[
+                Positioned.fill(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: ai ? null : bg,
+                      gradient: ai
+                          ? const LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: <Color>[
+                                Color(0xFF00A76F),
+                                Color(0xFF2574E8),
+                              ],
+                            )
+                          : null,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      icon,
+                      size: 16,
+                      color: ai ? Colors.white : fg,
+                    ),
+                  ),
+                ),
+                if (badge > 0)
+                  Positioned(
+                    top: -4,
+                    right: -4,
+                    child: Container(
+                      constraints: const BoxConstraints(
+                        minWidth: 15,
+                        minHeight: 15,
+                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 3),
+                      decoration: BoxDecoration(
+                        color: _ChatStyle.red,
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(color: Colors.white, width: 1.5),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        badge > 99 ? '99+' : '$badge',
+                        style: AppTypography.custom(
+                          size: 7.1,
+                          weight: FontWeight.w700,
+                          color: Colors.white,
+                          height: 1,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 class _ChatHeaderAction extends StatelessWidget {
   final String label;

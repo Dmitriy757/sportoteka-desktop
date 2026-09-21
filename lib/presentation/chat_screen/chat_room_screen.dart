@@ -3,6 +3,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:ui' show FontFeature;
 
 import 'package:flutter/material.dart';
@@ -217,10 +218,15 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
   // ✅ endpoints (ДОЛЖНЫ БЫТЬ ВНУТРИ КЛАССА, не снаружи)
   static const String _apiBase = "https://sportotekaapp.ru/api";
   static const String _markReadUrl = "$_apiBase/mark_read.php";
+  static const String _searchUsersUrl = "$_apiBase/search_users.php";
+  static const String _forwardMessageUrl = "$_apiBase/forward_message.php";
+  static const String _toggleReactionUrl = "$_apiBase/toggle_message_reaction.php";
+  static const String _getReactionsUrl = "$_apiBase/get_message_reactions.php";
 
   final TextEditingController _controller = TextEditingController();
   final FocusNode _inputFocus = FocusNode();
   final ScrollController _scrollController = ScrollController();
+  Offset? _lastMessagePressPosition;
 
   late String _chatTitle;
 
@@ -233,6 +239,10 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
   // Индексы и состояния
   bool isLoading = true;
   Timer? _refreshTimer;
+  Timer? _reactionsTimer;
+
+  // Реакции сгруппированы по message_id.
+  final Map<int, List<Map<String, dynamic>>> _messageReactions = {};
 
   bool isTyping = false;
   int? editingMessageId; // ID редактируемого сообщения
@@ -282,7 +292,9 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
 
     _loadMessages(initial: true);
     _loadMembers();
+    _loadReactions();
     _startPolling();
+    _startReactionPolling();
 
     _scrollController.addListener(() {
       if (!_scrollController.hasClients) return;
@@ -306,7 +318,9 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
     // ✅ не опрашиваем сервер в фоне
     if (state == AppLifecycleState.resumed) {
       _startPolling();
+      _startReactionPolling();
       _loadMessages(fromPoll: true);
+      _loadReactions(silent: true);
 
       // ✅ на всякий случай при возврате в чат
       _markThisChatRead();
@@ -314,6 +328,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
         state == AppLifecycleState.inactive ||
         state == AppLifecycleState.detached) {
       _refreshTimer?.cancel();
+      _reactionsTimer?.cancel();
     }
   }
 
@@ -325,11 +340,20 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
     });
   }
 
+  void _startReactionPolling() {
+    _reactionsTimer?.cancel();
+    _reactionsTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+      if (!mounted) return;
+      unawaited(_loadReactions(silent: true));
+    });
+  }
+
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
 
     _refreshTimer?.cancel();
+    _reactionsTimer?.cancel();
     _searchDebounce?.cancel();
     _scrollThrottle?.cancel();
 
@@ -490,6 +514,226 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
       return '[Сообщение]';
     }
     return t.length > 80 ? '${t.substring(0, 80)}…' : t;
+  }
+
+  List<_ChatImageItem> _collectChatImages() {
+    final out = <_ChatImageItem>[];
+    for (final msg in messages) {
+      if (_asBool(msg['is_deleted'])) continue;
+
+      final id = int.tryParse('${msg['id'] ?? 0}') ?? 0;
+      final type = (msg['type'] ?? '').toString().toLowerCase();
+      final localPath = (msg['local_path'] ?? '').toString().trim();
+      final rawUrl = (msg['file_url'] ??
+              msg['image_url'] ??
+              msg['url'] ??
+              msg['path'] ??
+              '')
+          .toString()
+          .trim();
+      final resolvedUrl = _resolveUrl(rawUrl);
+      final text = (msg['content'] ?? '').toString().trim();
+
+      if (localPath.isNotEmpty && _isImageType(type, localPath)) {
+        out.add(_ChatImageItem(
+          messageId: id,
+          localPath: localPath,
+          heroTag: 'img_$id',
+        ));
+        continue;
+      }
+
+      if (resolvedUrl.isNotEmpty && _isImageType(type, resolvedUrl)) {
+        out.add(_ChatImageItem(
+          messageId: id,
+          url: resolvedUrl,
+          heroTag: 'img_$id',
+        ));
+        continue;
+      }
+
+      if (_looksLikeImageUrl(text)) {
+        out.add(_ChatImageItem(
+          messageId: id,
+          url: _resolveUrl(text),
+          heroTag: 'img_$id',
+        ));
+      }
+    }
+    return out;
+  }
+
+  void _openImageGallery(Map<String, dynamic> msg) {
+    final items = _collectChatImages();
+    if (items.isEmpty) return;
+
+    final id = int.tryParse('${msg['id'] ?? 0}') ?? 0;
+    var initialIndex = items.indexWhere((item) => item.messageId == id);
+    if (initialIndex < 0) initialIndex = 0;
+
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => _FullImageGalleryScreen(
+          items: items,
+          initialIndex: initialIndex,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _loadReactions({bool silent = false}) async {
+    try {
+      final uri = Uri.parse(_getReactionsUrl).replace(queryParameters: {
+        'chat_id': widget.chatId.toString(),
+        'user_id': widget.userId.toString(),
+      });
+      final res = await http.get(uri).timeout(const Duration(seconds: 8));
+      if (res.statusCode != 200) return;
+
+      final data = json.decode(res.body);
+      if (data is! Map || data['success'] != true) return;
+      final raw = (data['reactions'] as List?) ?? const [];
+      final next = <int, List<Map<String, dynamic>>>{};
+      for (final item in raw) {
+        if (item is! Map) continue;
+        final map = Map<String, dynamic>.from(item);
+        final messageId = int.tryParse('${map['message_id'] ?? 0}') ?? 0;
+        if (messageId <= 0) continue;
+        map['count'] = int.tryParse('${map['count'] ?? 0}') ?? 0;
+        map['mine'] = _asBool(map['mine']);
+        next.putIfAbsent(messageId, () => <Map<String, dynamic>>[]).add(map);
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _messageReactions
+          ..clear()
+          ..addAll(next);
+      });
+    } catch (e) {
+      if (!silent) debugPrint('Не удалось загрузить реакции: $e');
+    }
+  }
+
+  Future<void> _toggleReaction(Map<String, dynamic> msg, String reaction) async {
+    final messageId = int.tryParse('${msg['id'] ?? 0}') ?? 0;
+    if (messageId <= 0 || msg['_local'] == true) return;
+
+    try {
+      HapticFeedback.selectionClick();
+      final res = await http.post(
+        Uri.parse(_toggleReactionUrl),
+        body: {
+          'message_id': messageId.toString(),
+          'user_id': widget.userId.toString(),
+          'reaction': reaction,
+        },
+      ).timeout(const Duration(seconds: 8));
+
+      if (res.statusCode != 200) {
+        _showError('Не удалось поставить реакцию');
+        return;
+      }
+      await _loadReactions(silent: true);
+    } catch (e) {
+      _showError('Не удалось поставить реакцию');
+    }
+  }
+
+  Widget _buildReactionChips(int messageId) {
+    final reactions = _messageReactions[messageId] ?? const [];
+    if (reactions.isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 5),
+      child: Wrap(
+        spacing: 5,
+        runSpacing: 4,
+        children: reactions.map((r) {
+          final reaction = (r['reaction'] ?? '').toString();
+          final count = int.tryParse('${r['count'] ?? 0}') ?? 0;
+          final mine = _asBool(r['mine']);
+          return Material(
+            color: mine ? _WinChatColors.greenSoft : _WinChatColors.soft,
+            borderRadius: BorderRadius.circular(999),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(999),
+              onTap: () {
+                final msg = messages.firstWhere(
+                  (m) => int.tryParse('${m['id'] ?? 0}') == messageId,
+                  orElse: () => <String, dynamic>{},
+                );
+                if (msg.isNotEmpty) _toggleReaction(msg, reaction);
+              },
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                child: Text(
+                  '$reaction${count > 1 ? ' $count' : ''}',
+                  style: _WinChatText.body(10.8, weight: FontWeight.w600),
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  Future<void> _forwardMessage(Map<String, dynamic> msg) async {
+    final messageId = int.tryParse('${msg['id'] ?? 0}') ?? 0;
+    if (messageId <= 0 || msg['_local'] == true) return;
+
+    final chosen = await showModalBottomSheet<_ForwardUser?>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => _ForwardUserSheet(
+        apiUrl: _searchUsersUrl,
+        myUserId: widget.userId,
+      ),
+    );
+
+    if (chosen == null || !mounted) return;
+
+    try {
+      final res = await http.post(
+        Uri.parse(_forwardMessageUrl),
+        body: {
+          'message_id': messageId.toString(),
+          'user_id': widget.userId.toString(),
+          'target_user_id': chosen.id.toString(),
+        },
+      ).timeout(const Duration(seconds: 10));
+
+      dynamic data;
+      try {
+        data = json.decode(res.body);
+      } catch (_) {
+        data = null;
+      }
+
+      final ok = res.statusCode == 200 && data is Map && data['success'] == true;
+      if (!ok) {
+        final reason = data is Map
+            ? (data['message'] ?? data['error'] ?? 'ошибка сервера').toString()
+            : 'HTTP ${res.statusCode}';
+        _showError('Не удалось переслать: $reason');
+        return;
+      }
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Сообщение переслано: ${chosen.title}'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (e) {
+      _showError('Не удалось переслать сообщение');
+    }
   }
 
   String _normalizeChatTitle(String raw) {
@@ -985,7 +1229,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
                   ),
                   _AttachmentAction(
                     icon: Icons.image_outlined,
-                    title: 'Фото',
+                    title: 'Фото из галереи',
                     subtitle: 'Выбрать изображение',
                     onTap: () {
                       Navigator.pop(sheetContext);
@@ -995,13 +1239,35 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
                   const SizedBox(height: 5),
                   _AttachmentAction(
                     icon: Icons.play_circle_outline_rounded,
-                    title: 'Видео',
+                    title: 'Видео из галереи',
                     subtitle: 'MP4, MOV, M4V или WebM',
                     onTap: () {
                       Navigator.pop(sheetContext);
                       _pickVideo();
                     },
                   ),
+                  if (Platform.isIOS || Platform.isAndroid) ...[
+                    const SizedBox(height: 5),
+                    _AttachmentAction(
+                      icon: Icons.photo_camera_outlined,
+                      title: 'Снять фото',
+                      subtitle: 'Открыть камеру и сразу отправить',
+                      onTap: () {
+                        Navigator.pop(sheetContext);
+                        _capturePhoto();
+                      },
+                    ),
+                    const SizedBox(height: 5),
+                    _AttachmentAction(
+                      icon: Icons.videocam_outlined,
+                      title: 'Снять видео',
+                      subtitle: 'Записать короткое видео и сразу отправить',
+                      onTap: () {
+                        Navigator.pop(sheetContext);
+                        _captureVideo();
+                      },
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -1056,6 +1322,35 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
     }
   }
 
+  Future<void> _capturePhoto() async {
+    try {
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(
+        source: ImageSource.camera,
+        imageQuality: 85,
+        maxWidth: 1920,
+      );
+      if (picked == null) return;
+      await _sendImage(File(picked.path));
+    } catch (e) {
+      _showError('Не удалось сделать фото: $e');
+    }
+  }
+
+  Future<void> _captureVideo() async {
+    try {
+      final picker = ImagePicker();
+      final picked = await picker.pickVideo(
+        source: ImageSource.camera,
+        maxDuration: const Duration(minutes: 5),
+      );
+      if (picked == null) return;
+      await _sendVideo(File(picked.path));
+    } catch (e) {
+      _showError('Не удалось записать видео: $e');
+    }
+  }
+
   Future<void> _sendImage(File file) async {
     await _sendMedia(file, type: 'image');
   }
@@ -1088,6 +1383,18 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
     File file, {
     required String type,
   }) async {
+    final sizeBytes = await file.length();
+    final maxBytes = type == 'video' ? 250 * 1024 * 1024 : 25 * 1024 * 1024;
+    if (sizeBytes <= 0) {
+      _showError('Файл пустой и не может быть отправлен');
+      return;
+    }
+    if (sizeBytes > maxBytes) {
+      final limitMb = maxBytes ~/ (1024 * 1024);
+      _showError('Файл слишком большой. Максимум $limitMb МБ');
+      return;
+    }
+
     final tempId = type == 'video'
         ? _addOptimisticVideo(file.path)
         : _addOptimisticImage(file.path);
@@ -1117,8 +1424,14 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
         ),
       );
 
-      final streamed = await req.send();
-      final res = await http.Response.fromStream(streamed);
+      final streamed = await req.send().timeout(
+        type == 'video'
+            ? const Duration(minutes: 10)
+            : const Duration(minutes: 3),
+      );
+      final res = await http.Response.fromStream(streamed).timeout(
+        const Duration(minutes: 2),
+      );
 
       if (mounted) {
         setState(() {
@@ -1129,7 +1442,18 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
 
       if (res.statusCode != 200) {
         _removeTemp(tempId);
-        _showError('Ошибка загрузки (${res.statusCode}): ${res.body}');
+        if (res.statusCode == 413) {
+          _showError(
+            'Видео не принято сервером: превышен серверный лимит загрузки (HTTP 413)',
+          );
+        } else {
+          final body = res.body.trim();
+          _showError(
+            body.isEmpty
+                ? 'Ошибка загрузки (${res.statusCode})'
+                : 'Ошибка загрузки (${res.statusCode}): $body',
+          );
+        }
         return;
       }
 
@@ -1498,63 +1822,225 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
     _inputFocus.requestFocus();
   }
 
-  void _showMessageMenu(BuildContext context, Map<String, dynamic> msg) {
+  Future<void> _showMessageMenu(
+    BuildContext context,
+    Map<String, dynamic> msg, {
+    Offset? globalPosition,
+  }) async {
     final isMine = msg['sender_id'] == widget.userId;
     final messenger = ScaffoldMessenger.of(context);
+    final messageId = int.tryParse('${msg['id'] ?? 0}') ?? 0;
 
-    showModalBottomSheet(
+    final roomBox = context.findRenderObject() as RenderBox?;
+    final roomOrigin = roomBox?.localToGlobal(Offset.zero) ?? Offset.zero;
+    final roomSize = roomBox?.size ?? MediaQuery.sizeOf(context);
+    final roomRect = roomOrigin & roomSize;
+
+    final anchor = globalPosition ??
+        Offset(
+          roomRect.left + roomRect.width * .68,
+          roomRect.top + roomRect.height * .52,
+        );
+
+    final actionCount = 3 + (isMine ? 2 : 0);
+    final popupWidth = math
+        .min(318.0, math.max(270.0, roomRect.width - 24))
+        .toDouble();
+    final popupHeight = 62.0 + actionCount * 43.0 + 14.0;
+
+    double left = anchor.dx - popupWidth * .55;
+    left = left.clamp(
+      roomRect.left + 10,
+      math.max(roomRect.left + 10, roomRect.right - popupWidth - 10),
+    ).toDouble();
+
+    final spaceBelow = roomRect.bottom - anchor.dy;
+    double top = spaceBelow >= popupHeight + 18
+        ? anchor.dy + 10
+        : anchor.dy - popupHeight - 10;
+    top = top.clamp(
+      roomRect.top + 8,
+      math.max(roomRect.top + 8, roomRect.bottom - popupHeight - 8),
+    ).toDouble();
+
+    Future<void> deleteMessage() async {
+      await http.post(
+        Uri.parse('https://sportotekaapp.ru/api/delete_message.php'),
+        body: {'message_id': msg['id'].toString()},
+      );
+      _loadMessages();
+      _markThisChatRead();
+    }
+
+    await showGeneralDialog<void>(
       context: context,
-      builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (isMine)
-              ListTile(
-                leading: const Icon(Icons.edit),
-                title: const Text('Редактировать'),
-                onTap: () {
-                  Navigator.pop(context);
-                  _startEdit(msg);
-                },
+      barrierDismissible: true,
+      barrierLabel: 'Закрыть меню сообщения',
+      barrierColor: Colors.black.withOpacity(.10),
+      transitionDuration: const Duration(milliseconds: 150),
+      pageBuilder: (dialogContext, _, __) {
+        void closeAnd(VoidCallback action) {
+          Navigator.of(dialogContext).pop();
+          Future<void>.delayed(Duration.zero, action);
+        }
+
+        Widget actionRow({
+          required IconData icon,
+          required String label,
+          required VoidCallback onTap,
+          Color? color,
+        }) {
+          final c = color ?? _WinChatColors.text;
+          return Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: onTap,
+              borderRadius: BorderRadius.circular(10),
+              child: SizedBox(
+                height: 43,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 13),
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: 26,
+                        child: Icon(icon, size: 19, color: c),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          label,
+                          style: _WinChatText.body(
+                            13.0,
+                            color: c,
+                            weight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-            if (isMine)
-              ListTile(
-                leading: const Icon(Icons.delete),
-                title: const Text('Удалить'),
-                onTap: () async {
-                  Navigator.pop(context);
-                  await http.post(
-                    Uri.parse(
-                        'https://sportotekaapp.ru/api/delete_message.php'),
-                    body: {'message_id': msg['id'].toString()},
-                  );
-                  _loadMessages();
-                  _markThisChatRead();
-                },
+            ),
+          );
+        }
+
+        return Material(
+          type: MaterialType.transparency,
+          child: Stack(
+            children: [
+              Positioned(
+                left: left,
+                top: top,
+                width: popupWidth,
+                child: Material(
+                  color: Colors.white,
+                  elevation: 14,
+                  shadowColor: Colors.black.withOpacity(.18),
+                  borderRadius: BorderRadius.circular(16),
+                  clipBehavior: Clip.antiAlias,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(7, 7, 7, 8),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (messageId > 0)
+                          Container(
+                            height: 49,
+                            decoration: BoxDecoration(
+                              color: _WinChatColors.soft,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            padding: const EdgeInsets.symmetric(horizontal: 6),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceAround,
+                              children: ['👍', '❤️', '😂', '👏', '🔥']
+                                  .map(
+                                    (reaction) => InkWell(
+                                      borderRadius: BorderRadius.circular(999),
+                                      onTap: () => closeAnd(
+                                        () => _toggleReaction(msg, reaction),
+                                      ),
+                                      child: SizedBox(
+                                        width: 42,
+                                        height: 40,
+                                        child: Center(
+                                          child: Text(
+                                            reaction,
+                                            style: const TextStyle(fontSize: 21),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  )
+                                  .toList(),
+                            ),
+                          ),
+                        if (messageId > 0) const SizedBox(height: 5),
+                        actionRow(
+                          icon: Icons.reply_rounded,
+                          label: 'Ответить',
+                          onTap: () => closeAnd(() => _startReply(msg)),
+                        ),
+                        if (messageId > 0)
+                          actionRow(
+                            icon: Icons.forward_to_inbox_rounded,
+                            label: 'Переслать',
+                            onTap: () => closeAnd(() => _forwardMessage(msg)),
+                          ),
+                        actionRow(
+                          icon: Icons.copy_rounded,
+                          label: 'Копировать',
+                          onTap: () => closeAnd(() {
+                            Clipboard.setData(
+                              ClipboardData(
+                                text: (msg['content'] ?? '').toString(),
+                              ),
+                            );
+                            messenger.showSnackBar(
+                              const SnackBar(content: Text('Текст скопирован')),
+                            );
+                          }),
+                        ),
+                        if (isMine)
+                          actionRow(
+                            icon: Icons.edit_rounded,
+                            label: 'Редактировать',
+                            onTap: () => closeAnd(() => _startEdit(msg)),
+                          ),
+                        if (isMine)
+                          actionRow(
+                            icon: Icons.delete_outline_rounded,
+                            label: 'Удалить',
+                            color: const Color(0xFFD92D20),
+                            onTap: () => closeAnd(() {
+                              unawaited(deleteMessage());
+                            }),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
               ),
-            ListTile(
-              leading: const Icon(Icons.reply),
-              title: const Text('Ответить'),
-              onTap: () {
-                Navigator.pop(context);
-                _startReply(msg);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.copy),
-              title: const Text('Копировать'),
-              onTap: () {
-                Clipboard.setData(
-                    ClipboardData(text: (msg['content'] ?? '').toString()));
-                Navigator.pop(context);
-                messenger.showSnackBar(
-                  const SnackBar(content: Text('Текст скопирован')),
-                );
-              },
-            ),
-          ],
-        ),
-      ),
+            ],
+          ),
+        );
+      },
+      transitionBuilder: (_, animation, __, child) {
+        final curved = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+          reverseCurve: Curves.easeInCubic,
+        );
+        return FadeTransition(
+          opacity: curved,
+          child: ScaleTransition(
+            scale: Tween<double>(begin: .97, end: 1).animate(curved),
+            alignment: Alignment.topCenter,
+            child: child,
+          ),
+        );
+      },
     );
   }
 
@@ -1676,7 +2162,15 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
     return Container(
       key: key,
       child: InkWell(
-        onLongPress: () => _showMessageMenu(context, msg),
+        onTapDown: (details) {
+          _lastMessagePressPosition = details.globalPosition;
+        },
+        onLongPress: () => _showMessageMenu(
+          context,
+          msg,
+          globalPosition: _lastMessagePressPosition,
+        ),
+        onDoubleTap: () => _toggleReaction(msg, '❤️'),
         splashColor: isMine
             ? Colors.blue.withOpacity(0.1)
             : Colors.grey.withOpacity(0.1),
@@ -1862,17 +2356,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
                                       ClipRRect(
                                         borderRadius: BorderRadius.circular(8),
                                         child: GestureDetector(
-                                          onTap: () {
-                                            Navigator.of(context).push(
-                                              MaterialPageRoute(
-                                                builder: (_) =>
-                                                    _FullImageLocalScreen(
-                                                  file: File(msg['local_path']),
-                                                  heroTag: heroTag,
-                                                ),
-                                              ),
-                                            );
-                                          },
+                                          onTap: () => _openImageGallery(msg),
                                           child: Hero(
                                             tag: heroTag,
                                             child: Image.file(
@@ -1894,17 +2378,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
                                       ClipRRect(
                                         borderRadius: BorderRadius.circular(8),
                                         child: GestureDetector(
-                                          onTap: () {
-                                            Navigator.of(context).push(
-                                              MaterialPageRoute(
-                                                builder: (_) =>
-                                                    _FullImageScreen(
-                                                  imageUrl: fileUrl,
-                                                  heroTag: heroTag,
-                                                ),
-                                              ),
-                                            );
-                                          },
+                                          onTap: () => _openImageGallery(msg),
                                           child: Hero(
                                             tag: heroTag,
                                             child: Image.network(
@@ -1926,17 +2400,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
                                       ClipRRect(
                                         borderRadius: BorderRadius.circular(8),
                                         child: GestureDetector(
-                                          onTap: () {
-                                            Navigator.of(context).push(
-                                              MaterialPageRoute(
-                                                builder: (_) =>
-                                                    _FullImageScreen(
-                                                  imageUrl: u,
-                                                  heroTag: heroTag,
-                                                ),
-                                              ),
-                                            );
-                                          },
+                                          onTap: () => _openImageGallery(msg),
                                           child: Hero(
                                             tag: heroTag,
                                             child: Image.network(
@@ -2026,6 +2490,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
                           ),
                       ],
                     ),
+                    if (!isDeleted && id > 0) _buildReactionChips(id),
                   ],
                 ),
               ),
@@ -2040,8 +2505,16 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
 
   @override
   Widget build(BuildContext context) {
-    final width = MediaQuery.sizeOf(context).width;
+    final media = MediaQuery.of(context);
+    final width = media.size.width;
     final compact = width < 520;
+    final keyboardVisible = media.viewInsets.bottom > 0;
+
+    // В CMR/workspace глобальная плавающая кнопка ИИ поднимается над
+    // клавиатурой и на части планшетов попадает поверх кнопки отправки.
+    // Пока клавиатура открыта, резервируем справа место под эту кнопку.
+    final aiButtonClearance =
+        widget.embedded && keyboardVisible ? (compact ? 52.0 : 58.0) : 0.0;
 
     final messagePadding = EdgeInsets.fromLTRB(
       compact ? 7 : 12,
@@ -2409,7 +2882,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen>
               padding: EdgeInsets.fromLTRB(
                 compact ? 6 : 9,
                 6,
-                compact ? 6 : 9,
+                (compact ? 6 : 9) + aiButtonClearance,
                 6,
               ),
               child: Row(
@@ -3048,57 +3521,530 @@ class _FullVideoScreenState extends State<_FullVideoScreen> {
   }
 }
 
-// ====================== Fullscreen Image ======================
+// ====================== Fullscreen Image Gallery ======================
 
-class _FullImageScreen extends StatelessWidget {
-  final String imageUrl;
+class _ChatImageItem {
+  final int messageId;
+  final String? url;
+  final String? localPath;
   final String heroTag;
-  const _FullImageScreen({
-    Key? key,
-    required this.imageUrl,
+
+  const _ChatImageItem({
+    required this.messageId,
     required this.heroTag,
-  }) : super(key: key);
+    this.url,
+    this.localPath,
+  });
+}
+
+class _FullImageGalleryScreen extends StatefulWidget {
+  final List<_ChatImageItem> items;
+  final int initialIndex;
+
+  const _FullImageGalleryScreen({
+    required this.items,
+    required this.initialIndex,
+  });
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(backgroundColor: Colors.black),
-      body: Center(
-        child: InteractiveViewer(
-          minScale: 0.5,
-          maxScale: 5,
-          child: Hero(
-            tag: heroTag,
-            child: Image.network(imageUrl, fit: BoxFit.contain),
+  State<_FullImageGalleryScreen> createState() =>
+      _FullImageGalleryScreenState();
+}
+
+class _FullImageGalleryScreenState extends State<_FullImageGalleryScreen> {
+  late final PageController _pageController;
+  late int _index;
+
+  @override
+  void initState() {
+    super.initState();
+    _index = widget.initialIndex.clamp(0, widget.items.length - 1).toInt();
+    _pageController = PageController(initialPage: _index);
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  void _go(int delta) {
+    final next = (_index + delta).clamp(0, widget.items.length - 1).toInt();
+    if (next == _index) return;
+    _pageController.animateToPage(
+      next,
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOut,
+    );
+  }
+
+  Widget _viewer(_ChatImageItem item) {
+    final image = item.localPath != null && item.localPath!.isNotEmpty
+        ? Image.file(
+            File(item.localPath!),
+            fit: BoxFit.contain,
+            errorBuilder: (_, __, ___) => const Center(
+              child: Text(
+                'Не удалось открыть изображение',
+                style: TextStyle(color: Colors.white70),
+              ),
+            ),
+          )
+        : Image.network(
+            item.url ?? '',
+            fit: BoxFit.contain,
+            loadingBuilder: (_, child, progress) {
+              if (progress == null) return child;
+              return const Center(
+                child: CircularProgressIndicator(color: Colors.white),
+              );
+            },
+            errorBuilder: (_, __, ___) => const Center(
+              child: Text(
+                'Не удалось открыть изображение',
+                style: TextStyle(color: Colors.white70),
+              ),
+            ),
+          );
+
+    return Center(
+      child: InteractiveViewer(
+        minScale: 0.8,
+        maxScale: 5,
+        child: Hero(
+          tag: item.heroTag,
+          child: image,
+        ),
+      ),
+    );
+  }
+
+  Widget _roundButton({
+    required IconData icon,
+    required VoidCallback onTap,
+    String? tooltip,
+  }) {
+    return Tooltip(
+      message: tooltip ?? '',
+      child: Material(
+        color: Colors.black.withOpacity(.48),
+        shape: const CircleBorder(),
+        child: InkWell(
+          onTap: onTap,
+          customBorder: const CircleBorder(),
+          child: SizedBox(
+            width: 44,
+            height: 44,
+            child: Icon(icon, color: Colors.white, size: 23),
           ),
         ),
       ),
     );
   }
-}
-
-class _FullImageLocalScreen extends StatelessWidget {
-  final File file;
-  final String heroTag;
-  const _FullImageLocalScreen({
-    Key? key,
-    required this.file,
-    required this.heroTag,
-  }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
+    final wide = MediaQuery.of(context).size.width >= 700;
     return Scaffold(
       backgroundColor: Colors.black,
-      appBar: AppBar(backgroundColor: Colors.black),
-      body: Center(
-        child: InteractiveViewer(
-          minScale: 0.5,
-          maxScale: 5,
-          child: Hero(
-            tag: heroTag,
-            child: Image.file(file, fit: BoxFit.contain),
+      body: Stack(
+        children: [
+          PageView.builder(
+            controller: _pageController,
+            itemCount: widget.items.length,
+            onPageChanged: (value) => setState(() => _index = value),
+            itemBuilder: (_, i) => _viewer(widget.items[i]),
+          ),
+          SafeArea(
+            child: Align(
+              alignment: Alignment.topRight,
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: _roundButton(
+                  icon: Icons.close_rounded,
+                  tooltip: 'Закрыть',
+                  onTap: () => Navigator.pop(context),
+                ),
+              ),
+            ),
+          ),
+          if (widget.items.length > 1)
+            SafeArea(
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: Container(
+                  margin: const EdgeInsets.only(top: 17),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(.45),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    '${_index + 1} / ${widget.items.length}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          if (wide && widget.items.length > 1 && _index > 0)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Padding(
+                padding: const EdgeInsets.only(left: 14),
+                child: _roundButton(
+                  icon: Icons.chevron_left_rounded,
+                  tooltip: 'Предыдущее фото',
+                  onTap: () => _go(-1),
+                ),
+              ),
+            ),
+          if (wide && widget.items.length > 1 &&
+              _index < widget.items.length - 1)
+            Align(
+              alignment: Alignment.centerRight,
+              child: Padding(
+                padding: const EdgeInsets.only(right: 14),
+                child: _roundButton(
+                  icon: Icons.chevron_right_rounded,
+                  tooltip: 'Следующее фото',
+                  onTap: () => _go(1),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+// ====================== Forward user picker ======================
+
+class _ForwardUser {
+  final int id;
+  final String title;
+  final String subtitle;
+  final String photo;
+
+  const _ForwardUser({
+    required this.id,
+    required this.title,
+    required this.subtitle,
+    required this.photo,
+  });
+}
+
+class _ForwardUserSheet extends StatefulWidget {
+  final String apiUrl;
+  final int myUserId;
+
+  const _ForwardUserSheet({
+    required this.apiUrl,
+    required this.myUserId,
+  });
+
+  @override
+  State<_ForwardUserSheet> createState() => _ForwardUserSheetState();
+}
+
+class _ForwardUserSheetState extends State<_ForwardUserSheet> {
+  final TextEditingController _q = TextEditingController();
+  Timer? _debounce;
+  bool _loading = false;
+  String? _error;
+  List<_ForwardUser> _items = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _q.addListener(_queryChanged);
+    _load('');
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _q.dispose();
+    super.dispose();
+  }
+
+  void _queryChanged() {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 260), () {
+      _load(_q.text.trim());
+    });
+  }
+
+  String _photoUrl(dynamic rawValue) {
+    final raw = (rawValue ?? '').toString().trim();
+    if (raw.isEmpty || raw.toLowerCase() == 'null') return '';
+    if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
+    if (raw.startsWith('/')) return 'https://sportotekaapp.ru$raw';
+    return 'https://sportotekaapp.ru/uploads/$raw';
+  }
+
+  Future<void> _load(String query) async {
+    if (!mounted) return;
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    try {
+      final uri = Uri.parse(widget.apiUrl).replace(queryParameters: {
+        'q': query,
+        'exclude_id': widget.myUserId.toString(),
+      });
+      final res = await http.get(uri).timeout(const Duration(seconds: 8));
+      final data = json.decode(res.body);
+      List raw = const [];
+      if (res.statusCode == 200 && data is Map && data['success'] == true) {
+        raw = (data['users'] as List?) ?? const [];
+      } else if (res.statusCode == 200 && data is List) {
+        raw = data;
+      }
+
+      final parsed = <_ForwardUser>[];
+      for (final item in raw) {
+        if (item is! Map) continue;
+        final id = int.tryParse('${item['id'] ?? 0}') ?? 0;
+        if (id <= 0 || id == widget.myUserId) continue;
+        final first = (item['first_name'] ?? '').toString().trim();
+        final last = (item['last_name'] ?? '').toString().trim();
+        final email = (item['email'] ?? '').toString().trim();
+        final fullName = '$first $last'.trim();
+        parsed.add(
+          _ForwardUser(
+            id: id,
+            title: fullName.isNotEmpty
+                ? fullName
+                : (email.isNotEmpty ? email : 'Пользователь #$id'),
+            subtitle: email,
+            photo: _photoUrl(item['photo'] ?? item['avatar']),
+          ),
+        );
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _items = parsed;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _items = [];
+        _error = 'Не удалось загрузить пользователей';
+      });
+    }
+  }
+
+  Widget _avatar(_ForwardUser user) {
+    final letter = user.title.isEmpty ? 'П' : user.title.substring(0, 1);
+    return Container(
+      width: 40,
+      height: 40,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: _WinChatColors.greenSoft,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: user.photo.isNotEmpty
+          ? Image.network(
+              user.photo,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => Center(
+                child: Text(
+                  letter.toUpperCase(),
+                  style: _WinChatText.title(
+                    12,
+                    color: _WinChatColors.greenDark,
+                  ),
+                ),
+              ),
+            )
+          : Center(
+              child: Text(
+                letter.toUpperCase(),
+                style: _WinChatText.title(
+                  12,
+                  color: _WinChatColors.greenDark,
+                ),
+              ),
+            ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottom = MediaQuery.of(context).viewInsets.bottom;
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottom),
+      child: SafeArea(
+        top: false,
+        child: SizedBox(
+          height: MediaQuery.of(context).size.height * .76,
+          child: Column(
+            children: [
+              Container(
+                width: 36,
+                height: 4,
+                margin: const EdgeInsets.only(top: 8, bottom: 10),
+                decoration: BoxDecoration(
+                  color: _WinChatColors.line,
+                  borderRadius: BorderRadius.circular(99),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Переслать сообщение',
+                            style: _WinChatText.title(15),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Кому отправить?',
+                            style: AppTypography.secondary(
+                              color: _WinChatColors.muted,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(Icons.close_rounded),
+                    ),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: _WinChatColors.soft,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: TextField(
+                    controller: _q,
+                    autofocus: true,
+                    decoration: const InputDecoration(
+                      hintText: 'Поиск: имя, фамилия или email',
+                      prefixIcon: Icon(Icons.search_rounded),
+                      border: InputBorder.none,
+                      isDense: true,
+                      contentPadding: EdgeInsets.symmetric(vertical: 12),
+                    ),
+                  ),
+                ),
+              ),
+              Expanded(
+                child: _loading
+                    ? const Center(
+                        child: CircularProgressIndicator(
+                          color: _WinChatColors.green,
+                        ),
+                      )
+                    : _error != null
+                        ? Center(
+                            child: Text(
+                              _error!,
+                              style: AppTypography.secondary(
+                                color: _WinChatColors.red,
+                              ),
+                            ),
+                          )
+                        : _items.isEmpty
+                            ? Center(
+                                child: Text(
+                                  'Пользователи не найдены',
+                                  style: AppTypography.secondary(
+                                    color: _WinChatColors.muted,
+                                  ),
+                                ),
+                              )
+                            : ListView.separated(
+                                padding:
+                                    const EdgeInsets.fromLTRB(12, 0, 12, 16),
+                                itemCount: _items.length,
+                                separatorBuilder: (_, __) =>
+                                    const SizedBox(height: 4),
+                                itemBuilder: (_, index) {
+                                  final user = _items[index];
+                                  return Material(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(12),
+                                    child: InkWell(
+                                      borderRadius: BorderRadius.circular(12),
+                                      onTap: () =>
+                                          Navigator.pop(context, user),
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 10,
+                                          vertical: 8,
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            _avatar(user),
+                                            const SizedBox(width: 10),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    user.title,
+                                                    maxLines: 1,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                    style: _WinChatText.body(
+                                                      12.2,
+                                                      weight: FontWeight.w600,
+                                                    ),
+                                                  ),
+                                                  if (user.subtitle.isNotEmpty)
+                                                    Padding(
+                                                      padding:
+                                                          const EdgeInsets.only(
+                                                              top: 2),
+                                                      child: Text(
+                                                        user.subtitle,
+                                                        maxLines: 1,
+                                                        overflow: TextOverflow
+                                                            .ellipsis,
+                                                        style: AppTypography
+                                                            .secondary(
+                                                          color: _WinChatColors
+                                                              .muted,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                ],
+                                              ),
+                                            ),
+                                            const Icon(
+                                              Icons.chevron_right_rounded,
+                                              color: _WinChatColors.muted,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+              ),
+            ],
           ),
         ),
       ),

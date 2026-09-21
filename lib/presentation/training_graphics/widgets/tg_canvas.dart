@@ -141,10 +141,20 @@ class TgCanvas extends StatefulWidget {
     super.key,
     required this.state,
     required this.onRequestEditSelected,
+    this.hideFieldBase = false,
+    this.ignoreNonPrimaryMouseButtons = false,
+    this.externalFieldTransform,
   });
 
   final TgState state;
   final VoidCallback onRequestEditSelected;
+  final bool hideFieldBase;
+  final bool ignoreNonPrimaryMouseButtons;
+
+  /// Optional exact scene->viewport homography supplied by the real GLB camera.
+  /// When present, all tactical geometry and hit-testing use this projection
+  /// instead of the editor's approximate perspective transform.
+  final vector.Matrix4? externalFieldTransform;
 
   @override
   State<TgCanvas> createState() => TgCanvasState();
@@ -154,6 +164,38 @@ class TgCanvasState extends State<TgCanvas>
     with SingleTickerProviderStateMixin
     implements TgCanvasStateProxy {
   TgState get state => widget.state;
+
+  vector.Matrix4? get _externalFieldTransform => widget.externalFieldTransform;
+  bool get _usesExternalFieldTransform => _externalFieldTransform != null;
+
+  Offset _projectExternalFieldPoint(Offset scene) {
+    final m = _externalFieldTransform;
+    return m == null ? scene : _tgTransformPoint(m, scene);
+  }
+
+  double _externalPixelsPerSceneUnit(Offset scene) {
+    final m = _externalFieldTransform;
+    if (m == null) return 1.0;
+    final p = _tgTransformPoint(m, scene);
+    final px = _tgTransformPoint(m, scene + const Offset(1, 0));
+    final py = _tgTransformPoint(m, scene + const Offset(0, 1));
+    final sx = (px - p).distance;
+    final sy = (py - p).distance;
+    final s = (sx + sy) * .5;
+    return s.isFinite ? s.clamp(.02, 10.0).toDouble() : 1.0;
+  }
+
+  double _externalBillboardScaleForHit(Offset scene) {
+    if (!_usesExternalFieldTransform) return 1.0;
+    final center = Offset(fieldLogicalWidth * .5, fieldLogicalHeight * .5);
+    final centerScale =
+        _externalPixelsPerSceneUnit(center).clamp(.0001, 1000.0).toDouble();
+    final localScale = _externalPixelsPerSceneUnit(scene);
+    final depthRatio =
+        (localScale / centerScale).clamp(.72, 1.42).toDouble();
+    // Keep hit targets in sync with the billboard size used by the painter.
+    return .72 * depthRatio;
+  }
 
   // =========================================================
   // ===== 3D режим (локальные поля + sync со state) =====
@@ -212,6 +254,7 @@ class TgCanvasState extends State<TgCanvas>
   int _activePointers = 0;
   bool _multiTouchActive = false;
   bool _tapConsumedByScale = false;
+  final Set<int> _ignoredPointerIds = <int>{};
 
   Offset _lastLocal = Offset.zero;
   int _lastTsMs = 0;
@@ -256,6 +299,18 @@ class TgCanvasState extends State<TgCanvas>
 
   bool _fieldContains(Offset p) {
     return _activeFieldRect().inflate(0.01).contains(p);
+  }
+
+  Rect _presentationSceneRectForViewport() {
+    final field = _activeFieldRect();
+    final side = math.max(92.0, field.width * .105).toDouble();
+    final end = math.max(86.0, field.height * .145).toDouble();
+    return Rect.fromLTRB(
+      field.left - side,
+      field.top - end,
+      field.right + side,
+      field.bottom + end,
+    );
   }
 
   bool _hasSavedViewportMatrix() {
@@ -415,6 +470,17 @@ class TgCanvasState extends State<TgCanvas>
   }
 
   Offset _sceneFromLocal(Offset localPos, {bool clampToField = true}) {
+    if (_usesExternalFieldTransform) {
+      final m = _externalFieldTransform!;
+      final scene = _tgUntransformPlanePoint(m, localPos);
+      if (!clampToField) return scene;
+      final rect = _activeFieldRect();
+      return Offset(
+        scene.dx.clamp(rect.left, rect.right),
+        scene.dy.clamp(rect.top, rect.bottom),
+      );
+    }
+
     final scene2d = state.transform.toScene(localPos);
 
     if (!state.is3DMode) {
@@ -437,6 +503,9 @@ class TgCanvasState extends State<TgCanvas>
   }
 
   Offset _fieldToLocal(Offset fieldPoint) {
+    if (_usesExternalFieldTransform) {
+      return _projectExternalFieldPoint(fieldPoint);
+    }
     return Offset(
       _t.dx + fieldPoint.dx * _scale,
       _t.dy + fieldPoint.dy * _scale,
@@ -461,11 +530,15 @@ class TgCanvasState extends State<TgCanvas>
       // ✅ Ворота не billboard, их проверяем обычным state.hitTest через scene
       if (_isFieldAttachedStampAsset(e.asset)) continue;
 
-      final projected = _projectPoint3D(e.pos);
-      final localCenter = _fieldToLocal(projected);
+      final localCenter = _usesExternalFieldTransform
+          ? _projectExternalFieldPoint(e.pos)
+          : _fieldToLocal(_projectPoint3D(e.pos));
 
-      final stampScale = _billboardScaleForStamp(e);
-      final sizePx = (e.size * stampScale * _scale).clamp(24.0, 1200.0);
+      final sizePx = (_usesExternalFieldTransform
+              ? e.size * _externalBillboardScaleForHit(e.pos)
+              : e.size * _billboardScaleForStamp(e) * _scale)
+          .clamp(24.0, 1200.0)
+          .toDouble();
 
       final rect = Rect.fromCenter(
         center: localCenter,
@@ -483,14 +556,14 @@ class TgCanvasState extends State<TgCanvas>
 
   String? _hitTestAtLocal(Offset localPos, Offset scenePos) {
     if (_fieldContains(scenePos)) {
-      if (state.is3DMode) {
+      if (state.is3DMode || _usesExternalFieldTransform) {
         final stampHit = _hitTestStamp3DAtLocal(localPos);
         if (stampHit != null) return stampHit;
       }
       return state.hitTest(scenePos);
     }
 
-    if (state.is3DMode) {
+    if (state.is3DMode || _usesExternalFieldTransform) {
       final stampHit = _hitTestStamp3DAtLocal(localPos);
       if (stampHit != null) return stampHit;
     }
@@ -499,6 +572,7 @@ class TgCanvasState extends State<TgCanvas>
   }
 
   Offset _scenePointToLocal(Offset scenePoint) {
+    if (_usesExternalFieldTransform) return _projectExternalFieldPoint(scenePoint);
     final projected = state.is3DMode ? _projectPoint3D(scenePoint) : scenePoint;
     return _fieldToLocal(projected);
   }
@@ -563,13 +637,18 @@ class TgCanvasState extends State<TgCanvas>
   Map<_SelectionHandle, Offset> _selectionHandlePoints() {
     final selected = state.selected;
     if (selected is TgStamp &&
-        state.is3DMode &&
+        (state.is3DMode || _usesExternalFieldTransform) &&
         !_isFieldAttachedStampAsset(selected.asset)) {
-      final projected = _projectPoint3D(selected.pos);
-      final center = _fieldToLocal(projected);
-      final sizePx = (selected.size * _billboardScaleForStamp(selected) * _scale)
-          .clamp(20.0, 4000.0)
-          .toDouble();
+      final center = _usesExternalFieldTransform
+          ? _projectExternalFieldPoint(selected.pos)
+          : _fieldToLocal(_projectPoint3D(selected.pos));
+      final sizePx = _usesExternalFieldTransform
+          ? (selected.size * _externalPixelsPerSceneUnit(selected.pos))
+              .clamp(20.0, 4000.0)
+              .toDouble()
+          : (selected.size * _billboardScaleForStamp(selected) * _scale)
+              .clamp(20.0, 4000.0)
+              .toDouble();
       final half = sizePx / 2.0;
       final c = math.cos(selected.rotation);
       final sn = math.sin(selected.rotation);
@@ -907,7 +986,7 @@ class TgCanvasState extends State<TgCanvas>
   // ✅ Clamp по ПРОЕЦИРОВАННЫМ границам активной области поля
   // =========================================================
   Rect _projectedFieldBounds() {
-    final rect = _activeFieldRect();
+    final rect = state.presentationMode ? _presentationSceneRectForViewport() : _activeFieldRect();
 
     if (!state.is3DMode) {
       return rect;
@@ -974,8 +1053,8 @@ class TgCanvasState extends State<TgCanvas>
     // Tracker does NOT refit the already tilted pitch. Its full-bleed child is
     // fitted first and then the 3D camera (zoom .96) is applied. Using the
     // logical field here preserves the same apparent size and air around it.
-    final source = _activeFieldRect();
-    const pad = 10.0;
+    final source = state.presentationMode ? _presentationSceneRectForViewport() : _activeFieldRect();
+    final pad = state.presentationMode ? 18.0 : 10.0;
     final vw = math.max(1.0, viewportSize.width - pad * 2);
     final vh = math.max(1.0, viewportSize.height - pad * 2);
 
@@ -1718,12 +1797,29 @@ class TgCanvasState extends State<TgCanvas>
 
   @override
   Offset sceneToViewport(Offset scene) {
+    if (_usesExternalFieldTransform) return _projectExternalFieldPoint(scene);
     return Offset(scene.dx * _scale + _t.dx, scene.dy * _scale + _t.dy);
   }
 
   @override
   Rect fieldViewportRect() {
     final rect = _activeFieldRect();
+    if (_usesExternalFieldTransform) {
+      final pts = <Offset>[
+        _projectExternalFieldPoint(rect.topLeft),
+        _projectExternalFieldPoint(rect.topRight),
+        _projectExternalFieldPoint(rect.bottomRight),
+        _projectExternalFieldPoint(rect.bottomLeft),
+      ];
+      final xs = pts.map((e) => e.dx);
+      final ys = pts.map((e) => e.dy);
+      return Rect.fromLTRB(
+        xs.reduce((a, b) => a < b ? a : b),
+        ys.reduce((a, b) => a < b ? a : b),
+        xs.reduce((a, b) => a > b ? a : b),
+        ys.reduce((a, b) => a > b ? a : b),
+      );
+    }
     return Rect.fromLTRB(
       rect.left * _scale + _t.dx,
       rect.top * _scale + _t.dy,
@@ -2225,6 +2321,13 @@ class TgCanvasState extends State<TgCanvas>
           return Listener(
             behavior: HitTestBehavior.opaque,
             onPointerDown: (e) {
+              if (widget.ignoreNonPrimaryMouseButtons &&
+                  e.kind == PointerDeviceKind.mouse &&
+                  (e.buttons & kPrimaryMouseButton) == 0) {
+                _ignoredPointerIds.add(e.pointer);
+                return;
+              }
+
               _activePointers++;
 
               if (_activePointers >= 2) {
@@ -2237,10 +2340,12 @@ class TgCanvasState extends State<TgCanvas>
               _beginPointer(e.localPosition);
             },
             onPointerMove: (e) {
+              if (_ignoredPointerIds.contains(e.pointer)) return;
               if (_multiTouchActive) return;
               _updatePointer(e.localPosition);
             },
-            onPointerUp: (_) {
+            onPointerUp: (e) {
+              if (_ignoredPointerIds.remove(e.pointer)) return;
               final wasMultiTouch = _multiTouchActive;
 
               _activePointers = math.max(0, _activePointers - 1);
@@ -2254,7 +2359,8 @@ class TgCanvasState extends State<TgCanvas>
 
               _endPointer();
             },
-            onPointerCancel: (_) {
+            onPointerCancel: (e) {
+              if (_ignoredPointerIds.remove(e.pointer)) return;
               _activePointers = math.max(0, _activePointers - 1);
 
               if (_activePointers < 2) {
@@ -2303,6 +2409,8 @@ class TgCanvasState extends State<TgCanvas>
                       stampImages: _stampCache,
                       stampSvgImages: _stampSvgAsImageCache,
                       svgCacheKey: svgCacheKey,
+                      hideFieldBase: widget.hideFieldBase,
+                      externalFieldTransform: widget.externalFieldTransform,
                     ),
                     isComplex: true,
                     willChange: true,
@@ -2326,6 +2434,8 @@ class _TgBoardPainter extends CustomPainter {
     required this.stampImages,
     required this.stampSvgImages,
     required this.svgCacheKey,
+    required this.hideFieldBase,
+    required this.externalFieldTransform,
   }) : super(
           repaint: Listenable.merge([
             state.transform.value,
@@ -2340,6 +2450,36 @@ class _TgBoardPainter extends CustomPainter {
   final Map<String, ui.Image> stampImages;
   final Map<String, ui.Image> stampSvgImages;
   final String Function(String, PlayerColors?) svgCacheKey;
+  final bool hideFieldBase;
+  final vector.Matrix4? externalFieldTransform;
+
+  bool get _usesExternalFieldTransform => externalFieldTransform != null;
+
+  Offset _projectExternal(Offset scene) {
+    final m = externalFieldTransform;
+    return m == null ? scene : _tgTransformPoint(m, scene);
+  }
+
+  double _externalScaleAt(Offset scene) {
+    final m = externalFieldTransform;
+    if (m == null) return 1.0;
+    final p = _tgTransformPoint(m, scene);
+    final px = _tgTransformPoint(m, scene + const Offset(1, 0));
+    final py = _tgTransformPoint(m, scene + const Offset(0, 1));
+    final s = ((px - p).distance + (py - p).distance) * .5;
+    return s.isFinite ? s.clamp(.02, 10.0).toDouble() : 1.0;
+  }
+
+  double _externalBillboardScaleAt(Offset scene) {
+    if (!_usesExternalFieldTransform) return 1.0;
+    final center = Offset(_fieldLogicalSize.width * .5, _fieldLogicalSize.height * .5);
+    final centerScale = _externalScaleAt(center).clamp(.0001, 1000.0).toDouble();
+    final localScale = _externalScaleAt(scene);
+    final depthRatio = (localScale / centerScale).clamp(.72, 1.42).toDouble();
+    // Tactical stamps should stay readable like in the 2D editor while their
+    // anchor position remains physically attached to the 3D pitch.
+    return .72 * depthRatio;
+  }
 
   bool get _is3DMode => state.is3DMode;
   double get _rotationX => state.rotationX;
@@ -2374,6 +2514,406 @@ class _TgBoardPainter extends CustomPainter {
   }
 
   bool _fieldContains(Offset p) => _activeFieldRect().inflate(0.01).contains(p);
+
+  Rect _presentationSceneRect() {
+    // Slightly larger than the pitch so fit/zoom treats the arena and the
+    // pitch as one composition.
+    final field = _activeFieldRect();
+    final side = math.max(124.0, field.width * .135).toDouble();
+    final end = math.max(118.0, field.height * .180).toDouble();
+    return Rect.fromLTRB(
+      field.left - side,
+      field.top - end,
+      field.right + side,
+      field.bottom + end,
+    );
+  }
+
+  void _paintPresentationBackdrop(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    canvas.drawRect(
+      rect,
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: <Color>[
+            Color(0xFF09100E),
+            Color(0xFF0E1714),
+            Color(0xFF15211C),
+            Color(0xFF202F28),
+          ],
+          stops: <double>[0.0, .30, .68, 1.0],
+        ).createShader(rect),
+    );
+
+    canvas.drawRect(
+      rect,
+      Paint()
+        ..shader = RadialGradient(
+          center: const Alignment(0, .85),
+          radius: 1.15,
+          colors: <Color>[
+            Colors.transparent,
+            Colors.black.withOpacity(.08),
+            Colors.black.withOpacity(.18),
+          ],
+          stops: const <double>[0.0, .72, 1.0],
+        ).createShader(rect),
+    );
+
+    void glow(Offset center, double radius, double opacity) {
+      canvas.drawCircle(
+        center,
+        radius,
+        Paint()
+          ..shader = RadialGradient(
+            colors: <Color>[
+              Colors.white.withOpacity(opacity),
+              const Color(0xFFBFE7D0).withOpacity(opacity * .25),
+              Colors.transparent,
+            ],
+          ).createShader(Rect.fromCircle(center: center, radius: radius)),
+      );
+    }
+
+    glow(Offset(size.width * .18, size.height * .04), size.shortestSide * .34, .090);
+    glow(Offset(size.width * .82, size.height * .04), size.shortestSide * .34, .090);
+    glow(Offset(size.width * .50, size.height * .10), size.shortestSide * .22, .040);
+  }
+
+  Path _stadiumRing(RRect outer, RRect inner) {
+    return Path()
+      ..fillType = PathFillType.evenOdd
+      ..addRRect(outer)
+      ..addRRect(inner);
+  }
+
+  void _paintPresentationStandRows(
+    Canvas canvas,
+    Rect fieldRect,
+    double short,
+    double radius0,
+    double from,
+    double to,
+    int count,
+    Color color,
+  ) {
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = math.max(1.1, short * .0024)
+      ..color = color;
+    for (var i = 0; i < count; i++) {
+      final t = i / math.max(1, count - 1);
+      final inset = short * (from + (to - from) * t);
+      final r = fieldRect.inflate(inset);
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(r, Radius.circular(radius0 * (1.20 + from * 4.0 + t * .28))),
+        paint,
+      );
+    }
+  }
+
+  void _paintPresentationGoal(
+    Canvas canvas,
+    Rect fieldRect,
+    double short,
+    bool top,
+  ) {
+    final goalW = fieldRect.width * .18;
+    final goalD = short * .036;
+    final postH = short * .018;
+    final y = top ? fieldRect.top - goalD * .42 : fieldRect.bottom + goalD * .42;
+    final cx = fieldRect.center.dx;
+    final left = cx - goalW / 2;
+    final right = cx + goalW / 2;
+    final frontY = top ? y + goalD * .14 : y - goalD * .14;
+    final backY = top ? y - goalD : y + goalD;
+
+    final netPaint = Paint()
+      ..color = Colors.white.withOpacity(.18)
+      ..strokeWidth = 1.0;
+    for (var i = 0; i <= 6; i++) {
+      final t = i / 6;
+      final x = left + goalW * t;
+      canvas.drawLine(Offset(x, frontY), Offset(x, backY), netPaint);
+    }
+    for (var i = 0; i <= 3; i++) {
+      final t = i / 3;
+      final yy = frontY + (backY - frontY) * t;
+      canvas.drawLine(Offset(left, yy), Offset(right, yy), netPaint);
+    }
+
+    final postPaint = Paint()
+      ..color = Colors.white.withOpacity(.94)
+      ..strokeCap = StrokeCap.round
+      ..strokeWidth = math.max(2.0, short * .0032);
+    canvas.drawLine(Offset(left, frontY), Offset(left, backY), postPaint);
+    canvas.drawLine(Offset(right, frontY), Offset(right, backY), postPaint);
+    canvas.drawLine(Offset(left, frontY), Offset(right, frontY), postPaint);
+    canvas.drawLine(Offset(left, backY), Offset(right, backY), postPaint..color = Colors.white.withOpacity(.65));
+    canvas.drawLine(Offset(left, frontY), Offset(left, frontY + (top ? postH : -postH)), postPaint);
+    canvas.drawLine(Offset(right, frontY), Offset(right, frontY + (top ? postH : -postH)), postPaint);
+  }
+
+  void _paintPresentationStadiumScene(Canvas canvas, Rect fieldRect) {
+    if (!state.presentationMode) return;
+
+    final short = math.min(fieldRect.width, fieldRect.height).toDouble();
+    final radius0 = math.max(24.0, short * .060).toDouble();
+    final world = _presentationSceneRect().inflate(short * .070);
+
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        world.shift(Offset(0, short * .030)),
+        Radius.circular(radius0 * 2.8),
+      ),
+      Paint()
+        ..color = Colors.black.withOpacity(.22)
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, short * .050),
+    );
+
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(world, Radius.circular(radius0 * 2.6)),
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: <Color>[Color(0xFF0E1613), Color(0xFF17231D), Color(0xFF223229)],
+          stops: <double>[0.0, .58, 1.0],
+        ).createShader(world),
+    );
+
+    final haloRect = fieldRect.inflate(short * .240);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(haloRect, Radius.circular(radius0 * 2.2)),
+      Paint()
+        ..shader = RadialGradient(
+          center: const Alignment(0, -.10),
+          radius: 1.08,
+          colors: <Color>[
+            const Color(0xFF78B394).withOpacity(.08),
+            Colors.transparent,
+          ],
+        ).createShader(haloRect),
+    );
+
+    final upperOuter = fieldRect.inflate(short * .270);
+    final upperInner = fieldRect.inflate(short * .175);
+    final upperRing = _stadiumRing(
+      RRect.fromRectAndRadius(upperOuter, Radius.circular(radius0 * 2.65)),
+      RRect.fromRectAndRadius(upperInner, Radius.circular(radius0 * 2.00)),
+    );
+    canvas.save();
+    canvas.translate(0, short * .040);
+    canvas.drawPath(upperRing, Paint()..color = Colors.black.withOpacity(.40));
+    canvas.restore();
+    canvas.drawPath(
+      upperRing,
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: <Color>[Color(0xFF314139), Color(0xFF1A2621)],
+        ).createShader(upperOuter),
+    );
+    _paintPresentationStandRows(
+      canvas,
+      fieldRect,
+      short,
+      radius0,
+      .190,
+      .250,
+      6,
+      Colors.white.withOpacity(.060),
+    );
+
+    final concourseOuter = fieldRect.inflate(short * .172);
+    final concourseInner = fieldRect.inflate(short * .154);
+    canvas.drawPath(
+      _stadiumRing(
+        RRect.fromRectAndRadius(concourseOuter, Radius.circular(radius0 * 1.95)),
+        RRect.fromRectAndRadius(concourseInner, Radius.circular(radius0 * 1.75)),
+      ),
+      Paint()..color = const Color(0xFF0F1714),
+    );
+
+    final lowerOuter = fieldRect.inflate(short * .150);
+    final lowerInner = fieldRect.inflate(short * .084);
+    final lowerRing = _stadiumRing(
+      RRect.fromRectAndRadius(lowerOuter, Radius.circular(radius0 * 1.88)),
+      RRect.fromRectAndRadius(lowerInner, Radius.circular(radius0 * 1.36)),
+    );
+    canvas.save();
+    canvas.translate(0, short * .024);
+    canvas.drawPath(lowerRing, Paint()..color = Colors.black.withOpacity(.35));
+    canvas.restore();
+    canvas.drawPath(
+      lowerRing,
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: <Color>[Color(0xFF51675D), Color(0xFF31443A)],
+        ).createShader(lowerOuter),
+    );
+    _paintPresentationStandRows(
+      canvas,
+      fieldRect,
+      short,
+      radius0,
+      .100,
+      .145,
+      7,
+      Colors.white.withOpacity(.075),
+    );
+
+    final apronOuter = fieldRect.inflate(short * .082);
+    final apronInner = fieldRect.inflate(short * .036);
+    canvas.drawPath(
+      _stadiumRing(
+        RRect.fromRectAndRadius(apronOuter, Radius.circular(radius0 * 1.34)),
+        RRect.fromRectAndRadius(apronInner, Radius.circular(radius0 * 1.00)),
+      ),
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: <Color>[Color(0xFF1A2D24), Color(0xFF14221B)],
+        ).createShader(apronOuter),
+    );
+
+    final boardOuter = fieldRect.inflate(short * .034);
+    final boardInner = fieldRect.inflate(short * .020);
+    final boardRing = _stadiumRing(
+      RRect.fromRectAndRadius(boardOuter, Radius.circular(radius0 * .98)),
+      RRect.fromRectAndRadius(boardInner, Radius.circular(radius0 * .80)),
+    );
+    canvas.drawPath(boardRing, Paint()..color = const Color(0xFF0D4F34));
+    canvas.drawPath(
+      boardRing,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = math.max(1.6, short * .0026)
+        ..color = const Color(0xFF59D69C).withOpacity(.34),
+    );
+
+    final boardLine = Paint()
+      ..color = const Color(0xFF7DE6B5).withOpacity(.38)
+      ..strokeWidth = math.max(1.2, short * .0020);
+    const segments = 10;
+    for (var i = 1; i < segments; i++) {
+      final t = i / segments;
+      final x = fieldRect.left + fieldRect.width * t;
+      canvas.drawLine(Offset(x, fieldRect.top - short * .034), Offset(x, fieldRect.top - short * .020), boardLine);
+      canvas.drawLine(Offset(x, fieldRect.bottom + short * .020), Offset(x, fieldRect.bottom + short * .034), boardLine);
+    }
+    for (var i = 1; i < 6; i++) {
+      final t = i / 6;
+      final y = fieldRect.top + fieldRect.height * t;
+      canvas.drawLine(Offset(fieldRect.left - short * .034, y), Offset(fieldRect.left - short * .020, y), boardLine);
+      canvas.drawLine(Offset(fieldRect.right + short * .020, y), Offset(fieldRect.right + short * .034, y), boardLine);
+    }
+
+    final tunnelPaint = Paint()..color = const Color(0xFF0A110E).withOpacity(.92);
+    final tunnelW = fieldRect.width * .090;
+    final tunnelD = short * .060;
+    final tunnelY = fieldRect.bottom + short * .090;
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromCenter(center: Offset(fieldRect.center.dx, fieldRect.top - short * .105), width: tunnelW, height: tunnelD),
+        Radius.circular(tunnelD * .18),
+      ),
+      tunnelPaint,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromCenter(center: Offset(fieldRect.center.dx, tunnelY), width: tunnelW, height: tunnelD),
+        Radius.circular(tunnelD * .18),
+      ),
+      tunnelPaint,
+    );
+
+    final benchPaint = Paint()..color = const Color(0xFFC6D7CF).withOpacity(.18);
+    final benchY = fieldRect.bottom + short * .056;
+    final benchW = fieldRect.width * .148;
+    final benchH = short * .032;
+    for (final cx in <double>[fieldRect.center.dx - fieldRect.width * .18, fieldRect.center.dx + fieldRect.width * .18]) {
+      final r = RRect.fromRectAndRadius(
+        Rect.fromCenter(center: Offset(cx, benchY), width: benchW, height: benchH),
+        Radius.circular(benchH * .40),
+      );
+      canvas.drawRRect(r, benchPaint);
+      canvas.drawRRect(
+        r,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = math.max(1.0, short * .0018)
+          ..color = Colors.white.withOpacity(.12),
+      );
+    }
+
+    final nearWalkway = Rect.fromLTWH(
+      fieldRect.left - short * .030,
+      fieldRect.bottom + short * .036,
+      fieldRect.width + short * .060,
+      short * .042,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(nearWalkway, Radius.circular(short * .012)),
+      Paint()..color = const Color(0xFF3F4C46).withOpacity(.40),
+    );
+
+    _paintPresentationGoal(canvas, fieldRect, short, true);
+    _paintPresentationGoal(canvas, fieldRect, short, false);
+  }
+
+  void _paintPresentationFieldLight(Canvas canvas, Rect fieldRect) {
+    if (!state.presentationMode) return;
+    canvas.drawRect(
+      fieldRect,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: <Color>[
+            Colors.white.withOpacity(.10),
+            Colors.transparent,
+            Colors.black.withOpacity(.040),
+          ],
+          stops: const <double>[0.0, .56, 1.0],
+        ).createShader(fieldRect),
+    );
+
+    for (final ax in <double>[.18, .50, .82]) {
+      final c = Offset(fieldRect.left + fieldRect.width * ax, fieldRect.top + fieldRect.height * .10);
+      final rr = Rect.fromCircle(center: c, radius: fieldRect.shortestSide * .36);
+      canvas.drawOval(
+        rr,
+        Paint()
+          ..shader = RadialGradient(
+            colors: <Color>[
+              Colors.white.withOpacity(.045),
+              Colors.transparent,
+            ],
+          ).createShader(rr),
+      );
+    }
+
+    canvas.drawRect(
+      fieldRect,
+      Paint()
+        ..shader = RadialGradient(
+          center: const Alignment(0, 0),
+          radius: 1.0,
+          colors: <Color>[
+            Colors.transparent,
+            Colors.black.withOpacity(.05),
+          ],
+          stops: const <double>[.72, 1.0],
+        ).createShader(fieldRect),
+    );
+  }
 
   vector.Matrix4 _buildField3DMatrix() {
     if (!state.is3DMode) return vector.Matrix4.identity();
@@ -2562,6 +3102,32 @@ class _TgBoardPainter extends CustomPainter {
 
     canvas.save();
     canvas.translate(projectedPos.dx, projectedPos.dy);
+
+    if (state.presentationMode) {
+      final a = e.asset.toLowerCase();
+      final playerLike = _isTgAvatarAsset(e.asset) ||
+          a.contains('/run_svg/') ||
+          a.contains('/pass_svg/') ||
+          a.contains('/jump_svg/') ||
+          a.contains('/stand_svg/') ||
+          a.contains('/vrat_svg/') ||
+          a.contains('/player_') ||
+          a.contains('/coach/');
+      if (playerLike) {
+        final shadowRect = Rect.fromCenter(
+          center: Offset(0, size * .38),
+          width: size * .48,
+          height: size * .12,
+        );
+        canvas.drawOval(
+          shadowRect,
+          Paint()
+            ..color = Colors.black.withOpacity(.18)
+            ..maskFilter = MaskFilter.blur(BlurStyle.normal, size * .055),
+        );
+      }
+    }
+
     canvas.rotate(e.rotation);
 
     final rect = Rect.fromCenter(center: Offset.zero, width: size, height: size);
@@ -3541,7 +4107,11 @@ class _TgBoardPainter extends CustomPainter {
     required bool selected,
     bool isPreview = false,
   }) {
-    final scaleNow = _currentScale(state.transform.value.value);
+    final scaleNow = _usesExternalFieldTransform
+        ? _externalScaleAt(Offset(_fieldLogicalSize.width * .5, _fieldLogicalSize.height * .5))
+            .clamp(.08, 4.0)
+            .toDouble()
+        : _currentScale(state.transform.value.value);
 
     if (e is TgLine) {
       final p = Paint()
@@ -3843,6 +4413,7 @@ class _TgBoardPainter extends CustomPainter {
   }
 
   Offset _selectionSceneToViewport(Offset scene, vector.Matrix4 m3d) {
+    if (_usesExternalFieldTransform) return _projectExternal(scene);
     final fieldPoint = _is3DMode ? _projectOnField(scene, m3d) : scene;
     return _tgTransformPoint(state.transform.value.value, fieldPoint);
   }
@@ -3940,13 +4511,17 @@ class _TgBoardPainter extends CustomPainter {
     if (b == Rect.zero || !b.width.isFinite || !b.height.isFinite) return;
 
     if (selected is TgStamp &&
-        _is3DMode &&
+        (_is3DMode || _usesExternalFieldTransform) &&
         !_isFieldAttachedStampAsset(selected.asset)) {
       final center = _selectionSceneToViewport(selected.pos, m3d);
       final scaleNow = _currentScale(state.transform.value.value);
-      final sizePx = (selected.size * _billboardScale(selected.pos, m3d) * scaleNow)
-          .clamp(20.0, 4000.0)
-          .toDouble();
+      final sizePx = _usesExternalFieldTransform
+          ? (selected.size * _externalScaleAt(selected.pos))
+              .clamp(20.0, 4000.0)
+              .toDouble()
+          : (selected.size * _billboardScale(selected.pos, m3d) * scaleNow)
+              .clamp(20.0, 4000.0)
+              .toDouble();
       final half = sizePx / 2.0;
       final c = math.cos(selected.rotation);
       final sn = math.sin(selected.rotation);
@@ -4030,28 +4605,47 @@ class _TgBoardPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final viewportRect = Offset.zero & size;
-    canvas.drawRect(
-      viewportRect,
-      Paint()
-        ..shader = const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: <Color>[Color(0xFFDDE7E1), Color(0xFFF6F8F7)],
-        ).createShader(viewportRect),
-    );
+    // In GLB overlay mode the 3D renderer below is the only field/background.
+    // The Canvas must stay fully transparent and paint tactical content only.
+    if (!hideFieldBase) {
+      if (state.presentationMode) {
+        _paintPresentationBackdrop(canvas, size);
+      } else {
+        canvas.drawRect(
+          viewportRect,
+          Paint()
+            ..shader = const LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: <Color>[Color(0xFFDDE7E1), Color(0xFFF6F8F7)],
+            ).createShader(viewportRect),
+        );
+      }
+    }
 
     final fieldRect = _activeFieldRect();
 
     final vp = state.transform.value.value;
     final m3d = _buildField3DMatrix();
+    final external = externalFieldTransform;
 
     canvas.save();
-    canvas.transform(vp.storage);
+    if (external == null) {
+      canvas.transform(vp.storage);
+    }
 
     canvas.save();
-    if (_is3DMode) canvas.transform(m3d.storage);
+    if (external != null) {
+      canvas.transform(external.storage);
+    } else if (_is3DMode) {
+      canvas.transform(m3d.storage);
+    }
 
-    if (_is3DMode) {
+    if (state.presentationMode && !hideFieldBase) {
+      _paintPresentationStadiumScene(canvas, fieldRect);
+    }
+
+    if (_is3DMode && !hideFieldBase) {
       // Same support plate / shadow used by Tracker's 3D perspective layer.
       // In Tracker the plate is +8 and the pitch is -5 => 13 px relative
       // separation, with #284B38 and a soft 18 px shadow.
@@ -4079,9 +4673,12 @@ class _TgBoardPainter extends CustomPainter {
     canvas.save();
     canvas.clipRect(fieldRect);
 
-    _paintFieldCover(canvas, fieldRect);
+    if (!hideFieldBase) {
+      _paintFieldCover(canvas, fieldRect);
+      _paintPresentationFieldLight(canvas, fieldRect);
+    }
 
-    if (state.gridEnabled && !_is3DMode) {
+    if (!hideFieldBase && state.gridEnabled && !_is3DMode) {
       _paintGrid(canvas, fieldRect);
     }
 
@@ -4090,11 +4687,13 @@ class _TgBoardPainter extends CustomPainter {
       final selected = state.selectedIds.contains(e.id);
 
       if (e is TgStamp) {
-        if (!_fieldContains(e.pos)) continue;
+        final overridePos = state.animationPositionFor(e.id);
+        final renderStamp = overridePos == null ? e : e.copyWith(pos: overridePos);
+        if (!_fieldContains(renderStamp.pos)) continue;
 
-        // ✅ Ворота и другие "прикреплённые к полю" штампы
-        if (_isFieldAttachedStampAsset(e.asset)) {
-          _paintStampAttachedToField(canvas, e, false);
+        // Ворота и другие "прикреплённые к полю" штампы остаются в плоскости поля.
+        if (_isFieldAttachedStampAsset(renderStamp.asset)) {
+          _paintStampAttachedToField(canvas, renderStamp, false);
         }
         continue;
       }
@@ -4127,24 +4726,32 @@ class _TgBoardPainter extends CustomPainter {
     for (final e in state.elements) {
       if (e.hidden) continue;
       if (e is! TgStamp) continue;
-      if (!_fieldContains(e.pos)) continue;
+      final overridePos = state.animationPositionFor(e.id);
+      final renderStamp = overridePos == null ? e : e.copyWith(pos: overridePos);
+      if (!_fieldContains(renderStamp.pos)) continue;
 
-      // ✅ Ворота уже отрисованы вместе с полем
-      if (_isFieldAttachedStampAsset(e.asset)) continue;
+      // Ворота уже отрисованы вместе с полем.
+      if (_isFieldAttachedStampAsset(renderStamp.asset)) continue;
 
-      final selected = state.selectedIds.contains(e.id);
+      final projected = _usesExternalFieldTransform
+          ? _projectExternal(renderStamp.pos)
+          : (_is3DMode ? _projectOnField(renderStamp.pos, m3d) : renderStamp.pos);
+      final s = _usesExternalFieldTransform
+          ? _externalBillboardScaleAt(renderStamp.pos)
+          : (_is3DMode ? _billboardScale(renderStamp.pos, m3d) : 1.0);
 
-      final projected = _is3DMode ? _projectOnField(e.pos, m3d) : e.pos;
-      final s = _is3DMode ? _billboardScale(e.pos, m3d) : 1.0;
-
-      _paintStampBillboard(canvas, e, projected, s, false);
+      _paintStampBillboard(canvas, renderStamp, projected, s, false);
     }
 
     if (prev is TgStamp &&
         _fieldContains(prev.pos) &&
         !_isFieldAttachedStampAsset(prev.asset)) {
-      final projected = _is3DMode ? _projectOnField(prev.pos, m3d) : prev.pos;
-      final s = _is3DMode ? _billboardScale(prev.pos, m3d) : 1.0;
+      final projected = _usesExternalFieldTransform
+          ? _projectExternal(prev.pos)
+          : (_is3DMode ? _projectOnField(prev.pos, m3d) : prev.pos);
+      final s = _usesExternalFieldTransform
+          ? _externalBillboardScaleAt(prev.pos)
+          : (_is3DMode ? _billboardScale(prev.pos, m3d) : 1.0);
 
       _paintStampBillboard(canvas, prev, projected, s, false, isPreview: true);
     }
@@ -4166,6 +4773,9 @@ class _TgBoardPainter extends CustomPainter {
         oldDelegate._rotationX != _rotationX ||
         oldDelegate._rotationY != _rotationY ||
         oldDelegate._rotationZ != _rotationZ ||
-        oldDelegate._perspective != _perspective;
+        oldDelegate._perspective != _perspective ||
+        oldDelegate.state.presentationMode != state.presentationMode ||
+        oldDelegate.hideFieldBase != hideFieldBase ||
+        oldDelegate.externalFieldTransform != externalFieldTransform;
   }
 }
