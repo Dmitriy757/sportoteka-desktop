@@ -40,6 +40,14 @@ class AiVideoAnalysisService {
 
   final Set<String> _sentPlayerBindings = <String>{};
 
+  // Requests used by persisted Replay.  Live analysis still streams frames,
+  // but after reopening a match the in-memory cache is gone, so frames/report
+  // are read back from the server-side SQLite store.
+  final Map<String, Completer<Map<String, dynamic>>> _pendingRequests =
+      <String, Completer<Map<String, dynamic>>>{};
+  int _requestSerial = 0;
+  bool _replayAttached = false;
+
   // 0..100 progress of the current recording analysis. The WebSocket server
   // doesn't send a dedicated progress field, so we derive it from the analyzed
   // video timestamp and fps/frame_count reported in each analysis_frame.
@@ -149,6 +157,159 @@ class AiVideoAnalysisService {
     );
   }
 
+  Future<Map<String, dynamic>> _request(
+    String action,
+    Map<String, dynamic> payload, {
+    Duration timeout = const Duration(seconds: 10),
+  }) async {
+    await connect();
+    if (!isConnected || _socket == null) {
+      throw StateError('Video AI WebSocket is not connected');
+    }
+
+    final requestId =
+        'req_${DateTime.now().microsecondsSinceEpoch}_${++_requestSerial}';
+    final completer = Completer<Map<String, dynamic>>();
+    _pendingRequests[requestId] = completer;
+
+    _socket!.add(jsonEncode(<String, dynamic>{
+      'action': action,
+      'request_id': requestId,
+      ...payload,
+    }));
+
+    try {
+      return await completer.future.timeout(timeout);
+    } finally {
+      _pendingRequests.remove(requestId);
+    }
+  }
+
+  /// Reattach to a recording analysis that is already running on the server.
+  /// The server owns the job; closing this Flutter screen only removes this
+  /// WebSocket subscriber and does not stop inference.
+  Future<Map<String, dynamic>?> attachActiveAnalysis({
+    required int matchId,
+    required int teamId,
+  }) async {
+    if (matchId <= 0 || teamId <= 0) return null;
+
+    final response = await _request(
+      'get_active_analysis',
+      <String, dynamic>{
+        'match_id': matchId,
+        'team_id': teamId,
+      },
+    );
+
+    if (response['active'] != true) return null;
+    final id = (response['match_live_id'] ?? '').toString().trim();
+    if (id.isEmpty) return null;
+
+    _activeMatchLiveId = id;
+    _syntheticJobId = id;
+    _replayAttached = false;
+    final rawProgress = response['progress'];
+    final progress = rawProgress is num
+        ? rawProgress.toInt()
+        : int.tryParse('${rawProgress ?? ''}') ?? 1;
+    _progressPercent = progress.clamp(1, 99);
+    final rawTime = response['time_ms'];
+    final timeMs = rawTime is num
+        ? rawTime.toInt()
+        : int.tryParse('${rawTime ?? ''}') ?? 0;
+    if (timeMs > _lastFrameTimeMs) _lastFrameTimeMs = timeMs;
+
+    final rawReport = response['report'];
+    if (rawReport is Map) {
+      final report = Map<String, dynamic>.from(rawReport);
+      _latestReport = report;
+      _appendEvents(report['events']);
+      final stats = report['stats'] ?? report['final_stats'];
+      if (stats is Map) {
+        _latestStats = Map<String, dynamic>.from(stats);
+      }
+    }
+
+    final statusPayload = <String, dynamic>{
+      'type': 'status',
+      'status': 'processing',
+      'progress': _progressPercent,
+      'job_id': id,
+      'match_live_id': id,
+      'time_ms': _lastFrameTimeMs,
+      'background': true,
+      'reattached': true,
+      'message': 'AI продолжает анализ на сервере',
+    };
+    _latestStatus = statusPayload;
+    if (!_messageController.isClosed) {
+      _messageController.add(statusPayload);
+    }
+    return Map<String, dynamic>.from(response);
+  }
+
+  /// Attach to the latest completed analysis stored on the Video AI server.
+  /// This survives leaving/reopening the match and also works on another
+  /// device because the report is not sourced from local SharedPreferences.
+  Future<Map<String, dynamic>?> attachSavedAnalysis({
+    required int matchId,
+    required int teamId,
+  }) async {
+    if (matchId <= 0 || teamId <= 0) return null;
+
+    final response = await _request(
+      'get_latest_match',
+      <String, dynamic>{
+        'match_id': matchId,
+        'team_id': teamId,
+        'completed_only': true,
+      },
+    );
+
+    final rawReport = response['report'];
+    if (rawReport is! Map) return null;
+    final report = Map<String, dynamic>.from(rawReport);
+    if (report['success'] == false) return null;
+
+    final id = (report['match_live_id'] ?? '').toString().trim();
+    if (id.isEmpty) return null;
+
+    _activeMatchLiveId = id;
+    _syntheticJobId = id;
+    _replayAttached = true;
+    _progressPercent = 100;
+    _latestReport = report;
+    _latestStatus = <String, dynamic>{
+      'type': 'status',
+      'status': 'completed',
+      'progress': 100,
+      'job_id': id,
+      'match_live_id': id,
+      'persisted_replay': true,
+    };
+    final stats = report['stats'] ?? report['final_stats'];
+    if (stats is Map) {
+      _latestStats = Map<String, dynamic>.from(stats);
+    }
+    _events.clear();
+    _eventKeys.clear();
+    _appendEvents(report['events']);
+    _frameCache.clear();
+
+    if (!_messageController.isClosed) {
+      _messageController.add(<String, dynamic>{
+        'type': 'saved_analysis_attached',
+        'status': 'completed',
+        'progress': 100,
+        'job_id': id,
+        'match_live_id': id,
+        'report': report,
+      });
+    }
+    return report;
+  }
+
   Future<AiJobCreateResponse> createJob(AiJobCreateRequest request) async {
     // Do NOT stop an already running analysis just because the UI asked to
     // "create" the same compatibility job again. The previous implementation
@@ -239,6 +400,7 @@ class AiVideoAnalysisService {
       'club_id': request.clubId,
       'team_name': request.title,
       'team_colors': request.teamColors,
+      'players': request.players,
       'home_team_key': request.homeTeamKey,
       'away_team_key': request.awayTeamKey,
       'focus_team': request.homeTeamKey,
@@ -249,7 +411,8 @@ class AiVideoAnalysisService {
       (_, value) =>
           value == null ||
           (value is String && value.trim().isEmpty) ||
-          (value is Map && value.isEmpty),
+          (value is Map && value.isEmpty) ||
+          (value is List && value.isEmpty),
     );
 
     _activeRunPayload = Map<String, dynamic>.from(payload);
@@ -309,6 +472,35 @@ class AiVideoAnalysisService {
     required String jobId,
     required int timeMs,
   }) async {
+    // Persisted Replay: ask the server for an interpolated frame at the exact
+    // video clock. This is what restores smooth rectangles after reopening the
+    // match; the old implementation only had an in-memory cache.
+    if (_replayAttached && (_activeMatchLiveId ?? '').trim().isNotEmpty) {
+      try {
+        final response = await _request(
+          'get_frame_packet',
+          <String, dynamic>{
+            'match_live_id': _activeMatchLiveId,
+            'time_ms': timeMs,
+          },
+          timeout: const Duration(seconds: 6),
+        );
+        final rawFrame = response['frame'];
+        if (rawFrame is Map) {
+          final packet = AiFramePacket.fromJson(
+            Map<String, dynamic>.from(rawFrame),
+          );
+          _frameCache.add(packet);
+          if (_frameCache.length > 240) {
+            _frameCache.removeRange(0, _frameCache.length - 240);
+          }
+          return packet;
+        }
+      } catch (_) {
+        // Fall back to any locally cached packet below.
+      }
+    }
+
     if (_frameCache.isEmpty) {
       try {
         await framePackets.first.timeout(const Duration(seconds: 8));
@@ -377,6 +569,8 @@ class AiVideoAnalysisService {
     required String trackId,
     required int playerId,
     required String playerName,
+    int? jerseyNumber,
+    String? teamTag,
   }) async {
     if (_disposed || playerId <= 0 || trackId.trim().isEmpty) return;
 
@@ -404,6 +598,8 @@ class AiVideoAnalysisService {
       'track_id': numericTrackId,
       'player_id': playerId,
       'player_name': playerName,
+      if (jerseyNumber != null && jerseyNumber > 0) 'jersey_number': jerseyNumber,
+      if (teamTag != null && teamTag.trim().isNotEmpty) 'team': teamTag.trim().toLowerCase(),
     }));
     _sentPlayerBindings.add(key);
   }
@@ -440,6 +636,14 @@ class AiVideoAnalysisService {
   void _handleMessage(Map<String, dynamic> message) {
     final type = (message['type'] ?? '').toString();
     final status = (message['status'] ?? '').toString().toLowerCase().trim();
+
+    final requestId = (message['request_id'] ?? '').toString();
+    if (requestId.isNotEmpty) {
+      final pending = _pendingRequests[requestId];
+      if (pending != null && !pending.isCompleted) {
+        pending.complete(Map<String, dynamic>.from(message));
+      }
+    }
 
     if (!_messageController.isClosed) {
       _messageController.add(message);
@@ -874,6 +1078,7 @@ class AiVideoAnalysisService {
     _stopRequested = false;
     _intentionalClose = false;
     _activeRunPayload = null;
+    _replayAttached = false;
     _sentPlayerBindings.clear();
     _frameCache.clear();
     _events.clear();
@@ -903,6 +1108,13 @@ class AiVideoAnalysisService {
         await socket.close(WebSocketStatus.normalClosure, 'SPORTOTEKA dispose');
       } catch (_) {}
     }
+
+    for (final pending in _pendingRequests.values) {
+      if (!pending.isCompleted) {
+        pending.completeError(StateError('Video AI service disposed'));
+      }
+    }
+    _pendingRequests.clear();
 
     await _messageController.close();
     await _frameController.close();

@@ -1,0 +1,1 @@
+/Users/dmitrij/Documents/sportoteka2.0/packages/thermion_flutter_fixed/android/CMakeLists.txt

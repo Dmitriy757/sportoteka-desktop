@@ -1,0 +1,38 @@
+{
+  "buildFiles": [
+    "/Users/dmitrij/Documents/sportoteka2.0/packages/thermion_flutter_fixed/android/CMakeLists.txt"
+  ],
+  "cleanCommandsComponents": [
+    [
+      "/Users/dmitrij/Library/Android/sdk/cmake/3.22.1/bin/ninja",
+      "-C",
+      "/Users/dmitrij/Documents/sportoteka2.0/packages/thermion_flutter_fixed/android/.cxx/RelWithDebInfo/432l656n/x86_64",
+      "clean"
+    ]
+  ],
+  "buildTargetsCommandComponents": [
+    "/Users/dmitrij/Library/Android/sdk/cmake/3.22.1/bin/ninja",
+    "-C",
+    "/Users/dmitrij/Documents/sportoteka2.0/packages/thermion_flutter_fixed/android/.cxx/RelWithDebInfo/432l656n/x86_64",
+    "{LIST_OF_TARGETS_TO_BUILD}"
+  ],
+  "libraries": {
+    "thermion_flutter_android::@6890427a1f51a3e7e1df": {
+      "toolchain": "toolchain",
+      "abi": "x86_64",
+      "artifactName": "thermion_flutter_android",
+      "output": "/Users/dmitrij/Documents/sportoteka2.0/build/thermion_flutter/intermediates/cxx/RelWithDebInfo/432l656n/obj/x86_64/libthermion_flutter_android.so",
+      "runtimeFiles": []
+    }
+  },
+  "toolchains": {
+    "toolchain": {
+      "cCompilerExecutable": "/Users/dmitrij/Library/Android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/darwin-x86_64/bin/clang.lld",
+      "cppCompilerExecutable": "/Users/dmitrij/Library/Android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/darwin-x86_64/bin/clang++.lld"
+    }
+  },
+  "cFileExtensions": [],
+  "cppFileExtensions": [
+    "cpp"
+  ]
+}

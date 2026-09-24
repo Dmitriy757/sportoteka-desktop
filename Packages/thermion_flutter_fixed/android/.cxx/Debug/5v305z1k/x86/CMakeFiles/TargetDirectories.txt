@@ -1,0 +1,3 @@
+/Users/dmitrij/Documents/sportoteka2.0/packages/thermion_flutter_fixed/android/.cxx/Debug/5v305z1k/x86/CMakeFiles/thermion_flutter_android.dir
+/Users/dmitrij/Documents/sportoteka2.0/packages/thermion_flutter_fixed/android/.cxx/Debug/5v305z1k/x86/CMakeFiles/edit_cache.dir
+/Users/dmitrij/Documents/sportoteka2.0/packages/thermion_flutter_fixed/android/.cxx/Debug/5v305z1k/x86/CMakeFiles/rebuild_cache.dir

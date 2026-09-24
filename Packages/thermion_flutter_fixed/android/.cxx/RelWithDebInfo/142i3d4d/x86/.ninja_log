@@ -1,0 +1,4 @@
+# ninja log v5
+0	39	1790104274006903541	CMakeFiles/thermion_flutter_android.dir/src/main/cpp/ThermionFlutterAndroid.cpp.o	77206c5d8073f85a
+39	81	1790104274048947199	/Users/dmitrij/Documents/sportoteka2.0/build/thermion_flutter/intermediates/cxx/RelWithDebInfo/142i3d4d/obj/x86/libthermion_flutter_android.so	80f1b0e892594afc
+0	43	1790180155311293154	/Users/dmitrij/Documents/sportoteka2.0/build/thermion_flutter/intermediates/cxx/RelWithDebInfo/142i3d4d/obj/x86/libthermion_flutter_android.so	80f1b0e892594afc

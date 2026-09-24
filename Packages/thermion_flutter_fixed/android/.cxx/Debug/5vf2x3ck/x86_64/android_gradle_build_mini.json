@@ -1,0 +1,27 @@
+{
+  "buildFiles": [
+    "/Users/dmitrij/.pub-cache/hosted/pub.dev/thermion_flutter-0.5.0/android/CMakeLists.txt"
+  ],
+  "cleanCommandsComponents": [
+    [
+      "/Users/dmitrij/Library/Android/sdk/cmake/3.22.1/bin/ninja",
+      "-C",
+      "/Users/dmitrij/.pub-cache/hosted/pub.dev/thermion_flutter-0.5.0/android/.cxx/Debug/5vf2x3ck/x86_64",
+      "clean"
+    ]
+  ],
+  "buildTargetsCommandComponents": [
+    "/Users/dmitrij/Library/Android/sdk/cmake/3.22.1/bin/ninja",
+    "-C",
+    "/Users/dmitrij/.pub-cache/hosted/pub.dev/thermion_flutter-0.5.0/android/.cxx/Debug/5vf2x3ck/x86_64",
+    "{LIST_OF_TARGETS_TO_BUILD}"
+  ],
+  "libraries": {
+    "thermion_flutter_android::@6890427a1f51a3e7e1df": {
+      "artifactName": "thermion_flutter_android",
+      "abi": "x86_64",
+      "output": "/Users/dmitrij/Documents/sportoteka2.0/build/thermion_flutter/intermediates/cxx/Debug/5vf2x3ck/obj/x86_64/libthermion_flutter_android.so",
+      "runtimeFiles": []
+    }
+  }
+}

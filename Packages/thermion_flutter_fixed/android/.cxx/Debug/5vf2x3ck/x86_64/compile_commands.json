@@ -1,0 +1,7 @@
+[
+{
+  "directory": "/Users/dmitrij/.pub-cache/hosted/pub.dev/thermion_flutter-0.5.0/android/.cxx/Debug/5vf2x3ck/x86_64",
+  "command": "/Users/dmitrij/Library/Android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/darwin-x86_64/bin/clang++ --target=x86_64-none-linux-android22 --sysroot=/Users/dmitrij/Library/Android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/darwin-x86_64/sysroot -DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES -DON -Dthermion_flutter_android_EXPORTS -I/Users/dmitrij/.pub-cache/hosted/pub.dev/thermion_flutter-0.5.0/android/src/main/include -I/Users/dmitrij/.pub-cache/hosted/pub.dev/thermion_flutter-0.5.0/android/src/main/cpp -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security -nostdinc++  -std=c++17 -fno-limit-debug-info  -fPIC -o CMakeFiles/thermion_flutter_android.dir/src/main/cpp/ThermionFlutterAndroid.cpp.o -c /Users/dmitrij/.pub-cache/hosted/pub.dev/thermion_flutter-0.5.0/android/src/main/cpp/ThermionFlutterAndroid.cpp",
+  "file": "/Users/dmitrij/.pub-cache/hosted/pub.dev/thermion_flutter-0.5.0/android/src/main/cpp/ThermionFlutterAndroid.cpp"
+}
+]

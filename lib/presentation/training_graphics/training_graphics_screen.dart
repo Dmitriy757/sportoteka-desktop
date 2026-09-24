@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/rendering.dart';
@@ -16,7 +17,6 @@ import 'package:vector_math/vector_math_64.dart' as vector;
 import 'training_graphics_state.dart';
 import 'widgets/tg_canvas.dart';
 import 'widgets/tg_left_toolbar.dart';
-
 
 import 'package:sportoteka/core/utils/pref_utils.dart';
 import 'package:sportoteka/presentation/plans/api/training_graphics_api.dart';
@@ -126,7 +126,9 @@ class TgScreenButton extends StatelessWidget {
     final isEnabled = onPressed != null && !isLoading;
 
     return Material(
-      color: isOutlined ? Colors.transparent : (color ?? TgScreenPalette.primaryGreen),
+      color: isOutlined
+          ? Colors.transparent
+          : (color ?? TgScreenPalette.primaryGreen),
       borderRadius: BorderRadius.circular(8),
       child: InkWell(
         onTap: isEnabled ? onPressed : null,
@@ -145,7 +147,9 @@ class TgScreenButton extends StatelessWidget {
                 : null,
             color: isOutlined
                 ? Colors.transparent
-                : (isEnabled ? null : TgScreenPalette.textLight.withOpacity(0.2)),
+                : (isEnabled
+                    ? null
+                    : TgScreenPalette.textLight.withOpacity(0.2)),
           ),
           child: Center(
             child: isLoading
@@ -164,7 +168,6 @@ class TgScreenButton extends StatelessWidget {
     );
   }
 }
-
 
 class TgScreenCard extends StatelessWidget {
   final Widget child;
@@ -201,7 +204,9 @@ class TgScreenCard extends StatelessWidget {
             color: color ?? TgScreenPalette.surface,
             borderRadius: BorderRadius.circular(4),
             border: Border.all(
-              color: isSelected ? TgScreenPalette.primaryGreen : TgScreenPalette.border,
+              color: isSelected
+                  ? TgScreenPalette.primaryGreen
+                  : TgScreenPalette.border,
               width: isSelected ? 1.5 : 1,
             ),
             boxShadow: TgScreenPalette.softShadow,
@@ -278,7 +283,8 @@ class TgScreenErrorBanner extends StatelessWidget {
             const SizedBox(width: 4),
             IconButton(
               onPressed: onDismiss,
-              icon: const Icon(Icons.close, size: 16, color: TgScreenPalette.textMuted),
+              icon: const Icon(Icons.close,
+                  size: 16, color: TgScreenPalette.textMuted),
               constraints: const BoxConstraints(),
               padding: EdgeInsets.zero,
             ),
@@ -339,12 +345,14 @@ class TgScreenLoadingOverlay extends StatelessWidget {
 }
 
 /// ================== ОСНОВНОЙ ЭКРАН ==================
-typedef TgPersonalLibraryLoader = Future<List<Map<String, dynamic>>> Function(int userId);
+typedef TgPersonalLibraryLoader = Future<List<Map<String, dynamic>>> Function(
+    int userId);
 typedef TgPersonalGraphicSaver = Future<Map<String, dynamic>?> Function(
   int userId,
   Map<String, dynamic> document,
 );
-typedef TgPersonalGraphicDeleter = Future<void> Function(int userId, int graphicId);
+typedef TgPersonalGraphicDeleter = Future<void> Function(
+    int userId, int graphicId);
 
 class TrainingGraphicsScreen extends StatefulWidget {
   const TrainingGraphicsScreen({
@@ -415,15 +423,14 @@ class TrainingGraphicsScreen extends StatefulWidget {
   int get resolvedClubId => isPersonalWorkspace ? 0 : (clubId ?? teamId ?? 0);
   String get resolvedClubName {
     if (isPersonalWorkspace) return 'Личный Workspace';
-    return (clubName ?? '').trim().isNotEmpty ? clubName!.trim() : (teamName ?? 'Club');
+    return (clubName ?? '').trim().isNotEmpty
+        ? clubName!.trim()
+        : (teamName ?? 'Club');
   }
 
   @override
   State<TrainingGraphicsScreen> createState() => _TrainingGraphicsScreenState();
-  
 }
-
-
 
 // Compact decisions shared by draft restore and unsaved-exit flows.
 // The primary action takes its own row, so lengthy Russian labels never
@@ -482,7 +489,8 @@ class _TgEditorDecisionDialog extends StatelessWidget {
             style: TextButton.styleFrom(
               foregroundColor: TgScreenPalette.error,
               textStyle: baseText,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
             ),
             child: Text(discardLabel!, textAlign: TextAlign.center),
           ));
@@ -513,7 +521,8 @@ class _TgEditorDecisionDialog extends StatelessWidget {
                       color: TgScreenPalette.lightGreen,
                       borderRadius: BorderRadius.circular(11),
                     ),
-                    child: Icon(icon, size: 20, color: TgScreenPalette.primaryGreenDark),
+                    child: Icon(icon,
+                        size: 20, color: TgScreenPalette.primaryGreenDark),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -561,7 +570,8 @@ class _TgEditorDecisionDialog extends StatelessWidget {
                   backgroundColor: TgScreenPalette.primaryGreen,
                   foregroundColor: Colors.white,
                   elevation: 0,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
                   textStyle: baseText,
                 ),
                 child: Text(primaryLabel, textAlign: TextAlign.center),
@@ -582,9 +592,10 @@ class _TrainingGraphicsScreenState extends State<TrainingGraphicsScreen>
     teamId: widget.resolvedTeamId,
     teamName: widget.resolvedTeamName,
   );
-  
+
   bool _didLayoutFit = false;
   bool _glbFieldMode = false;
+  int _glbFieldVariant = 1;
   final TrainingGraphicsGlbFieldController _glbFieldController =
       TrainingGraphicsGlbFieldController();
   final ValueNotifier<vector.Matrix4?> _glbProjection =
@@ -593,29 +604,35 @@ class _TrainingGraphicsScreenState extends State<TrainingGraphicsScreen>
   List<double>? _pendingGlbProjection;
 
 // Добавьте этот метод в класс _TrainingGraphicsScreenState (в любое место внутри класса)
-Future<void> _refreshSvg(String asset, PlayerColors colors) async {
-  print('🔄 Refreshing SVG: $asset');
-  // Здесь можно добавить логику обновления SVG если нужно
-  // Например, если в TgCanvas есть метод для перезагрузки SVG:
-  // if (_canvasKey.currentState != null) {
-  //   await _canvasKey.currentState?.refreshSvg(asset, colors);
-  // }
-}
-
+  Future<void> _refreshSvg(String asset, PlayerColors colors) async {
+    print('🔄 Refreshing SVG: $asset');
+    // Здесь можно добавить логику обновления SVG если нужно
+    // Например, если в TgCanvas есть метод для перезагрузки SVG:
+    // if (_canvasKey.currentState != null) {
+    //   await _canvasKey.currentState?.refreshSvg(asset, colors);
+    // }
+  }
 
   final GlobalKey _repaintKey = GlobalKey(debugLabel: 'tg_repaint');
-  final GlobalKey _exportRepaintKey = GlobalKey(debugLabel: 'tg_export_repaint');
+  final GlobalKey _exportRepaintKey =
+      GlobalKey(debugLabel: 'tg_export_repaint');
   final GlobalKey<TgCanvasState> _canvasKey = GlobalKey<TgCanvasState>();
   final GlobalKey _rightPaneKey = GlobalKey();
 
-  final DraggableScrollableController _panelController = DraggableScrollableController();
+  final DraggableScrollableController _panelController =
+      DraggableScrollableController();
   late final AnimationController _animationController;
   Timer? _playbackTimer;
   bool _playbackRunning = false;
   bool _exportCleanMode = false;
   double _playbackProgress = 0.0;
   int _currentPlaybackStep = 0;
-  final List<String> _playbackSteps = <String>['Шаг 1', 'Шаг 2', 'Шаг 3', 'Шаг 4'];
+  final List<String> _playbackSteps = <String>[
+    'Шаг 1',
+    'Шаг 2',
+    'Шаг 3',
+    'Шаг 4'
+  ];
   final List<int> _playbackStepDurationsMs = <int>[1800, 1800, 1800, 1800];
   final Map<String, int> _playbackRouteStepById = <String, int>{};
   final Map<String, String> _playbackRouteSubjectById = <String, String>{};
@@ -645,7 +662,8 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
   List<Map<String, dynamic>> _teamPlayersFor3D = <Map<String, dynamic>>[];
   List<_TrainingTemplate> _userTrainingTemplates = <_TrainingTemplate>[];
   bool _templatesLoaded = false;
-  List<_TrainingPlanExercise> _trainingPlanExercises = <_TrainingPlanExercise>[];
+  List<_TrainingPlanExercise> _trainingPlanExercises =
+      <_TrainingPlanExercise>[];
   bool _trainingPlanLoaded = false;
   Map<String, dynamic> _trainingCalendarMeta = <String, dynamic>{};
   Map<String, dynamic> _trainingAttendanceMeta = <String, dynamic>{};
@@ -684,7 +702,6 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
         ..._userTrainingTemplates,
       ];
 
-
   // Panel state
   bool _isPanelExpanded = false;
   bool _isPanelCollapsed = true;
@@ -717,7 +734,7 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
     "assets/training/stamps/vorota1/front.png",
     "assets/training/stamps/vorota1/left.png",
     "assets/training/stamps/vorota1/right.png",
-    
+
     "assets/training/stamps/props/cap.svg",
     "assets/training/stamps/props/cone.svg",
     "assets/training/stamps/props/dummy.svg",
@@ -729,66 +746,60 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
     "assets/training/stamps/props/neutral.png",
     "assets/training/stamps/props/pole.svg",
     "assets/training/stamps/props/ring.svg",
-   
 
-   // ✅ RUN SVG variations
-  "assets/training/stamps/run_svg/front_left.svg",
-  "assets/training/stamps/run_svg/front_angle_left.svg",
-  "assets/training/stamps/run_svg/front_angle_right.svg",
-  "assets/training/stamps/run_svg/side_left.svg",
-  "assets/training/stamps/run_svg/side_right.svg",
-  "assets/training/stamps/run_svg/back_left.svg",
-  "assets/training/stamps/run_svg/back_right.svg",
-  "assets/training/stamps/run_svg/back_angle_left.svg",
-  "assets/training/stamps/run_svg/back_angle_right.svg",
-  "assets/training/stamps/run_svg/frontal_links.svg",
-  
-  
-  // ✅ PASS SVG variations (добавляем сюда)
-"assets/training/stamps/pass_svg/front_left.svg",
-"assets/training/stamps/pass_svg/front_angle_left.svg",
-"assets/training/stamps/pass_svg/front_angle_right.svg",
-"assets/training/stamps/pass_svg/side_left.svg",
-"assets/training/stamps/pass_svg/side_right.svg",
-"assets/training/stamps/pass_svg/back_left.svg",
-"assets/training/stamps/pass_svg/back_right.svg",
-"assets/training/stamps/pass_svg/back_angle_left.svg",
-"assets/training/stamps/pass_svg/back_angle_right.svg",
-"assets/training/stamps/pass_svg/front_right.svg",
+    // ✅ RUN SVG variations
+    "assets/training/stamps/run_svg/front_left.svg",
+    "assets/training/stamps/run_svg/front_angle_left.svg",
+    "assets/training/stamps/run_svg/front_angle_right.svg",
+    "assets/training/stamps/run_svg/side_left.svg",
+    "assets/training/stamps/run_svg/side_right.svg",
+    "assets/training/stamps/run_svg/back_left.svg",
+    "assets/training/stamps/run_svg/back_right.svg",
+    "assets/training/stamps/run_svg/back_angle_left.svg",
+    "assets/training/stamps/run_svg/back_angle_right.svg",
+    "assets/training/stamps/run_svg/frontal_links.svg",
 
+    // ✅ PASS SVG variations (добавляем сюда)
+    "assets/training/stamps/pass_svg/front_left.svg",
+    "assets/training/stamps/pass_svg/front_angle_left.svg",
+    "assets/training/stamps/pass_svg/front_angle_right.svg",
+    "assets/training/stamps/pass_svg/side_left.svg",
+    "assets/training/stamps/pass_svg/side_right.svg",
+    "assets/training/stamps/pass_svg/back_left.svg",
+    "assets/training/stamps/pass_svg/back_right.svg",
+    "assets/training/stamps/pass_svg/back_angle_left.svg",
+    "assets/training/stamps/pass_svg/back_angle_right.svg",
+    "assets/training/stamps/pass_svg/front_right.svg",
 
+    "assets/training/stamps/stand_svg/front_left.svg",
+    "assets/training/stamps/stand_svg/front_angle_left.svg",
+    "assets/training/stamps/stand_svg/front_angle_right.svg",
+    "assets/training/stamps/stand_svg/side_left.svg",
+    "assets/training/stamps/stand_svg/side_right.svg",
+    "assets/training/stamps/stand_svg/back_left.svg",
+    "assets/training/stamps/stand_svg/back_right.svg",
+    "assets/training/stamps/stand_svg/back_angle_left.svg",
+    "assets/training/stamps/stand_svg/back_angle_right.svg",
+    "assets/training/stamps/stand_svg/front_right.svg",
 
-"assets/training/stamps/stand_svg/front_left.svg",
-"assets/training/stamps/stand_svg/front_angle_left.svg",
-"assets/training/stamps/stand_svg/front_angle_right.svg",
-"assets/training/stamps/stand_svg/side_left.svg",
-"assets/training/stamps/stand_svg/side_right.svg",
-"assets/training/stamps/stand_svg/back_left.svg",
-"assets/training/stamps/stand_svg/back_right.svg",
-"assets/training/stamps/stand_svg/back_angle_left.svg",
-"assets/training/stamps/stand_svg/back_angle_right.svg",
-"assets/training/stamps/stand_svg/front_right.svg",
+    "assets/training/stamps/jump_svg/front_left.svg",
+    "assets/training/stamps/jump_svg/front_right.svg",
+    "assets/training/stamps/jump_svg/side_right.svg",
+    "assets/training/stamps/jump_svg/side_left.svg",
+    "assets/training/stamps/jump_svg/back_right.svg",
+    "assets/training/stamps/jump_svg/back_left.svg",
 
-"assets/training/stamps/jump_svg/front_left.svg",
-"assets/training/stamps/jump_svg/front_right.svg",
-"assets/training/stamps/jump_svg/side_right.svg",
-"assets/training/stamps/jump_svg/side_left.svg",
-"assets/training/stamps/jump_svg/back_right.svg",
-"assets/training/stamps/jump_svg/back_left.svg",
-
-"assets/training/stamps/vrat_svg/front_left.svg",
-"assets/training/stamps/vrat_svg/front_angle_left.svg",
-"assets/training/stamps/vrat_svg/front_angle_right.svg",
-"assets/training/stamps/vrat_svg/side_left.svg",
-"assets/training/stamps/vrat_svg/side_right.svg",
-"assets/training/stamps/vrat_svg/back_left.svg",
-"assets/training/stamps/vrat_svg/back_right.svg",
-"assets/training/stamps/vrat_svg/back_angle_left.svg",
-"assets/training/stamps/vrat_svg/back_angle_right.svg",
-"assets/training/stamps/vrat_svg/front_right.svg",
-
-  
-];
+    "assets/training/stamps/vrat_svg/front_left.svg",
+    "assets/training/stamps/vrat_svg/front_angle_left.svg",
+    "assets/training/stamps/vrat_svg/front_angle_right.svg",
+    "assets/training/stamps/vrat_svg/side_left.svg",
+    "assets/training/stamps/vrat_svg/side_right.svg",
+    "assets/training/stamps/vrat_svg/back_left.svg",
+    "assets/training/stamps/vrat_svg/back_right.svg",
+    "assets/training/stamps/vrat_svg/back_angle_left.svg",
+    "assets/training/stamps/vrat_svg/back_angle_right.svg",
+    "assets/training/stamps/vrat_svg/front_right.svg",
+  ];
 
   static const double _topBarH = TgScreenPalette.topBarHeight;
 
@@ -842,7 +853,8 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
       final docJson = _currentDocJsonWithPlayback();
       final jsonStr = jsonEncode(docJson);
       await PrefUtils.setStringValue(_draftKey, jsonStr);
-      await PrefUtils.setStringValue(_draftTsKey, DateTime.now().toIso8601String());
+      await PrefUtils.setStringValue(
+          _draftTsKey, DateTime.now().toIso8601String());
     } catch (_) {}
   }
 
@@ -958,74 +970,73 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
   }
 
   void _initializeState() {
-  graphicId = widget.graphicId;
+    graphicId = widget.graphicId;
 
-  folderId = (widget.initialFolderId == null || widget.initialFolderId == 0)
-      ? 0
-      : widget.initialFolderId!;
-  folderTitle = widget.isPersonalWorkspace
-      ? 'Личный Workspace'
-      : ((widget.initialFolderTitle ?? "").trim().isNotEmpty
-          ? widget.initialFolderTitle!.trim()
-          : "Без папки");
-  _folderChosenForSave = widget.isPersonalWorkspace ||
-      (graphicId ?? 0) > 0 ||
-      widget.initialFolderId != null ||
-      (widget.initialFolderTitle ?? '').trim().isNotEmpty;
+    folderId = (widget.initialFolderId == null || widget.initialFolderId == 0)
+        ? 0
+        : widget.initialFolderId!;
+    folderTitle = widget.isPersonalWorkspace
+        ? 'Личный Workspace'
+        : ((widget.initialFolderTitle ?? "").trim().isNotEmpty
+            ? widget.initialFolderTitle!.trim()
+            : "Без папки");
+    _folderChosenForSave = widget.isPersonalWorkspace ||
+        (graphicId ?? 0) > 0 ||
+        widget.initialFolderId != null ||
+        (widget.initialFolderTitle ?? '').trim().isNotEmpty;
 
-  // По умолчанию Training Graphics открывается в том же 3D PRO ракурсе,
-  // что и карта Tracker. Сохранённая схема ниже всё равно переопределит
-  // эти значения своими параметрами камеры.
-  state.set3DParams(
-    enabled: true,
-    rotationX: -0.34,
-    rotationY: 0.0,
-    rotationZ: 0.0,
-    perspective: 0.00135,
-    cameraZoom: 0.96,
-    fieldSize: const Size(1050, 680),
-  );
+    // По умолчанию Training Graphics открывается в том же 3D PRO ракурсе,
+    // что и карта Tracker. Сохранённая схема ниже всё равно переопределит
+    // эти значения своими параметрами камеры.
+    state.set3DParams(
+      enabled: true,
+      rotationX: -0.34,
+      rotationY: 0.0,
+      rotationZ: 0.0,
+      perspective: 0.00135,
+      cameraZoom: 0.96,
+      fieldSize: const Size(1050, 680),
+    );
 
-  if (stamps.isNotEmpty) {
-    state.setActiveStamp(stamps.first);
-  }
-
-  if (_isMeaningfulDoc(widget.initialDocJson)) {
-    _applyDocJson(widget.initialDocJson);
-  } else {
-    if (!widget.selectMode && graphicId != null && graphicId! > 0) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (widget.isPersonalWorkspace) {
-          _loadPersonalGraphicById(graphicId!);
-        } else {
-          _loadDocById(graphicId!);
-        }
-      });
+    if (stamps.isNotEmpty) {
+      state.setActiveStamp(stamps.first);
     }
-  }
 
-  _selected.addAll(widget.preselectedIds.where((x) => x > 0));
+    if (_isMeaningfulDoc(widget.initialDocJson)) {
+      _applyDocJson(widget.initialDocJson);
+    } else {
+      if (!widget.selectMode && graphicId != null && graphicId! > 0) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (widget.isPersonalWorkspace) {
+            _loadPersonalGraphicById(graphicId!);
+          } else {
+            _loadDocById(graphicId!);
+          }
+        });
+      }
+    }
 
-  if (widget.selectMode) {
+    _selected.addAll(widget.preselectedIds.where((x) => x > 0));
+
+    if (widget.selectMode) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _loadList();
+      });
+    } else {
+      final hasInitialDoc = _isMeaningfulDoc(widget.initialDocJson);
+      final hasGraphicToLoad = graphicId != null && graphicId! > 0;
+
+      if (!hasInitialDoc && !hasGraphicToLoad) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _fitField();
+        });
+      }
+    }
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _loadList();
+      _restoreDraftIfAny();
     });
-  } else {
-    final hasInitialDoc = _isMeaningfulDoc(widget.initialDocJson);
-    final hasGraphicToLoad = graphicId != null && graphicId! > 0;
-
-    if (!hasInitialDoc && !hasGraphicToLoad) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _fitField();
-      });
-    }
   }
-
-  WidgetsBinding.instance.addPostFrameCallback((_) {
-    _restoreDraftIfAny();
-  });
-}
-
 
   // ==========================
   // 3D Pro: реальные игроки команды
@@ -1079,20 +1090,35 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
 
   List<Map<String, dynamic>> _tgExtractPlayersList(dynamic data) {
     if (data is List) {
-      return data.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+      return data
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
     }
 
     if (data is Map) {
-      for (final key in const ['players', 'data', 'items', 'members', 'athletes']) {
+      for (final key in const [
+        'players',
+        'data',
+        'items',
+        'members',
+        'athletes'
+      ]) {
         final value = data[key];
         if (value is List) {
-          return value.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+          return value
+              .whereType<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList();
         }
       }
 
       for (final value in data.values) {
         if (value is List) {
-          final mapped = value.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+          final mapped = value
+              .whereType<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList();
           if (mapped.isNotEmpty) return mapped;
         }
       }
@@ -1107,11 +1133,11 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
       try {
         final cloud = await widget.personalLibraryLoader!(userId);
         final items = cloud.map((e) => Map<String, dynamic>.from(e)).toList();
-        items.sort((a, b) =>
-            ((b['updated_at_ms'] as num?)?.toInt() ?? 0)
-                .compareTo((a['updated_at_ms'] as num?)?.toInt() ?? 0));
+        items.sort((a, b) => ((b['updated_at_ms'] as num?)?.toInt() ?? 0)
+            .compareTo((a['updated_at_ms'] as num?)?.toInt() ?? 0));
         // Also keep a local cache so the editor still has a library offline.
-        await PrefUtils.setStringValue(_personalGraphicsStorageKey, jsonEncode(items));
+        await PrefUtils.setStringValue(
+            _personalGraphicsStorageKey, jsonEncode(items));
         return items;
       } catch (_) {
         // Fall through to the profile cache when the cloud is unavailable.
@@ -1126,9 +1152,8 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
           .whereType<Map>()
           .map((e) => Map<String, dynamic>.from(e))
           .toList();
-      items.sort((a, b) =>
-          ((b['updated_at_ms'] as num?)?.toInt() ?? 0)
-              .compareTo((a['updated_at_ms'] as num?)?.toInt() ?? 0));
+      items.sort((a, b) => ((b['updated_at_ms'] as num?)?.toInt() ?? 0)
+          .compareTo((a['updated_at_ms'] as num?)?.toInt() ?? 0));
       return items;
     } catch (_) {
       return <Map<String, dynamic>>[];
@@ -1190,7 +1215,8 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
       final items = await _loadPersonalGraphicsLibrary();
       final now = DateTime.now();
       final id = graphicId ?? now.microsecondsSinceEpoch;
-      final title = 'Схема ${now.day.toString().padLeft(2, '0')}.${now.month.toString().padLeft(2, '0')}';
+      final title =
+          'Схема ${now.day.toString().padLeft(2, '0')}.${now.month.toString().padLeft(2, '0')}';
       var payload = <String, dynamic>{
         'id': id,
         'owner_type': 'user',
@@ -1210,7 +1236,8 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
           final parsedCloudId = cloudId is num
               ? cloudId.toInt()
               : int.tryParse('${cloudId ?? ''}');
-          if (parsedCloudId != null && parsedCloudId > 0) graphicId = parsedCloudId;
+          if (parsedCloudId != null && parsedCloudId > 0)
+            graphicId = parsedCloudId;
         }
       }
       final effectiveIdValue = payload['id'];
@@ -1229,7 +1256,8 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
       }
       // Keep the personal library bounded; documents themselves remain complete.
       if (items.length > 150) items.removeRange(150, items.length);
-      await PrefUtils.setStringValue(_personalGraphicsStorageKey, jsonEncode(items));
+      await PrefUtils.setStringValue(
+          _personalGraphicsStorageKey, jsonEncode(items));
       if (!mounted) return true;
       setState(() {
         graphicId = effectiveId;
@@ -1238,7 +1266,8 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
         _dirty = false;
       });
       await _clearDraft();
-      _showEditorNotice('Схема сохранена', 'Личный Workspace · профиль пользователя');
+      _showEditorNotice(
+          'Схема сохранена', 'Личный Workspace · профиль пользователя');
       return true;
     } catch (e) {
       _showEditorNotice('Не удалось сохранить', '$e', isError: true);
@@ -1259,7 +1288,8 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
       final itemId = value is num ? value.toInt() : int.tryParse('$value');
       return itemId == id;
     });
-    await PrefUtils.setStringValue(_personalGraphicsStorageKey, jsonEncode(items));
+    await PrefUtils.setStringValue(
+        _personalGraphicsStorageKey, jsonEncode(items));
   }
 
   Future<void> _showPersonalLibrary() async {
@@ -1272,7 +1302,8 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
       builder: (ctx) => SafeArea(
         child: Container(
           margin: const EdgeInsets.all(14),
-          constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * .78),
+          constraints:
+              BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * .78),
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(20),
@@ -1301,13 +1332,24 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Личный Workspace', style: TextStyle(fontFamily: AppTypography.fontFamily, fontWeight: FontWeight.w900, fontSize: AppTypography.sectionTitleSize)),
+                          Text('Личный Workspace',
+                              style: TextStyle(
+                                  fontFamily: AppTypography.fontFamily,
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: AppTypography.sectionTitleSize)),
                           SizedBox(height: 2),
-                          Text('Схемы этого профиля, без привязки к клубу', style: TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textMuted, fontWeight: FontWeight.w600, fontSize: AppTypography.captionSize)),
+                          Text('Схемы этого профиля, без привязки к клубу',
+                              style: TextStyle(
+                                  fontFamily: AppTypography.fontFamily,
+                                  color: TgScreenPalette.textMuted,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: AppTypography.captionSize)),
                         ],
                       ),
                     ),
-                    IconButton(onPressed: () => Navigator.of(ctx).pop(), icon: const Icon(Icons.close_rounded)),
+                    IconButton(
+                        onPressed: () => Navigator.of(ctx).pop(),
+                        icon: const Icon(Icons.close_rounded)),
                   ],
                 ),
               ),
@@ -1317,7 +1359,11 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                     ? const Center(
                         child: Padding(
                           padding: EdgeInsets.all(28),
-                          child: Text('Пока нет сохранённых схем', style: TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textMuted, fontWeight: FontWeight.w700)),
+                          child: Text('Пока нет сохранённых схем',
+                              style: TextStyle(
+                                  fontFamily: AppTypography.fontFamily,
+                                  color: TgScreenPalette.textMuted,
+                                  fontWeight: FontWeight.w700)),
                         ),
                       )
                     : ListView.separated(
@@ -1327,32 +1373,54 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                         itemBuilder: (_, index) {
                           final item = items[index];
                           final value = item['id'];
-                          final id = value is num ? value.toInt() : int.tryParse('$value') ?? 0;
+                          final id = value is num
+                              ? value.toInt()
+                              : int.tryParse('$value') ?? 0;
                           final title = '${item['title'] ?? 'Схема'}';
                           final updated = '${item['updated_at'] ?? ''}';
                           return Material(
                             color: const Color(0xFFFAFBFC),
                             borderRadius: BorderRadius.circular(12),
                             child: ListTile(
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12)),
                               leading: const CircleAvatar(
                                 backgroundColor: TgScreenPalette.lightGreen,
-                                child: Icon(Icons.sports_soccer_rounded, color: TgScreenPalette.primaryGreen, size: 18),
+                                child: Icon(Icons.sports_soccer_rounded,
+                                    color: TgScreenPalette.primaryGreen,
+                                    size: 18),
                               ),
-                              title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontFamily: AppTypography.fontFamily, fontWeight: FontWeight.w800)),
-                              subtitle: Text(updated, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textMuted, fontSize: AppTypography.captionSize)),
-                              onTap: id <= 0 ? null : () async {
-                                Navigator.of(ctx).pop();
-                                await _loadPersonalGraphicById(id);
-                              },
+                              title: Text(title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                      fontFamily: AppTypography.fontFamily,
+                                      fontWeight: FontWeight.w800)),
+                              subtitle: Text(updated,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                      fontFamily: AppTypography.fontFamily,
+                                      color: TgScreenPalette.textMuted,
+                                      fontSize: AppTypography.captionSize)),
+                              onTap: id <= 0
+                                  ? null
+                                  : () async {
+                                      Navigator.of(ctx).pop();
+                                      await _loadPersonalGraphicById(id);
+                                    },
                               trailing: IconButton(
                                 tooltip: 'Удалить',
-                                icon: const Icon(Icons.delete_outline_rounded, size: 18, color: TgScreenPalette.textMuted),
-                                onPressed: id <= 0 ? null : () async {
-                                  await _deletePersonalGraphic(id);
-                                  if (ctx.mounted) Navigator.of(ctx).pop();
-                                  await _showPersonalLibrary();
-                                },
+                                icon: const Icon(Icons.delete_outline_rounded,
+                                    size: 18, color: TgScreenPalette.textMuted),
+                                onPressed: id <= 0
+                                    ? null
+                                    : () async {
+                                        await _deletePersonalGraphic(id);
+                                        if (ctx.mounted)
+                                          Navigator.of(ctx).pop();
+                                        await _showPersonalLibrary();
+                                      },
                               ),
                             ),
                           );
@@ -1414,35 +1482,42 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
       }
       _playbackSteps
         ..clear()
-        ..addAll(steps.isEmpty ? const ['Шаг 1', 'Шаг 2', 'Шаг 3', 'Шаг 4'] : steps);
+        ..addAll(
+            steps.isEmpty ? const ['Шаг 1', 'Шаг 2', 'Шаг 3', 'Шаг 4'] : steps);
 
       final durationItems = map['stepDurationsMs'];
       _playbackStepDurationsMs
         ..clear()
         ..addAll(List<int>.generate(_playbackSteps.length, (index) {
-          final rawDuration = durationItems is List && index < durationItems.length
-              ? durationItems[index]
-              : _defaultPlaybackStepDurationMs;
+          final rawDuration =
+              durationItems is List && index < durationItems.length
+                  ? durationItems[index]
+                  : _defaultPlaybackStepDurationMs;
           final parsed = rawDuration is num
               ? rawDuration.toInt()
-              : int.tryParse(rawDuration.toString()) ?? _defaultPlaybackStepDurationMs;
+              : int.tryParse(rawDuration.toString()) ??
+                  _defaultPlaybackStepDurationMs;
           return parsed.clamp(500, 5000).toInt();
         }));
 
       _playbackRouteStepById
         ..clear()
-        ..addAll(((map['routeSteps'] is Map) ? Map<String, dynamic>.from(map['routeSteps']) : const <String, dynamic>{})
-            .map((k, v) => MapEntry(k, v is int ? v : int.tryParse(v.toString()) ?? 0)));
+        ..addAll(((map['routeSteps'] is Map)
+                ? Map<String, dynamic>.from(map['routeSteps'])
+                : const <String, dynamic>{})
+            .map((k, v) =>
+                MapEntry(k, v is int ? v : int.tryParse(v.toString()) ?? 0)));
       _playbackRouteSubjectById
         ..clear()
-        ..addAll(((map['routeSubjects'] is Map) ? Map<String, dynamic>.from(map['routeSubjects']) : const <String, dynamic>{})
+        ..addAll(((map['routeSubjects'] is Map)
+                ? Map<String, dynamic>.from(map['routeSubjects'])
+                : const <String, dynamic>{})
             .map((k, v) => MapEntry(k, v.toString())));
 
       _currentPlaybackStep = ((map['currentStep'] is int)
-                  ? map['currentStep'] as int
-                  : int.tryParse('${map['currentStep'] ?? 0}') ?? 0)
-              .clamp(0, _playbackSteps.length - 1)
-          as int;
+              ? map['currentStep'] as int
+              : int.tryParse('${map['currentStep'] ?? 0}') ?? 0)
+          .clamp(0, _playbackSteps.length - 1) as int;
       _pendingPlaybackSubjectId = null;
       _playbackProgress = 0.0;
       _playbackRunning = false;
@@ -1462,7 +1537,9 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
     final routes = _collectPlaybackRoutes();
     if (routes.isEmpty) {
       _showEditorSnackBar(
-        const SnackBar(content: Text('Для анимации привяжите игрока или мяч к маршруту в текущем шаге.')),
+        const SnackBar(
+            content: Text(
+                'Для анимации привяжите игрока или мяч к маршруту в текущем шаге.')),
       );
       return;
     }
@@ -1479,7 +1556,8 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
         _playbackProgress += inc;
         if (_playbackProgress >= 1.0) {
           _playbackProgress = 0.0;
-          _currentPlaybackStep = (_currentPlaybackStep + 1) % _playbackSteps.length;
+          _currentPlaybackStep =
+              (_currentPlaybackStep + 1) % _playbackSteps.length;
         }
       });
       _applyPlaybackObjectPositions();
@@ -1515,15 +1593,20 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
   }
 
   void _duplicatePlaybackStep() {
-    final safeIndex = _currentPlaybackStep.clamp(0, _playbackSteps.length - 1) as int;
+    final safeIndex =
+        _currentPlaybackStep.clamp(0, _playbackSteps.length - 1) as int;
     final source = _playbackSteps[safeIndex];
     final routesBeforeCopy = _collectPlaybackRoutes();
-    final routesInStep = routesBeforeCopy.where((route) => route.stepIndex == safeIndex).toList();
-    final copies = state.duplicateAnimationRoutes(routesInStep.map((route) => route.routeId));
+    final routesInStep = routesBeforeCopy
+        .where((route) => route.stepIndex == safeIndex)
+        .toList();
+    final copies = state
+        .duplicateAnimationRoutes(routesInStep.map((route) => route.routeId));
     setState(() {
       final insertIndex = _currentPlaybackStep + 1;
       _playbackSteps.insert(insertIndex, '$source копия');
-      _playbackStepDurationsMs.insert(insertIndex, _playbackStepDurationsMs[safeIndex]);
+      _playbackStepDurationsMs.insert(
+          insertIndex, _playbackStepDurationsMs[safeIndex]);
       final updated = <String, int>{};
       for (final entry in _playbackRouteStepById.entries) {
         final v = entry.value;
@@ -1536,7 +1619,8 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
       for (final entry in copies.entries) {
         updated[entry.value] = insertIndex;
         final subjectId = _playbackRouteSubjectById[entry.key];
-        if (subjectId != null) _playbackRouteSubjectById[entry.value] = subjectId;
+        if (subjectId != null)
+          _playbackRouteSubjectById[entry.value] = subjectId;
       }
       _playbackRouteStepById
         ..clear()
@@ -1567,15 +1651,18 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
       _playbackRouteStepById
         ..clear()
         ..addAll(updated);
-      _currentPlaybackStep = _currentPlaybackStep.clamp(0, _playbackSteps.length - 1) as int;
+      _currentPlaybackStep =
+          _currentPlaybackStep.clamp(0, _playbackSteps.length - 1) as int;
       _playbackProgress = 0.0;
     });
     _markPlaybackDirty();
   }
 
   void _setCurrentPlaybackDurationMs(int value) {
-    if (_currentPlaybackStep < 0 || _currentPlaybackStep >= _playbackStepDurationsMs.length) return;
-    setState(() => _playbackStepDurationsMs[_currentPlaybackStep] = value.clamp(500, 5000).toInt());
+    if (_currentPlaybackStep < 0 ||
+        _currentPlaybackStep >= _playbackStepDurationsMs.length) return;
+    setState(() => _playbackStepDurationsMs[_currentPlaybackStep] =
+        value.clamp(500, 5000).toInt());
     _markPlaybackDirty();
   }
 
@@ -1586,7 +1673,8 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
   }
 
   Future<void> _renamePlaybackStep() async {
-    final ctrl = TextEditingController(text: _playbackSteps[_currentPlaybackStep]);
+    final ctrl =
+        TextEditingController(text: _playbackSteps[_currentPlaybackStep]);
     final value = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -1594,11 +1682,16 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
         content: TextField(
           controller: ctrl,
           autofocus: true,
-          decoration: const InputDecoration(hintText: 'Например: Розыгрыш, Передача, Завершение'),
+          decoration: const InputDecoration(
+              hintText: 'Например: Розыгрыш, Передача, Завершение'),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Отмена')),
-          FilledButton(onPressed: () => Navigator.of(ctx).pop(ctrl.text.trim()), child: const Text('Сохранить')),
+          TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Отмена')),
+          FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(ctrl.text.trim()),
+              child: const Text('Сохранить')),
         ],
       ),
     );
@@ -1634,18 +1727,22 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
     if (_isPlaybackBallStamp(stamp)) return 'мяч';
     if (stamp.asset.startsWith('sportoteka://player-avatar')) {
       final uri = Uri.tryParse(stamp.asset);
-      final name = (uri?.queryParameters['name'] ?? stamp.name ?? 'Игрок').trim();
+      final name =
+          (uri?.queryParameters['name'] ?? stamp.name ?? 'Игрок').trim();
       final number = (uri?.queryParameters['number'] ?? '').trim();
       return number.isNotEmpty ? '$name #$number' : name;
     }
-    return (stamp.name?.trim().isNotEmpty == true) ? stamp.name!.trim() : 'объект';
+    return (stamp.name?.trim().isNotEmpty == true)
+        ? stamp.name!.trim()
+        : 'объект';
   }
 
   void _capturePlaybackSubject() {
     final selected = state.selected;
     if (selected is! TgStamp) {
       _showEditorSnackBar(
-        const SnackBar(content: Text('Сначала выберите игрока или мяч на поле.')),
+        const SnackBar(
+            content: Text('Сначала выберите игрока или мяч на поле.')),
       );
       return;
     }
@@ -1653,7 +1750,8 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
       _pendingPlaybackSubjectId = selected.id;
     });
     _showEditorSnackBar(
-      SnackBar(content: Text('Для анимации выбран: ${_playbackSubjectLabel()}')),
+      SnackBar(
+          content: Text('Для анимации выбран: ${_playbackSubjectLabel()}')),
     );
   }
 
@@ -1661,13 +1759,17 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
     final selected = state.selected;
     if (!_isPlaybackRouteElement(selected)) {
       _showEditorSnackBar(
-        const SnackBar(content: Text('Выберите маршрут (линию, кривую, волну, пружину, спираль или зигзаг).')),
+        const SnackBar(
+            content: Text(
+                'Выберите маршрут (линию, кривую, волну, пружину, спираль или зигзаг).')),
       );
       return;
     }
     if (_pendingPlaybackSubjectId == null) {
       _showEditorSnackBar(
-        const SnackBar(content: Text('Сначала выберите игрока или мяч и нажмите «Взять объект».')),
+        const SnackBar(
+            content: Text(
+                'Сначала выберите игрока или мяч и нажмите «Взять объект».')),
       );
       return;
     }
@@ -1678,7 +1780,9 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
     });
     _markPlaybackDirty();
     _showEditorSnackBar(
-      SnackBar(content: Text('Маршрут привязан к ${_playbackStepLabel(_currentPlaybackStep).toLowerCase()} для ${_playbackSubjectLabel()}')),
+      SnackBar(
+          content: Text(
+              'Маршрут привязан к ${_playbackStepLabel(_currentPlaybackStep).toLowerCase()} для ${_playbackSubjectLabel()}')),
     );
   }
 
@@ -1686,7 +1790,8 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
     final selected = state.selected;
     if (!_isPlaybackRouteElement(selected)) {
       _showEditorSnackBar(
-        const SnackBar(content: Text('Выберите маршрут, чтобы очистить привязку.')),
+        const SnackBar(
+            content: Text('Выберите маршрут, чтобы очистить привязку.')),
       );
       return;
     }
@@ -1715,7 +1820,9 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
   }
 
   List<_TgStepBindingInfo> _playbackBindingsForCurrentStep() {
-    final routes = _collectPlaybackRoutes().where((e) => e.stepIndex == _currentPlaybackStep).toList();
+    final routes = _collectPlaybackRoutes()
+        .where((e) => e.stepIndex == _currentPlaybackStep)
+        .toList();
     return routes.map((route) {
       return _TgStepBindingInfo(
         routeId: route.routeId,
@@ -1801,7 +1908,10 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
 
   bool _isPlaybackBallStamp(TgStamp stamp) {
     final a = stamp.asset.toLowerCase();
-    return a.startsWith('sportoteka://ball') || a.contains('/ball') || a.contains('myach') || a.contains('мяч');
+    return a.startsWith('sportoteka://ball') ||
+        a.contains('/ball') ||
+        a.contains('myach') ||
+        a.contains('мяч');
   }
 
   bool _isPlaybackPlayerStamp(TgStamp stamp) {
@@ -1880,7 +1990,8 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
     if (e is TgWavy) {
       final basePoints = <Offset>[e.start, ...e.controlPoints, e.endPoint];
       final base = _pointOnPolyline(basePoints, t);
-      final ahead = _pointOnPolyline(basePoints, (t + .01).clamp(0.0, 1.0).toDouble());
+      final ahead =
+          _pointOnPolyline(basePoints, (t + .01).clamp(0.0, 1.0).toDouble());
       final dir = ahead - base;
       final len = math.max(1.0, dir.distance).toDouble();
       final normal = Offset(-dir.dy / len, dir.dx / len);
@@ -1938,7 +2049,8 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
     for (int i = 0; i < lengths.length; i++) {
       final len = lengths[i];
       if (target <= len || i == lengths.length - 1) {
-        final local = len <= .0001 ? 0.0 : (target / len).clamp(0.0, 1.0).toDouble();
+        final local =
+            len <= .0001 ? 0.0 : (target / len).clamp(0.0, 1.0).toDouble();
         return Offset.lerp(points[i], points[i + 1], local) ?? points[i];
       }
       target -= len;
@@ -1986,36 +2098,37 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
   }
 
   void _applyDocJson(dynamic doc) {
-  try {
-    _restoringDraft = true;
+    try {
+      _restoringDraft = true;
 
-    final parsed = (doc is String) ? jsonDecode(doc) : doc;
-    Map<String, dynamic>? parsedMap;
-    if (parsed is Map<String, dynamic>) {
-      parsedMap = parsed;
-      state.loadFromJson(parsed);
-    } else if (parsed is Map) {
-      parsedMap = Map<String, dynamic>.from(parsed);
-      state.loadFromJson(parsedMap);
+      final parsed = (doc is String) ? jsonDecode(doc) : doc;
+      Map<String, dynamic>? parsedMap;
+      if (parsed is Map<String, dynamic>) {
+        parsedMap = parsed;
+        state.loadFromJson(parsed);
+      } else if (parsed is Map) {
+        parsedMap = Map<String, dynamic>.from(parsed);
+        state.loadFromJson(parsedMap);
+      }
+
+      _restorePlaybackPayload(parsedMap?['playback']);
+      _dirty = false;
+
+      // ✅ ВАЖНО:
+      // если схема загружена из JSON, значит камера/viewport уже есть,
+      // и повторный auto-fit делать не нужно
+      _didLayoutFit = true;
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        setState(() {});
+      });
+    } catch (_) {
+    } finally {
+      _restoringDraft = false;
     }
-
-    _restorePlaybackPayload(parsedMap?['playback']);
-    _dirty = false;
-
-    // ✅ ВАЖНО:
-    // если схема загружена из JSON, значит камера/viewport уже есть,
-    // и повторный auto-fit делать не нужно
-    _didLayoutFit = true;
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      setState(() {});
-    });
-  } catch (_) {
-  } finally {
-    _restoringDraft = false;
   }
-}
+
   // ==========================
   // Panel fractions
   // ==========================
@@ -2119,11 +2232,11 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
     }
   }
 
-
   void _openPropertiesPanel() {
     if (state.selected == null) return;
     _openLegacyPanel(TgPanel.editor);
   }
+
   void _openTacticalPadSheet() {
     showModalBottomSheet<void>(
       context: context,
@@ -2141,70 +2254,114 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
               boxShadow: TgScreenPalette.windowShadow,
             ),
             child: ConstrainedBox(
-              constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * .86),
+              constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(ctx).size.height * .86),
               child: SingleChildScrollView(
                 child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      width: 42,
-                      height: 42,
-                      decoration: BoxDecoration(
-                        color: TgScreenPalette.lightGreen,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Icon(Icons.auto_awesome_motion_rounded, color: TgScreenPalette.primaryGreen),
+                    Row(
+                      children: [
+                        Container(
+                          width: 42,
+                          height: 42,
+                          decoration: BoxDecoration(
+                            color: TgScreenPalette.lightGreen,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(Icons.auto_awesome_motion_rounded,
+                              color: TgScreenPalette.primaryGreen),
+                        ),
+                        const SizedBox(width: 4),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Расстановки и тактика',
+                                  style: TextStyle(
+                                      fontFamily: AppTypography.fontFamily,
+                                      color: TgScreenPalette.textPrimary,
+                                      fontSize: AppTypography.screenTitleSize,
+                                      fontWeight: FontWeight.w900)),
+                              SizedBox(height: 2),
+                              Text(
+                                  'Пресеты добавляются на поле и попадают в слои',
+                                  style: TextStyle(
+                                      fontFamily: AppTypography.fontFamily,
+                                      color: TgScreenPalette.textMuted,
+                                      fontSize: AppTypography.badgeSize,
+                                      fontWeight: FontWeight.w600)),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                            onPressed: () => Navigator.of(ctx).pop(),
+                            icon: const Icon(Icons.close_rounded)),
+                      ],
                     ),
-                    const SizedBox(width: 4),
-                    const Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Расстановки и тактика', style: TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textPrimary, fontSize: AppTypography.screenTitleSize, fontWeight: FontWeight.w900)),
-                          SizedBox(height: 2),
-                          Text('Пресеты добавляются на поле и попадают в слои', style: TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textMuted, fontSize: AppTypography.badgeSize, fontWeight: FontWeight.w600)),
-                        ],
-                      ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      children: [
+                        _tacticalPresetButton(ctx, '4-3-3', 'Расстановка',
+                            Icons.grid_view_rounded, '433'),
+                        _tacticalPresetButton(ctx, '4-4-2', 'Расстановка',
+                            Icons.grid_view_rounded, '442'),
+                        _tacticalPresetButton(ctx, '3-5-2', 'Расстановка',
+                            Icons.grid_view_rounded, '352'),
+                        _tacticalPresetButton(ctx, '4-2-3-1', 'Расстановка',
+                            Icons.grid_view_rounded, '4231'),
+                        _tacticalPresetButton(ctx, '5-3-2', 'Расстановка',
+                            Icons.grid_view_rounded, '532'),
+                        _tacticalPresetButton(ctx, 'Билдап', 'Выход из обороны',
+                            Icons.account_tree_rounded, 'build_up'),
+                        _tacticalPresetButton(ctx, 'От ворот', 'Розыгрыш GK',
+                            Icons.sports_soccer_rounded, 'goal_kick'),
+                        _tacticalPresetButton(ctx, 'Контратака',
+                            'Быстрый выход', Icons.flash_on_rounded, 'counter'),
+                        _tacticalPresetButton(ctx, 'Прессинг', 'Зона давления',
+                            Icons.radar_rounded, 'pressing'),
+                        _tacticalPresetButton(ctx, 'Низкий блок', '5-4-1',
+                            Icons.shield_outlined, 'low_block'),
+                        _tacticalPresetButton(ctx, 'Рондо', '5v2',
+                            Icons.radio_button_checked_rounded, 'rondo'),
+                        _tacticalPresetButton(ctx, 'Скорость', 'Станции',
+                            Icons.speed_rounded, 'speed'),
+                        _tacticalPresetButton(ctx, 'Офсайд', 'Линия защиты',
+                            Icons.align_vertical_center_rounded, 'offside'),
+                        _tacticalPresetButton(ctx, 'Забегание', 'Overlap',
+                            Icons.trending_up_rounded, 'overlap'),
+                        _tacticalPresetButton(ctx, '3-й игрок', 'Комбинация',
+                            Icons.hub_rounded, 'third_man'),
+                        _tacticalPresetButton(ctx, 'Угловой', 'Стандарт',
+                            Icons.flag_rounded, 'corner'),
+                        _tacticalPresetButton(ctx, 'Штрафной', 'Стандарт',
+                            Icons.sports_rounded, 'free_kick'),
+                        _tacticalPresetButton(
+                            ctx,
+                            'Атака 1–4',
+                            'Шаги',
+                            Icons.play_circle_outline_rounded,
+                            'animation_attack'),
+                        _tacticalPresetButton(ctx, 'Полный пакет', 'всё сразу',
+                            Icons.auto_awesome_rounded, 'full_pack'),
+                        _tacticalPresetButton(ctx, 'Очистить', 'слой схемы',
+                            Icons.cleaning_services_rounded, 'clear_tactical'),
+                      ],
                     ),
-                    IconButton(onPressed: () => Navigator.of(ctx).pop(), icon: const Icon(Icons.close_rounded)),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Шаблон создаёт группу объектов. В «Слоях» можно скрыть или заблокировать группу, в «Свойствах» — изменить отдельный объект.',
+                      style: TextStyle(
+                          fontFamily: AppTypography.fontFamily,
+                          color: TgScreenPalette.textMuted,
+                          fontSize: AppTypography.secondarySize,
+                          height: 1.35,
+                          fontWeight: FontWeight.w600),
+                    ),
                   ],
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  children: [
-                    _tacticalPresetButton(ctx, '4-3-3', 'Расстановка', Icons.grid_view_rounded, '433'),
-                    _tacticalPresetButton(ctx, '4-4-2', 'Расстановка', Icons.grid_view_rounded, '442'),
-                    _tacticalPresetButton(ctx, '3-5-2', 'Расстановка', Icons.grid_view_rounded, '352'),
-                    _tacticalPresetButton(ctx, '4-2-3-1', 'Расстановка', Icons.grid_view_rounded, '4231'),
-                    _tacticalPresetButton(ctx, '5-3-2', 'Расстановка', Icons.grid_view_rounded, '532'),
-                    _tacticalPresetButton(ctx, 'Билдап', 'Выход из обороны', Icons.account_tree_rounded, 'build_up'),
-                    _tacticalPresetButton(ctx, 'От ворот', 'Розыгрыш GK', Icons.sports_soccer_rounded, 'goal_kick'),
-                    _tacticalPresetButton(ctx, 'Контратака', 'Быстрый выход', Icons.flash_on_rounded, 'counter'),
-                    _tacticalPresetButton(ctx, 'Прессинг', 'Зона давления', Icons.radar_rounded, 'pressing'),
-                    _tacticalPresetButton(ctx, 'Низкий блок', '5-4-1', Icons.shield_outlined, 'low_block'),
-                    _tacticalPresetButton(ctx, 'Рондо', '5v2', Icons.radio_button_checked_rounded, 'rondo'),
-                    _tacticalPresetButton(ctx, 'Скорость', 'Станции', Icons.speed_rounded, 'speed'),
-                    _tacticalPresetButton(ctx, 'Офсайд', 'Линия защиты', Icons.align_vertical_center_rounded, 'offside'),
-                    _tacticalPresetButton(ctx, 'Забегание', 'Overlap', Icons.trending_up_rounded, 'overlap'),
-                    _tacticalPresetButton(ctx, '3-й игрок', 'Комбинация', Icons.hub_rounded, 'third_man'),
-                    _tacticalPresetButton(ctx, 'Угловой', 'Стандарт', Icons.flag_rounded, 'corner'),
-                    _tacticalPresetButton(ctx, 'Штрафной', 'Стандарт', Icons.sports_rounded, 'free_kick'),
-                    _tacticalPresetButton(ctx, 'Атака 1–4', 'Шаги', Icons.play_circle_outline_rounded, 'animation_attack'),
-                    _tacticalPresetButton(ctx, 'Полный пакет', 'всё сразу', Icons.auto_awesome_rounded, 'full_pack'),
-                    _tacticalPresetButton(ctx, 'Очистить', 'слой схемы', Icons.cleaning_services_rounded, 'clear_tactical'),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                const Text(
-                  'Шаблон создаёт группу объектов. В «Слоях» можно скрыть или заблокировать группу, в «Свойствах» — изменить отдельный объект.',
-                  style: TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textMuted, fontSize: AppTypography.secondarySize, height: 1.35, fontWeight: FontWeight.w600),
-                ),
-              ],
                 ),
               ),
             ),
@@ -2214,7 +2371,8 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
     );
   }
 
-  Widget _tacticalPresetButton(BuildContext sheetContext, String title, String subtitle, IconData icon, String key) {
+  Widget _tacticalPresetButton(BuildContext sheetContext, String title,
+      String subtitle, IconData icon, String key) {
     return SizedBox(
       width: 150,
       child: Material(
@@ -2245,9 +2403,23 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
               children: [
                 Icon(icon, color: TgScreenPalette.primaryGreen, size: 22),
                 const SizedBox(height: 8),
-                Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textPrimary, fontSize: AppTypography.bodySize, fontWeight: FontWeight.w900)),
+                Text(title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontFamily: AppTypography.fontFamily,
+                        color: TgScreenPalette.textPrimary,
+                        fontSize: AppTypography.bodySize,
+                        fontWeight: FontWeight.w900)),
                 const SizedBox(height: 2),
-                Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textMuted, fontSize: AppTypography.badgeSize, fontWeight: FontWeight.w700)),
+                Text(subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontFamily: AppTypography.fontFamily,
+                        color: TgScreenPalette.textMuted,
+                        fontSize: AppTypography.badgeSize,
+                        fontWeight: FontWeight.w700)),
               ],
             ),
           ),
@@ -2255,6 +2427,7 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
       ),
     );
   }
+
   // ==========================
   // Fit field
   // ==========================
@@ -2265,7 +2438,10 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
     // viewport канваса. Так оно не залезает под верхнюю/нижнюю панели и не
     // обрезается плавающими контролами.
     final canvasRb = _canvasKey.currentContext?.findRenderObject();
-    if (canvasRb is RenderBox && canvasRb.hasSize && canvasRb.size.width > 0 && canvasRb.size.height > 0) {
+    if (canvasRb is RenderBox &&
+        canvasRb.hasSize &&
+        canvasRb.size.width > 0 &&
+        canvasRb.size.height > 0) {
       if (state.is3DMode) {
         _canvasKey.currentState?.fitFieldToViewport3D(canvasRb.size);
       } else {
@@ -2277,7 +2453,8 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
     final rb = _rightPaneKey.currentContext?.findRenderObject();
     final full = (rb is RenderBox) ? rb.size : MediaQuery.of(context).size;
     final safeBottom = MediaQuery.of(context).padding.bottom;
-    final viewportH = (full.height - _topBarH - safeBottom - (120.0)).clamp(1.0, 200000.0);
+    final viewportH =
+        (full.height - _topBarH - safeBottom - (120.0)).clamp(1.0, 200000.0);
     final viewportW = (full.width - 32.0).clamp(1.0, 200000.0);
 
     final viewport = Size(viewportW, viewportH);
@@ -2328,7 +2505,9 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
       }
 
       dynamic item = data["item"] ?? data["data"];
-      if (item == null && data["items"] is List && (data["items"] as List).isNotEmpty) {
+      if (item == null &&
+          data["items"] is List &&
+          (data["items"] as List).isNotEmpty) {
         item = (data["items"] as List).first;
       }
       if (item is! Map) throw "No item in response";
@@ -2362,10 +2541,12 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
     return _captureBoundaryPng(_repaintKey, pixelRatio: 3.0);
   }
 
-  Future<Uint8List?> _captureBoundaryPng(GlobalKey key, {double pixelRatio = 3.0}) async {
+  Future<Uint8List?> _captureBoundaryPng(GlobalKey key,
+      {double pixelRatio = 3.0}) async {
     try {
       await WidgetsBinding.instance.endOfFrame;
-      final boundary = key.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+      final boundary =
+          key.currentContext?.findRenderObject() as RenderRepaintBoundary?;
       if (boundary == null) return null;
 
       final ui.Image image = await boundary.toImage(pixelRatio: pixelRatio);
@@ -2391,8 +2572,10 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
 
     setState(() {
       _exportCleanMode = true;
-      if (step != null) _currentPlaybackStep = step.clamp(0, _playbackSteps.length - 1) as int;
-      if (progress != null) _playbackProgress = progress.clamp(0.0, 1.0).toDouble();
+      if (step != null)
+        _currentPlaybackStep = step.clamp(0, _playbackSteps.length - 1) as int;
+      if (progress != null)
+        _playbackProgress = progress.clamp(0.0, 1.0).toDouble();
       _playbackRunning = includeAnimation;
     });
     if (includeAnimation) {
@@ -2509,10 +2692,15 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
   }
 
   Future<void> _exportCurrentPng() async {
-    final png = await _captureCleanExportPng(step: _currentPlaybackStep, progress: _playbackProgress, includeAnimation: true);
+    final png = await _captureCleanExportPng(
+        step: _currentPlaybackStep,
+        progress: _playbackProgress,
+        includeAnimation: true);
     if (!mounted) return;
     if (png == null) {
-      _showEditorSnackBar(const SnackBar(content: Text('Не удалось собрать PNG')), isError: true);
+      _showEditorSnackBar(
+          const SnackBar(content: Text('Не удалось собрать PNG')),
+          isError: true);
       return;
     }
     final saved = await _saveExportWithDialog(
@@ -2529,13 +2717,17 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
     final folder = _exportFolderName();
     var exported = 0;
     for (int i = 0; i < _playbackSteps.length; i++) {
-      final png = await _captureCleanExportPng(step: i, progress: 1.0, includeAnimation: true);
+      final png = await _captureCleanExportPng(
+          step: i, progress: 1.0, includeAnimation: true);
       if (png == null) continue;
-      await saveTgExportFile('step_${(i + 1).toString().padLeft(2, '0')}.png', png, mimeType: 'image/png', folderName: '$folder/steps');
+      await saveTgExportFile(
+          'step_${(i + 1).toString().padLeft(2, '0')}.png', png,
+          mimeType: 'image/png', folderName: '$folder/steps');
       exported++;
     }
     if (!mounted) return;
-    _showEditorSnackBar(SnackBar(content: Text('Экспортировано шагов: $exported')));
+    _showEditorSnackBar(
+        SnackBar(content: Text('Экспортировано шагов: $exported')));
   }
 
   Future<void> _exportAnimationFrames() async {
@@ -2545,10 +2737,12 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
     for (int step = 0; step < _playbackSteps.length; step++) {
       for (int frame = 0; frame < framesPerStep; frame++) {
         final t = framesPerStep <= 1 ? 1.0 : frame / (framesPerStep - 1);
-        final png = await _captureCleanExportPng(step: step, progress: t, includeAnimation: true);
+        final png = await _captureCleanExportPng(
+            step: step, progress: t, includeAnimation: true);
         if (png == null) continue;
         final frameNumber = (exported + 1).toString().padLeft(3, '0');
-        await saveTgExportFile('frame_$frameNumber.png', png, mimeType: 'image/png', folderName: '$folder/animation_frames');
+        await saveTgExportFile('frame_$frameNumber.png', png,
+            mimeType: 'image/png', folderName: '$folder/animation_frames');
         exported++;
       }
     }
@@ -2562,9 +2756,12 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
       'frames_count': exported,
       'scheme': docJson,
     });
-    await saveTgExportFile('scheme.json', Uint8List.fromList(utf8.encode(manifest)), mimeType: 'application/json', folderName: folder);
+    await saveTgExportFile(
+        'scheme.json', Uint8List.fromList(utf8.encode(manifest)),
+        mimeType: 'application/json', folderName: folder);
     if (!mounted) return;
-    _showEditorSnackBar(SnackBar(content: Text('Экспортировано кадров: $exported')));
+    _showEditorSnackBar(
+        SnackBar(content: Text('Экспортировано кадров: $exported')));
   }
 
   Future<void> _exportCurrentPdf() async {
@@ -2601,7 +2798,8 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
         extensions: const ['json'],
       );
       if (!mounted || saved == null) return;
-      _showEditorSnackBar(SnackBar(content: Text('JSON сцены сохранён: $saved')));
+      _showEditorSnackBar(
+          SnackBar(content: Text('JSON сцены сохранён: $saved')));
     } catch (error) {
       if (mounted) {
         _showEditorSnackBar(
@@ -2632,104 +2830,123 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
               boxShadow: TgScreenPalette.windowShadow,
             ),
             child: ConstrainedBox(
-              constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * .82),
+              constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(ctx).size.height * .82),
               child: SingleChildScrollView(
                 child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      width: 38,
-                      height: 38,
-                      decoration: BoxDecoration(
-                        color: TgScreenPalette.lightGreen,
-                        borderRadius: BorderRadius.circular(13),
-                      ),
-                      child: const Icon(Icons.file_download_rounded, color: TgScreenPalette.primaryGreen, size: 19),
+                    Row(
+                      children: [
+                        Container(
+                          width: 38,
+                          height: 38,
+                          decoration: BoxDecoration(
+                            color: TgScreenPalette.lightGreen,
+                            borderRadius: BorderRadius.circular(13),
+                          ),
+                          child: const Icon(Icons.file_download_rounded,
+                              color: TgScreenPalette.primaryGreen, size: 19),
+                        ),
+                        const SizedBox(width: 10),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Экспорт схемы',
+                                  style: TextStyle(
+                                      fontFamily: AppTypography.fontFamily,
+                                      color: TgScreenPalette.textPrimary,
+                                      fontSize: AppTypography.sectionTitleSize,
+                                      fontWeight: FontWeight.w900)),
+                              SizedBox(height: 2),
+                              Text(
+                                  'PNG и PDF сохраняются через системное «Сохранить как…». JSON содержит сцену и привязки анимации.',
+                                  style: TextStyle(
+                                      fontFamily: AppTypography.fontFamily,
+                                      color: TgScreenPalette.textMuted,
+                                      fontSize: AppTypography.secondarySize,
+                                      height: 1.25,
+                                      fontWeight: FontWeight.w500)),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: () => Navigator.of(ctx).pop(),
+                          icon: const Icon(Icons.close_rounded),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 10),
-                    const Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Экспорт схемы', style: TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textPrimary, fontSize: AppTypography.sectionTitleSize, fontWeight: FontWeight.w900)),
-                          SizedBox(height: 2),
-                          Text('PNG и PDF сохраняются через системное «Сохранить как…». JSON содержит сцену и привязки анимации.', style: TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textMuted, fontSize: AppTypography.secondarySize, height: 1.25, fontWeight: FontWeight.w500)),
-                        ],
-                      ),
+                    const SizedBox(height: 8),
+                    _ExportOptionTile(
+                      icon: Icons.image_rounded,
+                      title: 'PNG текущего кадра',
+                      subtitle: png == null
+                          ? 'Не удалось собрать кадр — попробуйте ещё раз после загрузки поля'
+                          : 'Чистый экспорт: поле, схема и текущий кадр анимации без панелей.',
+                      active: png != null,
+                      onTap: () async {
+                        Navigator.of(ctx).pop();
+                        await _exportCurrentPng();
+                      },
                     ),
-                    IconButton(
-                      onPressed: () => Navigator.of(ctx).pop(),
-                      icon: const Icon(Icons.close_rounded),
+                    const SizedBox(height: 8),
+                    _ExportOptionTile(
+                      icon: Icons.filter_1_rounded,
+                      title: 'PNG по шагам',
+                      subtitle:
+                          'Создаёт отдельные файлы step_01.png, step_02.png и так далее.',
+                      active: true,
+                      onTap: () async {
+                        Navigator.of(ctx).pop();
+                        await _exportStepPngs();
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    _ExportOptionTile(
+                      icon: Icons.movie_creation_outlined,
+                      title: 'Серия кадров анимации',
+                      subtitle:
+                          'Создаёт animation_frames/frame_001.png... и scheme.json для будущего GIF/видео.',
+                      active: true,
+                      onTap: () async {
+                        Navigator.of(ctx).pop();
+                        await _exportAnimationFrames();
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    _ExportOptionTile(
+                      icon: Icons.memory_rounded,
+                      title: 'JSON сцены',
+                      subtitle:
+                          'Координаты поля, объектов, камеры и слоёв для переноса и архива.',
+                      active: true,
+                      onTap: () async {
+                        Navigator.of(ctx).pop();
+                        await _exportSceneJson();
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    _ExportOptionTile(
+                      icon: Icons.picture_as_pdf_rounded,
+                      title: 'PDF текущей схемы',
+                      subtitle:
+                          'A4 landscape: поле, объекты и текущий кадр анимации без панелей.',
+                      active: true,
+                      onTap: () async {
+                        Navigator.of(ctx).pop();
+                        await _exportCurrentPdf();
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    const _ExportOptionTile(
+                      icon: Icons.video_file_outlined,
+                      title: 'GIF / MP4',
+                      subtitle:
+                          'Кадры уже экспортируются; кодек видео лучше подключать отдельным сервисом, чтобы не утяжелять Flutter-клиент.',
                     ),
                   ],
-                ),
-                const SizedBox(height: 8),
-                _ExportOptionTile(
-                  icon: Icons.image_rounded,
-                  title: 'PNG текущего кадра',
-                  subtitle: png == null
-                      ? 'Не удалось собрать кадр — попробуйте ещё раз после загрузки поля'
-                      : 'Чистый экспорт: поле, схема и текущий кадр анимации без панелей.',
-                  active: png != null,
-                  onTap: () async {
-                    Navigator.of(ctx).pop();
-                    await _exportCurrentPng();
-                  },
-                ),
-                const SizedBox(height: 8),
-                _ExportOptionTile(
-                  icon: Icons.filter_1_rounded,
-                  title: 'PNG по шагам',
-                  subtitle: 'Создаёт отдельные файлы step_01.png, step_02.png и так далее.',
-                  active: true,
-                  onTap: () async {
-                    Navigator.of(ctx).pop();
-                    await _exportStepPngs();
-                  },
-                ),
-                const SizedBox(height: 8),
-                _ExportOptionTile(
-                  icon: Icons.movie_creation_outlined,
-                  title: 'Серия кадров анимации',
-                  subtitle: 'Создаёт animation_frames/frame_001.png... и scheme.json для будущего GIF/видео.',
-                  active: true,
-                  onTap: () async {
-                    Navigator.of(ctx).pop();
-                    await _exportAnimationFrames();
-                  },
-                ),
-                const SizedBox(height: 8),
-                _ExportOptionTile(
-                  icon: Icons.memory_rounded,
-                  title: 'JSON сцены',
-                  subtitle: 'Координаты поля, объектов, камеры и слоёв для переноса и архива.',
-                  active: true,
-                  onTap: () async {
-                    Navigator.of(ctx).pop();
-                    await _exportSceneJson();
-                  },
-                ),
-                const SizedBox(height: 8),
-                _ExportOptionTile(
-                  icon: Icons.picture_as_pdf_rounded,
-                  title: 'PDF текущей схемы',
-                  subtitle: 'A4 landscape: поле, объекты и текущий кадр анимации без панелей.',
-                  active: true,
-                  onTap: () async {
-                    Navigator.of(ctx).pop();
-                    await _exportCurrentPdf();
-                  },
-                ),
-                const SizedBox(height: 8),
-                const _ExportOptionTile(
-                  icon: Icons.video_file_outlined,
-                  title: 'GIF / MP4',
-                  subtitle: 'Кадры уже экспортируются; кодек видео лучше подключать отдельным сервисом, чтобы не утяжелять Flutter-клиент.',
-                ),
-              ],
                 ),
               ),
             ),
@@ -2764,7 +2981,8 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
       if (parsed is List) {
         for (final item in parsed) {
           if (item is Map) {
-            final template = _TrainingTemplate.fromJson(Map<String, dynamic>.from(item));
+            final template =
+                _TrainingTemplate.fromJson(Map<String, dynamic>.from(item));
             if (template != null) list.add(template);
           }
         }
@@ -2781,29 +2999,35 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
   }
 
   Future<void> _persistUserTrainingTemplates() async {
-    final raw = jsonEncode(_userTrainingTemplates.map((e) => e.toJson()).toList());
+    final raw =
+        jsonEncode(_userTrainingTemplates.map((e) => e.toJson()).toList());
     await PrefUtils.setStringValue(_templatesStorageKey, raw);
   }
 
-  List<_TrainingTemplate> _filterTrainingTemplates(String category, String query) {
+  List<_TrainingTemplate> _filterTrainingTemplates(
+      String category, String query) {
     final q = query.trim().toLowerCase();
     return _allTrainingTemplates.where((template) {
       final catOk = category == 'Все' || template.category == category;
       if (!catOk) return false;
       if (q.isEmpty) return true;
-      final haystack = '${template.title} ${template.category} ${template.description}'.toLowerCase();
+      final haystack =
+          '${template.title} ${template.category} ${template.description}'
+              .toLowerCase();
       return haystack.contains(q);
     }).toList();
   }
 
   Future<void> _showSaveTemplateDialog() async {
     final titleCtrl = TextEditingController(text: _suggestTemplateTitle());
-    final descCtrl = TextEditingController(text: 'Пользовательский шаблон тренировки');
+    final descCtrl =
+        TextEditingController(text: 'Пользовательский шаблон тренировки');
     var category = 'Атака';
 
     final result = await _showWorkflowPanel<_TemplateDraft>(
       title: 'Сохранить шаблон',
-      subtitle: 'Шаблон попадёт в библиотеку тренировок и будет доступен в плане',
+      subtitle:
+          'Шаблон попадёт в библиотеку тренировок и будет доступен в плане',
       icon: Icons.bookmark_add_outlined,
       maxWidth: 520,
       builder: (panelContext) => StatefulBuilder(
@@ -2811,19 +3035,36 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            TextField(controller: titleCtrl, decoration: _workflowInputDecoration('Название', hint: 'Например: Рондо 5v2', icon: Icons.title_rounded)),
+            TextField(
+                controller: titleCtrl,
+                decoration: _workflowInputDecoration('Название',
+                    hint: 'Например: Рондо 5v2', icon: Icons.title_rounded)),
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
               value: category,
-              decoration: _workflowInputDecoration('Категория', icon: Icons.category_outlined),
-              items: _trainingTemplateCategories.where((e) => e != 'Все').map((e) => DropdownMenuItem<String>(value: e, child: Text(e))).toList(),
+              decoration: _workflowInputDecoration('Категория',
+                  icon: Icons.category_outlined),
+              items: _trainingTemplateCategories
+                  .where((e) => e != 'Все')
+                  .map(
+                      (e) => DropdownMenuItem<String>(value: e, child: Text(e)))
+                  .toList(),
               onChanged: (v) => setPanelState(() => category = v ?? category),
             ),
             const SizedBox(height: 12),
-            TextField(controller: descCtrl, minLines: 2, maxLines: 4, decoration: _workflowInputDecoration('Описание', hint: 'Цель упражнения, формат, подсказка тренеру', icon: Icons.notes_rounded)),
+            TextField(
+                controller: descCtrl,
+                minLines: 2,
+                maxLines: 4,
+                decoration: _workflowInputDecoration('Описание',
+                    hint: 'Цель упражнения, формат, подсказка тренеру',
+                    icon: Icons.notes_rounded)),
             const SizedBox(height: 14),
             Row(children: [
-              Expanded(child: OutlinedButton(onPressed: () => Navigator.of(panelContext).pop(), child: const Text('Отмена'))),
+              Expanded(
+                  child: OutlinedButton(
+                      onPressed: () => Navigator.of(panelContext).pop(),
+                      child: const Text('Отмена'))),
               const SizedBox(width: 10),
               Expanded(
                 child: FilledButton.icon(
@@ -2833,7 +3074,9 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                     Navigator.of(panelContext).pop(_TemplateDraft(
                       title: title,
                       category: category,
-                      description: descCtrl.text.trim().isEmpty ? 'Пользовательский шаблон' : descCtrl.text.trim(),
+                      description: descCtrl.text.trim().isEmpty
+                          ? 'Пользовательский шаблон'
+                          : descCtrl.text.trim(),
                     ));
                   },
                   icon: const Icon(Icons.save_outlined, size: 17),
@@ -2869,7 +3112,8 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
   }
 
   String _suggestTemplateTitle() {
-    final layers = state.layerNames.where((e) => e.startsWith('tactical_')).toList();
+    final layers =
+        state.layerNames.where((e) => e.startsWith('tactical_')).toList();
     if (layers.isNotEmpty) {
       return layers.first
           .replaceAll('tactical_', '')
@@ -2936,7 +3180,8 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
 
   Future<void> _deleteTrainingTemplate(_TrainingTemplate template) async {
     if (template.builtin) return;
-    setState(() => _userTrainingTemplates.removeWhere((e) => e.id == template.id));
+    setState(
+        () => _userTrainingTemplates.removeWhere((e) => e.id == template.id));
     await _persistUserTrainingTemplates();
     if (!mounted) return;
     _showEditorSnackBar(
@@ -3006,7 +3251,8 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                               color: TgScreenPalette.lightGreen,
                               borderRadius: BorderRadius.circular(10),
                             ),
-                            child: const Icon(Icons.bookmarks_rounded, color: TgScreenPalette.primaryGreen, size: 17),
+                            child: const Icon(Icons.bookmarks_rounded,
+                                color: TgScreenPalette.primaryGreen, size: 17),
                           ),
                           const SizedBox(width: 10),
                           const Expanded(
@@ -3057,10 +3303,14 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                       child: TextField(
                         controller: searchCtrl,
                         onChanged: (v) => setSheetState(() => query = v),
-                        style: const TextStyle(fontFamily: AppTypography.fontFamily, fontSize: AppTypography.secondarySize, fontWeight: FontWeight.w700),
+                        style: const TextStyle(
+                            fontFamily: AppTypography.fontFamily,
+                            fontSize: AppTypography.secondarySize,
+                            fontWeight: FontWeight.w700),
                         decoration: InputDecoration(
                           isDense: true,
-                          prefixIcon: const Icon(Icons.search_rounded, size: 18),
+                          prefixIcon:
+                              const Icon(Icons.search_rounded, size: 18),
                           hintText: 'Поиск шаблона',
                           filled: true,
                           fillColor: TgScreenPalette.surfaceLight,
@@ -3086,14 +3336,18 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                             label: Text(cat),
                             labelStyle: TextStyle(
                               fontFamily: AppTypography.fontFamily,
-                              color: active ? Colors.white : TgScreenPalette.textSecondary,
+                              color: active
+                                  ? Colors.white
+                                  : TgScreenPalette.textSecondary,
                               fontWeight: FontWeight.w800,
                               fontSize: AppTypography.captionSize,
                             ),
                             selectedColor: TgScreenPalette.primaryGreen,
                             backgroundColor: TgScreenPalette.surfaceLight,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                            onSelected: (_) => setSheetState(() => category = cat),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10)),
+                            onSelected: (_) =>
+                                setSheetState(() => category = cat),
                           );
                         },
                       ),
@@ -3106,7 +3360,10 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                                 padding: EdgeInsets.all(28),
                                 child: Text(
                                   'Шаблоны не найдены',
-                                  style: TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textMuted, fontWeight: FontWeight.w700),
+                                  style: TextStyle(
+                                      fontFamily: AppTypography.fontFamily,
+                                      color: TgScreenPalette.textMuted,
+                                      fontWeight: FontWeight.w700),
                                 ),
                               ),
                             )
@@ -3114,7 +3371,8 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                               shrinkWrap: true,
                               padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
                               itemCount: templates.length,
-                              separatorBuilder: (_, __) => const SizedBox(height: 8),
+                              separatorBuilder: (_, __) =>
+                                  const SizedBox(height: 8),
                               itemBuilder: (ctx, i) {
                                 final template = templates[i];
                                 return _TemplateCard(
@@ -3127,10 +3385,12 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                                   onDelete: template.builtin
                                       ? null
                                       : () async {
-                                          await _deleteTrainingTemplate(template);
+                                          await _deleteTrainingTemplate(
+                                              template);
                                           setSheetState(() {});
                                         },
-                                  onExport: () => _exportTrainingTemplate(template),
+                                  onExport: () =>
+                                      _exportTrainingTemplate(template),
                                   onAddToPlan: () async {
                                     await _addTemplateToTrainingPlan(template);
                                     setSheetState(() {});
@@ -3150,7 +3410,6 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
     searchCtrl.dispose();
   }
 
-
   // ==========================
   // Training plan
   // ==========================
@@ -3163,7 +3422,8 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
       if (parsed is List) {
         for (final item in parsed) {
           if (item is Map) {
-            final exercise = _TrainingPlanExercise.fromJson(Map<String, dynamic>.from(item));
+            final exercise =
+                _TrainingPlanExercise.fromJson(Map<String, dynamic>.from(item));
             if (exercise != null) list.add(exercise);
           }
         }
@@ -3180,7 +3440,8 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
   }
 
   Future<void> _persistTrainingPlan() async {
-    final raw = jsonEncode(_trainingPlanExercises.map((e) => e.toJson()).toList());
+    final raw =
+        jsonEncode(_trainingPlanExercises.map((e) => e.toJson()).toList());
     await PrefUtils.setStringValue(_trainingPlanStorageKey, raw);
   }
 
@@ -3189,7 +3450,9 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
       final raw = await PrefUtils.getStringValue(key);
       if (raw == null || raw.trim().isEmpty) return <String, dynamic>{};
       final parsed = jsonDecode(raw);
-      return parsed is Map ? Map<String, dynamic>.from(parsed) : <String, dynamic>{};
+      return parsed is Map
+          ? Map<String, dynamic>.from(parsed)
+          : <String, dynamic>{};
     } catch (_) {
       return <String, dynamic>{};
     }
@@ -3212,13 +3475,18 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
   }
 
   Future<void> _persistTrainingWorkflowMeta() async {
-    await PrefUtils.setStringValue(_trainingCalendarStorageKey, jsonEncode(_trainingCalendarMeta));
-    await PrefUtils.setStringValue(_trainingAttendanceStorageKey, jsonEncode(_trainingAttendanceMeta));
-    await PrefUtils.setStringValue(_trainingExecutionStorageKey, jsonEncode(_trainingExecutionMeta));
-    await PrefUtils.setStringValue(_trainingTrackerStorageKey, jsonEncode(_trainingTrackerMeta));
+    await PrefUtils.setStringValue(
+        _trainingCalendarStorageKey, jsonEncode(_trainingCalendarMeta));
+    await PrefUtils.setStringValue(
+        _trainingAttendanceStorageKey, jsonEncode(_trainingAttendanceMeta));
+    await PrefUtils.setStringValue(
+        _trainingExecutionStorageKey, jsonEncode(_trainingExecutionMeta));
+    await PrefUtils.setStringValue(
+        _trainingTrackerStorageKey, jsonEncode(_trainingTrackerMeta));
   }
 
-  int get _trainingPlanTotalMinutes => _trainingPlanExercises.fold<int>(0, (sum, e) => sum + e.durationMin);
+  int get _trainingPlanTotalMinutes =>
+      _trainingPlanExercises.fold<int>(0, (sum, e) => sum + e.durationMin);
 
   int get _trainingAttendancePresent {
     final v = _trainingAttendanceMeta['present'];
@@ -3227,7 +3495,11 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
 
   int get _trainingAttendanceExpected {
     final v = _trainingAttendanceMeta['expected'];
-    final fromPlan = _trainingPlanExercises.isEmpty ? 0 : _trainingPlanExercises.map((e) => e.playersCount).fold<int>(0, math.max);
+    final fromPlan = _trainingPlanExercises.isEmpty
+        ? 0
+        : _trainingPlanExercises
+            .map((e) => e.playersCount)
+            .fold<int>(0, math.max);
     return v is int ? v : int.tryParse('${v ?? fromPlan}') ?? fromPlan;
   }
 
@@ -3256,7 +3528,8 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
       'cmr_linkage': <String, dynamic>{
         'plans_module': 'cmr_plans_panel',
         'calendar_event_id': _trainingCalendarMeta['event_id'],
-        'attendance_event_id': _trainingAttendanceMeta['event_id'] ?? _trainingCalendarMeta['event_id'],
+        'attendance_event_id': _trainingAttendanceMeta['event_id'] ??
+            _trainingCalendarMeta['event_id'],
         'tracker_session_id': _trainingTrackerMeta['session_id'],
       },
       'current_scheme': _currentDocJsonWithPlayback(),
@@ -3272,10 +3545,14 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
     String? initialEquipment,
     int? initialPlayers,
   }) async {
-    final titleCtrl = TextEditingController(text: initialTitle ?? _suggestTemplateTitle());
-    final goalCtrl = TextEditingController(text: initialGoal ?? 'Цель упражнения');
-    final equipmentCtrl = TextEditingController(text: initialEquipment ?? 'мячи, фишки, манишки');
-    final durationCtrl = TextEditingController(text: '${initialDuration ?? 12}');
+    final titleCtrl =
+        TextEditingController(text: initialTitle ?? _suggestTemplateTitle());
+    final goalCtrl =
+        TextEditingController(text: initialGoal ?? 'Цель упражнения');
+    final equipmentCtrl =
+        TextEditingController(text: initialEquipment ?? 'мячи, фишки, манишки');
+    final durationCtrl =
+        TextEditingController(text: '${initialDuration ?? 12}');
     final playersCtrl = TextEditingController(text: '${initialPlayers ?? 10}');
     var block = initialBlock ?? 'Основная часть';
 
@@ -3290,27 +3567,56 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              TextField(controller: titleCtrl, decoration: _workflowInputDecoration('Упражнение', hint: 'Например: Рондо 5v2', icon: Icons.sports_soccer_rounded)),
+              TextField(
+                  controller: titleCtrl,
+                  decoration: _workflowInputDecoration('Упражнение',
+                      hint: 'Например: Рондо 5v2',
+                      icon: Icons.sports_soccer_rounded)),
               const SizedBox(height: 10),
               DropdownButtonFormField<String>(
                 value: block,
-                decoration: _workflowInputDecoration('Блок занятия', icon: Icons.view_agenda_outlined),
-                items: _trainingPlanBlocks.map((e) => DropdownMenuItem<String>(value: e, child: Text(e))).toList(),
+                decoration: _workflowInputDecoration('Блок занятия',
+                    icon: Icons.view_agenda_outlined),
+                items: _trainingPlanBlocks
+                    .map((e) =>
+                        DropdownMenuItem<String>(value: e, child: Text(e)))
+                    .toList(),
                 onChanged: (v) => setPanelState(() => block = v ?? block),
               ),
               const SizedBox(height: 10),
               Row(children: [
-                Expanded(child: TextField(controller: durationCtrl, keyboardType: TextInputType.number, decoration: _workflowInputDecoration('Минуты'))),
+                Expanded(
+                    child: TextField(
+                        controller: durationCtrl,
+                        keyboardType: TextInputType.number,
+                        decoration: _workflowInputDecoration('Минуты'))),
                 const SizedBox(width: 10),
-                Expanded(child: TextField(controller: playersCtrl, keyboardType: TextInputType.number, decoration: _workflowInputDecoration('Игроков'))),
+                Expanded(
+                    child: TextField(
+                        controller: playersCtrl,
+                        keyboardType: TextInputType.number,
+                        decoration: _workflowInputDecoration('Игроков'))),
               ]),
               const SizedBox(height: 10),
-              TextField(controller: goalCtrl, minLines: 2, maxLines: 4, decoration: _workflowInputDecoration('Цель / акценты тренера', icon: Icons.flag_outlined)),
+              TextField(
+                  controller: goalCtrl,
+                  minLines: 2,
+                  maxLines: 4,
+                  decoration: _workflowInputDecoration('Цель / акценты тренера',
+                      icon: Icons.flag_outlined)),
               const SizedBox(height: 10),
-              TextField(controller: equipmentCtrl, minLines: 1, maxLines: 3, decoration: _workflowInputDecoration('Инвентарь', icon: Icons.inventory_2_outlined)),
+              TextField(
+                  controller: equipmentCtrl,
+                  minLines: 1,
+                  maxLines: 3,
+                  decoration: _workflowInputDecoration('Инвентарь',
+                      icon: Icons.inventory_2_outlined)),
               const SizedBox(height: 14),
               Row(children: [
-                Expanded(child: OutlinedButton(onPressed: () => Navigator.of(panelContext).pop(), child: const Text('Отмена'))),
+                Expanded(
+                    child: OutlinedButton(
+                        onPressed: () => Navigator.of(panelContext).pop(),
+                        child: const Text('Отмена'))),
                 const SizedBox(width: 10),
                 Expanded(
                   child: FilledButton.icon(
@@ -3320,10 +3626,20 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                       Navigator.of(panelContext).pop(_PlanExerciseDraft(
                         title: title,
                         block: block,
-                        durationMin: (int.tryParse(durationCtrl.text.trim())?.clamp(1, 240) as num?)?.toInt() ?? 12,
-                        playersCount: (int.tryParse(playersCtrl.text.trim())?.clamp(1, 99) as num?)?.toInt() ?? 10,
-                        goal: goalCtrl.text.trim().isEmpty ? 'Цель упражнения' : goalCtrl.text.trim(),
-                        equipment: equipmentCtrl.text.trim().isEmpty ? 'мячи, фишки, манишки' : equipmentCtrl.text.trim(),
+                        durationMin: (int.tryParse(durationCtrl.text.trim())
+                                    ?.clamp(1, 240) as num?)
+                                ?.toInt() ??
+                            12,
+                        playersCount: (int.tryParse(playersCtrl.text.trim())
+                                    ?.clamp(1, 99) as num?)
+                                ?.toInt() ??
+                            10,
+                        goal: goalCtrl.text.trim().isEmpty
+                            ? 'Цель упражнения'
+                            : goalCtrl.text.trim(),
+                        equipment: equipmentCtrl.text.trim().isEmpty
+                            ? 'мячи, фишки, манишки'
+                            : equipmentCtrl.text.trim(),
                       ));
                     },
                     icon: const Icon(Icons.add_rounded, size: 17),
@@ -3346,7 +3662,8 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
   }
 
   Future<void> _addCurrentSchemeToTrainingPlan() async {
-    final draft = await _showExerciseDraftDialog(initialTitle: _suggestTemplateTitle());
+    final draft =
+        await _showExerciseDraftDialog(initialTitle: _suggestTemplateTitle());
     if (draft == null) return;
     final exercise = _TrainingPlanExercise(
       id: 'exercise_${DateTime.now().millisecondsSinceEpoch}',
@@ -3362,7 +3679,8 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
     setState(() => _trainingPlanExercises.add(exercise));
     await _persistTrainingPlan();
     if (!mounted) return;
-    _showEditorSnackBar(SnackBar(content: Text('Добавлено в план: ${exercise.title}')));
+    _showEditorSnackBar(
+        SnackBar(content: Text('Добавлено в план: ${exercise.title}')));
   }
 
   Future<void> _addTemplateToTrainingPlan(_TrainingTemplate template) async {
@@ -3374,7 +3692,9 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
       initialPlayers: 10,
     );
     if (draft == null) return;
-    final doc = template.docJson == null ? null : Map<String, dynamic>.from(template.docJson!);
+    final doc = template.docJson == null
+        ? null
+        : Map<String, dynamic>.from(template.docJson!);
     final exercise = _TrainingPlanExercise(
       id: 'exercise_${DateTime.now().millisecondsSinceEpoch}',
       title: draft.title,
@@ -3392,7 +3712,8 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
     setState(() => _trainingPlanExercises.add(exercise));
     await _persistTrainingPlan();
     if (!mounted) return;
-    _showEditorSnackBar(SnackBar(content: Text('Шаблон добавлен в план: ${exercise.title}')));
+    _showEditorSnackBar(
+        SnackBar(content: Text('Шаблон добавлен в план: ${exercise.title}')));
   }
 
   String _blockForTemplateCategory(String category) {
@@ -3442,10 +3763,12 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _fitField();
     });
-    _showEditorSnackBar(SnackBar(content: Text('Открыто упражнение: ${exercise.title}')));
+    _showEditorSnackBar(
+        SnackBar(content: Text('Открыто упражнение: ${exercise.title}')));
   }
 
-  Future<void> _duplicateTrainingPlanExercise(_TrainingPlanExercise exercise) async {
+  Future<void> _duplicateTrainingPlanExercise(
+      _TrainingPlanExercise exercise) async {
     final copy = exercise.copyWith(
       id: 'exercise_${DateTime.now().millisecondsSinceEpoch}',
       title: '${exercise.title} копия',
@@ -3455,8 +3778,10 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
     await _persistTrainingPlan();
   }
 
-  Future<void> _deleteTrainingPlanExercise(_TrainingPlanExercise exercise) async {
-    setState(() => _trainingPlanExercises.removeWhere((e) => e.id == exercise.id));
+  Future<void> _deleteTrainingPlanExercise(
+      _TrainingPlanExercise exercise) async {
+    setState(
+        () => _trainingPlanExercises.removeWhere((e) => e.id == exercise.id));
     await _persistTrainingPlan();
   }
 
@@ -3484,8 +3809,6 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
     _showEditorSnackBar(SnackBar(content: Text('План экспортирован: $saved')));
   }
 
-
-
   Future<T?> _showWorkflowPanel<T>({
     required String title,
     required String subtitle,
@@ -3509,7 +3832,8 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
           child: Align(
             alignment: isPhone ? Alignment.bottomCenter : Alignment.centerRight,
             child: Padding(
-              padding: EdgeInsets.fromLTRB(isPhone ? 10 : 22, 10, isPhone ? 10 : 18, isPhone ? 10 : 12),
+              padding: EdgeInsets.fromLTRB(
+                  isPhone ? 10 : 22, 10, isPhone ? 10 : 18, isPhone ? 10 : 12),
               child: Material(
                 color: Colors.transparent,
                 child: ConstrainedBox(
@@ -3531,7 +3855,8 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
         );
       },
       transitionBuilder: (context, animation, secondaryAnimation, child) {
-        final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
+        final curved =
+            CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
         return FadeTransition(
           opacity: curved,
           child: SlideTransition(
@@ -3546,7 +3871,8 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
     );
   }
 
-  InputDecoration _workflowInputDecoration(String label, {String? hint, IconData? icon}) {
+  InputDecoration _workflowInputDecoration(String label,
+      {String? hint, IconData? icon}) {
     return InputDecoration(
       labelText: label,
       hintText: hint,
@@ -3555,10 +3881,23 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
       filled: true,
       fillColor: TgScreenPalette.surfaceLight,
       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-      labelStyle: const TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textMuted, fontWeight: FontWeight.w700, fontSize: AppTypography.captionSize),
-      hintStyle: const TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textLight, fontWeight: FontWeight.w600, fontSize: AppTypography.captionSize),
-      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: TgScreenPalette.borderLight)),
-      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: TgScreenPalette.primaryGreen, width: 1.2)),
+      labelStyle: const TextStyle(
+          fontFamily: AppTypography.fontFamily,
+          color: TgScreenPalette.textMuted,
+          fontWeight: FontWeight.w700,
+          fontSize: AppTypography.captionSize),
+      hintStyle: const TextStyle(
+          fontFamily: AppTypography.fontFamily,
+          color: TgScreenPalette.textLight,
+          fontWeight: FontWeight.w600,
+          fontSize: AppTypography.captionSize),
+      enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: TgScreenPalette.borderLight)),
+      focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(
+              color: TgScreenPalette.primaryGreen, width: 1.2)),
     );
   }
 
@@ -3576,10 +3915,13 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
     return <String, dynamic>{'value': decoded};
   }
 
-  Future<Map<String, int>> _loadCmrAttendanceSummaryByEventId(String eventId) async {
+  Future<Map<String, int>> _loadCmrAttendanceSummaryByEventId(
+      String eventId) async {
     final safeEventId = eventId.trim();
     if (safeEventId.isEmpty) return const <String, int>{};
-    final uri = Uri.parse('https://sportotekaapp.ru/api/get_team_attendance.php').replace(queryParameters: {'event_id': safeEventId});
+    final uri =
+        Uri.parse('https://sportotekaapp.ru/api/get_team_attendance.php')
+            .replace(queryParameters: {'event_id': safeEventId});
     final resp = await http.get(uri).timeout(const Duration(seconds: 12));
     final data = _decodeWorkflowMap(resp.body);
     final rawItems = data['items'] ?? data['data'] ?? data['attendance'];
@@ -3616,63 +3958,112 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
     };
   }
 
-  Future<Map<String, dynamic>> _loadTrackerSummaryBySessionId(String sessionId) async {
+  Future<Map<String, dynamic>> _loadTrackerSummaryBySessionId(
+      String sessionId) async {
     final sid = sessionId.trim();
     if (sid.isEmpty) return <String, dynamic>{};
 
     Map<String, dynamic> extract(Map<String, dynamic> data) {
-      final report = data['report'] is Map ? Map<String, dynamic>.from(data['report'] as Map) : data;
+      final report = data['report'] is Map
+          ? Map<String, dynamic>.from(data['report'] as Map)
+          : data;
       final summary = report['summary'] is Map
           ? Map<String, dynamic>.from(report['summary'] as Map)
-          : (report['team_summary'] is Map ? Map<String, dynamic>.from(report['team_summary'] as Map) : report);
+          : (report['team_summary'] is Map
+              ? Map<String, dynamic>.from(report['team_summary'] as Map)
+              : report);
       Object? pick(List<String> keys) {
         for (final map in [summary, report, data]) {
           for (final key in keys) {
-            if (map[key] != null && map[key].toString().trim().isNotEmpty) return map[key];
+            if (map[key] != null && map[key].toString().trim().isNotEmpty)
+              return map[key];
           }
         }
         return null;
       }
+
       return <String, dynamic>{
         'session_id': sid,
-        'distance_m': double.tryParse('${pick(['distance_m', 'total_distance_m', 'team_distance_m', 'distance']) ?? 0}'.replaceAll(',', '.')) ?? 0,
-        'load_score': double.tryParse('${pick(['load_score', 'team_load_score', 'load']) ?? 0}'.replaceAll(',', '.')) ?? 0,
-        'sprint_count': int.tryParse('${pick(['sprint_count', 'team_sprint_count', 'sprints']) ?? 0}') ?? 0,
-        'max_speed_kmh': double.tryParse('${pick(['max_speed_kmh', 'team_max_speed_kmh', 'max_speed']) ?? 0}'.replaceAll(',', '.')) ?? 0,
-        'players_count': int.tryParse('${pick(['players_count', 'active_players', 'players']) ?? 0}') ?? 0,
-        'pdf_url': 'https://sportotekaapp.ru/api/tracker/export_training_report_pdf.php?session_id=$sid&team_id=${widget.resolvedTeamId}&template=analytics_ru&inline=1&print=1&v=87',
-        'csv_url': 'https://sportotekaapp.ru/api/tracker/export_training_report_csv.php?session_id=$sid&team_id=${widget.resolvedTeamId}&v=87',
+        'distance_m': double.tryParse('${pick([
+                          'distance_m',
+                          'total_distance_m',
+                          'team_distance_m',
+                          'distance'
+                        ]) ?? 0}'
+                .replaceAll(',', '.')) ??
+            0,
+        'load_score': double.tryParse(
+                '${pick(['load_score', 'team_load_score', 'load']) ?? 0}'
+                    .replaceAll(',', '.')) ??
+            0,
+        'sprint_count': int.tryParse('${pick([
+                      'sprint_count',
+                      'team_sprint_count',
+                      'sprints'
+                    ]) ?? 0}') ??
+            0,
+        'max_speed_kmh': double.tryParse('${pick([
+                          'max_speed_kmh',
+                          'team_max_speed_kmh',
+                          'max_speed'
+                        ]) ?? 0}'
+                .replaceAll(',', '.')) ??
+            0,
+        'players_count': int.tryParse('${pick([
+                      'players_count',
+                      'active_players',
+                      'players'
+                    ]) ?? 0}') ??
+            0,
+        'pdf_url':
+            'https://sportotekaapp.ru/api/tracker/export_training_report_pdf.php?session_id=$sid&team_id=${widget.resolvedTeamId}&template=analytics_ru&inline=1&print=1&v=87',
+        'csv_url':
+            'https://sportotekaapp.ru/api/tracker/export_training_report_csv.php?session_id=$sid&team_id=${widget.resolvedTeamId}&v=87',
         'loaded_from': 'tracker_report_api',
         'updated_at': DateTime.now().toIso8601String(),
       };
     }
 
     try {
-      final reportUri = Uri.parse('https://sportotekaapp.ru/api/tracker/get_training_report.php').replace(queryParameters: {
+      final reportUri = Uri.parse(
+              'https://sportotekaapp.ru/api/tracker/get_training_report.php')
+          .replace(queryParameters: {
         'session_id': sid,
         'team_id': widget.resolvedTeamId.toString(),
       });
-      final resp = await http.get(reportUri).timeout(const Duration(seconds: 14));
+      final resp =
+          await http.get(reportUri).timeout(const Duration(seconds: 14));
       final data = _decodeWorkflowMap(resp.body);
       if (data.isNotEmpty && data['success'] != false) return extract(data);
     } catch (_) {}
 
-    final resp = await http.post(
-      Uri.parse('https://sportotekaapp.ru/api/get_training_tracker_summary.php'),
-      headers: {'Content-Type': 'application/json; charset=utf-8'},
-      body: jsonEncode({'club_id': widget.resolvedClubId, 'team_id': widget.resolvedTeamId, 'session_id': sid}),
-    ).timeout(const Duration(seconds: 12));
+    final resp = await http
+        .post(
+          Uri.parse(
+              'https://sportotekaapp.ru/api/get_training_tracker_summary.php'),
+          headers: {'Content-Type': 'application/json; charset=utf-8'},
+          body: jsonEncode({
+            'club_id': widget.resolvedClubId,
+            'team_id': widget.resolvedTeamId,
+            'session_id': sid
+          }),
+        )
+        .timeout(const Duration(seconds: 12));
     final data = _decodeWorkflowMap(resp.body);
     final item = data['item'] ?? data['data'] ?? data;
     if (item is Map) return extract(Map<String, dynamic>.from(item));
-    return <String, dynamic>{'session_id': sid, 'updated_at': DateTime.now().toIso8601String()};
+    return <String, dynamic>{
+      'session_id': sid,
+      'updated_at': DateTime.now().toIso8601String()
+    };
   }
 
   Future<void> _showWorkflowSyncPanel() async {
     await _loadTrainingPlan();
     await _loadUserTrainingTemplates();
     await _loadTrainingWorkflowMeta();
-    String statusText = 'Готово к синхронизации с CMR: планы, шаблоны, календарь, посещаемость, трекер и текущая схема.';
+    String statusText =
+        'Готово к синхронизации с CMR: планы, шаблоны, календарь, посещаемость, трекер и текущая схема.';
     bool running = false;
     await _showWorkflowPanel<void>(
       title: 'Синхронизация CMR',
@@ -3703,20 +4094,68 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  _WorkflowChip(icon: Icons.event_note_rounded, label: '${_trainingPlanExercises.length} упражн. • $_trainingPlanTotalMinutes мин', active: _trainingPlanExercises.isNotEmpty),
-                  _WorkflowChip(icon: Icons.calendar_month_rounded, label: (_trainingCalendarMeta['date'] ?? '').toString().isEmpty ? 'календарь не задан' : 'календарь связан', active: (_trainingCalendarMeta['date'] ?? '').toString().isNotEmpty),
-                  _WorkflowChip(icon: Icons.groups_rounded, label: 'посещаемость ${_trainingAttendancePresent}/${_trainingAttendanceExpected}', active: _trainingAttendancePresent > 0),
-                  _WorkflowChip(icon: Icons.sensors_rounded, label: (_trainingTrackerMeta['session_id'] ?? '').toString().isEmpty ? 'трекер не связан' : 'трекер #${_trainingTrackerMeta['session_id']}', active: (_trainingTrackerMeta['session_id'] ?? '').toString().isNotEmpty),
+                  _WorkflowChip(
+                      icon: Icons.event_note_rounded,
+                      label:
+                          '${_trainingPlanExercises.length} упражн. • $_trainingPlanTotalMinutes мин',
+                      active: _trainingPlanExercises.isNotEmpty),
+                  _WorkflowChip(
+                      icon: Icons.calendar_month_rounded,
+                      label: (_trainingCalendarMeta['date'] ?? '')
+                              .toString()
+                              .isEmpty
+                          ? 'календарь не задан'
+                          : 'календарь связан',
+                      active: (_trainingCalendarMeta['date'] ?? '')
+                          .toString()
+                          .isNotEmpty),
+                  _WorkflowChip(
+                      icon: Icons.groups_rounded,
+                      label:
+                          'посещаемость ${_trainingAttendancePresent}/${_trainingAttendanceExpected}',
+                      active: _trainingAttendancePresent > 0),
+                  _WorkflowChip(
+                      icon: Icons.sensors_rounded,
+                      label: (_trainingTrackerMeta['session_id'] ?? '')
+                              .toString()
+                              .isEmpty
+                          ? 'трекер не связан'
+                          : 'трекер #${_trainingTrackerMeta['session_id']}',
+                      active: (_trainingTrackerMeta['session_id'] ?? '')
+                          .toString()
+                          .isNotEmpty),
                 ],
               ),
               const SizedBox(height: 14),
-              _WorkflowInfoCard(icon: running ? Icons.cloud_sync_rounded : Icons.cloud_done_outlined, title: running ? 'Идёт синхронизация' : 'Статус', text: statusText),
+              _WorkflowInfoCard(
+                  icon: running
+                      ? Icons.cloud_sync_rounded
+                      : Icons.cloud_done_outlined,
+                  title: running ? 'Идёт синхронизация' : 'Статус',
+                  text: statusText),
               const SizedBox(height: 14),
               Row(
                 children: [
-                  Expanded(child: OutlinedButton.icon(onPressed: running ? null : () => _exportTrainingPlanJson(), icon: const Icon(Icons.file_download_outlined, size: 17), label: const Text('Offline JSON'))),
+                  Expanded(
+                      child: OutlinedButton.icon(
+                          onPressed:
+                              running ? null : () => _exportTrainingPlanJson(),
+                          icon: const Icon(Icons.file_download_outlined,
+                              size: 17),
+                          label: const Text('Offline JSON'))),
                   const SizedBox(width: 10),
-                  Expanded(child: FilledButton.icon(onPressed: running ? null : run, icon: running ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Icon(Icons.sync_rounded, size: 17), label: Text(running ? 'Отправка...' : 'Синхронизировать'))),
+                  Expanded(
+                      child: FilledButton.icon(
+                          onPressed: running ? null : run,
+                          icon: running
+                              ? const SizedBox(
+                                  width: 14,
+                                  height: 14,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2, color: Colors.white))
+                              : const Icon(Icons.sync_rounded, size: 17),
+                          label: Text(
+                              running ? 'Отправка...' : 'Синхронизировать'))),
                 ],
               ),
             ],
@@ -3733,18 +4172,26 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
     if (_workflowSyncing) return 'Синхронизация уже выполняется';
     setState(() => _workflowSyncing = true);
     try {
-      final resp = await http.post(
-        Uri.parse('https://sportotekaapp.ru/api/save_training_workflow.php'),
-        headers: {'Content-Type': 'application/json; charset=utf-8'},
-        body: jsonEncode(_buildTrainingWorkflowPayload()),
-      ).timeout(const Duration(seconds: 14));
+      final resp = await http
+          .post(
+            Uri.parse(
+                'https://sportotekaapp.ru/api/save_training_workflow.php'),
+            headers: {'Content-Type': 'application/json; charset=utf-8'},
+            body: jsonEncode(_buildTrainingWorkflowPayload()),
+          )
+          .timeout(const Duration(seconds: 14));
       final raw = resp.body.trim();
-      final ok = resp.statusCode >= 200 && resp.statusCode < 300 && raw.isNotEmpty && !raw.startsWith('<');
+      final ok = resp.statusCode >= 200 &&
+          resp.statusCode < 300 &&
+          raw.isNotEmpty &&
+          !raw.startsWith('<');
       if (!ok) throw 'Сервер не принял workflow';
       final data = _decodeWorkflowMap(raw);
       if (data['success'] == true || data['status'] == 'success') {
-        final msg = 'План, шаблоны, календарь, посещаемость, отчёт и трекер синхронизированы с CMR';
-        if (!silent && mounted) _showEditorSnackBar(SnackBar(content: Text(msg)));
+        final msg =
+            'План, шаблоны, календарь, посещаемость, отчёт и трекер синхронизированы с CMR';
+        if (!silent && mounted)
+          _showEditorSnackBar(SnackBar(content: Text(msg)));
         return msg;
       } else {
         throw (data['message'] ?? 'Ошибка синхронизации').toString();
@@ -3757,8 +4204,10 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
         mimeType: 'application/json',
         folderName: _exportFolderName(),
       );
-      final msg = 'Серверная синхронизация недоступна, создан offline-файл: $saved';
-      if (!silent && mounted) _showEditorSnackBar(SnackBar(content: Text(msg)), isWarning: true);
+      final msg =
+          'Серверная синхронизация недоступна, создан offline-файл: $saved';
+      if (!silent && mounted)
+        _showEditorSnackBar(SnackBar(content: Text(msg)), isWarning: true);
       return msg;
     } finally {
       if (mounted) setState(() => _workflowSyncing = false);
@@ -3767,12 +4216,22 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
 
   Future<void> _showCalendarLinkDialog() async {
     await _loadTrainingWorkflowMeta();
-    final eventIdCtrl = TextEditingController(text: (_trainingCalendarMeta['event_id'] ?? '').toString());
-    final titleCtrl = TextEditingController(text: (_trainingCalendarMeta['title'] ?? 'Тренировка ${widget.resolvedTeamName}').toString());
-    final dateCtrl = TextEditingController(text: (_trainingCalendarMeta['date'] ?? DateTime.now().toIso8601String().substring(0, 10)).toString());
-    final timeCtrl = TextEditingController(text: (_trainingCalendarMeta['time'] ?? '18:00').toString());
-    final locationCtrl = TextEditingController(text: (_trainingCalendarMeta['location'] ?? 'Поле').toString());
-    final noteCtrl = TextEditingController(text: (_trainingCalendarMeta['note'] ?? '').toString());
+    final eventIdCtrl = TextEditingController(
+        text: (_trainingCalendarMeta['event_id'] ?? '').toString());
+    final titleCtrl = TextEditingController(
+        text: (_trainingCalendarMeta['title'] ??
+                'Тренировка ${widget.resolvedTeamName}')
+            .toString());
+    final dateCtrl = TextEditingController(
+        text: (_trainingCalendarMeta['date'] ??
+                DateTime.now().toIso8601String().substring(0, 10))
+            .toString());
+    final timeCtrl = TextEditingController(
+        text: (_trainingCalendarMeta['time'] ?? '18:00').toString());
+    final locationCtrl = TextEditingController(
+        text: (_trainingCalendarMeta['location'] ?? 'Поле').toString());
+    final noteCtrl = TextEditingController(
+        text: (_trainingCalendarMeta['note'] ?? '').toString());
     final res = await _showWorkflowPanel<Map<String, dynamic>>(
       title: 'Календарь CMR',
       subtitle: 'Связь плана с событием команды и будущей посещаемостью',
@@ -3786,30 +4245,58 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
             _WorkflowInfoCard(
               icon: Icons.hub_outlined,
               title: 'Связка с CMR',
-              text: 'Можно указать event_id уже созданной тренировки из календаря. По нему затем подтягивается посещаемость и связывается отчёт.',
+              text:
+                  'Можно указать event_id уже созданной тренировки из календаря. По нему затем подтягивается посещаемость и связывается отчёт.',
             ),
             const SizedBox(height: 12),
-            TextField(controller: eventIdCtrl, keyboardType: TextInputType.number, decoration: _workflowInputDecoration('event_id из календаря', hint: 'необязательно', icon: Icons.tag_rounded)),
+            TextField(
+                controller: eventIdCtrl,
+                keyboardType: TextInputType.number,
+                decoration: _workflowInputDecoration('event_id из календаря',
+                    hint: 'необязательно', icon: Icons.tag_rounded)),
             const SizedBox(height: 10),
-            TextField(controller: titleCtrl, decoration: _workflowInputDecoration('Название события', icon: Icons.edit_calendar_rounded)),
+            TextField(
+                controller: titleCtrl,
+                decoration: _workflowInputDecoration('Название события',
+                    icon: Icons.edit_calendar_rounded)),
             const SizedBox(height: 10),
             Row(children: [
-              Expanded(child: TextField(controller: dateCtrl, decoration: _workflowInputDecoration('Дата YYYY-MM-DD', icon: Icons.date_range_rounded))),
+              Expanded(
+                  child: TextField(
+                      controller: dateCtrl,
+                      decoration: _workflowInputDecoration('Дата YYYY-MM-DD',
+                          icon: Icons.date_range_rounded))),
               const SizedBox(width: 10),
-              Expanded(child: TextField(controller: timeCtrl, decoration: _workflowInputDecoration('Время', icon: Icons.schedule_rounded))),
+              Expanded(
+                  child: TextField(
+                      controller: timeCtrl,
+                      decoration: _workflowInputDecoration('Время',
+                          icon: Icons.schedule_rounded))),
             ]),
             const SizedBox(height: 10),
-            TextField(controller: locationCtrl, decoration: _workflowInputDecoration('Место', icon: Icons.place_outlined)),
+            TextField(
+                controller: locationCtrl,
+                decoration: _workflowInputDecoration('Место',
+                    icon: Icons.place_outlined)),
             const SizedBox(height: 10),
-            TextField(controller: noteCtrl, minLines: 2, maxLines: 4, decoration: _workflowInputDecoration('Комментарий', icon: Icons.notes_rounded)),
+            TextField(
+                controller: noteCtrl,
+                minLines: 2,
+                maxLines: 4,
+                decoration: _workflowInputDecoration('Комментарий',
+                    icon: Icons.notes_rounded)),
             const SizedBox(height: 14),
             Row(
               children: [
-                Expanded(child: OutlinedButton(onPressed: () => Navigator.of(panelContext).pop(), child: const Text('Отмена'))),
+                Expanded(
+                    child: OutlinedButton(
+                        onPressed: () => Navigator.of(panelContext).pop(),
+                        child: const Text('Отмена'))),
                 const SizedBox(width: 10),
                 Expanded(
                   child: FilledButton.icon(
-                    onPressed: () => Navigator.of(panelContext).pop(<String, dynamic>{
+                    onPressed: () =>
+                        Navigator.of(panelContext).pop(<String, dynamic>{
                       'event_id': eventIdCtrl.text.trim(),
                       'title': titleCtrl.text.trim(),
                       'date': dateCtrl.text.trim(),
@@ -3840,23 +4327,38 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
     setState(() => _trainingCalendarMeta = res);
     await _persistTrainingWorkflowMeta();
     if (!mounted) return;
-    _showEditorSnackBar(const SnackBar(content: Text('План связан с календарём CMR')));
+    _showEditorSnackBar(
+        const SnackBar(content: Text('План связан с календарём CMR')));
   }
 
   Future<void> _showAttendanceFactDialog() async {
     await _loadTrainingWorkflowMeta();
-    final eventIdCtrl = TextEditingController(text: (_trainingAttendanceMeta['event_id'] ?? _trainingCalendarMeta['event_id'] ?? '').toString());
-    final expectedCtrl = TextEditingController(text: '${_trainingAttendanceExpected == 0 ? 10 : _trainingAttendanceExpected}');
-    final presentCtrl = TextEditingController(text: '${_trainingAttendancePresent == 0 ? (_trainingAttendanceExpected == 0 ? 10 : _trainingAttendanceExpected) : _trainingAttendancePresent}');
-    final rpeCtrl = TextEditingController(text: (_trainingExecutionMeta['rpe'] ?? '5').toString());
-    final completionCtrl = TextEditingController(text: (_trainingExecutionMeta['completionPercent'] ?? '100').toString());
-    final noteCtrl = TextEditingController(text: (_trainingExecutionMeta['coachNote'] ?? '').toString());
+    final eventIdCtrl = TextEditingController(
+        text: (_trainingAttendanceMeta['event_id'] ??
+                _trainingCalendarMeta['event_id'] ??
+                '')
+            .toString());
+    final expectedCtrl = TextEditingController(
+        text:
+            '${_trainingAttendanceExpected == 0 ? 10 : _trainingAttendanceExpected}');
+    final presentCtrl = TextEditingController(
+        text:
+            '${_trainingAttendancePresent == 0 ? (_trainingAttendanceExpected == 0 ? 10 : _trainingAttendanceExpected) : _trainingAttendancePresent}');
+    final rpeCtrl = TextEditingController(
+        text: (_trainingExecutionMeta['rpe'] ?? '5').toString());
+    final completionCtrl = TextEditingController(
+        text:
+            (_trainingExecutionMeta['completionPercent'] ?? '100').toString());
+    final noteCtrl = TextEditingController(
+        text: (_trainingExecutionMeta['coachNote'] ?? '').toString());
     final done = <String>{
       ...((_trainingExecutionMeta['completedExerciseIds'] is List)
-          ? (_trainingExecutionMeta['completedExerciseIds'] as List).map((e) => e.toString())
+          ? (_trainingExecutionMeta['completedExerciseIds'] as List)
+              .map((e) => e.toString())
           : _trainingPlanExercises.map((e) => e.id)),
     };
-    String loadStatus = 'Можно заполнить вручную или подтянуть посещаемость по event_id из CMR.';
+    String loadStatus =
+        'Можно заполнить вручную или подтянуть посещаемость по event_id из CMR.';
     final res = await _showWorkflowPanel<Map<String, dynamic>>(
       title: 'Посещаемость и факт',
       subtitle: 'CMR-форма без стандартного системного окна',
@@ -3867,23 +4369,28 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
           Future<void> loadFromCmr() async {
             final eventId = eventIdCtrl.text.trim();
             if (eventId.isEmpty) {
-              setPanelState(() => loadStatus = 'Укажите event_id из календаря.');
+              setPanelState(
+                  () => loadStatus = 'Укажите event_id из календаря.');
               return;
             }
             setPanelState(() => loadStatus = 'Загружаю посещаемость из CMR...');
             try {
               final summary = await _loadCmrAttendanceSummaryByEventId(eventId);
               if (summary.isEmpty || (summary['expected'] ?? 0) == 0) {
-                setPanelState(() => loadStatus = 'По этому event_id пока нет сохранённой посещаемости.');
+                setPanelState(() => loadStatus =
+                    'По этому event_id пока нет сохранённой посещаемости.');
                 return;
               }
               setPanelState(() {
-                expectedCtrl.text = '${summary['expected'] ?? expectedCtrl.text}';
+                expectedCtrl.text =
+                    '${summary['expected'] ?? expectedCtrl.text}';
                 presentCtrl.text = '${summary['present'] ?? presentCtrl.text}';
-                loadStatus = 'Загружено: присутствовало ${summary['present']}/${summary['expected']}, опоздали ${summary['late'] ?? 0}, отсутствовали ${summary['absent'] ?? 0}.';
+                loadStatus =
+                    'Загружено: присутствовало ${summary['present']}/${summary['expected']}, опоздали ${summary['late'] ?? 0}, отсутствовали ${summary['absent'] ?? 0}.';
               });
             } catch (e) {
-              setPanelState(() => loadStatus = 'Не удалось загрузить посещаемость: $e');
+              setPanelState(
+                  () => loadStatus = 'Не удалось загрузить посещаемость: $e');
             }
           }
 
@@ -3893,29 +4400,68 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(children: [
-                  Expanded(child: TextField(controller: eventIdCtrl, keyboardType: TextInputType.number, decoration: _workflowInputDecoration('event_id календаря', icon: Icons.tag_rounded))),
+                  Expanded(
+                      child: TextField(
+                          controller: eventIdCtrl,
+                          keyboardType: TextInputType.number,
+                          decoration: _workflowInputDecoration(
+                              'event_id календаря',
+                              icon: Icons.tag_rounded))),
                   const SizedBox(width: 8),
-                  OutlinedButton.icon(onPressed: loadFromCmr, icon: const Icon(Icons.download_rounded, size: 17), label: const Text('Из CMR')),
+                  OutlinedButton.icon(
+                      onPressed: loadFromCmr,
+                      icon: const Icon(Icons.download_rounded, size: 17),
+                      label: const Text('Из CMR')),
                 ]),
                 const SizedBox(height: 10),
-                _WorkflowInfoCard(icon: Icons.groups_rounded, title: 'Источник посещаемости', text: loadStatus),
+                _WorkflowInfoCard(
+                    icon: Icons.groups_rounded,
+                    title: 'Источник посещаемости',
+                    text: loadStatus),
                 const SizedBox(height: 12),
                 Row(children: [
-                  Expanded(child: TextField(controller: expectedCtrl, keyboardType: TextInputType.number, decoration: _workflowInputDecoration('План игроков'))),
+                  Expanded(
+                      child: TextField(
+                          controller: expectedCtrl,
+                          keyboardType: TextInputType.number,
+                          decoration:
+                              _workflowInputDecoration('План игроков'))),
                   const SizedBox(width: 10),
-                  Expanded(child: TextField(controller: presentCtrl, keyboardType: TextInputType.number, decoration: _workflowInputDecoration('Присутствовало'))),
+                  Expanded(
+                      child: TextField(
+                          controller: presentCtrl,
+                          keyboardType: TextInputType.number,
+                          decoration:
+                              _workflowInputDecoration('Присутствовало'))),
                 ]),
                 const SizedBox(height: 10),
                 Row(children: [
-                  Expanded(child: TextField(controller: rpeCtrl, keyboardType: TextInputType.number, decoration: _workflowInputDecoration('RPE 1–10'))),
+                  Expanded(
+                      child: TextField(
+                          controller: rpeCtrl,
+                          keyboardType: TextInputType.number,
+                          decoration: _workflowInputDecoration('RPE 1–10'))),
                   const SizedBox(width: 10),
-                  Expanded(child: TextField(controller: completionCtrl, keyboardType: TextInputType.number, decoration: _workflowInputDecoration('Выполнение %'))),
+                  Expanded(
+                      child: TextField(
+                          controller: completionCtrl,
+                          keyboardType: TextInputType.number,
+                          decoration:
+                              _workflowInputDecoration('Выполнение %'))),
                 ]),
                 const SizedBox(height: 12),
-                const Text('Выполненные упражнения', style: TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textSecondary, fontWeight: FontWeight.w900, fontSize: AppTypography.secondarySize)),
+                const Text('Выполненные упражнения',
+                    style: TextStyle(
+                        fontFamily: AppTypography.fontFamily,
+                        color: TgScreenPalette.textSecondary,
+                        fontWeight: FontWeight.w900,
+                        fontSize: AppTypography.secondarySize)),
                 const SizedBox(height: 6),
                 DecoratedBox(
-                  decoration: BoxDecoration(color: TgScreenPalette.surfaceLight, borderRadius: BorderRadius.circular(14), border: Border.all(color: TgScreenPalette.borderLight)),
+                  decoration: BoxDecoration(
+                      color: TgScreenPalette.surfaceLight,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: TgScreenPalette.borderLight)),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -3931,26 +4477,47 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                               done.remove(ex.id);
                             }
                           }),
-                          title: Text(ex.title, style: const TextStyle(fontFamily: AppTypography.fontFamily, fontWeight: FontWeight.w800, fontSize: AppTypography.secondarySize)),
-                          subtitle: Text('${ex.block} • ${ex.durationMin} мин', style: const TextStyle(fontFamily: AppTypography.fontFamily, fontSize: AppTypography.captionSize, color: TgScreenPalette.textMuted)),
+                          title: Text(ex.title,
+                              style: const TextStyle(
+                                  fontFamily: AppTypography.fontFamily,
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: AppTypography.secondarySize)),
+                          subtitle: Text('${ex.block} • ${ex.durationMin} мин',
+                              style: const TextStyle(
+                                  fontFamily: AppTypography.fontFamily,
+                                  fontSize: AppTypography.captionSize,
+                                  color: TgScreenPalette.textMuted)),
                         ),
                     ],
                   ),
                 ),
                 const SizedBox(height: 10),
-                TextField(controller: noteCtrl, minLines: 3, maxLines: 5, decoration: _workflowInputDecoration('Комментарий тренера после занятия', icon: Icons.notes_rounded)),
+                TextField(
+                    controller: noteCtrl,
+                    minLines: 3,
+                    maxLines: 5,
+                    decoration: _workflowInputDecoration(
+                        'Комментарий тренера после занятия',
+                        icon: Icons.notes_rounded)),
                 const SizedBox(height: 14),
                 Row(children: [
-                  Expanded(child: OutlinedButton(onPressed: () => Navigator.of(panelContext).pop(), child: const Text('Отмена'))),
+                  Expanded(
+                      child: OutlinedButton(
+                          onPressed: () => Navigator.of(panelContext).pop(),
+                          child: const Text('Отмена'))),
                   const SizedBox(width: 10),
                   Expanded(
                     child: FilledButton.icon(
-                      onPressed: () => Navigator.of(panelContext).pop(<String, dynamic>{
+                      onPressed: () =>
+                          Navigator.of(panelContext).pop(<String, dynamic>{
                         'event_id': eventIdCtrl.text.trim(),
-                        'expected': int.tryParse(expectedCtrl.text.trim()) ?? _trainingAttendanceExpected,
-                        'present': int.tryParse(presentCtrl.text.trim()) ?? _trainingAttendancePresent,
+                        'expected': int.tryParse(expectedCtrl.text.trim()) ??
+                            _trainingAttendanceExpected,
+                        'present': int.tryParse(presentCtrl.text.trim()) ??
+                            _trainingAttendancePresent,
                         'rpe': int.tryParse(rpeCtrl.text.trim()) ?? 5,
-                        'completionPercent': int.tryParse(completionCtrl.text.trim()) ?? 100,
+                        'completionPercent':
+                            int.tryParse(completionCtrl.text.trim()) ?? 100,
                         'coachNote': noteCtrl.text.trim(),
                         'completedExerciseIds': done.toList(),
                         'updated_at': DateTime.now().toIso8601String(),
@@ -3990,18 +4557,26 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
     });
     await _persistTrainingWorkflowMeta();
     if (!mounted) return;
-    _showEditorSnackBar(const SnackBar(content: Text('Факт тренировки сохранён')));
+    _showEditorSnackBar(
+        const SnackBar(content: Text('Факт тренировки сохранён')));
   }
 
   Future<void> _showTrackerLinkDialog() async {
     await _loadTrainingWorkflowMeta();
-    final sessionCtrl = TextEditingController(text: (_trainingTrackerMeta['session_id'] ?? '').toString());
-    final distanceCtrl = TextEditingController(text: (_trainingTrackerMeta['distance_m'] ?? '').toString());
-    final loadCtrl = TextEditingController(text: (_trainingTrackerMeta['load_score'] ?? '').toString());
-    final sprintCtrl = TextEditingController(text: (_trainingTrackerMeta['sprint_count'] ?? '').toString());
-    final maxSpeedCtrl = TextEditingController(text: (_trainingTrackerMeta['max_speed_kmh'] ?? '').toString());
-    final noteCtrl = TextEditingController(text: (_trainingTrackerMeta['note'] ?? '').toString());
-    String loadStatus = 'Введите session_id или final session_id из трекера. Данные подтягиваются через tracker/report API.';
+    final sessionCtrl = TextEditingController(
+        text: (_trainingTrackerMeta['session_id'] ?? '').toString());
+    final distanceCtrl = TextEditingController(
+        text: (_trainingTrackerMeta['distance_m'] ?? '').toString());
+    final loadCtrl = TextEditingController(
+        text: (_trainingTrackerMeta['load_score'] ?? '').toString());
+    final sprintCtrl = TextEditingController(
+        text: (_trainingTrackerMeta['sprint_count'] ?? '').toString());
+    final maxSpeedCtrl = TextEditingController(
+        text: (_trainingTrackerMeta['max_speed_kmh'] ?? '').toString());
+    final noteCtrl = TextEditingController(
+        text: (_trainingTrackerMeta['note'] ?? '').toString());
+    String loadStatus =
+        'Введите session_id или final session_id из трекера. Данные подтягиваются через tracker/report API.';
     final res = await _showWorkflowPanel<Map<String, dynamic>>(
       title: 'Связь с трекером',
       subtitle: 'Нагрузка тренировки + ссылка на отчёт трекера',
@@ -4015,18 +4590,25 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
               setPanelState(() => loadStatus = 'Укажите session_id трекера.');
               return;
             }
-            setPanelState(() => loadStatus = 'Загружаю отчёт трекера по session_id $sid...');
+            setPanelState(() =>
+                loadStatus = 'Загружаю отчёт трекера по session_id $sid...');
             try {
               final summary = await _loadTrackerSummaryBySessionId(sid);
               setPanelState(() {
-                distanceCtrl.text = (summary['distance_m'] ?? distanceCtrl.text).toString();
-                loadCtrl.text = (summary['load_score'] ?? loadCtrl.text).toString();
-                sprintCtrl.text = (summary['sprint_count'] ?? sprintCtrl.text).toString();
-                maxSpeedCtrl.text = (summary['max_speed_kmh'] ?? maxSpeedCtrl.text).toString();
-                loadStatus = 'Загружено: ${summary['distance_m'] ?? 0} м, нагрузка ${summary['load_score'] ?? 0}, спринты ${summary['sprint_count'] ?? 0}, макс. скорость ${summary['max_speed_kmh'] ?? 0} км/ч.';
+                distanceCtrl.text =
+                    (summary['distance_m'] ?? distanceCtrl.text).toString();
+                loadCtrl.text =
+                    (summary['load_score'] ?? loadCtrl.text).toString();
+                sprintCtrl.text =
+                    (summary['sprint_count'] ?? sprintCtrl.text).toString();
+                maxSpeedCtrl.text =
+                    (summary['max_speed_kmh'] ?? maxSpeedCtrl.text).toString();
+                loadStatus =
+                    'Загружено: ${summary['distance_m'] ?? 0} м, нагрузка ${summary['load_score'] ?? 0}, спринты ${summary['sprint_count'] ?? 0}, макс. скорость ${summary['max_speed_kmh'] ?? 0} км/ч.';
               });
             } catch (e) {
-              setPanelState(() => loadStatus = 'Не удалось загрузить трекер: $e');
+              setPanelState(
+                  () => loadStatus = 'Не удалось загрузить трекер: $e');
             }
           }
 
@@ -4036,40 +4618,92 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(children: [
-                  Expanded(child: TextField(controller: sessionCtrl, decoration: _workflowInputDecoration('session_id трекера', icon: Icons.tag_rounded))),
+                  Expanded(
+                      child: TextField(
+                          controller: sessionCtrl,
+                          decoration: _workflowInputDecoration(
+                              'session_id трекера',
+                              icon: Icons.tag_rounded))),
                   const SizedBox(width: 8),
-                  OutlinedButton.icon(onPressed: fetchSummary, icon: const Icon(Icons.download_rounded, size: 17), label: const Text('Загрузить')),
+                  OutlinedButton.icon(
+                      onPressed: fetchSummary,
+                      icon: const Icon(Icons.download_rounded, size: 17),
+                      label: const Text('Загрузить')),
                 ]),
                 const SizedBox(height: 10),
-                _WorkflowInfoCard(icon: Icons.analytics_outlined, title: 'Данные нагрузки', text: loadStatus),
+                _WorkflowInfoCard(
+                    icon: Icons.analytics_outlined,
+                    title: 'Данные нагрузки',
+                    text: loadStatus),
                 const SizedBox(height: 12),
                 Row(children: [
-                  Expanded(child: TextField(controller: distanceCtrl, keyboardType: TextInputType.number, decoration: _workflowInputDecoration('Дистанция, м'))),
+                  Expanded(
+                      child: TextField(
+                          controller: distanceCtrl,
+                          keyboardType: TextInputType.number,
+                          decoration:
+                              _workflowInputDecoration('Дистанция, м'))),
                   const SizedBox(width: 10),
-                  Expanded(child: TextField(controller: loadCtrl, keyboardType: TextInputType.number, decoration: _workflowInputDecoration('Нагрузка'))),
+                  Expanded(
+                      child: TextField(
+                          controller: loadCtrl,
+                          keyboardType: TextInputType.number,
+                          decoration: _workflowInputDecoration('Нагрузка'))),
                 ]),
                 const SizedBox(height: 10),
                 Row(children: [
-                  Expanded(child: TextField(controller: sprintCtrl, keyboardType: TextInputType.number, decoration: _workflowInputDecoration('Спринты'))),
+                  Expanded(
+                      child: TextField(
+                          controller: sprintCtrl,
+                          keyboardType: TextInputType.number,
+                          decoration: _workflowInputDecoration('Спринты'))),
                   const SizedBox(width: 10),
-                  Expanded(child: TextField(controller: maxSpeedCtrl, keyboardType: TextInputType.number, decoration: _workflowInputDecoration('Макс. скорость, км/ч'))),
+                  Expanded(
+                      child: TextField(
+                          controller: maxSpeedCtrl,
+                          keyboardType: TextInputType.number,
+                          decoration: _workflowInputDecoration(
+                              'Макс. скорость, км/ч'))),
                 ]),
                 const SizedBox(height: 10),
-                TextField(controller: noteCtrl, minLines: 2, maxLines: 4, decoration: _workflowInputDecoration('Комментарий по нагрузке', icon: Icons.notes_rounded)),
+                TextField(
+                    controller: noteCtrl,
+                    minLines: 2,
+                    maxLines: 4,
+                    decoration: _workflowInputDecoration(
+                        'Комментарий по нагрузке',
+                        icon: Icons.notes_rounded)),
                 const SizedBox(height: 14),
                 Row(children: [
-                  Expanded(child: OutlinedButton(onPressed: () => Navigator.of(panelContext).pop(), child: const Text('Отмена'))),
+                  Expanded(
+                      child: OutlinedButton(
+                          onPressed: () => Navigator.of(panelContext).pop(),
+                          child: const Text('Отмена'))),
                   const SizedBox(width: 10),
                   Expanded(
                     child: FilledButton.icon(
-                      onPressed: () => Navigator.of(panelContext).pop(<String, dynamic>{
+                      onPressed: () =>
+                          Navigator.of(panelContext).pop(<String, dynamic>{
                         'session_id': sessionCtrl.text.trim(),
-                        'distance_m': double.tryParse(distanceCtrl.text.trim().replaceAll(',', '.')) ?? 0,
-                        'load_score': double.tryParse(loadCtrl.text.trim().replaceAll(',', '.')) ?? 0,
-                        'sprint_count': int.tryParse(sprintCtrl.text.trim()) ?? 0,
-                        'max_speed_kmh': double.tryParse(maxSpeedCtrl.text.trim().replaceAll(',', '.')) ?? 0,
-                        'pdf_url': sessionCtrl.text.trim().isEmpty ? '' : 'https://sportotekaapp.ru/api/tracker/export_training_report_pdf.php?session_id=${sessionCtrl.text.trim()}&team_id=${widget.resolvedTeamId}&template=analytics_ru&inline=1&print=1&v=87',
-                        'csv_url': sessionCtrl.text.trim().isEmpty ? '' : 'https://sportotekaapp.ru/api/tracker/export_training_report_csv.php?session_id=${sessionCtrl.text.trim()}&team_id=${widget.resolvedTeamId}&v=87',
+                        'distance_m': double.tryParse(distanceCtrl.text
+                                .trim()
+                                .replaceAll(',', '.')) ??
+                            0,
+                        'load_score': double.tryParse(
+                                loadCtrl.text.trim().replaceAll(',', '.')) ??
+                            0,
+                        'sprint_count':
+                            int.tryParse(sprintCtrl.text.trim()) ?? 0,
+                        'max_speed_kmh': double.tryParse(maxSpeedCtrl.text
+                                .trim()
+                                .replaceAll(',', '.')) ??
+                            0,
+                        'pdf_url': sessionCtrl.text.trim().isEmpty
+                            ? ''
+                            : 'https://sportotekaapp.ru/api/tracker/export_training_report_pdf.php?session_id=${sessionCtrl.text.trim()}&team_id=${widget.resolvedTeamId}&template=analytics_ru&inline=1&print=1&v=87',
+                        'csv_url': sessionCtrl.text.trim().isEmpty
+                            ? ''
+                            : 'https://sportotekaapp.ru/api/tracker/export_training_report_csv.php?session_id=${sessionCtrl.text.trim()}&team_id=${widget.resolvedTeamId}&v=87',
                         'note': noteCtrl.text.trim(),
                         'cmr_module': 'tracker',
                         'updated_at': DateTime.now().toIso8601String(),
@@ -4095,7 +4729,8 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
     setState(() => _trainingTrackerMeta = res);
     await _persistTrainingWorkflowMeta();
     if (!mounted) return;
-    _showEditorSnackBar(const SnackBar(content: Text('Трекер привязан к тренировке')));
+    _showEditorSnackBar(
+        const SnackBar(content: Text('Трекер привязан к тренировке')));
   }
 
   Future<void> _exportCoachTrainingReport() async {
@@ -4117,13 +4752,18 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
       folderName: _exportFolderName(),
     );
     if (!mounted) return;
-    _showEditorSnackBar(SnackBar(content: Text('Отчёт создан: $jsonSaved / $htmlSaved')));
+    _showEditorSnackBar(
+        SnackBar(content: Text('Отчёт создан: $jsonSaved / $htmlSaved')));
   }
 
   String _buildTrainingReportHtml(Map<String, dynamic> payload) {
     String esc(Object? v) => const HtmlEscape().convert((v ?? '').toString());
     final exercises = _trainingPlanExercises;
-    final completed = ((_trainingExecutionMeta['completedExerciseIds'] is List) ? _trainingExecutionMeta['completedExerciseIds'] as List : const <dynamic>[]).map((e) => e.toString()).toSet();
+    final completed = ((_trainingExecutionMeta['completedExerciseIds'] is List)
+            ? _trainingExecutionMeta['completedExerciseIds'] as List
+            : const <dynamic>[])
+        .map((e) => e.toString())
+        .toSet();
     final rows = exercises.map((e) {
       final done = completed.isEmpty || completed.contains(e.id);
       return '<tr><td>${esc(e.block)}</td><td>${esc(e.title)}</td><td>${e.durationMin}</td><td>${e.playersCount}</td><td>${esc(e.goal)}</td><td>${done ? 'да' : 'нет'}</td></tr>';
@@ -4137,7 +4777,8 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
   }
 
   String _suggestCmrPlanTitle() {
-    if (_trainingPlanExercises.isNotEmpty) return '${widget.resolvedTeamName} · ${_todayIsoDate()} · ${_trainingPlanExercises.length} упражн.';
+    if (_trainingPlanExercises.isNotEmpty)
+      return '${widget.resolvedTeamName} · ${_todayIsoDate()} · ${_trainingPlanExercises.length} упражн.';
     return 'Тактическая тренировка ${widget.resolvedTeamName}';
   }
 
@@ -4161,12 +4802,14 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
     final cycleCtrl = TextEditingController(text: 'Недельный цикл');
     final dateCtrl = TextEditingController(text: _todayIsoDate());
     final locationCtrl = TextEditingController(text: 'Тренировочное поле');
-    final descriptionCtrl = TextEditingController(text: _buildCmrPlanDescription());
+    final descriptionCtrl =
+        TextEditingController(text: _buildCmrPlanDescription());
     bool attachScheme = true;
 
     final result = await _showWorkflowPanel<Map<String, dynamic>>(
       title: 'Сохранить в CMR Plans',
-      subtitle: 'План попадёт в выбранную папку и будет виден в разделе “Планы”',
+      subtitle:
+          'План попадёт в выбранную папку и будет виден в разделе “Планы”',
       icon: Icons.cloud_done_rounded,
       maxWidth: 560,
       builder: (panelContext) {
@@ -4178,14 +4821,18 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                 _WorkflowInfoBox(
                   icon: Icons.folder_open_rounded,
                   title: folderTitle,
-                  text: 'Папка сохранения CMR Plans. Можно выбрать другую, не выходя из редактора.',
+                  text:
+                      'Папка сохранения CMR Plans. Можно выбрать другую, не выходя из редактора.',
                   action: OutlinedButton.icon(
                     onPressed: () async {
-                      final picked = await _openWorkspaceFolderPicker(title: 'Папка для плана');
+                      final picked = await _openWorkspaceFolderPicker(
+                          title: 'Папка для плана');
                       if (picked == null) return;
                       setState(() {
                         folderId = _asInt(picked['id']);
-                        folderTitle = _asStr(picked['title']).isNotEmpty ? _asStr(picked['title']) : 'Все материалы';
+                        folderTitle = _asStr(picked['title']).isNotEmpty
+                            ? _asStr(picked['title'])
+                            : 'Все материалы';
                         _folderChosenForSave = true;
                       });
                       setPanelState(() {});
@@ -4195,17 +4842,29 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                   ),
                 ),
                 const SizedBox(height: 10),
-                TextField(controller: titleCtrl, decoration: _workflowInputDecoration('Название плана', icon: Icons.edit_note_rounded)),
+                TextField(
+                    controller: titleCtrl,
+                    decoration: _workflowInputDecoration('Название плана',
+                        icon: Icons.edit_note_rounded)),
                 const SizedBox(height: 8),
                 Row(
                   children: [
-                    Expanded(child: TextField(controller: cycleCtrl, decoration: _workflowInputDecoration('Цикл'))),
+                    Expanded(
+                        child: TextField(
+                            controller: cycleCtrl,
+                            decoration: _workflowInputDecoration('Цикл'))),
                     const SizedBox(width: 8),
-                    Expanded(child: TextField(controller: dateCtrl, decoration: _workflowInputDecoration('Дата'))),
+                    Expanded(
+                        child: TextField(
+                            controller: dateCtrl,
+                            decoration: _workflowInputDecoration('Дата'))),
                   ],
                 ),
                 const SizedBox(height: 8),
-                TextField(controller: locationCtrl, decoration: _workflowInputDecoration('Место', icon: Icons.place_outlined)),
+                TextField(
+                    controller: locationCtrl,
+                    decoration: _workflowInputDecoration('Место',
+                        icon: Icons.place_outlined)),
                 const SizedBox(height: 8),
                 TextField(
                   controller: descriptionCtrl,
@@ -4219,13 +4878,29 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                   value: attachScheme,
                   activeColor: TgScreenPalette.primaryGreen,
                   onChanged: (v) => setPanelState(() => attachScheme = v),
-                  title: const Text('Сохранить текущую схему и прикрепить к плану', style: TextStyle(fontFamily: AppTypography.fontFamily, fontWeight: FontWeight.w800, fontSize: AppTypography.bodySize)),
-                  subtitle: Text(graphicId == null ? 'Сначала будет создана схема в этой же папке' : 'Будет обновлена схема #$graphicId', style: const TextStyle(fontFamily: AppTypography.fontFamily, fontWeight: FontWeight.w600, fontSize: AppTypography.captionSize, color: TgScreenPalette.textMuted)),
+                  title: const Text(
+                      'Сохранить текущую схему и прикрепить к плану',
+                      style: TextStyle(
+                          fontFamily: AppTypography.fontFamily,
+                          fontWeight: FontWeight.w800,
+                          fontSize: AppTypography.bodySize)),
+                  subtitle: Text(
+                      graphicId == null
+                          ? 'Сначала будет создана схема в этой же папке'
+                          : 'Будет обновлена схема #$graphicId',
+                      style: const TextStyle(
+                          fontFamily: AppTypography.fontFamily,
+                          fontWeight: FontWeight.w600,
+                          fontSize: AppTypography.captionSize,
+                          color: TgScreenPalette.textMuted)),
                 ),
                 const SizedBox(height: 10),
                 Row(
                   children: [
-                    Expanded(child: OutlinedButton(onPressed: () => Navigator.of(panelContext).pop(), child: const Text('Отмена'))),
+                    Expanded(
+                        child: OutlinedButton(
+                            onPressed: () => Navigator.of(panelContext).pop(),
+                            child: const Text('Отмена'))),
                     const SizedBox(width: 8),
                     Expanded(
                       flex: 2,
@@ -4279,12 +4954,24 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
         builder: (panelContext) => Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('В плане пока нет упражнений. Добавить текущую схему и продолжить сохранение?', style: TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textSecondary, fontWeight: FontWeight.w700, height: 1.35)),
+            const Text(
+                'В плане пока нет упражнений. Добавить текущую схему и продолжить сохранение?',
+                style: TextStyle(
+                    fontFamily: AppTypography.fontFamily,
+                    color: TgScreenPalette.textSecondary,
+                    fontWeight: FontWeight.w700,
+                    height: 1.35)),
             const SizedBox(height: 12),
             Row(children: [
-              Expanded(child: OutlinedButton(onPressed: () => Navigator.of(panelContext).pop(false), child: const Text('Отмена'))),
+              Expanded(
+                  child: OutlinedButton(
+                      onPressed: () => Navigator.of(panelContext).pop(false),
+                      child: const Text('Отмена'))),
               const SizedBox(width: 8),
-              Expanded(child: FilledButton(onPressed: () => Navigator.of(panelContext).pop(true), child: const Text('Добавить'))),
+              Expanded(
+                  child: FilledButton(
+                      onPressed: () => Navigator.of(panelContext).pop(true),
+                      child: const Text('Добавить'))),
             ]),
           ],
         ),
@@ -4332,12 +5019,20 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
         'folder_id': folderId ?? 0,
         'folder_title': folderTitle,
         'folder_name': folderTitle,
-        'theme': _asStr(meta['theme']).isEmpty ? _suggestCmrPlanTitle() : _asStr(meta['theme']),
-        'cycle_title': _asStr(meta['cycle_title']).isEmpty ? 'Недельный цикл' : _asStr(meta['cycle_title']),
+        'theme': _asStr(meta['theme']).isEmpty
+            ? _suggestCmrPlanTitle()
+            : _asStr(meta['theme']),
+        'cycle_title': _asStr(meta['cycle_title']).isEmpty
+            ? 'Недельный цикл'
+            : _asStr(meta['cycle_title']),
         'description': _asStr(meta['description']),
         'plan_description': _asStr(meta['description']),
-        'plan_date': _asStr(meta['plan_date']).isEmpty ? _todayIsoDate() : _asStr(meta['plan_date']),
-        'date': _asStr(meta['plan_date']).isEmpty ? _todayIsoDate() : _asStr(meta['plan_date']),
+        'plan_date': _asStr(meta['plan_date']).isEmpty
+            ? _todayIsoDate()
+            : _asStr(meta['plan_date']),
+        'date': _asStr(meta['plan_date']).isEmpty
+            ? _todayIsoDate()
+            : _asStr(meta['plan_date']),
         'location': _asStr(meta['location']),
         'duration_min': _trainingPlanTotalMinutes,
         'players_count': _trainingAttendanceExpected,
@@ -4355,11 +5050,17 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
           .timeout(const Duration(seconds: 16));
 
       final data = _decodeWorkflowMap(response.body);
-      if (response.statusCode < 200 || response.statusCode >= 300 || data['success'] != true) {
+      if (response.statusCode < 200 ||
+          response.statusCode >= 300 ||
+          data['success'] != true) {
         throw data['message'] ?? response.body;
       }
 
-      final newId = _asInt(data['plan_id'] ?? data['id'] ?? data['new_id'] ?? data['created_id'] ?? data['insert_id']);
+      final newId = _asInt(data['plan_id'] ??
+          data['id'] ??
+          data['new_id'] ??
+          data['created_id'] ??
+          data['insert_id']);
       if (mounted) {
         setState(() {
           if (newId > 0) _cmrSavedPlanId = newId;
@@ -4369,9 +5070,13 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
       }
       await _persistTrainingPlan();
       await _clearDraft();
-      _showEditorSnackBar(SnackBar(content: Text('План сохранён в CMR: ${folderTitle.isEmpty ? 'Все материалы' : folderTitle}')));
+      _showEditorSnackBar(SnackBar(
+          content: Text(
+              'План сохранён в CMR: ${folderTitle.isEmpty ? 'Все материалы' : folderTitle}')));
     } catch (e) {
-      _showEditorSnackBar(SnackBar(content: Text('Не удалось сохранить в CMR: $e')), isError: true);
+      _showEditorSnackBar(
+          SnackBar(content: Text('Не удалось сохранить в CMR: $e')),
+          isError: true);
     } finally {
       if (mounted) setState(() => saving = false);
     }
@@ -4390,7 +5095,9 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
           builder: (ctx, setSheetState) {
             final grouped = <String, List<_TrainingPlanExercise>>{};
             for (final block in _trainingPlanBlocks) {
-              grouped[block] = _trainingPlanExercises.where((e) => e.block == block).toList();
+              grouped[block] = _trainingPlanExercises
+                  .where((e) => e.block == block)
+                  .toList();
             }
             return SafeArea(
               child: Container(
@@ -4419,46 +5126,86 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                               color: TgScreenPalette.lightGreen,
                               borderRadius: BorderRadius.circular(10),
                             ),
-                            child: const Icon(Icons.event_note_rounded, color: TgScreenPalette.primaryGreen, size: 18),
+                            child: const Icon(Icons.event_note_rounded,
+                                color: TgScreenPalette.primaryGreen, size: 18),
                           ),
                           const SizedBox(width: 10),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text('План тренировки', style: TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textPrimary, fontWeight: FontWeight.w900, fontSize: AppTypography.sectionTitleSize)),
+                                const Text('План тренировки',
+                                    style: TextStyle(
+                                        fontFamily: AppTypography.fontFamily,
+                                        color: TgScreenPalette.textPrimary,
+                                        fontWeight: FontWeight.w900,
+                                        fontSize:
+                                            AppTypography.sectionTitleSize)),
                                 const SizedBox(height: 1),
-                                Text('${_trainingPlanExercises.length} упражн. • $_trainingPlanTotalMinutes мин • ${widget.resolvedTeamName}', style: const TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textMuted, fontWeight: FontWeight.w700, fontSize: AppTypography.captionSize)),
+                                Text(
+                                    '${_trainingPlanExercises.length} упражн. • $_trainingPlanTotalMinutes мин • ${widget.resolvedTeamName}',
+                                    style: const TextStyle(
+                                        fontFamily: AppTypography.fontFamily,
+                                        color: TgScreenPalette.textMuted,
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: AppTypography.captionSize)),
                               ],
                             ),
                           ),
-                          _MiniTemplateAction(icon: Icons.add_rounded, tooltip: 'Добавить текущую схему', onTap: () async {
-                            await _addCurrentSchemeToTrainingPlan();
-                            setSheetState(() {});
-                          }),
-                          _MiniTemplateAction(icon: Icons.cloud_done_rounded, tooltip: 'Сохранить в CMR Plans', onTap: () async {
-                            await _saveTrainingPlanToCmr();
-                            setSheetState(() {});
-                          }),
-                          _MiniTemplateAction(icon: Icons.sync_rounded, tooltip: 'Синхронизация с сервером', onTap: () async {
-                            await _showWorkflowSyncPanel();
-                            setSheetState(() {});
-                          }),
-                          _MiniTemplateAction(icon: Icons.calendar_month_rounded, tooltip: 'Календарь', onTap: () async {
-                            await _showCalendarLinkDialog();
-                            setSheetState(() {});
-                          }),
-                          _MiniTemplateAction(icon: Icons.fact_check_outlined, tooltip: 'Посещаемость / факт', onTap: () async {
-                            await _showAttendanceFactDialog();
-                            setSheetState(() {});
-                          }),
-                          _MiniTemplateAction(icon: Icons.sensors_rounded, tooltip: 'Трекер', onTap: () async {
-                            await _showTrackerLinkDialog();
-                            setSheetState(() {});
-                          }),
-                          _MiniTemplateAction(icon: Icons.article_outlined, tooltip: 'Отчёт тренера', onTap: () => _exportCoachTrainingReport()),
-                          _MiniTemplateAction(icon: Icons.file_download_outlined, tooltip: 'Экспорт JSON', onTap: () => _exportTrainingPlanJson()),
-                          _MiniTemplateAction(icon: Icons.close_rounded, tooltip: 'Закрыть', onTap: () => Navigator.of(ctx).pop()),
+                          _MiniTemplateAction(
+                              icon: Icons.add_rounded,
+                              tooltip: 'Добавить текущую схему',
+                              onTap: () async {
+                                await _addCurrentSchemeToTrainingPlan();
+                                setSheetState(() {});
+                              }),
+                          _MiniTemplateAction(
+                              icon: Icons.cloud_done_rounded,
+                              tooltip: 'Сохранить в CMR Plans',
+                              onTap: () async {
+                                await _saveTrainingPlanToCmr();
+                                setSheetState(() {});
+                              }),
+                          _MiniTemplateAction(
+                              icon: Icons.sync_rounded,
+                              tooltip: 'Синхронизация с сервером',
+                              onTap: () async {
+                                await _showWorkflowSyncPanel();
+                                setSheetState(() {});
+                              }),
+                          _MiniTemplateAction(
+                              icon: Icons.calendar_month_rounded,
+                              tooltip: 'Календарь',
+                              onTap: () async {
+                                await _showCalendarLinkDialog();
+                                setSheetState(() {});
+                              }),
+                          _MiniTemplateAction(
+                              icon: Icons.fact_check_outlined,
+                              tooltip: 'Посещаемость / факт',
+                              onTap: () async {
+                                await _showAttendanceFactDialog();
+                                setSheetState(() {});
+                              }),
+                          _MiniTemplateAction(
+                              icon: Icons.sensors_rounded,
+                              tooltip: 'Трекер',
+                              onTap: () async {
+                                await _showTrackerLinkDialog();
+                                setSheetState(() {});
+                              }),
+                          _MiniTemplateAction(
+                              icon: Icons.article_outlined,
+                              tooltip: 'Отчёт тренера',
+                              onTap: () => _exportCoachTrainingReport()),
+                          _MiniTemplateAction(
+                              icon: Icons.file_download_outlined,
+                              tooltip: 'Экспорт JSON',
+                              onTap: () => _exportTrainingPlanJson()),
+                          _MiniTemplateAction(
+                              icon: Icons.close_rounded,
+                              tooltip: 'Закрыть',
+                              onTap: () => Navigator.of(ctx).pop()),
                         ],
                       ),
                     ),
@@ -4478,10 +5225,27 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                           const SizedBox(height: 7),
                           Row(
                             children: [
-                              Icon(Icons.folder_open_rounded, size: 15, color: TgScreenPalette.primaryGreen),
+                              Icon(Icons.folder_open_rounded,
+                                  size: 15,
+                                  color: TgScreenPalette.primaryGreen),
                               const SizedBox(width: 6),
-                              Expanded(child: Text('CMR папка: $folderTitle', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textMuted, fontWeight: FontWeight.w800, fontSize: AppTypography.captionSize))),
-                              if (_cmrSavedPlanId != null) Text('план #$_cmrSavedPlanId', style: const TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.primaryGreen, fontWeight: FontWeight.w900, fontSize: AppTypography.captionSize)),
+                              Expanded(
+                                  child: Text('CMR папка: $folderTitle',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                          fontFamily: AppTypography.fontFamily,
+                                          color: TgScreenPalette.textMuted,
+                                          fontWeight: FontWeight.w800,
+                                          fontSize:
+                                              AppTypography.captionSize))),
+                              if (_cmrSavedPlanId != null)
+                                Text('план #$_cmrSavedPlanId',
+                                    style: const TextStyle(
+                                        fontFamily: AppTypography.fontFamily,
+                                        color: TgScreenPalette.primaryGreen,
+                                        fontWeight: FontWeight.w900,
+                                        fontSize: AppTypography.captionSize)),
                             ],
                           ),
                         ],
@@ -4494,11 +5258,26 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                               child: Column(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  const Icon(Icons.event_note_outlined, color: TgScreenPalette.textLight, size: 34),
+                                  const Icon(Icons.event_note_outlined,
+                                      color: TgScreenPalette.textLight,
+                                      size: 34),
                                   const SizedBox(height: 10),
-                                  const Text('План пока пустой', style: TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textPrimary, fontWeight: FontWeight.w900, fontSize: AppTypography.sectionTitleSize)),
+                                  const Text('План пока пустой',
+                                      style: TextStyle(
+                                          fontFamily: AppTypography.fontFamily,
+                                          color: TgScreenPalette.textPrimary,
+                                          fontWeight: FontWeight.w900,
+                                          fontSize:
+                                              AppTypography.sectionTitleSize)),
                                   const SizedBox(height: 4),
-                                  const Text('Добавьте текущую схему или любой шаблон в тренировку.', textAlign: TextAlign.center, style: TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textMuted, fontWeight: FontWeight.w600, fontSize: AppTypography.captionSize)),
+                                  const Text(
+                                      'Добавьте текущую схему или любой шаблон в тренировку.',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                          fontFamily: AppTypography.fontFamily,
+                                          color: TgScreenPalette.textMuted,
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: AppTypography.captionSize)),
                                   const SizedBox(height: 12),
                                   FilledButton.icon(
                                     onPressed: () async {
@@ -4512,39 +5291,70 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                               ),
                             )
                           : ListView(
-                              padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
+                              padding:
+                                  const EdgeInsets.fromLTRB(14, 10, 14, 14),
                               children: [
                                 for (final block in _trainingPlanBlocks) ...[
-                                  if ((grouped[block] ?? const <_TrainingPlanExercise>[]).isNotEmpty) ...[
+                                  if ((grouped[block] ??
+                                          const <_TrainingPlanExercise>[])
+                                      .isNotEmpty) ...[
                                     Padding(
-                                      padding: const EdgeInsets.only(top: 6, bottom: 6),
-                                      child: Text(block, style: const TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textSecondary, fontWeight: FontWeight.w900, fontSize: AppTypography.captionSize)),
+                                      padding: const EdgeInsets.only(
+                                          top: 6, bottom: 6),
+                                      child: Text(block,
+                                          style: const TextStyle(
+                                              fontFamily:
+                                                  AppTypography.fontFamily,
+                                              color:
+                                                  TgScreenPalette.textSecondary,
+                                              fontWeight: FontWeight.w900,
+                                              fontSize:
+                                                  AppTypography.captionSize)),
                                     ),
                                     for (final exercise in grouped[block]!)
                                       Padding(
-                                        padding: const EdgeInsets.only(bottom: 8),
+                                        padding:
+                                            const EdgeInsets.only(bottom: 8),
                                         child: _TrainingPlanExerciseCard(
                                           exercise: exercise,
-                                          index: _trainingPlanExercises.indexWhere((e) => e.id == exercise.id),
-                                          canMoveUp: _trainingPlanExercises.indexWhere((e) => e.id == exercise.id) > 0,
-                                          canMoveDown: _trainingPlanExercises.indexWhere((e) => e.id == exercise.id) < _trainingPlanExercises.length - 1,
-                                          onOpen: () => _openTrainingPlanExercise(exercise),
+                                          index:
+                                              _trainingPlanExercises.indexWhere(
+                                                  (e) => e.id == exercise.id),
+                                          canMoveUp: _trainingPlanExercises
+                                                  .indexWhere((e) =>
+                                                      e.id == exercise.id) >
+                                              0,
+                                          canMoveDown: _trainingPlanExercises
+                                                  .indexWhere((e) =>
+                                                      e.id == exercise.id) <
+                                              _trainingPlanExercises.length - 1,
+                                          onOpen: () =>
+                                              _openTrainingPlanExercise(
+                                                  exercise),
                                           onDuplicate: () async {
-                                            await _duplicateTrainingPlanExercise(exercise);
+                                            await _duplicateTrainingPlanExercise(
+                                                exercise);
                                             setSheetState(() {});
                                           },
                                           onDelete: () async {
-                                            await _deleteTrainingPlanExercise(exercise);
+                                            await _deleteTrainingPlanExercise(
+                                                exercise);
                                             setSheetState(() {});
                                           },
                                           onMoveUp: () async {
-                                            final index = _trainingPlanExercises.indexWhere((e) => e.id == exercise.id);
-                                            await _moveTrainingPlanExercise(index, -1);
+                                            final index = _trainingPlanExercises
+                                                .indexWhere(
+                                                    (e) => e.id == exercise.id);
+                                            await _moveTrainingPlanExercise(
+                                                index, -1);
                                             setSheetState(() {});
                                           },
                                           onMoveDown: () async {
-                                            final index = _trainingPlanExercises.indexWhere((e) => e.id == exercise.id);
-                                            await _moveTrainingPlanExercise(index, 1);
+                                            final index = _trainingPlanExercises
+                                                .indexWhere(
+                                                    (e) => e.id == exercise.id);
+                                            await _moveTrainingPlanExercise(
+                                                index, 1);
                                             setSheetState(() {});
                                           },
                                         ),
@@ -4678,7 +5488,10 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
       if (data["success"] == true) {
         final any = data["items"] ?? [];
         final list = (any is List)
-            ? any.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList()
+            ? any
+                .whereType<Map>()
+                .map((e) => Map<String, dynamic>.from(e))
+                .toList()
             : <Map<String, dynamic>>[];
 
         setState(() {
@@ -4688,7 +5501,8 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
       } else {
         setState(() {
           _listLoading = false;
-          _listError = (data["message"] ?? "Не удалось загрузить схемы").toString();
+          _listError =
+              (data["message"] ?? "Не удалось загрузить схемы").toString();
         });
       }
     } catch (e) {
@@ -4702,7 +5516,8 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
   // ==========================
   // Save graphic
   // ==========================
-  void _showEditorSnackBar(SnackBar notice, {bool isError = false, bool isWarning = false}) {
+  void _showEditorSnackBar(SnackBar notice,
+      {bool isError = false, bool isWarning = false}) {
     if (!mounted) return;
     final accent = isError
         ? TgScreenPalette.error
@@ -4724,7 +5539,9 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
           Icon(
             isError
                 ? Icons.error_outline_rounded
-                : (isWarning ? Icons.warning_amber_rounded : Icons.info_outline_rounded),
+                : (isWarning
+                    ? Icons.warning_amber_rounded
+                    : Icons.info_outline_rounded),
             color: accent,
             size: 21,
           ),
@@ -4746,16 +5563,29 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
   }
 
   void _showEditorNotice(String title, String message, {bool isError = false}) {
-    _showEditorSnackBar(SnackBar(
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: const TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textPrimary, fontSize: 13, fontWeight: FontWeight.w800)),
-          Text(message, maxLines: 3, overflow: TextOverflow.ellipsis, style: const TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textSecondary, fontSize: 12)),
-        ],
-      ),
-    ), isError: isError);
+    _showEditorSnackBar(
+        SnackBar(
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title,
+                  style: const TextStyle(
+                      fontFamily: AppTypography.fontFamily,
+                      color: TgScreenPalette.textPrimary,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800)),
+              Text(message,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      fontFamily: AppTypography.fontFamily,
+                      color: TgScreenPalette.textSecondary,
+                      fontSize: 12)),
+            ],
+          ),
+        ),
+        isError: isError);
   }
 
   Future<void> _saveGraphic() async {
@@ -4781,7 +5611,8 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
 
     final createdBy = await PrefUtils.getUserId() ?? 0;
     if (createdBy <= 0) {
-      _showEditorNotice('Нужен вход', 'Не найден user_id. Войдите в аккаунт.', isError: true);
+      _showEditorNotice('Нужен вход', 'Не найден user_id. Войдите в аккаунт.',
+          isError: true);
       return false;
     }
 
@@ -4852,16 +5683,20 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
   }
 
   String _playerName(Map<String, dynamic> p) {
-    final direct = _playerString(p, const ['name', 'full_name', 'fio', 'player_name']);
+    final direct =
+        _playerString(p, const ['name', 'full_name', 'fio', 'player_name']);
     if (direct.isNotEmpty) return direct;
-    final first = _playerString(p, const ['first_name', 'firstname', 'firstName']);
-    final last = _playerString(p, const ['last_name', 'lastname', 'lastName', 'surname']);
+    final first =
+        _playerString(p, const ['first_name', 'firstname', 'firstName']);
+    final last = _playerString(
+        p, const ['last_name', 'lastname', 'lastName', 'surname']);
     final joined = '$first $last'.trim();
     return joined.isNotEmpty ? joined : 'Игрок';
   }
 
   String _playerNumber(Map<String, dynamic> p, int fallback) {
-    final direct = _playerString(p, const ['number', 'shirt_number', 'jersey_number', 'game_number']);
+    final direct = _playerString(
+        p, const ['number', 'shirt_number', 'jersey_number', 'game_number']);
     if (direct.isNotEmpty) return direct;
     return fallback.toString();
   }
@@ -4902,7 +5737,9 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
       'team': opponent ? 'away' : 'home',
       'role': goalkeeper ? 'goalkeeper' : 'player',
     };
-    return Uri(scheme: 'sportoteka', host: 'player-avatar', queryParameters: query).toString();
+    return Uri(
+            scheme: 'sportoteka', host: 'player-avatar', queryParameters: query)
+        .toString();
   }
 
   Future<void> _openPlayerPicker({required bool goalkeeper}) async {
@@ -4914,8 +5751,10 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
         'name': goalkeeper ? 'Вратарь' : 'Игрок',
         'number': goalkeeper ? '1' : '7',
       };
-      state.setActiveStamp(_playerAvatarAsset(demo, index: goalkeeper ? 0 : 6, goalkeeper: goalkeeper, opponent: false));
-      _showEditorNotice('Игрок выбран', 'Нажмите на поле, чтобы поставить круг с аватаром.');
+      state.setActiveStamp(_playerAvatarAsset(demo,
+          index: goalkeeper ? 0 : 6, goalkeeper: goalkeeper, opponent: false));
+      _showEditorNotice(
+          'Игрок выбран', 'Нажмите на поле, чтобы поставить круг с аватаром.');
       return;
     }
 
@@ -4950,7 +5789,9 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                goalkeeper ? 'Выберите вратаря' : 'Выберите игрока',
+                                goalkeeper
+                                    ? 'Выберите вратаря'
+                                    : 'Выберите игрока',
                                 style: const TextStyle(
                                   fontFamily: AppTypography.fontFamily,
                                   color: TgScreenPalette.textPrimary,
@@ -5016,7 +5857,9 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                         final avatar = _playerAvatarUrl(p);
                         final ringColor = opponent
                             ? const Color(0xFFEF334D)
-                            : (goalkeeper ? const Color(0xFF0EA5E9) : TgScreenPalette.primaryGreen);
+                            : (goalkeeper
+                                ? const Color(0xFF0EA5E9)
+                                : TgScreenPalette.primaryGreen);
                         return Material(
                           color: TgScreenPalette.surfaceLight,
                           borderRadius: BorderRadius.circular(10),
@@ -5040,16 +5883,21 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                                     height: 48,
                                     decoration: BoxDecoration(
                                       shape: BoxShape.circle,
-                                      border: Border.all(color: ringColor, width: 3),
+                                      border: Border.all(
+                                          color: ringColor, width: 3),
                                     ),
                                     child: ClipOval(
                                       child: avatar.isNotEmpty
                                           ? Image.network(
                                               avatar,
                                               fit: BoxFit.cover,
-                                              errorBuilder: (_, __, ___) => _AvatarFallback(name: name, color: ringColor),
+                                              errorBuilder: (_, __, ___) =>
+                                                  _AvatarFallback(
+                                                      name: name,
+                                                      color: ringColor),
                                             )
-                                          : _AvatarFallback(name: name, color: ringColor),
+                                          : _AvatarFallback(
+                                              name: name, color: ringColor),
                                     ),
                                   ),
                                   const SizedBox(width: 4),
@@ -5062,7 +5910,8 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                                         fontFamily: AppTypography.fontFamily,
                                         color: TgScreenPalette.textPrimary,
                                         fontWeight: FontWeight.w800,
-                                        fontSize: AppTypography.sectionTitleSize,
+                                        fontSize:
+                                            AppTypography.sectionTitleSize,
                                       ),
                                     ),
                                   ),
@@ -5073,7 +5922,8 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                                     decoration: BoxDecoration(
                                       color: ringColor,
                                       shape: BoxShape.circle,
-                                      border: Border.all(color: Colors.white, width: 2),
+                                      border: Border.all(
+                                          color: Colors.white, width: 2),
                                     ),
                                     child: Text(
                                       number,
@@ -5103,7 +5953,15 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
   }
 
   Future<void> _openFlutter3DPro() async {
+    _openGlbFieldVariant(1);
+  }
+
+  void _openGlbFieldVariant(int variant) {
     if (!mounted) return;
+    debugPrint(
+      '[STADIUM_ANDROID] UI open 3D field variant=$variant '
+      'platform=$defaultTargetPlatform',
+    );
     state.setPresentationMode(false);
     state.set3DParams(
       enabled: false,
@@ -5114,7 +5972,10 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
       cameraZoom: 0.96,
     );
     _glbProjection.value = null;
-    setState(() => _glbFieldMode = true);
+    setState(() {
+      _glbFieldVariant = variant.clamp(1, 3).toInt();
+      _glbFieldMode = true;
+    });
   }
 
   void _setGlbFieldMode(bool enabled) {
@@ -5169,17 +6030,21 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
       if (fileSize > 4 * 1024 * 1024) {
         if (!mounted) return;
         _showEditorSnackBar(
-          const SnackBar(content: Text('Текстура слишком большая. Используйте изображение до 4 МБ.')),
+          const SnackBar(
+              content: Text(
+                  'Текстура слишком большая. Используйте изображение до 4 МБ.')),
           isWarning: true,
         );
         return;
       }
 
-      final Uint8List bytes = pickedFile.bytes ?? await pickedFile.xFile.readAsBytes();
+      final Uint8List bytes =
+          pickedFile.bytes ?? await pickedFile.xFile.readAsBytes();
       if (bytes.isEmpty) {
         if (!mounted) return;
         _showEditorSnackBar(
-          const SnackBar(content: Text('Не удалось прочитать изображение текстуры.')),
+          const SnackBar(
+              content: Text('Не удалось прочитать изображение текстуры.')),
           isError: true,
         );
         return;
@@ -5350,7 +6215,8 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                         flex: 2,
                         child: FilledButton.icon(
                           onPressed: widget.onManageSubscription,
-                          icon: const Icon(Icons.workspace_premium_outlined, size: 17),
+                          icon: const Icon(Icons.workspace_premium_outlined,
+                              size: 17),
                           label: const Text('Подключить модуль'),
                         ),
                       ),
@@ -5398,7 +6264,9 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
               folderTitle: folderTitle,
               onBack: () => Navigator.of(context).maybePop(),
               onFit: null,
-              onPickFolder: widget.isPersonalWorkspace ? _showPersonalLibrary : _pickFolder,
+              onPickFolder: widget.isPersonalWorkspace
+                  ? _showPersonalLibrary
+                  : _pickFolder,
               onSave: null,
               onTogglePanel: null,
               onExport: null,
@@ -5408,7 +6276,9 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
               isPanelCollapsed: false,
               selectMode: true,
               selectedCount: _selected.length,
-              onAttach: _selected.isEmpty ? null : () => Navigator.of(context).pop(_selected.toList()),
+              onAttach: _selected.isEmpty
+                  ? null
+                  : () => Navigator.of(context).pop(_selected.toList()),
               saving: false,
             ),
             Expanded(
@@ -5553,7 +6423,7 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                   height: 60,
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(10),
-                      color: Colors.transparent, 
+                    color: Colors.transparent,
                     border: Border.all(color: TgScreenPalette.border),
                   ),
                   clipBehavior: Clip.antiAlias,
@@ -5609,7 +6479,9 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                         ? TgScreenPalette.primaryGreen.withOpacity(0.1)
                         : Colors.transparent,
                     border: Border.all(
-                      color: selected ? TgScreenPalette.primaryGreen : TgScreenPalette.border,
+                      color: selected
+                          ? TgScreenPalette.primaryGreen
+                          : TgScreenPalette.border,
                       width: selected ? 2 : 1.5,
                     ),
                   ),
@@ -5638,43 +6510,60 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
             final desktop = root.maxWidth >= 1180;
             final landscape = root.maxWidth >= root.maxHeight;
             final tabletLandscape = root.maxWidth >= 700 && landscape;
-            final tabletPortrait = root.maxWidth >= 600 && root.maxWidth < 1180 && !tabletLandscape;
+            final tabletPortrait = root.maxWidth >= 600 &&
+                root.maxWidth < 1180 &&
+                !tabletLandscape;
             final tightUi = root.maxWidth < 1180 || root.maxHeight < 760;
             final microUi = root.maxWidth < 760 || root.maxHeight < 560;
             // Панель может быть раскрыта или свернута. В свернутом состоянии
             // она не должна резервировать место и не должна скрывать нижний тулбар.
             final panelOpen = _isPanelExpanded && !_isPanelCollapsed;
-            final overlayPanel = panelOpen && (microUi || root.maxWidth < 940 || root.maxHeight < 640);
+            final overlayPanel = panelOpen &&
+                (microUi || root.maxWidth < 940 || root.maxHeight < 640);
             final panelAsSide = panelOpen && tabletLandscape;
             final panelAsBottom = panelOpen && !panelAsSide;
             // В micro/focus режиме панели накладываются поверх поля и не сжимают его.
             final sidePanelContentWidth = microUi
                 ? math.min(286.0, math.max(220.0, root.maxWidth - 112.0))
                 : (tightUi ? (root.maxWidth < 980 ? 286.0 : 322.0) : 356.0);
-            final sidePanelDockReserve = microUi ? 62.0 : (tightUi ? 72.0 : 88.0);
-            final sidePanelShellWidth = math.min(
-              root.maxWidth - (microUi ? 10.0 : 18.0),
-              sidePanelContentWidth + sidePanelDockReserve,
-            ).clamp(232.0, 460.0) as double;
-            final editorPaneWidth = root.maxWidth -
-                TgLeftToolbar.widthForWorkspace(root.maxWidth);
+            final sidePanelDockReserve =
+                microUi ? 62.0 : (tightUi ? 72.0 : 88.0);
+            final sidePanelShellWidth = math
+                .min(
+                  root.maxWidth - (microUi ? 10.0 : 18.0),
+                  sidePanelContentWidth + sidePanelDockReserve,
+                )
+                .clamp(232.0, 460.0) as double;
+            final editorPaneWidth =
+                root.maxWidth - TgLeftToolbar.widthForWorkspace(root.maxWidth);
             // The quick-action dock remains visible after closing the window.
             // Put contextual controls beside it, using the same side/bottom
             // breakpoint and dock dimensions as _TgDraggablePanel.
-            final dockAsSide = !_isPhone && editorPaneWidth >= 700 &&
+            final dockAsSide = !_isPhone &&
+                editorPaneWidth >= 700 &&
                 editorPaneWidth >= root.maxHeight * .78;
             final dockMicroUi = editorPaneWidth < 760 || root.maxHeight < 560;
-            final dockCompactUi = editorPaneWidth < 1280 || root.maxHeight < 820;
+            final dockCompactUi =
+                editorPaneWidth < 1280 || root.maxHeight < 820;
             final dockControlRightInset = dockAsSide
                 ? (dockMicroUi ? 62.0 : (dockCompactUi ? 72.0 : 88.0)) +
-                    (dockMicroUi ? 4.0 : (dockCompactUi ? 8.0 : 12.0)) + 8.0
+                    (dockMicroUi ? 4.0 : (dockCompactUi ? 8.0 : 12.0)) +
+                    8.0
                 : (tightUi ? 10.0 : (desktop ? 12.0 : 10.0));
+            // В 3D правый вертикальный док остаётся видимым даже на некоторых
+            // компактных раскладках. Всегда резервируем ему место, чтобы
+            // свойства/радар не заходили под кнопки.
+            final glbDockSafeInset = _glbFieldMode
+                ? math.max(dockControlRightInset, tightUi ? 78.0 : 92.0)
+                : dockControlRightInset;
             // Панель может быть боковой и раскрытой, но нижняя панель инструментов
             // всё равно должна оставаться доступной слева от неё.
-            final showBottomToolbars = !_exportCleanMode && (!panelOpen || panelAsSide);
+            final showBottomToolbars =
+                !_exportCleanMode && (!panelOpen || panelAsSide);
             // Как в Tracker: на desktop/tablet инструменты живут в левой CMR-панели,
             // без дублирующей горизонтальной полосы над/под картой.
-            final showBottomDrawingToolbar = showBottomToolbars && root.maxWidth < 920;
+            final showBottomDrawingToolbar =
+                showBottomToolbars && root.maxWidth < 920;
             final bottomToolRightInset = panelOpen && panelAsSide
                 ? sidePanelShellWidth + (microUi ? 8.0 : 14.0)
                 : (tightUi ? 6.0 : 0.0);
@@ -5684,7 +6573,8 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
             // окном справа; на широком экране поле освобождает для него место,
             // на узком окно аккуратно накладывается и закрывается по фону/крестику.
             final animationOpen = !_exportCleanMode && _animationPanelOpen;
-            final animationAsSide = animationOpen && root.maxWidth >= 980 && root.maxHeight >= 600;
+            final animationAsSide =
+                animationOpen && root.maxWidth >= 980 && root.maxHeight >= 600;
             final animationPanelShellWidth = root.maxWidth >= 1500
                 ? 390.0
                 : (root.maxWidth >= 1180 ? 370.0 : 340.0);
@@ -5694,9 +6584,8 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                 : ((!_exportCleanMode && panelAsSide && !overlayPanel)
                     ? math.max(5.0, sidePanelShellWidth + 8.0)
                     : 5.0);
-            final idleBottomReserve = showBottomDrawingToolbar
-                ? (microUi ? 62.0 : 70.0)
-                : 10.0;
+            final idleBottomReserve =
+                showBottomDrawingToolbar ? (microUi ? 62.0 : 70.0) : 10.0;
             final reservedBottom = _exportCleanMode
                 ? 5.0
                 : (overlayPanel
@@ -5712,7 +6601,8 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                     state: state,
                     workspaceWidth: root.maxWidth,
                     teamName: widget.resolvedTeamName,
-                    onZoomToSelection: () => _canvasKey.currentState?.zoomToSelection(),
+                    onZoomToSelection: () =>
+                        _canvasKey.currentState?.zoomToSelection(),
                     onResetView: () => _canvasKey.currentState?.resetView(),
                     onCloseEditor: _handleBack,
                     onOpenObjects: () => _openLegacyPanel(TgPanel.objects),
@@ -5722,8 +6612,9 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                     onOpenAnimation: _toggleAnimationPanel,
                     animationOpen: _animationPanelOpen,
                     onSet3D: _setBoard3D,
-                    onOpen3DPro: _openFlutter3DPro,
+                    onOpen3DField: _openGlbFieldVariant,
                     gameViewActive: _glbFieldMode,
+                    gameViewVariant: _glbFieldVariant,
                     onPickFieldTexture: _pickFieldTexture,
                     onClearFieldTexture: state.clearCustomFieldTexture,
                   ),
@@ -5733,318 +6624,464 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
                       key: _exportRepaintKey,
                       child: ClipRect(
                         child: Stack(
-                        children: [
-                          Positioned.fill(
-                            child: Padding(
-                              padding: EdgeInsets.fromLTRB(5, _exportCleanMode ? 5 : (microUi ? 38 : 49), reservedRight, reservedBottom),
-                              child: DecoratedBox(
-                                decoration: BoxDecoration(
-                                  color: TgScreenPalette.surface,
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(16),
-                                  child: LayoutBuilder(
-                                    builder: (context, c) {
-                                      if (!_didLayoutFit) {
-                                        final hasLoadedViewport =
-                                            state.transform.value.value.storage[12].abs() > 0.5 ||
-                                            state.transform.value.value.storage[13].abs() > 0.5 ||
-                                            (state.transform.value.value.storage[0] - 1.0).abs() > 0.0001 ||
-                                            (state.transform.value.value.storage[5] - 1.0).abs() > 0.0001;
+                          children: [
+                            Positioned.fill(
+                              child: Padding(
+                                padding: EdgeInsets.fromLTRB(
+                                    5,
+                                    _exportCleanMode ? 5 : (microUi ? 38 : 49),
+                                    reservedRight,
+                                    reservedBottom),
+                                child: DecoratedBox(
+                                  decoration: BoxDecoration(
+                                    color: TgScreenPalette.surface,
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(16),
+                                    child: LayoutBuilder(
+                                      builder: (context, c) {
+                                        if (!_didLayoutFit) {
+                                          final hasLoadedViewport = state
+                                                      .transform
+                                                      .value
+                                                      .value
+                                                      .storage[12]
+                                                      .abs() >
+                                                  0.5 ||
+                                              state.transform.value.value
+                                                      .storage[13]
+                                                      .abs() >
+                                                  0.5 ||
+                                              (state.transform.value.value
+                                                              .storage[0] -
+                                                          1.0)
+                                                      .abs() >
+                                                  0.0001 ||
+                                              (state.transform.value.value
+                                                              .storage[5] -
+                                                          1.0)
+                                                      .abs() >
+                                                  0.0001;
 
-                                        if (!hasLoadedViewport) {
-                                          _didLayoutFit = true;
-                                          WidgetsBinding.instance.addPostFrameCallback((_) {
-                                            if (mounted) _fitField();
-                                          });
-                                        } else {
-                                          _didLayoutFit = true;
+                                          if (!hasLoadedViewport) {
+                                            _didLayoutFit = true;
+                                            WidgetsBinding.instance
+                                                .addPostFrameCallback((_) {
+                                              if (mounted) _fitField();
+                                            });
+                                          } else {
+                                            _didLayoutFit = true;
+                                          }
                                         }
-                                      }
 
-                                      return RepaintBoundary(
-                                        key: _repaintKey,
-                                        child: _glbFieldMode
-                                            ? Listener(
-                                                behavior: HitTestBehavior.translucent,
-                                                onPointerDown: _glbFieldController.handlePointerDown,
-                                                onPointerMove: _glbFieldController.handlePointerMove,
-                                                onPointerUp: _glbFieldController.handlePointerUp,
-                                                onPointerCancel: _glbFieldController.handlePointerCancel,
-                                                onPointerSignal: _glbFieldController.handlePointerSignal,
-                                                child: Stack(
-                                                  children: [
-                                                  const Positioned.fill(
-                                                    child: DecoratedBox(
-                                                      decoration: BoxDecoration(
-                                                        color: Color(0xFF26463A),
+                                        return RepaintBoundary(
+                                          key: _repaintKey,
+                                          child: _glbFieldMode
+                                              ? Listener(
+                                                  behavior: HitTestBehavior
+                                                      .translucent,
+                                                  onPointerDown:
+                                                      _glbFieldController
+                                                          .handlePointerDown,
+                                                  onPointerMove:
+                                                      _glbFieldController
+                                                          .handlePointerMove,
+                                                  onPointerUp:
+                                                      _glbFieldController
+                                                          .handlePointerUp,
+                                                  onPointerCancel:
+                                                      _glbFieldController
+                                                          .handlePointerCancel,
+                                                  onPointerSignal: (event) {
+                                                    if (event
+                                                        is PointerScrollEvent) {
+                                                      GestureBinding.instance
+                                                          .pointerSignalResolver
+                                                          .register(
+                                                        event,
+                                                        (resolved) =>
+                                                            _glbFieldController
+                                                                .handlePointerSignal(
+                                                                    resolved),
+                                                      );
+                                                    } else {
+                                                      _glbFieldController
+                                                          .handlePointerSignal(
+                                                              event);
+                                                    }
+                                                  },
+                                                  child: Stack(
+                                                    children: [
+                                                      const Positioned.fill(
+                                                        child: DecoratedBox(
+                                                          decoration:
+                                                              BoxDecoration(
+                                                            color: Color(
+                                                                0xFF26463A),
+                                                          ),
+                                                        ),
                                                       ),
-                                                    ),
-                                                  ),
-                                                  Positioned.fill(
-                                                    child: TrainingGraphicsGlbFieldView(
-                                                      state: state,
-                                                      playbackRunning: _playbackRunning,
-                                                      onTogglePlayback: _togglePlayback,
-                                                      enableCameraInput: false,
-                                                      showStatusBadge: false,
-                                                      controller: _glbFieldController,
-                                                      onProjectionChanged: _updateGlbProjection,
-                                                    ),
-                                                  ),
-                                                  Positioned.fill(
-                                                    child: ValueListenableBuilder<vector.Matrix4?>(
-                                                      valueListenable: _glbProjection,
-                                                      builder: (context, projection, _) {
-                                                        return TgCanvas(
-                                                          key: _canvasKey,
+                                                      Positioned.fill(
+                                                        child:
+                                                            TrainingGraphicsGlbFieldView(
                                                           state: state,
-                                                          hideFieldBase: true,
-                                                          ignoreNonPrimaryMouseButtons: true,
-                                                          externalFieldTransform: projection,
-                                                          onRequestEditSelected: _openPropertiesPanel,
-                                                        );
-                                                      },
-                                                    ),
+                                                          playbackRunning:
+                                                              _playbackRunning,
+                                                          onTogglePlayback:
+                                                              _togglePlayback,
+                                                          enableCameraInput:
+                                                              false,
+                                                          showStatusBadge:
+                                                              false,
+                                                          controller:
+                                                              _glbFieldController,
+                                                          fieldVariant:
+                                                              _glbFieldVariant,
+                                                          onProjectionChanged:
+                                                              _updateGlbProjection,
+                                                        ),
+                                                      ),
+                                                      Positioned.fill(
+                                                        child:
+                                                            ValueListenableBuilder<
+                                                                vector
+                                                                .Matrix4?>(
+                                                          valueListenable:
+                                                              _glbProjection,
+                                                          builder: (context,
+                                                              projection, _) {
+                                                            return TgCanvas(
+                                                              key: _canvasKey,
+                                                              state: state,
+                                                              hideFieldBase:
+                                                                  true,
+                                                              ignoreNonPrimaryMouseButtons:
+                                                                  true,
+                                                              externalFieldTransform:
+                                                                  projection,
+                                                              externalCameraMultiTouch:
+                                                                  true,
+                                                              onExternalCameraPan: (delta) =>
+                                                                  _glbFieldController
+                                                                      .handleTabletGesture(
+                                                                          panDelta:
+                                                                              delta),
+                                                              onExternalCameraZoom: (factor) =>
+                                                                  _glbFieldController
+                                                                      .handleTabletGesture(
+                                                                          zoomFactor:
+                                                                              factor),
+                                                              onExternalCameraYaw: (delta) =>
+                                                                  _glbFieldController
+                                                                      .handleTabletGesture(
+                                                                          yawDelta:
+                                                                              delta),
+                                                              onRequestEditSelected:
+                                                                  _openPropertiesPanel,
+                                                            );
+                                                          },
+                                                        ),
+                                                      ),
+                                                    ],
                                                   ),
-                                                  ],
+                                                )
+                                              : TgCanvas(
+                                                  key: _canvasKey,
+                                                  state: state,
+                                                  onRequestEditSelected:
+                                                      _openPropertiesPanel,
                                                 ),
-                                              )
-                                            : TgCanvas(
-                                                key: _canvasKey,
-                                                state: state,
-                                                onRequestEditSelected: _openPropertiesPanel,
-                                              ),
-                                      );
-                                    },
+                                        );
+                                      },
+                                    ),
                                   ),
                                 ),
                               ),
                             ),
-                          ),
-                          if (!_exportCleanMode)
-                            Positioned(
-                            left: 0,
-                            right: 0,
-                            top: 0,
-                            child: _TopTitleBar(
-                              title: widget.resolvedTeamName,
-                              folderTitle: folderTitle,
-                              onBack: _handleBack,
-                              onFit: _fitField,
-                              onPickFolder: widget.isPersonalWorkspace ? _showPersonalLibrary : _pickFolder,
-                              onSave: _saveGraphic,
-                              onTogglePanel: _togglePanel,
-                              onExport: () => _showProExportCenter(),
-                              onTemplates: () => _showTrainingTemplatesCenter(),
-                              onTrainingPlan: () => _showTrainingPlanCenter(),
-                              isPanelExpanded: _isPanelExpanded,
-                              isPanelCollapsed: _isPanelCollapsed,
-                              selectMode: false,
-                              selectedCount: 0,
-                              onAttach: null,
-                              saving: saving,
-                              clubId: widget.resolvedClubId,
-                              clubName: widget.resolvedClubName,
-                              teamId: widget.resolvedTeamId,
-                              teamName: widget.resolvedTeamName,
-                              players3d: _teamPlayersFor3D,
-                              loadingPlayers3d: _teamPlayersLoading,
-                              state: state,
-                            ),
-                          ),
-                          if (!_exportCleanMode)
-                            Positioned(
-                              top: microUi ? 42 : 54,
-                              right: reservedRight + 10,
-                              child: _FieldViewModeSwitch(
-                                state: state,
-                                glbActive: _glbFieldMode,
-                                on2D: () => _setBoard3D(false),
-                                onPerspective: () => _setBoard3D(true),
-                                onGlb: () => _setGlbFieldMode(true),
-                              ),
-                            ),
-                          if (!_exportCleanMode && _docLoading)
-                            const Positioned.fill(
-                              child: TgScreenLoadingOverlay(
-                                message: 'Загрузка схемы...',
-                              ),
-                            ),
-                          if (!_exportCleanMode && _docError != null && !_docLoading)
-                            Positioned(
-                              left: 20,
-                              right: 20,
-                              bottom: 24,
-                              child: TgScreenErrorBanner(
-                                message: _docError!,
-                                onRetry: (graphicId == null || graphicId! <= 0)
-                                    ? null
-                                    : () => _loadDocById(graphicId!),
-                                onDismiss: () => setState(() => _docError = null),
-                              ),
-                            ),
-                          if (!_glbFieldMode)
-                            Positioned(
-                              left: desktop ? 22 : 12,
-                              right: desktop ? 22 : 12,
-                              top: 60,
-                              bottom: showBottomDrawingToolbar ? 70 : 12,
-                              child: IgnorePointer(
-                                child: _TgPlaybackOverlay(
-                                  canvasState: _canvasKey.currentState,
-                                  routes: _collectPlaybackRoutes(),
-                                  activeStep: _currentPlaybackStep,
-                                  progress: _playbackProgress,
-                                  visible: _playbackRunning || _collectPlaybackRoutes().isNotEmpty,
+                            if (!_exportCleanMode)
+                              Positioned(
+                                left: 0,
+                                right: 0,
+                                top: 0,
+                                child: _TopTitleBar(
+                                  title: widget.resolvedTeamName,
+                                  folderTitle: folderTitle,
+                                  onBack: _handleBack,
+                                  onFit: _fitField,
+                                  onPickFolder: widget.isPersonalWorkspace
+                                      ? _showPersonalLibrary
+                                      : _pickFolder,
+                                  onSave: _saveGraphic,
+                                  onTogglePanel: _togglePanel,
+                                  onExport: () => _showProExportCenter(),
+                                  onTemplates: () =>
+                                      _showTrainingTemplatesCenter(),
+                                  onTrainingPlan: () =>
+                                      _showTrainingPlanCenter(),
+                                  isPanelExpanded: _isPanelExpanded,
+                                  isPanelCollapsed: _isPanelCollapsed,
+                                  selectMode: false,
+                                  selectedCount: 0,
+                                  onAttach: null,
+                                  saving: saving,
+                                  clubId: widget.resolvedClubId,
+                                  clubName: widget.resolvedClubName,
+                                  teamId: widget.resolvedTeamId,
+                                  teamName: widget.resolvedTeamName,
+                                  players3d: _teamPlayersFor3D,
+                                  loadingPlayers3d: _teamPlayersLoading,
+                                  state: state,
                                 ),
                               ),
-                            ),
-                          if (showBottomDrawingToolbar)
-                            Positioned(
-                            left: bottomToolLeftInset,
-                            right: bottomToolRightInset,
-                            bottom: 10,
-                            child: _ReferenceBottomToolbar(
-                              state: state,
-                              onObjects: () {
-                                state.setTool(TgTool.stamp);
-                                _openLegacyPanel(TgPanel.objects);
-                              },
-                              onLayers: () => _openLegacyPanel(TgPanel.layers),
-                              onProperties: _openPropertiesPanel,
-                              onTactical: _openTacticalPadSheet,
-                              onPickPlayer: () => _openPlayerPicker(goalkeeper: false),
-                              onPickGoalkeeper: () => _openPlayerPicker(goalkeeper: true),
-                              onBall: () => state.setActiveStamp('sportoteka://ball'),
-                              onChip: () => state.setActiveStamp('sportoteka://chip'),
-                              onCone: () => state.setActiveStamp('sportoteka://cone'),
-                              onDummy: () => state.setActiveStamp('sportoteka://dummy'),
-                              onGoal: () => state.setActiveStamp('sportoteka://goal'),
-                              onCurve: () => state.setTool(TgTool.curve),
-                              onWavy: () => state.setTool(TgTool.wavy),
-                            ),
-                          ),
-                          if (!_exportCleanMode && state.is3DMode)
-                            Positioned(
-                              right: animationAsSide
-                                  ? animationPanelShellWidth + 18
-                                  : (panelOpen && panelAsSide
-                                      ? sidePanelShellWidth + 18
-                                      : (dockAsSide ? dockControlRightInset : (tightUi ? 12 : 16))),
-                              bottom: showBottomDrawingToolbar ? 58 : 14,
-                              child: _TgTrackerCameraControl(
-                                onOrbitDelta: (delta) {
-                                  if (_glbFieldMode) {
-                                    _glbFieldController.orbitBy(delta);
-                                  } else {
-                                    _canvasKey.currentState?.orbit3D(delta);
-                                  }
-                                },
-                                onZoomIn: () {
-                                  if (_glbFieldMode) {
-                                    _glbFieldController.zoomIn();
-                                  } else {
-                                    _canvasKey.currentState?.zoom3DIn();
-                                  }
-                                },
-                                onZoomOut: () {
-                                  if (_glbFieldMode) {
-                                    _glbFieldController.zoomOut();
-                                  } else {
-                                    _canvasKey.currentState?.zoom3DOut();
-                                  }
-                                },
-                                onReset: () {
-                                  if (_glbFieldMode) {
-                                    _glbFieldController.reset();
-                                  } else {
-                                    _canvasKey.currentState?.reset3DView();
-                                  }
-                                },
+                            if (!_exportCleanMode)
+                              Positioned(
+                                top: microUi ? 42 : 54,
+                                left: 12,
+                                child: _FieldViewModeSwitch(
+                                  state: state,
+                                  glbActive: _glbFieldMode,
+                                  on2D: () => _setBoard3D(false),
+                                  onPerspective: () => _setBoard3D(true),
+                                  onGlb: () => _setGlbFieldMode(true),
+                                ),
                               ),
-                            ),
-                          if (!_exportCleanMode && !_animationPanelOpen && state.selected != null && (!_isPanelExpanded || _isPanelCollapsed))
-                            Positioned(
-                              top: desktop ? 66 : 60,
-                              right: dockControlRightInset,
-                              child: _ReferenceStylePanel(
-                                state: state,
-                                onOpenProperties: _openPropertiesPanel,
+                            if (!_exportCleanMode && _glbFieldMode)
+                              Positioned(
+                                top: tightUi ? (microUi ? 82 : 94) : 54,
+                                left: tightUi ? 12 : 202,
+                                child: _GlbCameraPresetBar(
+                                  onOverview: () => _glbFieldController
+                                      .setPreset(TrainingGraphics3DCameraPreset
+                                          .overview),
+                                  onTv: () => _glbFieldController.setPreset(
+                                      TrainingGraphics3DCameraPreset.tv),
+                                  onStand: () => _glbFieldController.setPreset(
+                                      TrainingGraphics3DCameraPreset.stand),
+                                  onGoal: () => _glbFieldController.setPreset(
+                                      TrainingGraphics3DCameraPreset.goal),
+                                  onFree: () => _glbFieldController.setPreset(
+                                      TrainingGraphics3DCameraPreset.free),
+                                ),
                               ),
-                            ),
-                          if (!_exportCleanMode && !_animationPanelOpen && !state.is3DMode && (!_isPanelExpanded || _isPanelCollapsed))
-                            Positioned(
-                            right: dockControlRightInset,
-                            bottom: tightUi ? 58 : (desktop ? 70 : 88),
-                            child: _ReferenceMiniMap(state: state),
-                          ),
-                          if (animationOpen && !animationAsSide)
-                            Positioned.fill(
-                              child: GestureDetector(
-                                behavior: HitTestBehavior.opaque,
-                                onTap: _closeAnimationPanel,
-                                child: Container(color: const Color(0x140B1220)),
+                            if (!_exportCleanMode && _docLoading)
+                              const Positioned.fill(
+                                child: TgScreenLoadingOverlay(
+                                  message: 'Загрузка схемы...',
+                                ),
                               ),
-                            ),
-                          if (animationOpen)
-                            Positioned(
-                              top: microUi ? 44 : 56,
-                              right: 8,
-                              bottom: 8,
-                              left: animationAsSide ? null : 8,
-                              width: animationAsSide ? animationPanelShellWidth : null,
-                              child: _TgPlaybackWindow(
-                                stepLabels: _playbackSteps,
-                                stepDurationsMs: _playbackStepDurationsMs,
-                                currentStep: _currentPlaybackStep,
-                                playing: _playbackRunning,
-                                progress: _playbackProgress,
-                                selectedSubjectLabel: _playbackSubjectLabel(),
-                                currentBindings: _playbackBindingsForCurrentStep(),
-                                onClose: _closeAnimationPanel,
-                                onTogglePlay: _togglePlayback,
-                                onSelectStep: _selectPlaybackStep,
-                                onAddStep: _addPlaybackStep,
-                                onDuplicateStep: _duplicatePlaybackStep,
-                                onDeleteStep: _removePlaybackStep,
-                                onRenameStep: _renamePlaybackStep,
-                                onStepDurationChanged: _setCurrentPlaybackDurationMs,
-                                onCaptureSubject: _capturePlaybackSubject,
-                                onBindRoute: _bindSelectedRouteToCurrentStep,
-                                onClearBinding: _clearSelectedRouteBinding,
-                                onSelectBinding: _selectPlaybackBinding,
-                                onDeleteBinding: _deletePlaybackBinding,
+                            if (!_exportCleanMode &&
+                                _docError != null &&
+                                !_docLoading)
+                              Positioned(
+                                left: 20,
+                                right: 20,
+                                bottom: 24,
+                                child: TgScreenErrorBanner(
+                                  message: _docError!,
+                                  onRetry:
+                                      (graphicId == null || graphicId! <= 0)
+                                          ? null
+                                          : () => _loadDocById(graphicId!),
+                                  onDismiss: () =>
+                                      setState(() => _docError = null),
+                                ),
                               ),
-                            ),
-                          if (!_exportCleanMode)
-                            Positioned.fill(
-                              child: _TgDraggablePanel(
-                                state: state,
-                                stamps: stamps,
-                                isPhone: _isPhone,
-                                controller: _panelController,
-                                isPanelCollapsed: _isPanelCollapsed,
-                                onTogglePanel: _togglePanel,
-                                canvasKey: _canvasKey,
-                                onRefreshSvg: _refreshSvg,
-                                onExportPng: () => _showProExportCenter(),
-                                teamName: widget.resolvedTeamName,
-                                teamPlayers: _teamPlayersFor3D,
-                                teamPlayersLoading: _teamPlayersLoading,
-                                teamPlayersError: _teamPlayersError,
-                                onOpen3DPro: _openFlutter3DPro,
-                                initialPanel: _legacyPanelInitial,
-                                panelOpenRevision: _legacyPanelRevision,
-                                onPanelOpened: _openLegacyPanel,
-                                onPanelClosed: _closeLegacyPanel,
+                            if (!_glbFieldMode)
+                              Positioned(
+                                left: desktop ? 22 : 12,
+                                right: desktop ? 22 : 12,
+                                top: 60,
+                                bottom: showBottomDrawingToolbar ? 70 : 12,
+                                child: IgnorePointer(
+                                  child: _TgPlaybackOverlay(
+                                    canvasState: _canvasKey.currentState,
+                                    routes: _collectPlaybackRoutes(),
+                                    activeStep: _currentPlaybackStep,
+                                    progress: _playbackProgress,
+                                    visible: _playbackRunning ||
+                                        _collectPlaybackRoutes().isNotEmpty,
+                                  ),
+                                ),
                               ),
-                            ),
-                        ],
+                            if (showBottomDrawingToolbar)
+                              Positioned(
+                                left: bottomToolLeftInset,
+                                right: bottomToolRightInset,
+                                bottom: 10,
+                                child: _ReferenceBottomToolbar(
+                                  state: state,
+                                  onObjects: () {
+                                    state.setTool(TgTool.stamp);
+                                    _openLegacyPanel(TgPanel.objects);
+                                  },
+                                  onLayers: () =>
+                                      _openLegacyPanel(TgPanel.layers),
+                                  onProperties: _openPropertiesPanel,
+                                  onTactical: _openTacticalPadSheet,
+                                  onPickPlayer: () =>
+                                      _openPlayerPicker(goalkeeper: false),
+                                  onPickGoalkeeper: () =>
+                                      _openPlayerPicker(goalkeeper: true),
+                                  onBall: () =>
+                                      state.setActiveStamp('sportoteka://ball'),
+                                  onChip: () =>
+                                      state.setActiveStamp('sportoteka://chip'),
+                                  onCone: () =>
+                                      state.setActiveStamp('sportoteka://cone'),
+                                  onDummy: () => state
+                                      .setActiveStamp('sportoteka://dummy'),
+                                  onGoal: () =>
+                                      state.setActiveStamp('sportoteka://goal'),
+                                  onCurve: () => state.setTool(TgTool.curve),
+                                  onWavy: () => state.setTool(TgTool.wavy),
+                                ),
+                              ),
+                            if (!_exportCleanMode &&
+                                (_glbFieldMode || state.is3DMode))
+                              Positioned(
+                                right: animationAsSide
+                                    ? animationPanelShellWidth + 18
+                                    : (panelOpen && panelAsSide
+                                        ? sidePanelShellWidth + 18
+                                        : (_glbFieldMode
+                                            ? glbDockSafeInset + 8
+                                            : (dockAsSide
+                                                ? dockControlRightInset
+                                                : (tightUi ? 12 : 16)))),
+                                bottom: showBottomDrawingToolbar ? 58 : 14,
+                                child: _TgTrackerCameraControl(
+                                  onOrbitDelta: (delta) {
+                                    if (_glbFieldMode) {
+                                      _glbFieldController.orbitBy(delta);
+                                    } else {
+                                      _canvasKey.currentState?.orbit3D(delta);
+                                    }
+                                  },
+                                  onZoomIn: () {
+                                    if (_glbFieldMode) {
+                                      _glbFieldController.zoomIn();
+                                    } else {
+                                      _canvasKey.currentState?.zoom3DIn();
+                                    }
+                                  },
+                                  onZoomOut: () {
+                                    if (_glbFieldMode) {
+                                      _glbFieldController.zoomOut();
+                                    } else {
+                                      _canvasKey.currentState?.zoom3DOut();
+                                    }
+                                  },
+                                  onReset: () {
+                                    if (_glbFieldMode) {
+                                      _glbFieldController.reset();
+                                    } else {
+                                      _canvasKey.currentState?.reset3DView();
+                                    }
+                                  },
+                                ),
+                              ),
+                            if (!_exportCleanMode &&
+                                !_animationPanelOpen &&
+                                state.selected != null &&
+                                (!_isPanelExpanded || _isPanelCollapsed))
+                              Positioned(
+                                top: _glbFieldMode
+                                    ? (tightUi ? (microUi ? 126 : 138) : 108)
+                                    : (desktop ? 66 : 60),
+                                right: _glbFieldMode
+                                    ? glbDockSafeInset + 8.0
+                                    : dockControlRightInset,
+                                child: _ReferenceStylePanel(
+                                  state: state,
+                                  onOpenProperties: _openPropertiesPanel,
+                                ),
+                              ),
+                            if (!_exportCleanMode &&
+                                !_animationPanelOpen &&
+                                (_glbFieldMode || !state.is3DMode) &&
+                                (!_isPanelExpanded || _isPanelCollapsed))
+                              Positioned(
+                                right: _glbFieldMode
+                                    ? glbDockSafeInset + 154.0
+                                    : dockControlRightInset,
+                                bottom: tightUi ? 58 : (desktop ? 70 : 88),
+                                child: _ReferenceMiniMap(
+                                  state: state,
+                                  glbActive: _glbFieldMode,
+                                  controller: _glbFieldController,
+                                ),
+                              ),
+                            if (animationOpen && !animationAsSide)
+                              Positioned.fill(
+                                child: GestureDetector(
+                                  behavior: HitTestBehavior.opaque,
+                                  onTap: _closeAnimationPanel,
+                                  child:
+                                      Container(color: const Color(0x140B1220)),
+                                ),
+                              ),
+                            if (animationOpen)
+                              Positioned(
+                                top: microUi ? 44 : 56,
+                                right: 8,
+                                bottom: 8,
+                                left: animationAsSide ? null : 8,
+                                width: animationAsSide
+                                    ? animationPanelShellWidth
+                                    : null,
+                                child: _TgPlaybackWindow(
+                                  stepLabels: _playbackSteps,
+                                  stepDurationsMs: _playbackStepDurationsMs,
+                                  currentStep: _currentPlaybackStep,
+                                  playing: _playbackRunning,
+                                  progress: _playbackProgress,
+                                  selectedSubjectLabel: _playbackSubjectLabel(),
+                                  currentBindings:
+                                      _playbackBindingsForCurrentStep(),
+                                  onClose: _closeAnimationPanel,
+                                  onTogglePlay: _togglePlayback,
+                                  onSelectStep: _selectPlaybackStep,
+                                  onAddStep: _addPlaybackStep,
+                                  onDuplicateStep: _duplicatePlaybackStep,
+                                  onDeleteStep: _removePlaybackStep,
+                                  onRenameStep: _renamePlaybackStep,
+                                  onStepDurationChanged:
+                                      _setCurrentPlaybackDurationMs,
+                                  onCaptureSubject: _capturePlaybackSubject,
+                                  onBindRoute: _bindSelectedRouteToCurrentStep,
+                                  onClearBinding: _clearSelectedRouteBinding,
+                                  onSelectBinding: _selectPlaybackBinding,
+                                  onDeleteBinding: _deletePlaybackBinding,
+                                ),
+                              ),
+                            if (!_exportCleanMode)
+                              Positioned.fill(
+                                child: _TgDraggablePanel(
+                                  state: state,
+                                  stamps: stamps,
+                                  isPhone: _isPhone,
+                                  controller: _panelController,
+                                  isPanelCollapsed: _isPanelCollapsed,
+                                  onTogglePanel: _togglePanel,
+                                  canvasKey: _canvasKey,
+                                  onRefreshSvg: _refreshSvg,
+                                  onExportPng: () => _showProExportCenter(),
+                                  teamName: widget.resolvedTeamName,
+                                  teamPlayers: _teamPlayersFor3D,
+                                  teamPlayersLoading: _teamPlayersLoading,
+                                  teamPlayersError: _teamPlayersError,
+                                  onOpen3DPro: _openFlutter3DPro,
+                                  initialPanel: _legacyPanelInitial,
+                                  panelOpenRevision: _legacyPanelRevision,
+                                  onPanelOpened: _openLegacyPanel,
+                                  onPanelClosed: _closeLegacyPanel,
+                                ),
+                              ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
                   ),
                 ],
               ),
@@ -6055,7 +7092,6 @@ Future<void> _refreshSvg(String asset, PlayerColors colors) async {
     );
   }
 }
-
 
 class _ReferenceBottomToolbar extends StatelessWidget {
   const _ReferenceBottomToolbar({
@@ -6104,7 +7140,8 @@ class _ReferenceBottomToolbar extends StatelessWidget {
               decoration: BoxDecoration(
                 color: Colors.white.withOpacity(.98),
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: TgScreenPalette.borderLight.withOpacity(.72)),
+                border: Border.all(
+                    color: TgScreenPalette.borderLight.withOpacity(.72)),
                 boxShadow: TgScreenPalette.windowShadow,
               ),
               child: SingleChildScrollView(
@@ -6112,28 +7149,100 @@ class _ReferenceBottomToolbar extends StatelessWidget {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    _ToolbarItem(icon: Icons.widgets_outlined, label: 'Объекты', active: state.tool == TgTool.stamp && (state.activeStampAsset?.startsWith('sportoteka://player-avatar') != true), onTap: onObjects),
-                    _ToolbarItem(icon: Icons.auto_awesome_motion_rounded, label: 'Тактика', active: false, onTap: onTactical),
-                    _ToolbarItem(icon: Icons.layers_outlined, label: 'Слои', active: false, onTap: onLayers),
-                    _ToolbarItem(icon: Icons.tune_rounded, label: 'Свойства', active: state.selected != null, onTap: state.selected == null ? null : onProperties),
+                    _ToolbarItem(
+                        icon: Icons.widgets_outlined,
+                        label: 'Объекты',
+                        active: state.tool == TgTool.stamp &&
+                            (state.activeStampAsset?.startsWith(
+                                    'sportoteka://player-avatar') !=
+                                true),
+                        onTap: onObjects),
+                    _ToolbarItem(
+                        icon: Icons.auto_awesome_motion_rounded,
+                        label: 'Тактика',
+                        active: false,
+                        onTap: onTactical),
+                    _ToolbarItem(
+                        icon: Icons.layers_outlined,
+                        label: 'Слои',
+                        active: false,
+                        onTap: onLayers),
+                    _ToolbarItem(
+                        icon: Icons.tune_rounded,
+                        label: 'Свойства',
+                        active: state.selected != null,
+                        onTap: state.selected == null ? null : onProperties),
                     _ToolbarItem(
                       icon: Icons.person_outline_rounded,
                       label: 'Игрок',
-                      active: state.activeStampAsset?.startsWith('sportoteka://player-avatar') == true,
+                      active: state.activeStampAsset
+                              ?.startsWith('sportoteka://player-avatar') ==
+                          true,
                       onTap: onPickPlayer,
                     ),
-                    _ToolbarItem(icon: Icons.sports_handball_rounded, label: 'Вратарь', active: state.activeStampAsset?.contains('role=goalkeeper') == true, onTap: onPickGoalkeeper),
-                    _ToolbarItem(icon: Icons.sports_soccer_rounded, label: 'Мяч', active: state.activeStampAsset == 'sportoteka://ball', onTap: onBall),
-                    _ToolbarItem(icon: Icons.circle_outlined, label: 'Фишка', active: state.activeStampAsset == 'sportoteka://chip', onTap: onChip),
-                    _ToolbarItem(icon: Icons.change_history_rounded, label: 'Конус', active: state.activeStampAsset == 'sportoteka://cone', onTap: onCone),
-                    _ToolbarItem(icon: Icons.table_rows_rounded, label: 'Ворота', active: state.activeStampAsset == 'sportoteka://goal', onTap: onGoal),
-                    _ToolbarItem(icon: Icons.crop_free_rounded, label: 'Зона', active: state.tool == TgTool.rect, onTap: () => state.setTool(TgTool.rect)),
-                    _ToolbarItem(icon: Icons.text_fields_rounded, label: 'Текст', active: state.tool == TgTool.text, onTap: () => state.setTool(TgTool.text)),
-                    _ToolbarItem(icon: Icons.horizontal_rule_rounded, label: 'Линия', active: state.tool == TgTool.line, onTap: () => state.setTool(TgTool.line)),
-                    _ToolbarItem(icon: Icons.draw_outlined, label: 'Кривая', active: state.tool == TgTool.curve, onTap: onCurve),
-                    _ToolbarItem(icon: Icons.timeline_rounded, label: 'Волна', active: state.tool == TgTool.wavy, onTap: onWavy),
-                    _ToolbarItem(icon: Icons.arrow_forward_rounded, label: 'Стрелка', active: false, onTap: () => state.setTool(TgTool.line)),
-                    _ToolbarItem(icon: Icons.delete_outline_rounded, label: 'Удалить', active: false, danger: true, onTap: state.deleteSelected),
+                    _ToolbarItem(
+                        icon: Icons.sports_handball_rounded,
+                        label: 'Вратарь',
+                        active: state.activeStampAsset
+                                ?.contains('role=goalkeeper') ==
+                            true,
+                        onTap: onPickGoalkeeper),
+                    _ToolbarItem(
+                        icon: Icons.sports_soccer_rounded,
+                        label: 'Мяч',
+                        active: state.activeStampAsset == 'sportoteka://ball',
+                        onTap: onBall),
+                    _ToolbarItem(
+                        icon: Icons.circle_outlined,
+                        label: 'Фишка',
+                        active: state.activeStampAsset == 'sportoteka://chip',
+                        onTap: onChip),
+                    _ToolbarItem(
+                        icon: Icons.change_history_rounded,
+                        label: 'Конус',
+                        active: state.activeStampAsset == 'sportoteka://cone',
+                        onTap: onCone),
+                    _ToolbarItem(
+                        icon: Icons.table_rows_rounded,
+                        label: 'Ворота',
+                        active: state.activeStampAsset == 'sportoteka://goal',
+                        onTap: onGoal),
+                    _ToolbarItem(
+                        icon: Icons.crop_free_rounded,
+                        label: 'Зона',
+                        active: state.tool == TgTool.rect,
+                        onTap: () => state.setTool(TgTool.rect)),
+                    _ToolbarItem(
+                        icon: Icons.text_fields_rounded,
+                        label: 'Текст',
+                        active: state.tool == TgTool.text,
+                        onTap: () => state.setTool(TgTool.text)),
+                    _ToolbarItem(
+                        icon: Icons.horizontal_rule_rounded,
+                        label: 'Линия',
+                        active: state.tool == TgTool.line,
+                        onTap: () => state.setTool(TgTool.line)),
+                    _ToolbarItem(
+                        icon: Icons.draw_outlined,
+                        label: 'Кривая',
+                        active: state.tool == TgTool.curve,
+                        onTap: onCurve),
+                    _ToolbarItem(
+                        icon: Icons.timeline_rounded,
+                        label: 'Волна',
+                        active: state.tool == TgTool.wavy,
+                        onTap: onWavy),
+                    _ToolbarItem(
+                        icon: Icons.arrow_forward_rounded,
+                        label: 'Стрелка',
+                        active: false,
+                        onTap: () => state.setTool(TgTool.line)),
+                    _ToolbarItem(
+                        icon: Icons.delete_outline_rounded,
+                        label: 'Удалить',
+                        active: false,
+                        danger: true,
+                        onTap: state.deleteSelected),
                   ],
                 ),
               ),
@@ -6162,7 +7271,11 @@ class _ToolbarItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = danger ? const Color(0xFFE11D48) : (active ? TgScreenPalette.primaryGreen : TgScreenPalette.textSecondary);
+    final color = danger
+        ? const Color(0xFFE11D48)
+        : (active
+            ? TgScreenPalette.primaryGreen
+            : TgScreenPalette.textSecondary);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 3),
       child: Material(
@@ -6176,7 +7289,10 @@ class _ToolbarItem extends StatelessWidget {
             height: 34,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(10),
-              border: active ? Border.all(color: TgScreenPalette.primaryGreen.withOpacity(.18)) : null,
+              border: active
+                  ? Border.all(
+                      color: TgScreenPalette.primaryGreen.withOpacity(.18))
+                  : null,
             ),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -6204,7 +7320,8 @@ class _ToolbarItem extends StatelessWidget {
 }
 
 class _ReferenceStylePanel extends StatelessWidget {
-  const _ReferenceStylePanel({required this.state, required this.onOpenProperties});
+  const _ReferenceStylePanel(
+      {required this.state, required this.onOpenProperties});
   final TgState state;
   final VoidCallback onOpenProperties;
 
@@ -6216,23 +7333,30 @@ class _ReferenceStylePanel extends StatelessWidget {
         final selected = state.selected;
         final title = _selectedTitle(selected);
         final currentWidth = _lineWidth(selected);
-        final canAdjustLineWidth = selected is TgLine || selected is TgCurve ||
-            selected is TgWavy || selected is TgZigzag ||
-            selected is TgSpring || selected is TgRect || selected is TgCircle;
-        final canAdjustLineStyle = selected is TgLine || selected is TgCurve ||
-            selected is TgWavy;
-        final canAdjustColor = canAdjustLineWidth || selected is TgText ||
+        final canAdjustLineWidth = selected is TgLine ||
+            selected is TgCurve ||
+            selected is TgWavy ||
+            selected is TgZigzag ||
+            selected is TgSpring ||
+            selected is TgRect ||
+            selected is TgCircle;
+        final canAdjustLineStyle =
+            selected is TgLine || selected is TgCurve || selected is TgWavy;
+        final canAdjustColor = canAdjustLineWidth ||
+            selected is TgText ||
             (selected is TgStamp && selected.playerColors != null);
         return IgnorePointer(
           ignoring: false,
           child: Container(
             width: 188,
-            constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height - 126),
+            constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(context).size.height - 126),
             padding: const EdgeInsets.all(7),
             decoration: BoxDecoration(
               color: Colors.white.withOpacity(.98),
               borderRadius: BorderRadius.circular(TgScreenPalette.panelRadius),
-              border: Border.all(color: TgScreenPalette.borderLight.withOpacity(.70)),
+              border: Border.all(
+                  color: TgScreenPalette.borderLight.withOpacity(.70)),
               boxShadow: [
                 BoxShadow(
                   color: const Color(0xFF0B1220).withOpacity(.10),
@@ -6247,193 +7371,248 @@ class _ReferenceStylePanel extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'Выбран: $title',
-                        style: const TextStyle(
-                          fontFamily: AppTypography.fontFamily,
-                          color: TgScreenPalette.textPrimary,
-                          fontSize: AppTypography.captionSize,
-                          fontWeight: FontWeight.w900,
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Выбран: $title',
+                          style: const TextStyle(
+                            fontFamily: AppTypography.fontFamily,
+                            color: TgScreenPalette.textPrimary,
+                            fontSize: AppTypography.captionSize,
+                            fontWeight: FontWeight.w900,
+                          ),
                         ),
                       ),
-                    ),
-                    IconButton(
-                      tooltip: 'Закрыть настройки',
-                      onPressed: state.clearSelection,
-                      icon: const Icon(Icons.close_rounded, size: 18.0, color: TgScreenPalette.textMuted),
-                      constraints: const BoxConstraints.tightFor(width: 28, height: 28),
-                      padding: EdgeInsets.zero,
+                      IconButton(
+                        tooltip: 'Закрыть настройки',
+                        onPressed: state.clearSelection,
+                        icon: const Icon(Icons.close_rounded,
+                            size: 18.0, color: TgScreenPalette.textMuted),
+                        constraints: const BoxConstraints.tightFor(
+                            width: 28, height: 28),
+                        padding: EdgeInsets.zero,
+                      ),
+                    ],
+                  ),
+                  if (canAdjustColor) ...[
+                    const SizedBox(height: 6),
+                    if (selected is TgStamp)
+                      const Text(
+                        'Цвет формы',
+                        style: TextStyle(
+                            fontFamily: AppTypography.fontFamily,
+                            color: TgScreenPalette.textMuted,
+                            fontWeight: FontWeight.w700,
+                            fontSize: AppTypography.captionSize),
+                      ),
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          _colorDot(const Color(0xFF00A750), selected),
+                          _colorDot(const Color(0xFFFACC15), selected),
+                          _colorDot(const Color(0xFF38BDF8), selected),
+                          _colorDot(const Color(0xFFF97316), selected),
+                          _colorDot(const Color(0xFFEF334D), selected),
+                          _colorDot(Colors.white, selected, outlined: true),
+                          _colorDot(const Color(0xFF0B1220), selected),
+                        ],
+                      ),
                     ),
                   ],
-                ),
-                if (canAdjustColor) ...[
-                  const SizedBox(height: 6),
-                  if (selected is TgStamp)
+                  if (canAdjustLineWidth) ...[
+                    const SizedBox(height: 6),
                     const Text(
-                      'Цвет формы',
-                      style: TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textMuted, fontWeight: FontWeight.w700, fontSize: AppTypography.captionSize),
+                      'Толщина линии',
+                      style: TextStyle(
+                          fontFamily: AppTypography.fontFamily,
+                          color: TgScreenPalette.textMuted,
+                          fontWeight: FontWeight.w700,
+                          fontSize: AppTypography.captionSize),
                     ),
-                  SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      _colorDot(const Color(0xFF00A750), selected),
-                      _colorDot(const Color(0xFFFACC15), selected),
-                      _colorDot(const Color(0xFF38BDF8), selected),
-                      _colorDot(const Color(0xFFF97316), selected),
-                      _colorDot(const Color(0xFFEF334D), selected),
-                      _colorDot(Colors.white, selected, outlined: true),
-                      _colorDot(const Color(0xFF0B1220), selected),
-                    ],
-                  ),
-                ),
-                ],
-                if (canAdjustLineWidth) ...[
-                const SizedBox(height: 6),
-                const Text(
-                  'Толщина линии',
-                  style: TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textMuted, fontWeight: FontWeight.w700, fontSize: AppTypography.captionSize),
-                ),
-                Row(
-                  children: [
-                    Expanded(
-                      child: SliderTheme(
-                        data: SliderTheme.of(context).copyWith(
-                          activeTrackColor: TgScreenPalette.primaryGreen,
-                          inactiveTrackColor: TgScreenPalette.borderLight,
-                          thumbColor: Colors.white,
-                          overlayColor: TgScreenPalette.primaryGreen.withOpacity(.12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: SliderTheme(
+                            data: SliderTheme.of(context).copyWith(
+                              activeTrackColor: TgScreenPalette.primaryGreen,
+                              inactiveTrackColor: TgScreenPalette.borderLight,
+                              thumbColor: Colors.white,
+                              overlayColor:
+                                  TgScreenPalette.primaryGreen.withOpacity(.12),
+                            ),
+                            child: Slider(
+                              value: currentWidth.clamp(1.0, 12.0),
+                              min: 1,
+                              max: 12,
+                              onChanged: (v) => _setWidth(selected, v),
+                            ),
+                          ),
                         ),
-                        child: Slider(
-                          value: currentWidth.clamp(1.0, 12.0),
-                          min: 1,
-                          max: 12,
-                          onChanged: (v) => _setWidth(selected, v),
+                        Text('${currentWidth.round()} px',
+                            style: const TextStyle(
+                                fontFamily: AppTypography.fontFamily,
+                                color: TgScreenPalette.textMuted,
+                                fontWeight: FontWeight.w800,
+                                fontSize: AppTypography.captionSize)),
+                      ],
+                    ),
+                  ],
+                  if (selected is TgStamp) ...[
+                    const SizedBox(height: 6),
+                    const Text(
+                      'Размер объекта',
+                      style: TextStyle(
+                          fontFamily: AppTypography.fontFamily,
+                          color: TgScreenPalette.textMuted,
+                          fontWeight: FontWeight.w700,
+                          fontSize: AppTypography.captionSize),
+                    ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: SliderTheme(
+                            data: SliderTheme.of(context).copyWith(
+                              activeTrackColor: TgScreenPalette.primaryGreen,
+                              inactiveTrackColor: TgScreenPalette.borderLight,
+                              thumbColor: Colors.white,
+                              overlayColor:
+                                  TgScreenPalette.primaryGreen.withOpacity(.12),
+                            ),
+                            child: Slider(
+                              value:
+                                  selected.size.clamp(20.0, 260.0).toDouble(),
+                              min: 20,
+                              max: 260,
+                              onChanged: (v) =>
+                                  state.updateSelectedStamp(size: v),
+                            ),
+                          ),
                         ),
+                        Text('${selected.size.round()}',
+                            style: const TextStyle(
+                                fontFamily: AppTypography.fontFamily,
+                                color: TgScreenPalette.textMuted,
+                                fontWeight: FontWeight.w800,
+                                fontSize: AppTypography.captionSize)),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Поворот',
+                      style: TextStyle(
+                          fontFamily: AppTypography.fontFamily,
+                          color: TgScreenPalette.textMuted,
+                          fontWeight: FontWeight.w700,
+                          fontSize: AppTypography.captionSize),
+                    ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: SliderTheme(
+                            data: SliderTheme.of(context).copyWith(
+                              activeTrackColor: TgScreenPalette.primaryGreen,
+                              inactiveTrackColor: TgScreenPalette.borderLight,
+                              thumbColor: Colors.white,
+                            ),
+                            child: Slider(
+                              value: selected.rotation
+                                  .clamp(-3.14159, 3.14159)
+                                  .toDouble(),
+                              min: -3.14159,
+                              max: 3.14159,
+                              onChanged: (v) =>
+                                  state.updateSelectedStamp(rotation: v),
+                            ),
+                          ),
+                        ),
+                        Text('${(selected.rotation * 180 / math.pi).round()}°',
+                            style: const TextStyle(
+                                fontFamily: AppTypography.fontFamily,
+                                color: TgScreenPalette.textMuted,
+                                fontWeight: FontWeight.w800,
+                                fontSize: AppTypography.captionSize)),
+                      ],
+                    ),
+                  ],
+                  if (canAdjustLineStyle) ...[
+                    const SizedBox(height: 6),
+                    const Text(
+                      'Стиль линии',
+                      style: TextStyle(
+                          fontFamily: AppTypography.fontFamily,
+                          color: TgScreenPalette.textMuted,
+                          fontWeight: FontWeight.w700,
+                          fontSize: AppTypography.captionSize),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      height: 34,
+                      padding: const EdgeInsets.symmetric(horizontal: 5),
+                      decoration: BoxDecoration(
+                        color: TgScreenPalette.surfaceLight,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: TgScreenPalette.borderLight),
+                      ),
+                      child: Row(
+                        children: [
+                          _lineStyleButton('—', LineKind.normal, selected),
+                          _lineStyleButton('···', LineKind.dotted, selected),
+                          _lineStyleButton('- -', LineKind.dashed, selected),
+                          _arrowButton(selected),
+                        ],
                       ),
                     ),
-                    Text('${currentWidth.round()} px', style: const TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textMuted, fontWeight: FontWeight.w800, fontSize: AppTypography.captionSize)),
                   ],
-                ),
-                ],
-                if (selected is TgStamp) ...[
-                  const SizedBox(height: 6),
-                  const Text(
-                    'Размер объекта',
-                    style: TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textMuted, fontWeight: FontWeight.w700, fontSize: AppTypography.captionSize),
-                  ),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: SliderTheme(
-                          data: SliderTheme.of(context).copyWith(
-                            activeTrackColor: TgScreenPalette.primaryGreen,
-                            inactiveTrackColor: TgScreenPalette.borderLight,
-                            thumbColor: Colors.white,
-                            overlayColor: TgScreenPalette.primaryGreen.withOpacity(.12),
-                          ),
-                          child: Slider(
-                            value: selected.size.clamp(20.0, 260.0).toDouble(),
-                            min: 20,
-                            max: 260,
-                            onChanged: (v) => state.updateSelectedStamp(size: v),
+                  if (_canEditPoints(selected)) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _panelAction(
+                            Icons.tune_rounded,
+                            'Ред. точки',
+                            TgScreenPalette.primaryGreen,
+                            () => _editPoints(selected),
                           ),
                         ),
-                      ),
-                      Text('${selected.size.round()}', style: const TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textMuted, fontWeight: FontWeight.w800, fontSize: AppTypography.captionSize)),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Поворот',
-                    style: TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textMuted, fontWeight: FontWeight.w700, fontSize: AppTypography.captionSize),
-                  ),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: SliderTheme(
-                          data: SliderTheme.of(context).copyWith(
-                            activeTrackColor: TgScreenPalette.primaryGreen,
-                            inactiveTrackColor: TgScreenPalette.borderLight,
-                            thumbColor: Colors.white,
-                          ),
-                          child: Slider(
-                            value: selected.rotation.clamp(-3.14159, 3.14159).toDouble(),
-                            min: -3.14159,
-                            max: 3.14159,
-                            onChanged: (v) => state.updateSelectedStamp(rotation: v),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _panelAction(
+                            Icons.check_circle_outline_rounded,
+                            'Готово',
+                            TgScreenPalette.textSecondary,
+                            state.finishEditPoints,
                           ),
                         ),
-                      ),
-                      Text('${(selected.rotation * 180 / math.pi).round()}°', style: const TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textMuted, fontWeight: FontWeight.w800, fontSize: AppTypography.captionSize)),
-                    ],
-                  ),
-                ],
-                if (canAdjustLineStyle) ...[
-                  const SizedBox(height: 6),
-                  const Text(
-                  'Стиль линии',
-                  style: TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textMuted, fontWeight: FontWeight.w700, fontSize: AppTypography.captionSize),
-                ),
-                const SizedBox(height: 8),
-                Container(
-                  height: 34,
-                  padding: const EdgeInsets.symmetric(horizontal: 5),
-                  decoration: BoxDecoration(
-                    color: TgScreenPalette.surfaceLight,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: TgScreenPalette.borderLight),
-                  ),
-                  child: Row(
-                    children: [
-                      _lineStyleButton('—', LineKind.normal, selected),
-                      _lineStyleButton('···', LineKind.dotted, selected),
-                      _lineStyleButton('- -', LineKind.dashed, selected),
-                      _arrowButton(selected),
-                    ],
-                  ),
-                ),
-                ],
-                if (_canEditPoints(selected)) ...[
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _panelAction(
-                          Icons.tune_rounded,
-                          'Ред. точки',
-                          TgScreenPalette.primaryGreen,
-                          () => _editPoints(selected),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: _panelAction(
-                          Icons.check_circle_outline_rounded,
-                          'Готово',
-                          TgScreenPalette.textSecondary,
-                          state.finishEditPoints,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    Expanded(child: _panelAction(Icons.delete_outline_rounded, 'Удалить', const Color(0xFFE11D48), state.deleteSelected)),
-                    const SizedBox(width: 6),
-                    Expanded(child: _panelAction(Icons.copy_rounded, 'Копия', TgScreenPalette.textSecondary, state.duplicateSelected)),
+                      ],
+                    ),
                   ],
-                ),
-                const SizedBox(height: 6),
-                SizedBox(
-                  width: double.infinity,
-                  child: _panelAction(Icons.tune_rounded, 'Свойства', TgScreenPalette.primaryGreen, onOpenProperties),
-                ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Expanded(
+                          child: _panelAction(
+                              Icons.delete_outline_rounded,
+                              'Удалить',
+                              const Color(0xFFE11D48),
+                              state.deleteSelected)),
+                      const SizedBox(width: 6),
+                      Expanded(
+                          child: _panelAction(
+                              Icons.copy_rounded,
+                              'Копия',
+                              TgScreenPalette.textSecondary,
+                              state.duplicateSelected)),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  SizedBox(
+                    width: double.infinity,
+                    child: _panelAction(Icons.tune_rounded, 'Свойства',
+                        TgScreenPalette.primaryGreen, onOpenProperties),
+                  ),
                 ],
               ),
             ),
@@ -6450,7 +7629,10 @@ class _ReferenceStylePanel extends StatelessWidget {
     if (e is TgWavy) return 'волна';
     if (e is TgZigzag) return 'зигзаг';
     if (e is TgSpring) return 'пружина';
-    if (e is TgStamp) return e.asset.startsWith('sportoteka://player-avatar') ? 'игрок' : 'объект';
+    if (e is TgStamp)
+      return e.asset.startsWith('sportoteka://player-avatar')
+          ? 'игрок'
+          : 'объект';
     if (e is TgText) return 'текст';
     return 'зона';
   }
@@ -6501,10 +7683,12 @@ class _ReferenceStylePanel extends StatelessWidget {
     if (e is TgWavy) state.updateSelectedWavy(color: color);
     if (e is TgZigzag) state.updateSelectedZigzag(color: color);
     if (e is TgSpring) state.updateSelectedSpring(color: color);
-    if (e is TgRect || e is TgCircle) state.updateSelectedShape(border: color, fill: color.withOpacity(.10));
+    if (e is TgRect || e is TgCircle)
+      state.updateSelectedShape(border: color, fill: color.withOpacity(.10));
     if (e is TgText) state.updateSelectedText(color: color);
     if (e is TgStamp && e.playerColors != null) {
-      state.updateSelectedStamp(playerColors: e.playerColors!.copyWith(jersey: color));
+      state.updateSelectedStamp(
+          playerColors: e.playerColors!.copyWith(jersey: color));
     }
   }
 
@@ -6560,16 +7744,21 @@ class _ReferenceStylePanel extends StatelessWidget {
   }
 
   Widget _arrowButton(TgElement? selected) {
-    final active = (selected is TgLine && selected.end == LineEnd.arrow) || (selected is TgCurve && selected.end == LineEnd.arrow) || (selected is TgWavy && selected.lineEnd == LineEnd.arrow);
+    final active = (selected is TgLine && selected.end == LineEnd.arrow) ||
+        (selected is TgCurve && selected.end == LineEnd.arrow) ||
+        (selected is TgWavy && selected.lineEnd == LineEnd.arrow);
     return Expanded(
       child: InkWell(
         onTap: () {
           if (selected is TgLine) {
-            state.updateSelectedLine(end: active ? LineEnd.none : LineEnd.arrow);
+            state.updateSelectedLine(
+                end: active ? LineEnd.none : LineEnd.arrow);
           } else if (selected is TgCurve) {
-            state.updateSelectedCurve(end: active ? LineEnd.none : LineEnd.arrow);
+            state.updateSelectedCurve(
+                end: active ? LineEnd.none : LineEnd.arrow);
           } else if (selected is TgWavy) {
-            state.updateSelectedWavy(lineEnd: active ? LineEnd.none : LineEnd.arrow);
+            state.updateSelectedWavy(
+                lineEnd: active ? LineEnd.none : LineEnd.arrow);
           }
         },
         borderRadius: BorderRadius.circular(10),
@@ -6580,12 +7769,13 @@ class _ReferenceStylePanel extends StatelessWidget {
             color: active ? TgScreenPalette.primaryGreen : Colors.transparent,
             borderRadius: BorderRadius.circular(10),
           ),
-          child: Icon(Icons.arrow_forward_rounded, size: 18.0, color: active ? Colors.white : TgScreenPalette.textSecondary),
+          child: Icon(Icons.arrow_forward_rounded,
+              size: 18.0,
+              color: active ? Colors.white : TgScreenPalette.textSecondary),
         ),
       ),
     );
   }
-
 
   bool _canEditPoints(TgElement? e) {
     return e is TgCurve || e is TgWavy;
@@ -6601,79 +7791,144 @@ class _ReferenceStylePanel extends StatelessWidget {
     }
   }
 
-  Widget _panelAction(IconData icon, String text, Color color, VoidCallback onTap) {
+  Widget _panelAction(
+      IconData icon, String text, Color color, VoidCallback onTap) {
     return Material(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(4),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(8),
-          child: Container(
-            height: 34,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: color.withOpacity(.18)),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(icon, size: 14, color: color),
-                const SizedBox(width: 3),
-                Flexible(
-                  child: Text(
-                    text,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontFamily: AppTypography.fontFamily, color: color, fontWeight: FontWeight.w900, fontSize: AppTypography.captionSize),
-                  ),
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(4),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          height: 34,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: color.withOpacity(.18)),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 14, color: color),
+              const SizedBox(width: 3),
+              Flexible(
+                child: Text(
+                  text,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                      fontFamily: AppTypography.fontFamily,
+                      color: color,
+                      fontWeight: FontWeight.w900,
+                      fontSize: AppTypography.captionSize),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
+      ),
     );
   }
-
 }
 
 class _ReferenceMiniMap extends StatelessWidget {
-  const _ReferenceMiniMap({required this.state});
+  const _ReferenceMiniMap({
+    required this.state,
+    required this.glbActive,
+    required this.controller,
+  });
+
   final TgState state;
+  final bool glbActive;
+  final TrainingGraphicsGlbFieldController controller;
+
+  void _moveCamera(Offset local, Size size) {
+    if (!glbActive || size.width <= 10 || size.height <= 10) return;
+    final field = (Offset.zero & size).deflate(5);
+    final u =
+        ((local.dx - field.left) / field.width).clamp(0.0, 1.0).toDouble();
+    final v =
+        ((local.dy - field.top) / field.height).clamp(0.0, 1.0).toDouble();
+    controller.focusAtNormalized(u, v);
+  }
 
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: state,
       builder: (_, __) => Container(
-        width: 126,
-        height: 86,
+        width: 172,
+        height: 118,
         padding: const EdgeInsets.all(6),
         decoration: BoxDecoration(
           color: const Color(0xFF102017).withOpacity(.90),
           borderRadius: BorderRadius.circular(10),
           border: Border.all(color: Colors.white.withOpacity(.12)),
           boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(.22), blurRadius: 24, offset: const Offset(0, 14)),
+            BoxShadow(
+                color: Colors.black.withOpacity(.22),
+                blurRadius: 24,
+                offset: const Offset(0, 14)),
           ],
         ),
         child: Column(
           children: [
             Row(
-              children: const [
-                Expanded(child: Text('RADAR', style: TextStyle(fontFamily: AppTypography.fontFamily, color: Colors.white, fontSize: AppTypography.captionSize, fontWeight: FontWeight.w800, letterSpacing: .8))),
-                Icon(Icons.visibility_outlined, size: 16, color: Colors.white70),
-                SizedBox(width: 10),
-                Icon(Icons.lock_outline_rounded, size: 16, color: Colors.white70),
-                SizedBox(width: 10),
-                Icon(Icons.fullscreen_rounded, size: 16, color: Colors.white70),
+              children: [
+                const Expanded(
+                    child: Text('RADAR',
+                        style: TextStyle(
+                            fontFamily: AppTypography.fontFamily,
+                            color: Colors.white,
+                            fontSize: AppTypography.captionSize,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: .8))),
+                Icon(
+                    glbActive
+                        ? Icons.touch_app_rounded
+                        : Icons.visibility_outlined,
+                    size: 16,
+                    color:
+                        glbActive ? const Color(0xFF61D69D) : Colors.white70),
+                const SizedBox(width: 10),
+                const Icon(Icons.lock_outline_rounded,
+                    size: 16, color: Colors.white70),
+                const SizedBox(width: 10),
+                const Icon(Icons.fullscreen_rounded,
+                    size: 16, color: Colors.white70),
               ],
             ),
             const SizedBox(height: 8),
             Expanded(
-              child: CustomPaint(
-                painter: _MiniMapPainter(state.elements),
-                child: const SizedBox.expand(),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final size =
+                      Size(constraints.maxWidth, constraints.maxHeight);
+                  return ValueListenableBuilder<Offset>(
+                    valueListenable: controller.radarFocus,
+                    builder: (_, focus, __) => ValueListenableBuilder<double>(
+                      valueListenable: controller.radarYaw,
+                      builder: (_, yaw, __) => GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTapDown: glbActive
+                            ? (d) => _moveCamera(d.localPosition, size)
+                            : null,
+                        onPanUpdate: glbActive
+                            ? (d) => _moveCamera(d.localPosition, size)
+                            : null,
+                        child: CustomPaint(
+                          painter: _MiniMapPainter(
+                            state.elements,
+                            cameraFocus: focus,
+                            cameraYaw: yaw,
+                            showCamera: glbActive,
+                          ),
+                          child: const SizedBox.expand(),
+                        ),
+                      ),
+                    ),
+                  );
+                },
               ),
             ),
           ],
@@ -6684,8 +7939,17 @@ class _ReferenceMiniMap extends StatelessWidget {
 }
 
 class _MiniMapPainter extends CustomPainter {
-  _MiniMapPainter(this.elements);
+  _MiniMapPainter(
+    this.elements, {
+    required this.cameraFocus,
+    required this.cameraYaw,
+    required this.showCamera,
+  });
+
   final List<TgElement> elements;
+  final Offset cameraFocus;
+  final double cameraYaw;
+  final bool showCamera;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -6695,43 +7959,100 @@ class _MiniMapPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1
       ..color = Colors.white.withOpacity(.52);
-    canvas.drawRRect(RRect.fromRectAndRadius(field, const Radius.circular(5)), Paint()..color = const Color(0xFF76947B));
+    canvas.drawRRect(RRect.fromRectAndRadius(field, const Radius.circular(5)),
+        Paint()..color = const Color(0xFF76947B));
     final stripeW = field.width / 12.0;
     canvas.save();
-    canvas.clipRRect(RRect.fromRectAndRadius(field.deflate(1), const Radius.circular(4)));
+    canvas.clipRRect(
+        RRect.fromRectAndRadius(field.deflate(1), const Radius.circular(4)));
     for (var stripe = 0; stripe < 14; stripe++) {
       canvas.drawRect(
-        Rect.fromLTWH(field.left + stripe * stripeW, field.top, stripeW, field.height),
-        Paint()..color = stripe.isEven ? const Color(0xFF719078) : const Color(0xFF819E86),
+        Rect.fromLTWH(
+            field.left + stripe * stripeW, field.top, stripeW, field.height),
+        Paint()
+          ..color =
+              stripe.isEven ? const Color(0xFF719078) : const Color(0xFF819E86),
       );
     }
     canvas.restore();
-    canvas.drawRRect(RRect.fromRectAndRadius(field, const Radius.circular(5)), p);
-    canvas.drawLine(Offset(field.center.dx, field.top), Offset(field.center.dx, field.bottom), p);
+    canvas.drawRRect(
+        RRect.fromRectAndRadius(field, const Radius.circular(5)), p);
+    canvas.drawLine(Offset(field.center.dx, field.top),
+        Offset(field.center.dx, field.bottom), p);
     canvas.drawCircle(field.center, field.height * .17, p);
-    canvas.drawRect(Rect.fromLTWH(field.left, field.center.dy - field.height * .18, field.width * .12, field.height * .36), p);
-    canvas.drawRect(Rect.fromLTWH(field.right - field.width * .12, field.center.dy - field.height * .18, field.width * .12, field.height * .36), p);
+    canvas.drawRect(
+        Rect.fromLTWH(field.left, field.center.dy - field.height * .18,
+            field.width * .12, field.height * .36),
+        p);
+    canvas.drawRect(
+        Rect.fromLTWH(
+            field.right - field.width * .12,
+            field.center.dy - field.height * .18,
+            field.width * .12,
+            field.height * .36),
+        p);
 
     int i = 0;
     for (final e in elements) {
-      if (e is! TgStamp) continue;
+      if (e is! TgStamp || e.hidden) continue;
       final uri = Uri.tryParse(e.asset);
       final team = uri?.queryParameters['team'] ?? 'home';
       final x = field.left + (e.pos.dx / 1050.0).clamp(0.0, 1.0) * field.width;
       final y = field.top + (e.pos.dy / 680.0).clamp(0.0, 1.0) * field.height;
-      final color = team == 'away' ? const Color(0xFFEF334D) : const Color(0xFF20C56B);
-      canvas.drawCircle(Offset(x, y), 4.6, Paint()..color = color);
-      canvas.drawCircle(Offset(x, y), 4.6, (Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.0
-        ..color = Colors.white.withOpacity(.75)));
-      i++;
-      if (i > 40) break;
+      final color =
+          team == 'away' ? const Color(0xFFEF334D) : const Color(0xFF20C56B);
+      canvas.drawCircle(Offset(x, y), 4.2, Paint()..color = color);
+      canvas.drawCircle(
+          Offset(x, y),
+          4.2,
+          Paint()
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 1.0
+            ..color = Colors.white.withOpacity(.82));
+      if (++i > 40) break;
+    }
+
+    if (showCamera) {
+      final cx = field.left + cameraFocus.dx.clamp(0.0, 1.0) * field.width;
+      final cy = field.top + cameraFocus.dy.clamp(0.0, 1.0) * field.height;
+      final center = Offset(cx, cy);
+      canvas.drawCircle(center, 5.3, Paint()..color = const Color(0xFFFFD166));
+      canvas.drawCircle(
+          center,
+          5.3,
+          Paint()
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 1.4
+            ..color = Colors.white);
+      final dir = Offset(math.sin(cameraYaw), math.cos(cameraYaw));
+      final tip = center + dir * 14.0;
+      canvas.drawLine(
+          center,
+          tip,
+          Paint()
+            ..color = const Color(0xFFFFD166)
+            ..strokeWidth = 2.0
+            ..strokeCap = StrokeCap.round);
+      final left = tip +
+          Offset(math.sin(cameraYaw - 2.45), math.cos(cameraYaw - 2.45)) * 5.0;
+      final right = tip +
+          Offset(math.sin(cameraYaw + 2.45), math.cos(cameraYaw + 2.45)) * 5.0;
+      canvas.drawPath(
+          Path()
+            ..moveTo(tip.dx, tip.dy)
+            ..lineTo(left.dx, left.dy)
+            ..lineTo(right.dx, right.dy)
+            ..close(),
+          Paint()..color = const Color(0xFFFFD166));
     }
   }
 
   @override
-  bool shouldRepaint(covariant _MiniMapPainter oldDelegate) => oldDelegate.elements != elements;
+  bool shouldRepaint(covariant _MiniMapPainter oldDelegate) =>
+      oldDelegate.elements != elements ||
+      oldDelegate.cameraFocus != cameraFocus ||
+      oldDelegate.cameraYaw != cameraYaw ||
+      oldDelegate.showCamera != showCamera;
 }
 
 class _AvatarFallback extends StatelessWidget {
@@ -6742,8 +8063,10 @@ class _AvatarFallback extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     String initials() {
-      final parts = name.trim().split(RegExp(r'\s+')).where((e) => e.isNotEmpty).toList();
-      String take(String value) => value.runes.take(1).map((r) => String.fromCharCode(r)).join();
+      final parts =
+          name.trim().split(RegExp(r'\s+')).where((e) => e.isNotEmpty).toList();
+      String take(String value) =>
+          value.runes.take(1).map((r) => String.fromCharCode(r)).join();
       if (parts.isEmpty) return 'И';
       if (parts.length == 1) return take(parts.first).toUpperCase();
       return (take(parts.first) + take(parts.last)).toUpperCase();
@@ -6754,14 +8077,22 @@ class _AvatarFallback extends StatelessWidget {
       color: color.withOpacity(.92),
       child: Text(
         initials(),
-        style: const TextStyle(fontFamily: AppTypography.fontFamily, color: Colors.white, fontWeight: FontWeight.w900, fontSize: AppTypography.sectionTitleSize),
+        style: const TextStyle(
+            fontFamily: AppTypography.fontFamily,
+            color: Colors.white,
+            fontWeight: FontWeight.w900,
+            fontSize: AppTypography.sectionTitleSize),
       ),
     );
   }
 }
 
 class _TeamSideChip extends StatelessWidget {
-  const _TeamSideChip({required this.label, required this.active, required this.color, required this.onTap});
+  const _TeamSideChip(
+      {required this.label,
+      required this.active,
+      required this.color,
+      required this.onTap});
   final String label;
   final bool active;
   final Color color;
@@ -6780,7 +8111,10 @@ class _TeamSideChip extends StatelessWidget {
           alignment: Alignment.center,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: active ? color.withOpacity(.45) : TgScreenPalette.borderLight),
+            border: Border.all(
+                color: active
+                    ? color.withOpacity(.45)
+                    : TgScreenPalette.borderLight),
           ),
           child: Text(
             label,
@@ -6897,12 +8231,12 @@ final List<_TrainingTemplate> _builtInTrainingTemplates = <_TrainingTemplate>[
 ];
 
 class _TemplateDraft {
-  const _TemplateDraft({required this.title, required this.category, required this.description});
+  const _TemplateDraft(
+      {required this.title, required this.category, required this.description});
   final String title;
   final String category;
   final String description;
 }
-
 
 const List<String> _trainingPlanBlocks = <String>[
   'Разминка',
@@ -6989,19 +8323,34 @@ class _TrainingPlanExercise {
       id: id,
       title: title,
       block: (json['block'] ?? 'Основная часть').toString(),
-      durationMin: json['durationMin'] is int ? json['durationMin'] as int : int.tryParse('${json['durationMin'] ?? 12}') ?? 12,
-      playersCount: json['playersCount'] is int ? json['playersCount'] as int : int.tryParse('${json['playersCount'] ?? 10}') ?? 10,
-      goal: (json['goal'] ?? '').toString().trim().isEmpty ? 'Цель упражнения' : (json['goal'] ?? '').toString(),
-      equipment: (json['equipment'] ?? '').toString().trim().isEmpty ? 'мячи, фишки, манишки' : (json['equipment'] ?? '').toString(),
-      templateId: (json['templateId'] ?? '').toString().trim().isEmpty ? null : (json['templateId'] ?? '').toString(),
-      templateTitle: (json['templateTitle'] ?? '').toString().trim().isEmpty ? null : (json['templateTitle'] ?? '').toString(),
-      presetKey: (json['presetKey'] ?? '').toString().trim().isEmpty ? null : (json['presetKey'] ?? '').toString(),
+      durationMin: json['durationMin'] is int
+          ? json['durationMin'] as int
+          : int.tryParse('${json['durationMin'] ?? 12}') ?? 12,
+      playersCount: json['playersCount'] is int
+          ? json['playersCount'] as int
+          : int.tryParse('${json['playersCount'] ?? 10}') ?? 10,
+      goal: (json['goal'] ?? '').toString().trim().isEmpty
+          ? 'Цель упражнения'
+          : (json['goal'] ?? '').toString(),
+      equipment: (json['equipment'] ?? '').toString().trim().isEmpty
+          ? 'мячи, фишки, манишки'
+          : (json['equipment'] ?? '').toString(),
+      templateId: (json['templateId'] ?? '').toString().trim().isEmpty
+          ? null
+          : (json['templateId'] ?? '').toString(),
+      templateTitle: (json['templateTitle'] ?? '').toString().trim().isEmpty
+          ? null
+          : (json['templateTitle'] ?? '').toString(),
+      presetKey: (json['presetKey'] ?? '').toString().trim().isEmpty
+          ? null
+          : (json['presetKey'] ?? '').toString(),
       docJson: doc,
       createdAt: DateTime.tryParse((json['createdAt'] ?? '').toString()),
     );
   }
 
-  _TrainingPlanExercise copyWith({String? id, String? title, DateTime? createdAt}) {
+  _TrainingPlanExercise copyWith(
+      {String? id, String? title, DateTime? createdAt}) {
     return _TrainingPlanExercise(
       id: id ?? this.id,
       title: title ?? this.title,
@@ -7041,8 +8390,14 @@ class _TrainingTemplate {
   final DateTime? createdAt;
 
   String get safeFileName {
-    final raw = title.toLowerCase().replaceAll(RegExp(r'[^a-zа-я0-9]+', unicode: true), '_');
-    return raw.replaceAll(RegExp(r'_+'), '_').replaceAll(RegExp(r'^_|_$'), '').trim().isEmpty
+    final raw = title
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-zа-я0-9]+', unicode: true), '_');
+    return raw
+            .replaceAll(RegExp(r'_+'), '_')
+            .replaceAll(RegExp(r'^_|_$'), '')
+            .trim()
+            .isEmpty
         ? 'training_template'
         : raw.replaceAll(RegExp(r'_+'), '_').replaceAll(RegExp(r'^_|_$'), '');
   }
@@ -7075,7 +8430,9 @@ class _TrainingTemplate {
       category: (json['category'] ?? 'Атака').toString(),
       description: (json['description'] ?? '').toString(),
       builtin: json['builtin'] == true,
-      presetKey: (json['presetKey'] ?? '').toString().trim().isEmpty ? null : (json['presetKey'] ?? '').toString().trim(),
+      presetKey: (json['presetKey'] ?? '').toString().trim().isEmpty
+          ? null
+          : (json['presetKey'] ?? '').toString().trim(),
       docJson: doc,
       createdAt: DateTime.tryParse((json['createdAt'] ?? '').toString()),
     );
@@ -7094,9 +8451,6 @@ class _TrainingTemplate {
     );
   }
 }
-
-
-
 
 class _WorkflowPanelShell extends StatelessWidget {
   const _WorkflowPanelShell({
@@ -7135,7 +8489,8 @@ class _WorkflowPanelShell extends StatelessWidget {
                   end: Alignment.bottomRight,
                   colors: [Color(0xFFFFFFFF), Color(0xFFF7FAF9)],
                 ),
-                border: Border(bottom: BorderSide(color: TgScreenPalette.softLine)),
+                border:
+                    Border(bottom: BorderSide(color: TgScreenPalette.softLine)),
               ),
               child: Row(
                 children: [
@@ -7153,16 +8508,33 @@ class _WorkflowPanelShell extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textPrimary, fontWeight: FontWeight.w900, fontSize: AppTypography.sectionTitleSize, height: 1.1)),
+                        Text(title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                fontFamily: AppTypography.fontFamily,
+                                color: TgScreenPalette.textPrimary,
+                                fontWeight: FontWeight.w900,
+                                fontSize: AppTypography.sectionTitleSize,
+                                height: 1.1)),
                         const SizedBox(height: 2),
-                        Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textMuted, fontWeight: FontWeight.w600, fontSize: AppTypography.captionSize, height: 1.18)),
+                        Text(subtitle,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                fontFamily: AppTypography.fontFamily,
+                                color: TgScreenPalette.textMuted,
+                                fontWeight: FontWeight.w600,
+                                fontSize: AppTypography.captionSize,
+                                height: 1.18)),
                       ],
                     ),
                   ),
                   IconButton(
                     visualDensity: VisualDensity.compact,
                     onPressed: () => Navigator.of(context).maybePop(),
-                    icon: const Icon(Icons.close_rounded, size: 18, color: TgScreenPalette.textMuted),
+                    icon: const Icon(Icons.close_rounded,
+                        size: 18, color: TgScreenPalette.textMuted),
                   ),
                 ],
               ),
@@ -7181,7 +8553,11 @@ class _WorkflowPanelShell extends StatelessWidget {
 }
 
 class _WorkflowInfoBox extends StatelessWidget {
-  const _WorkflowInfoBox({required this.icon, required this.title, required this.text, this.action});
+  const _WorkflowInfoBox(
+      {required this.icon,
+      required this.title,
+      required this.text,
+      this.action});
   final IconData icon;
   final String title;
   final String text;
@@ -7195,7 +8571,8 @@ class _WorkflowInfoBox extends StatelessWidget {
       decoration: BoxDecoration(
         color: TgScreenPalette.lightGreen,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: TgScreenPalette.primaryGreen.withOpacity(.14)),
+        border:
+            Border.all(color: TgScreenPalette.primaryGreen.withOpacity(.14)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -7206,9 +8583,20 @@ class _WorkflowInfoBox extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textPrimary, fontWeight: FontWeight.w900, fontSize: AppTypography.secondarySize)),
+                Text(title,
+                    style: const TextStyle(
+                        fontFamily: AppTypography.fontFamily,
+                        color: TgScreenPalette.textPrimary,
+                        fontWeight: FontWeight.w900,
+                        fontSize: AppTypography.secondarySize)),
                 const SizedBox(height: 3),
-                Text(text, style: const TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textSecondary, fontWeight: FontWeight.w600, fontSize: AppTypography.captionSize, height: 1.25)),
+                Text(text,
+                    style: const TextStyle(
+                        fontFamily: AppTypography.fontFamily,
+                        color: TgScreenPalette.textSecondary,
+                        fontWeight: FontWeight.w600,
+                        fontSize: AppTypography.captionSize,
+                        height: 1.25)),
                 if (action != null) ...[
                   const SizedBox(height: 9),
                   Align(alignment: Alignment.centerLeft, child: action!),
@@ -7223,7 +8611,8 @@ class _WorkflowInfoBox extends StatelessWidget {
 }
 
 class _WorkflowInfoCard extends StatelessWidget {
-  const _WorkflowInfoCard({required this.icon, required this.title, required this.text});
+  const _WorkflowInfoCard(
+      {required this.icon, required this.title, required this.text});
   final IconData icon;
   final String title;
   final String text;
@@ -7235,7 +8624,8 @@ class _WorkflowInfoCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: TgScreenPalette.lightGreen,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: TgScreenPalette.primaryGreen.withOpacity(.14)),
+        border:
+            Border.all(color: TgScreenPalette.primaryGreen.withOpacity(.14)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -7246,9 +8636,20 @@ class _WorkflowInfoCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textPrimary, fontWeight: FontWeight.w900, fontSize: AppTypography.secondarySize)),
+                Text(title,
+                    style: const TextStyle(
+                        fontFamily: AppTypography.fontFamily,
+                        color: TgScreenPalette.textPrimary,
+                        fontWeight: FontWeight.w900,
+                        fontSize: AppTypography.secondarySize)),
                 const SizedBox(height: 3),
-                Text(text, style: const TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textSecondary, fontWeight: FontWeight.w600, fontSize: AppTypography.captionSize, height: 1.25)),
+                Text(text,
+                    style: const TextStyle(
+                        fontFamily: AppTypography.fontFamily,
+                        color: TgScreenPalette.textSecondary,
+                        fontWeight: FontWeight.w600,
+                        fontSize: AppTypography.captionSize,
+                        height: 1.25)),
               ],
             ),
           ),
@@ -7281,43 +8682,72 @@ class _TrainingWorkflowStatusStrip extends StatelessWidget {
     final time = (calendarMeta['time'] ?? '').toString();
     final present = (attendanceMeta['present'] ?? '-').toString();
     final expected = (attendanceMeta['expected'] ?? '-').toString();
-    final completed = executionMeta['completedExerciseIds'] is List ? (executionMeta['completedExerciseIds'] as List).length : 0;
+    final completed = executionMeta['completedExerciseIds'] is List
+        ? (executionMeta['completedExerciseIds'] as List).length
+        : 0;
     final trackerSession = (trackerMeta['session_id'] ?? '').toString();
     return Wrap(
       spacing: 6,
       runSpacing: 6,
       children: [
-        _WorkflowChip(icon: Icons.timer_outlined, label: '$totalMinutes мин • $exercisesCount упр.'),
-        _WorkflowChip(icon: Icons.calendar_month_rounded, label: date.isEmpty ? 'календарь не задан' : '$date $time', active: date.isNotEmpty),
-        _WorkflowChip(icon: Icons.groups_rounded, label: 'посещаемость $present/$expected', active: present != '-'),
-        _WorkflowChip(icon: Icons.fact_check_outlined, label: 'выполнено $completed/$exercisesCount', active: completed > 0),
-        _WorkflowChip(icon: Icons.sensors_rounded, label: trackerSession.isEmpty ? 'трекер не связан' : 'трекер #$trackerSession', active: trackerSession.isNotEmpty),
+        _WorkflowChip(
+            icon: Icons.timer_outlined,
+            label: '$totalMinutes мин • $exercisesCount упр.'),
+        _WorkflowChip(
+            icon: Icons.calendar_month_rounded,
+            label: date.isEmpty ? 'календарь не задан' : '$date $time',
+            active: date.isNotEmpty),
+        _WorkflowChip(
+            icon: Icons.groups_rounded,
+            label: 'посещаемость $present/$expected',
+            active: present != '-'),
+        _WorkflowChip(
+            icon: Icons.fact_check_outlined,
+            label: 'выполнено $completed/$exercisesCount',
+            active: completed > 0),
+        _WorkflowChip(
+            icon: Icons.sensors_rounded,
+            label: trackerSession.isEmpty
+                ? 'трекер не связан'
+                : 'трекер #$trackerSession',
+            active: trackerSession.isNotEmpty),
       ],
     );
   }
 }
 
 class _WorkflowChip extends StatelessWidget {
-  const _WorkflowChip({required this.icon, required this.label, this.active = false});
+  const _WorkflowChip(
+      {required this.icon, required this.label, this.active = false});
   final IconData icon;
   final String label;
   final bool active;
   @override
   Widget build(BuildContext context) {
-    final color = active ? TgScreenPalette.primaryGreen : TgScreenPalette.textMuted;
+    final color =
+        active ? TgScreenPalette.primaryGreen : TgScreenPalette.textMuted;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
       decoration: BoxDecoration(
-        color: active ? TgScreenPalette.lightGreen : TgScreenPalette.surfaceLight,
+        color:
+            active ? TgScreenPalette.lightGreen : TgScreenPalette.surfaceLight,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: active ? TgScreenPalette.primaryGreen.withOpacity(.25) : TgScreenPalette.borderLight),
+        border: Border.all(
+            color: active
+                ? TgScreenPalette.primaryGreen.withOpacity(.25)
+                : TgScreenPalette.borderLight),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon, size: 13, color: color),
           const SizedBox(width: 4),
-          Text(label, style: TextStyle(fontFamily: AppTypography.fontFamily, color: color, fontWeight: FontWeight.w800, fontSize: AppTypography.captionSize)),
+          Text(label,
+              style: TextStyle(
+                  fontFamily: AppTypography.fontFamily,
+                  color: color,
+                  fontWeight: FontWeight.w800,
+                  fontSize: AppTypography.captionSize)),
         ],
       ),
     );
@@ -7373,7 +8803,11 @@ class _TrainingPlanExerciseCard extends StatelessWidget {
                 ),
                 child: Text(
                   '${index + 1}',
-                  style: const TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.primaryGreen, fontWeight: FontWeight.w900, fontSize: AppTypography.secondarySize),
+                  style: const TextStyle(
+                      fontFamily: AppTypography.fontFamily,
+                      color: TgScreenPalette.primaryGreen,
+                      fontWeight: FontWeight.w900,
+                      fontSize: AppTypography.secondarySize),
                 ),
               ),
               const SizedBox(width: 10),
@@ -7385,31 +8819,60 @@ class _TrainingPlanExerciseCard extends StatelessWidget {
                       exercise.title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textPrimary, fontWeight: FontWeight.w900, fontSize: AppTypography.bodySize),
+                      style: const TextStyle(
+                          fontFamily: AppTypography.fontFamily,
+                          color: TgScreenPalette.textPrimary,
+                          fontWeight: FontWeight.w900,
+                          fontSize: AppTypography.bodySize),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       '${exercise.durationMin} мин • ${exercise.playersCount} игроков • ${exercise.equipment}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textMuted, fontWeight: FontWeight.w700, fontSize: AppTypography.captionSize),
+                      style: const TextStyle(
+                          fontFamily: AppTypography.fontFamily,
+                          color: TgScreenPalette.textMuted,
+                          fontWeight: FontWeight.w700,
+                          fontSize: AppTypography.captionSize),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       exercise.goal,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontFamily: AppTypography.fontFamily, color: TgScreenPalette.textSecondary, fontWeight: FontWeight.w600, fontSize: AppTypography.captionSize, height: 1.18),
+                      style: const TextStyle(
+                          fontFamily: AppTypography.fontFamily,
+                          color: TgScreenPalette.textSecondary,
+                          fontWeight: FontWeight.w600,
+                          fontSize: AppTypography.captionSize,
+                          height: 1.18),
                     ),
                   ],
                 ),
               ),
               const SizedBox(width: 8),
-              _MiniTemplateAction(icon: Icons.open_in_new_rounded, tooltip: 'Открыть', onTap: onOpen),
-              _MiniTemplateAction(icon: Icons.arrow_upward_rounded, tooltip: 'Выше', onTap: canMoveUp ? onMoveUp : null),
-              _MiniTemplateAction(icon: Icons.arrow_downward_rounded, tooltip: 'Ниже', onTap: canMoveDown ? onMoveDown : null),
-              _MiniTemplateAction(icon: Icons.copy_rounded, tooltip: 'Дублировать', onTap: onDuplicate),
-              _MiniTemplateAction(icon: Icons.delete_outline_rounded, tooltip: 'Удалить', onTap: onDelete, danger: true),
+              _MiniTemplateAction(
+                  icon: Icons.open_in_new_rounded,
+                  tooltip: 'Открыть',
+                  onTap: onOpen),
+              _MiniTemplateAction(
+                  icon: Icons.arrow_upward_rounded,
+                  tooltip: 'Выше',
+                  onTap: canMoveUp ? onMoveUp : null),
+              _MiniTemplateAction(
+                  icon: Icons.arrow_downward_rounded,
+                  tooltip: 'Ниже',
+                  onTap: canMoveDown ? onMoveDown : null),
+              _MiniTemplateAction(
+                  icon: Icons.copy_rounded,
+                  tooltip: 'Дублировать',
+                  onTap: onDuplicate),
+              _MiniTemplateAction(
+                  icon: Icons.delete_outline_rounded,
+                  tooltip: 'Удалить',
+                  onTap: onDelete,
+                  danger: true),
             ],
           ),
         ),
@@ -7438,7 +8901,8 @@ class _TemplateCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final icon = _iconForCategory(template.category);
-    final accent = template.builtin ? TgScreenPalette.primaryGreen : TgScreenPalette.info;
+    final accent =
+        template.builtin ? TgScreenPalette.primaryGreen : TgScreenPalette.info;
     return Material(
       color: TgScreenPalette.surfaceLight,
       borderRadius: BorderRadius.circular(12),
@@ -7483,9 +8947,12 @@ class _TemplateCard extends StatelessWidget {
                           ),
                         ),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 7, vertical: 3),
                           decoration: BoxDecoration(
-                            color: template.builtin ? TgScreenPalette.lightGreen : const Color(0xFFEFF6FF),
+                            color: template.builtin
+                                ? TgScreenPalette.lightGreen
+                                : const Color(0xFFEFF6FF),
                             borderRadius: BorderRadius.circular(999),
                           ),
                           child: Text(
@@ -7517,12 +8984,28 @@ class _TemplateCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              _MiniTemplateAction(icon: Icons.open_in_new_rounded, tooltip: 'Открыть', onTap: onOpen),
-              _MiniTemplateAction(icon: Icons.playlist_add_rounded, tooltip: 'В план', onTap: onAddToPlan),
-              _MiniTemplateAction(icon: Icons.copy_rounded, tooltip: 'Дублировать', onTap: onDuplicate),
-              _MiniTemplateAction(icon: Icons.file_download_outlined, tooltip: 'Экспорт JSON', onTap: onExport),
+              _MiniTemplateAction(
+                  icon: Icons.open_in_new_rounded,
+                  tooltip: 'Открыть',
+                  onTap: onOpen),
+              _MiniTemplateAction(
+                  icon: Icons.playlist_add_rounded,
+                  tooltip: 'В план',
+                  onTap: onAddToPlan),
+              _MiniTemplateAction(
+                  icon: Icons.copy_rounded,
+                  tooltip: 'Дублировать',
+                  onTap: onDuplicate),
+              _MiniTemplateAction(
+                  icon: Icons.file_download_outlined,
+                  tooltip: 'Экспорт JSON',
+                  onTap: onExport),
               if (onDelete != null)
-                _MiniTemplateAction(icon: Icons.delete_outline_rounded, tooltip: 'Удалить', onTap: onDelete, danger: true),
+                _MiniTemplateAction(
+                    icon: Icons.delete_outline_rounded,
+                    tooltip: 'Удалить',
+                    onTap: onDelete,
+                    danger: true),
             ],
           ),
         ),
@@ -7555,7 +9038,11 @@ class _TemplateCard extends StatelessWidget {
 }
 
 class _MiniTemplateAction extends StatelessWidget {
-  const _MiniTemplateAction({required this.icon, required this.tooltip, required this.onTap, this.danger = false});
+  const _MiniTemplateAction(
+      {required this.icon,
+      required this.tooltip,
+      required this.onTap,
+      this.danger = false});
   final IconData icon;
   final String tooltip;
   final VoidCallback? onTap;
@@ -7575,7 +9062,8 @@ class _MiniTemplateAction extends StatelessWidget {
           child: Icon(
             icon,
             size: 16,
-            color: danger ? TgScreenPalette.error : TgScreenPalette.textSecondary,
+            color:
+                danger ? TgScreenPalette.error : TgScreenPalette.textSecondary,
           ),
         ),
       ),
@@ -7662,7 +9150,8 @@ class _TopTitleBar extends StatelessWidget {
                 color: TgScreenPalette.lightGreen,
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: const Icon(Icons.sports_soccer_rounded, color: TgScreenPalette.primaryGreen, size: 16),
+              child: const Icon(Icons.sports_soccer_rounded,
+                  color: TgScreenPalette.primaryGreen, size: 16),
             ),
             const SizedBox(width: 4),
             Expanded(
@@ -7726,7 +9215,9 @@ class _TopTitleBar extends StatelessWidget {
               ),
               const SizedBox(width: 4),
               _HeaderActionButton(
-                icon: folderTitle == 'Личный Workspace' ? Icons.person_outline_rounded : Icons.folder_open_rounded,
+                icon: folderTitle == 'Личный Workspace'
+                    ? Icons.person_outline_rounded
+                    : Icons.folder_open_rounded,
                 label: folderTitle == 'Личный Workspace' ? 'Мои' : 'Папка',
                 onTap: onPickFolder,
                 foreground: TgScreenPalette.textSecondary,
@@ -7745,15 +9236,15 @@ class _TopTitleBar extends StatelessWidget {
                 danger: true,
               ),
             ] else
-              _AttachButton(count: selectedCount, onTap: selectedCount == 0 ? null : onAttach),
+              _AttachButton(
+                  count: selectedCount,
+                  onTap: selectedCount == 0 ? null : onAttach),
           ],
         ),
       ),
     );
   }
-
 }
-
 
 class _FieldViewModeSwitch extends StatelessWidget {
   const _FieldViewModeSwitch({
@@ -7816,6 +9307,108 @@ class _FieldViewModeSwitch extends StatelessWidget {
                   : TgScreenPalette.textSecondary,
               fontSize: 11.5,
               fontWeight: active ? FontWeight.w800 : FontWeight.w700,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _GlbCameraPresetBar extends StatelessWidget {
+  const _GlbCameraPresetBar({
+    required this.onOverview,
+    required this.onTv,
+    required this.onStand,
+    required this.onGoal,
+    required this.onFree,
+  });
+
+  final VoidCallback onOverview;
+  final VoidCallback onTv;
+  final VoidCallback onStand;
+  final VoidCallback onGoal;
+  final VoidCallback onFree;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white.withOpacity(.94),
+      borderRadius: BorderRadius.circular(10),
+      elevation: 0,
+      child: Container(
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: TgScreenPalette.borderLight),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(.08),
+              blurRadius: 14,
+              spreadRadius: -6,
+              offset: const Offset(0, 5),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _cameraPresetButton('Обзор', Icons.stadium_outlined, onOverview),
+            _cameraPresetButton('ТВ', Icons.live_tv_rounded, onTv),
+            _cameraPresetButton('Трибуна', Icons.chair_alt_outlined, onStand),
+            _cameraPresetButton('У ворот', Icons.sports_soccer_rounded, onGoal),
+            _cameraPresetButton('Свободно', Icons.threesixty_rounded, onFree),
+            const SizedBox(width: 4),
+            Tooltip(
+              message:
+                  'ПКМ — вращение • Shift+ПКМ/колесо — движение • колесо — масштаб',
+              child: Container(
+                width: 25,
+                height: 25,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: TgScreenPalette.surfaceLight,
+                  borderRadius: BorderRadius.circular(7),
+                ),
+                child: const Icon(
+                  Icons.open_with_rounded,
+                  size: 14,
+                  color: TgScreenPalette.textMuted,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _cameraPresetButton(String label, IconData icon, VoidCallback onTap) {
+    return Tooltip(
+      message: label,
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(7),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(7),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 14, color: TgScreenPalette.textSecondary),
+                const SizedBox(width: 4),
+                Text(
+                  label,
+                  style: const TextStyle(
+                    fontFamily: AppTypography.fontFamily,
+                    color: TgScreenPalette.textSecondary,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -7903,7 +9496,8 @@ class _TgTrackerOrbitPadState extends State<_TgTrackerOrbitPad> {
   Widget build(BuildContext context) {
     const size = 78.0;
     return Tooltip(
-      message: 'Тяните внутри круга: поворот и наклон камеры. Двойное нажатие — сброс.',
+      message:
+          'Тяните внутри круга: поворот и наклон камеры. Двойное нажатие — сброс.',
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onDoubleTap: widget.onReset,
@@ -7972,7 +9566,8 @@ class _TgTrackerOrbitPadState extends State<_TgTrackerOrbitPad> {
                     ),
                   ],
                 ),
-                child: const Icon(Icons.open_with_rounded, size: 14, color: Colors.white),
+                child: const Icon(Icons.open_with_rounded,
+                    size: 14, color: Colors.white),
               ),
             ],
           ),
@@ -8022,14 +9617,14 @@ class _TgCameraRoundButton extends StatelessWidget {
                 ),
               ],
             ),
-            child: Icon(icon, size: compact ? 13 : 16, color: const Color(0xFF111827)),
+            child: Icon(icon,
+                size: compact ? 13 : 16, color: const Color(0xFF111827)),
           ),
         ),
       ),
     );
   }
 }
-
 
 class _HeaderActionButton extends StatelessWidget {
   const _HeaderActionButton({
@@ -8066,7 +9661,9 @@ class _HeaderActionButton extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(4),
             border: Border.all(
-              color: danger ? foreground.withOpacity(.28) : TgScreenPalette.borderLight,
+              color: danger
+                  ? foreground.withOpacity(.28)
+                  : TgScreenPalette.borderLight,
             ),
           ),
           child: Row(
@@ -8202,7 +9799,8 @@ class _SaveButton extends StatelessWidget {
               ? const SizedBox(
                   width: 16,
                   height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: Colors.white),
                 )
               : const Row(
                   mainAxisSize: MainAxisSize.min,
@@ -8226,7 +9824,6 @@ class _SaveButton extends StatelessWidget {
   }
 }
 
-
 class _AttachButton extends StatelessWidget {
   const _AttachButton({required this.count, required this.onTap});
   final int count;
@@ -8236,7 +9833,9 @@ class _AttachButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final active = count > 0;
     return Material(
-      color: active ? TgScreenPalette.primaryGreen : TgScreenPalette.surfaceHighlight,
+      color: active
+          ? TgScreenPalette.primaryGreen
+          : TgScreenPalette.surfaceHighlight,
       borderRadius: BorderRadius.circular(8),
       child: InkWell(
         onTap: onTap,
@@ -8259,7 +9858,6 @@ class _AttachButton extends StatelessWidget {
     );
   }
 }
-
 
 class _IconButton extends StatelessWidget {
   final String tooltip;
@@ -8318,7 +9916,6 @@ class _IconButton extends StatelessWidget {
   }
 }
 
-
 class _ExportOptionTile extends StatelessWidget {
   const _ExportOptionTile({
     required this.icon,
@@ -8342,60 +9939,66 @@ class _ExportOptionTile extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(10),
         child: Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: active ? TgScreenPalette.lightGreen : TgScreenPalette.surfaceLight,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: active ? TgScreenPalette.primaryGreen.withOpacity(.24) : TgScreenPalette.border,
-        ),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: TgScreenPalette.border),
-            ),
-            child: Icon(
-              icon,
-              size: 18.0,
-              color: active ? TgScreenPalette.primaryGreen : TgScreenPalette.textSecondary,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: active
+                ? TgScreenPalette.lightGreen
+                : TgScreenPalette.surfaceLight,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: active
+                  ? TgScreenPalette.primaryGreen.withOpacity(.24)
+                  : TgScreenPalette.border,
             ),
           ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontFamily: AppTypography.fontFamily,
-                    color: TgScreenPalette.textPrimary,
-                    fontSize: AppTypography.captionSize,
-                    fontWeight: FontWeight.w900,
-                  ),
+          child: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: TgScreenPalette.border),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  style: const TextStyle(
-                    fontFamily: AppTypography.fontFamily,
-                    color: TgScreenPalette.textMuted,
-                    fontSize: AppTypography.badgeSize,
-                    height: 1.25,
-                    fontWeight: FontWeight.w500,
-                  ),
+                child: Icon(
+                  icon,
+                  size: 18.0,
+                  color: active
+                      ? TgScreenPalette.primaryGreen
+                      : TgScreenPalette.textSecondary,
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontFamily: AppTypography.fontFamily,
+                        color: TgScreenPalette.textPrimary,
+                        fontSize: AppTypography.captionSize,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
+                        fontFamily: AppTypography.fontFamily,
+                        color: TgScreenPalette.textMuted,
+                        fontSize: AppTypography.badgeSize,
+                        height: 1.25,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
         ),
       ),
     );
@@ -8448,20 +10051,27 @@ class _TgDraggablePanel extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final micro = constraints.maxWidth < 760 || constraints.maxHeight < 560;
-        final compactSide = constraints.maxWidth < 1280 || constraints.maxHeight < 820;
+        final compactSide =
+            constraints.maxWidth < 1280 || constraints.maxHeight < 820;
         // Планшет landscape получает боковую выезжающую панель, а не высокий bottom-sheet.
-        final sidePanel = constraints.maxWidth >= 700 && constraints.maxWidth >= constraints.maxHeight * .78 && !isPhone;
+        final sidePanel = constraints.maxWidth >= 700 &&
+            constraints.maxWidth >= constraints.maxHeight * .78 &&
+            !isPhone;
         final contentWidth = micro
             ? math.min(286.0, math.max(220.0, constraints.maxWidth - 112.0))
-            : (compactSide ? (constraints.maxWidth < 980 ? 286.0 : 322.0) : 356.0);
+            : (compactSide
+                ? (constraints.maxWidth < 980 ? 286.0 : 322.0)
+                : 356.0);
         final panelTop = micro ? 44.0 : (compactSide ? 54.0 : 70.0);
         final panelRight = micro ? 4.0 : (compactSide ? 8.0 : 12.0);
         final panelBottom = micro ? 4.0 : (compactSide ? 8.0 : 12.0);
         final dockReserve = micro ? 62.0 : (compactSide ? 72.0 : 88.0);
-        final sideShellWidth = math.min(
-          constraints.maxWidth - (micro ? 10.0 : 18.0),
-          contentWidth + dockReserve,
-        ).clamp(232.0, 460.0) as double;
+        final sideShellWidth = math
+            .min(
+              constraints.maxWidth - (micro ? 10.0 : 18.0),
+              contentWidth + dockReserve,
+            )
+            .clamp(232.0, 460.0) as double;
 
         if (sidePanel) {
           return Stack(
@@ -8511,7 +10121,8 @@ class _TgDraggablePanel extends StatelessWidget {
                   snapSizes: [minSize, initialSize, maxSize],
                   builder: (context, scrollController) {
                     return Container(
-                      margin: EdgeInsets.fromLTRB(micro ? 6 : 12, 0, micro ? 6 : 12, micro ? 6 : 12),
+                      margin: EdgeInsets.fromLTRB(
+                          micro ? 6 : 12, 0, micro ? 6 : 12, micro ? 6 : 12),
                       decoration: BoxDecoration(
                         color: TgScreenPalette.surface,
                         borderRadius: BorderRadius.circular(micro ? 14 : 22),
@@ -8544,7 +10155,8 @@ class _TgDraggablePanel extends StatelessWidget {
               ),
             Positioned(
               right: 16,
-              bottom: isPanelCollapsed ? 14 : (micro ? 172 : (isPhone ? 260 : 210)),
+              bottom:
+                  isPanelCollapsed ? 14 : (micro ? 172 : (isPhone ? 260 : 210)),
               child: _PanelToggleButton(
                 isExpanded: !isPanelCollapsed,
                 onTap: onTogglePanel,
@@ -8589,7 +10201,9 @@ class _PanelToggleButton extends StatelessWidget {
               duration: const Duration(milliseconds: 180),
               turns: isExpanded ? 0.5 : 0,
               child: Icon(
-                isExpanded ? Icons.keyboard_arrow_down_rounded : Icons.dashboard_customize_rounded,
+                isExpanded
+                    ? Icons.keyboard_arrow_down_rounded
+                    : Icons.dashboard_customize_rounded,
                 color: TgScreenPalette.textSecondary,
                 size: 21,
               ),
@@ -8600,6 +10214,7 @@ class _PanelToggleButton extends StatelessWidget {
     );
   }
 }
+
 /// ===== ЛАКОНИЧНАЯ КРУГЛАЯ КНОПКА =====
 class _SimsDragHandle extends StatelessWidget {
   final bool isExpanded;
@@ -8654,6 +10269,7 @@ String _tgPlaybackInitials(String name) {
     if (value.isEmpty) return '';
     return value.runes.take(count).map((r) => String.fromCharCode(r)).join();
   }
+
   if (parts.isEmpty) return 'P';
   if (parts.length == 1) {
     return firstChars(parts.first, 2).toUpperCase();
@@ -8689,7 +10305,8 @@ class _TgPlaybackBinding {
   final Color color;
   final double size;
 
-  factory _TgPlaybackBinding.generic({required String label, required Color color}) {
+  factory _TgPlaybackBinding.generic(
+      {required String label, required Color color}) {
     return _TgPlaybackBinding(
       subject: _TgPlaybackSubject.generic,
       label: label,
@@ -8700,7 +10317,8 @@ class _TgPlaybackBinding {
     );
   }
 
-  factory _TgPlaybackBinding.fromStamp(TgStamp stamp, {required Color fallbackColor, required bool forceBall}) {
+  factory _TgPlaybackBinding.fromStamp(TgStamp stamp,
+      {required Color fallbackColor, required bool forceBall}) {
     final asset = stamp.asset;
     if (forceBall || asset.toLowerCase().startsWith('sportoteka://ball')) {
       return const _TgPlaybackBinding(
@@ -8714,9 +10332,11 @@ class _TgPlaybackBinding {
     }
     if (asset.startsWith('sportoteka://player-avatar')) {
       final uri = Uri.tryParse(asset);
-      final name = (uri?.queryParameters['name'] ?? stamp.name ?? 'Игрок').trim();
+      final name =
+          (uri?.queryParameters['name'] ?? stamp.name ?? 'Игрок').trim();
       final number = (uri?.queryParameters['number'] ?? '').trim();
-      final ring = _tgPlaybackColorFromHex(uri?.queryParameters['ring'], fallbackColor);
+      final ring =
+          _tgPlaybackColorFromHex(uri?.queryParameters['ring'], fallbackColor);
       return _TgPlaybackBinding(
         subject: _TgPlaybackSubject.player,
         label: name,
@@ -8891,7 +10511,8 @@ class _TgPlaybackWindow extends StatelessWidget {
                     child: const SizedBox(
                       width: 32,
                       height: 32,
-                      child: Icon(Icons.close_rounded, size: 18, color: TgScreenPalette.textSecondary),
+                      child: Icon(Icons.close_rounded,
+                          size: 18, color: TgScreenPalette.textSecondary),
                     ),
                   ),
                 ],
@@ -8917,7 +10538,9 @@ class _TgPlaybackWindow extends StatelessWidget {
                               borderRadius: BorderRadius.circular(10),
                             ),
                             child: Icon(
-                              playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                              playing
+                                  ? Icons.pause_rounded
+                                  : Icons.play_arrow_rounded,
                               color: Colors.white,
                               size: 23,
                             ),
@@ -8932,7 +10555,9 @@ class _TgPlaybackWindow extends StatelessWidget {
                                 children: [
                                   Expanded(
                                     child: Text(
-                                      stepLabels.isEmpty ? 'Нет шагов' : stepLabels[safeStep],
+                                      stepLabels.isEmpty
+                                          ? 'Нет шагов'
+                                          : stepLabels[safeStep],
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       style: const TextStyle(
@@ -8944,7 +10569,9 @@ class _TgPlaybackWindow extends StatelessWidget {
                                     ),
                                   ),
                                   Text(
-                                    stepLabels.isEmpty ? '0 / 0' : '${safeStep + 1} / ${stepLabels.length}',
+                                    stepLabels.isEmpty
+                                        ? '0 / 0'
+                                        : '${safeStep + 1} / ${stepLabels.length}',
                                     style: const TextStyle(
                                       fontFamily: TgScreenPalette.fontFamily,
                                       fontSize: AppTypography.captionSize,
@@ -8958,10 +10585,13 @@ class _TgPlaybackWindow extends StatelessWidget {
                               ClipRRect(
                                 borderRadius: BorderRadius.circular(99),
                                 child: LinearProgressIndicator(
-                                  value: (progress.clamp(0.0, 1.0) as num).toDouble(),
+                                  value: (progress.clamp(0.0, 1.0) as num)
+                                      .toDouble(),
                                   minHeight: 5,
                                   backgroundColor: const Color(0xFFEFF3F6),
-                                  valueColor: const AlwaysStoppedAnimation<Color>(TgScreenPalette.primaryGreen),
+                                  valueColor:
+                                      const AlwaysStoppedAnimation<Color>(
+                                          TgScreenPalette.primaryGreen),
                                 ),
                               ),
                             ],
@@ -8973,15 +10603,22 @@ class _TgPlaybackWindow extends StatelessWidget {
                     const _PlaybackWindowSectionLabel('ДЛИТЕЛЬНОСТЬ ШАГА'),
                     Row(
                       children: [
-                        const Text('0,5 с', style: TextStyle(fontFamily: TgScreenPalette.fontFamily, color: TgScreenPalette.textMuted, fontSize: AppTypography.badgeSize)),
+                        const Text('0,5 с',
+                            style: TextStyle(
+                                fontFamily: TgScreenPalette.fontFamily,
+                                color: TgScreenPalette.textMuted,
+                                fontSize: AppTypography.badgeSize)),
                         Expanded(
                           child: Slider(
-                            value: stepDurationsMs[safeStep].clamp(500, 5000).toDouble(),
+                            value: stepDurationsMs[safeStep]
+                                .clamp(500, 5000)
+                                .toDouble(),
                             min: 500,
                             max: 5000,
                             divisions: 45,
                             activeColor: TgScreenPalette.primaryGreen,
-                            onChanged: (value) => onStepDurationChanged(value.round()),
+                            onChanged: (value) =>
+                                onStepDurationChanged(value.round()),
                           ),
                         ),
                         SizedBox(
@@ -8989,7 +10626,11 @@ class _TgPlaybackWindow extends StatelessWidget {
                           child: Text(
                             '${(stepDurationsMs[safeStep] / 1000).toStringAsFixed(1)} с',
                             textAlign: TextAlign.right,
-                            style: const TextStyle(fontFamily: TgScreenPalette.fontFamily, color: TgScreenPalette.textPrimary, fontSize: AppTypography.captionSize, fontWeight: FontWeight.w700),
+                            style: const TextStyle(
+                                fontFamily: TgScreenPalette.fontFamily,
+                                color: TgScreenPalette.textPrimary,
+                                fontSize: AppTypography.captionSize,
+                                fontWeight: FontWeight.w700),
                           ),
                         ),
                       ],
@@ -9039,12 +10680,14 @@ class _TgPlaybackWindow extends StatelessWidget {
                     ),
                     const SizedBox(height: 10),
                     if (stepLabels.isEmpty)
-                      const _PlaybackWindowEmpty(text: 'Добавьте первый шаг анимации')
+                      const _PlaybackWindowEmpty(
+                          text: 'Добавьте первый шаг анимации')
                     else
                       ...List<Widget>.generate(stepLabels.length, (index) {
                         final active = index == safeStep;
                         return Padding(
-                          padding: EdgeInsets.only(bottom: index == stepLabels.length - 1 ? 0 : 5),
+                          padding: EdgeInsets.only(
+                              bottom: index == stepLabels.length - 1 ? 0 : 5),
                           child: InkWell(
                             onTap: () => onSelectStep(index),
                             borderRadius: BorderRadius.circular(9),
@@ -9052,7 +10695,9 @@ class _TgPlaybackWindow extends StatelessWidget {
                               duration: const Duration(milliseconds: 150),
                               padding: const EdgeInsets.fromLTRB(9, 7, 9, 7),
                               decoration: BoxDecoration(
-                                color: active ? TgScreenPalette.lightGreen : const Color(0xFFF8FAFC),
+                                color: active
+                                    ? TgScreenPalette.lightGreen
+                                    : const Color(0xFFF8FAFC),
                                 borderRadius: BorderRadius.circular(9),
                               ),
                               child: Row(
@@ -9062,7 +10707,9 @@ class _TgPlaybackWindow extends StatelessWidget {
                                     height: 23,
                                     alignment: Alignment.center,
                                     decoration: BoxDecoration(
-                                      color: active ? TgScreenPalette.primaryGreen : Colors.white,
+                                      color: active
+                                          ? TgScreenPalette.primaryGreen
+                                          : Colors.white,
                                       shape: BoxShape.circle,
                                     ),
                                     child: Text(
@@ -9071,7 +10718,9 @@ class _TgPlaybackWindow extends StatelessWidget {
                                         fontFamily: TgScreenPalette.fontFamily,
                                         fontSize: AppTypography.badgeSize,
                                         fontWeight: FontWeight.w800,
-                                        color: active ? Colors.white : TgScreenPalette.textMuted,
+                                        color: active
+                                            ? Colors.white
+                                            : TgScreenPalette.textMuted,
                                       ),
                                     ),
                                   ),
@@ -9084,17 +10733,26 @@ class _TgPlaybackWindow extends StatelessWidget {
                                       style: TextStyle(
                                         fontFamily: TgScreenPalette.fontFamily,
                                         fontSize: AppTypography.captionSize,
-                                        fontWeight: active ? FontWeight.w700 : FontWeight.w600,
-                                        color: active ? TgScreenPalette.primaryGreenDark : TgScreenPalette.textPrimary,
+                                        fontWeight: active
+                                            ? FontWeight.w700
+                                            : FontWeight.w600,
+                                        color: active
+                                            ? TgScreenPalette.primaryGreenDark
+                                            : TgScreenPalette.textPrimary,
                                       ),
                                     ),
                                   ),
                                   Text(
                                     '${(stepDurationsMs[index] / 1000).toStringAsFixed(1)} с',
-                                    style: const TextStyle(fontFamily: TgScreenPalette.fontFamily, color: TgScreenPalette.textMuted, fontSize: AppTypography.badgeSize),
+                                    style: const TextStyle(
+                                        fontFamily: TgScreenPalette.fontFamily,
+                                        color: TgScreenPalette.textMuted,
+                                        fontSize: AppTypography.badgeSize),
                                   ),
                                   if (active)
-                                    const Icon(Icons.chevron_right_rounded, size: 16, color: TgScreenPalette.primaryGreen),
+                                    const Icon(Icons.chevron_right_rounded,
+                                        size: 16,
+                                        color: TgScreenPalette.primaryGreen),
                                 ],
                               ),
                             ),
@@ -9112,7 +10770,8 @@ class _TgPlaybackWindow extends StatelessWidget {
                       ),
                       child: Row(
                         children: [
-                          const Icon(Icons.ads_click_rounded, size: 16, color: TgScreenPalette.textMuted),
+                          const Icon(Icons.ads_click_rounded,
+                              size: 16, color: TgScreenPalette.textMuted),
                           const SizedBox(width: 7),
                           Expanded(
                             child: Text(
@@ -9161,7 +10820,8 @@ class _TgPlaybackWindow extends StatelessWidget {
                     const _PlaybackWindowSectionLabel('МАРШРУТЫ ТЕКУЩЕГО ШАГА'),
                     const SizedBox(height: 7),
                     if (currentBindings.isEmpty)
-                      const _PlaybackWindowEmpty(text: 'В этом шаге пока нет привязанных маршрутов')
+                      const _PlaybackWindowEmpty(
+                          text: 'В этом шаге пока нет привязанных маршрутов')
                     else
                       ...currentBindings.map((item) {
                         return Padding(
@@ -9172,7 +10832,9 @@ class _TgPlaybackWindow extends StatelessWidget {
                             child: Container(
                               padding: const EdgeInsets.fromLTRB(9, 7, 7, 7),
                               decoration: BoxDecoration(
-                                color: item.isManual ? TgScreenPalette.lightGreen : const Color(0xFFF8FAFC),
+                                color: item.isManual
+                                    ? TgScreenPalette.lightGreen
+                                    : const Color(0xFFF8FAFC),
                                 borderRadius: BorderRadius.circular(9),
                               ),
                               child: Row(
@@ -9182,26 +10844,34 @@ class _TgPlaybackWindow extends StatelessWidget {
                                     height: 26,
                                     alignment: Alignment.center,
                                     decoration: BoxDecoration(
-                                      color: item.isManual ? TgScreenPalette.primaryGreen : Colors.white,
+                                      color: item.isManual
+                                          ? TgScreenPalette.primaryGreen
+                                          : Colors.white,
                                       shape: BoxShape.circle,
                                     ),
                                     child: Icon(
-                                      item.isManual ? Icons.link_rounded : Icons.auto_awesome_rounded,
+                                      item.isManual
+                                          ? Icons.link_rounded
+                                          : Icons.auto_awesome_rounded,
                                       size: 14,
-                                      color: item.isManual ? Colors.white : TgScreenPalette.textMuted,
+                                      color: item.isManual
+                                          ? Colors.white
+                                          : TgScreenPalette.textMuted,
                                     ),
                                   ),
                                   const SizedBox(width: 8),
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         Text(
                                           item.subjectTitle,
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
                                           style: const TextStyle(
-                                            fontFamily: TgScreenPalette.fontFamily,
+                                            fontFamily:
+                                                TgScreenPalette.fontFamily,
                                             fontSize: AppTypography.captionSize,
                                             fontWeight: FontWeight.w700,
                                             color: TgScreenPalette.textPrimary,
@@ -9213,7 +10883,8 @@ class _TgPlaybackWindow extends StatelessWidget {
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
                                           style: const TextStyle(
-                                            fontFamily: TgScreenPalette.fontFamily,
+                                            fontFamily:
+                                                TgScreenPalette.fontFamily,
                                             fontSize: AppTypography.badgeSize,
                                             fontWeight: FontWeight.w500,
                                             color: TgScreenPalette.textMuted,
@@ -9227,7 +10898,8 @@ class _TgPlaybackWindow extends StatelessWidget {
                                     borderRadius: BorderRadius.circular(8),
                                     child: const Padding(
                                       padding: EdgeInsets.all(5),
-                                      child: Icon(Icons.close_rounded, size: 15, color: Color(0xFFE11D48)),
+                                      child: Icon(Icons.close_rounded,
+                                          size: 15, color: Color(0xFFE11D48)),
                                     ),
                                   ),
                                 ],
@@ -9333,7 +11005,8 @@ class _PlaybackWindowEmpty extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.info_outline_rounded, size: 15, color: TgScreenPalette.textMuted),
+          const Icon(Icons.info_outline_rounded,
+              size: 15, color: TgScreenPalette.textMuted),
           const SizedBox(width: 6),
           Expanded(
             child: Text(
@@ -9404,7 +11077,8 @@ class _TgPlaybackTimelineBar extends StatelessWidget {
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: TgScreenPalette.borderLight),
           boxShadow: const [
-            BoxShadow(color: Color(0x140B1220), blurRadius: 20, offset: Offset(0, 8)),
+            BoxShadow(
+                color: Color(0x140B1220), blurRadius: 20, offset: Offset(0, 8)),
           ],
         ),
         child: Column(
@@ -9418,8 +11092,15 @@ class _TgPlaybackTimelineBar extends StatelessWidget {
                   child: Container(
                     width: 30,
                     height: 30,
-                    decoration: BoxDecoration(color: TgScreenPalette.primaryGreen, borderRadius: BorderRadius.circular(8)),
-                    child: Icon(playing ? Icons.pause_rounded : Icons.play_arrow_rounded, color: Colors.white, size: 20),
+                    decoration: BoxDecoration(
+                        color: TgScreenPalette.primaryGreen,
+                        borderRadius: BorderRadius.circular(8)),
+                    child: Icon(
+                        playing
+                            ? Icons.pause_rounded
+                            : Icons.play_arrow_rounded,
+                        color: Colors.white,
+                        size: 20),
                   ),
                 ),
                 const SizedBox(width: 6),
@@ -9430,18 +11111,23 @@ class _TgPlaybackTimelineBar extends StatelessWidget {
                       value: (progress.clamp(0.0, 1.0) as num).toDouble(),
                       minHeight: 5,
                       backgroundColor: const Color(0xFFEFF3F6),
-                      valueColor: const AlwaysStoppedAnimation<Color>(TgScreenPalette.primaryGreen),
+                      valueColor: const AlwaysStoppedAnimation<Color>(
+                          TgScreenPalette.primaryGreen),
                     ),
                   ),
                 ),
                 const SizedBox(width: 6),
                 _TimelineAction(icon: Icons.add_rounded, onTap: onAddStep),
                 const SizedBox(width: 4),
-                _TimelineAction(icon: Icons.copy_rounded, onTap: onDuplicateStep),
+                _TimelineAction(
+                    icon: Icons.copy_rounded, onTap: onDuplicateStep),
                 const SizedBox(width: 4),
                 _TimelineAction(icon: Icons.edit_outlined, onTap: onRenameStep),
                 const SizedBox(width: 4),
-                _TimelineAction(icon: Icons.delete_outline_rounded, danger: true, onTap: onDeleteStep),
+                _TimelineAction(
+                    icon: Icons.delete_outline_rounded,
+                    danger: true,
+                    onTap: onDeleteStep),
               ],
             ),
             const SizedBox(height: 5),
@@ -9452,7 +11138,8 @@ class _TgPlaybackTimelineBar extends StatelessWidget {
                 children: [
                   Container(
                     width: 118,
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
                     decoration: BoxDecoration(
                       color: const Color(0xFFF8FAFC),
                       borderRadius: BorderRadius.circular(8),
@@ -9462,21 +11149,39 @@ class _TgPlaybackTimelineBar extends StatelessWidget {
                       selectedSubjectLabel,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontFamily: TgScreenPalette.fontFamily, fontSize: AppTypography.captionSize, fontWeight: FontWeight.w800, color: TgScreenPalette.textPrimary),
+                      style: const TextStyle(
+                          fontFamily: TgScreenPalette.fontFamily,
+                          fontSize: AppTypography.captionSize,
+                          fontWeight: FontWeight.w800,
+                          color: TgScreenPalette.textPrimary),
                     ),
                   ),
                   const SizedBox(width: 4),
-                  _TimelineWideAction(label: 'Взять', icon: Icons.ads_click_rounded, onTap: onCaptureSubject),
+                  _TimelineWideAction(
+                      label: 'Взять',
+                      icon: Icons.ads_click_rounded,
+                      onTap: onCaptureSubject),
                   const SizedBox(width: 4),
-                  _TimelineWideAction(label: 'Привязать', icon: Icons.link_rounded, onTap: onBindRoute),
+                  _TimelineWideAction(
+                      label: 'Привязать',
+                      icon: Icons.link_rounded,
+                      onTap: onBindRoute),
                   const SizedBox(width: 4),
-                  _TimelineWideAction(label: 'Очистить', icon: Icons.link_off_rounded, onTap: onClearBinding, danger: true),
+                  _TimelineWideAction(
+                      label: 'Очистить',
+                      icon: Icons.link_off_rounded,
+                      onTap: onClearBinding,
+                      danger: true),
                 ],
               ),
             ),
             if (currentBindings.isNotEmpty) ...[
               const SizedBox(height: 4),
-              _TgStepBindingsStrip(bindings: currentBindings, compact: true, onSelect: onSelectBinding, onDelete: onDeleteBinding),
+              _TgStepBindingsStrip(
+                  bindings: currentBindings,
+                  compact: true,
+                  onSelect: onSelectBinding,
+                  onDelete: onDeleteBinding),
             ],
             const SizedBox(height: 5),
             SizedBox(
@@ -9492,11 +11197,18 @@ class _TgPlaybackTimelineBar extends StatelessWidget {
                     borderRadius: BorderRadius.circular(8),
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 180),
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 5),
                       decoration: BoxDecoration(
-                        color: active ? TgScreenPalette.primaryGreen.withOpacity(0.12) : const Color(0xFFF8FAFC),
+                        color: active
+                            ? TgScreenPalette.primaryGreen.withOpacity(0.12)
+                            : const Color(0xFFF8FAFC),
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: active ? TgScreenPalette.primaryGreen : TgScreenPalette.borderLight, width: active ? 1.6 : 1),
+                        border: Border.all(
+                            color: active
+                                ? TgScreenPalette.primaryGreen
+                                : TgScreenPalette.borderLight,
+                            width: active ? 1.6 : 1),
                       ),
                       child: Text(
                         '${index + 1}. ${stepLabels[index]}',
@@ -9504,7 +11216,9 @@ class _TgPlaybackTimelineBar extends StatelessWidget {
                           fontFamily: TgScreenPalette.fontFamily,
                           fontSize: AppTypography.captionSize,
                           fontWeight: FontWeight.w800,
-                          color: active ? TgScreenPalette.primaryGreenDark : TgScreenPalette.textSecondary,
+                          color: active
+                              ? TgScreenPalette.primaryGreenDark
+                              : TgScreenPalette.textSecondary,
                         ),
                       ),
                     ),
@@ -9569,7 +11283,8 @@ class _TgPlaybackTimelineBar extends StatelessWidget {
                     value: (progress.clamp(0.0, 1.0) as num).toDouble(),
                     minHeight: 5,
                     backgroundColor: const Color(0xFFEFF3F6),
-                    valueColor: const AlwaysStoppedAnimation<Color>(TgScreenPalette.primaryGreen),
+                    valueColor: const AlwaysStoppedAnimation<Color>(
+                        TgScreenPalette.primaryGreen),
                   ),
                 ),
               ),
@@ -9580,7 +11295,10 @@ class _TgPlaybackTimelineBar extends StatelessWidget {
               const SizedBox(width: 4),
               _TimelineAction(icon: Icons.edit_outlined, onTap: onRenameStep),
               const SizedBox(width: 4),
-              _TimelineAction(icon: Icons.delete_outline_rounded, danger: true, onTap: onDeleteStep),
+              _TimelineAction(
+                  icon: Icons.delete_outline_rounded,
+                  danger: true,
+                  onTap: onDeleteStep),
             ],
           ),
           const SizedBox(height: 6),
@@ -9588,7 +11306,8 @@ class _TgPlaybackTimelineBar extends StatelessWidget {
             children: [
               Expanded(
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
                   decoration: BoxDecoration(
                     color: const Color(0xFFF8FAFC),
                     borderRadius: BorderRadius.circular(8),
@@ -9599,25 +11318,43 @@ class _TgPlaybackTimelineBar extends StatelessWidget {
                     children: [
                       const Text(
                         'Объект для анимации',
-                        style: TextStyle(fontFamily: TgScreenPalette.fontFamily, fontSize: AppTypography.badgeSize, fontWeight: FontWeight.w700, color: TgScreenPalette.textSecondary),
+                        style: TextStyle(
+                            fontFamily: TgScreenPalette.fontFamily,
+                            fontSize: AppTypography.badgeSize,
+                            fontWeight: FontWeight.w700,
+                            color: TgScreenPalette.textSecondary),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         selectedSubjectLabel,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontFamily: TgScreenPalette.fontFamily, fontSize: AppTypography.sectionTitleSize, fontWeight: FontWeight.w800, color: TgScreenPalette.textPrimary),
+                        style: const TextStyle(
+                            fontFamily: TgScreenPalette.fontFamily,
+                            fontSize: AppTypography.sectionTitleSize,
+                            fontWeight: FontWeight.w800,
+                            color: TgScreenPalette.textPrimary),
                       ),
                     ],
                   ),
                 ),
               ),
               const SizedBox(width: 4),
-              _TimelineWideAction(label: 'Взять объект', icon: Icons.ads_click_rounded, onTap: onCaptureSubject),
+              _TimelineWideAction(
+                  label: 'Взять объект',
+                  icon: Icons.ads_click_rounded,
+                  onTap: onCaptureSubject),
               const SizedBox(width: 4),
-              _TimelineWideAction(label: 'Привязать', icon: Icons.link_rounded, onTap: onBindRoute),
+              _TimelineWideAction(
+                  label: 'Привязать',
+                  icon: Icons.link_rounded,
+                  onTap: onBindRoute),
               const SizedBox(width: 4),
-              _TimelineWideAction(label: 'Очистить', icon: Icons.link_off_rounded, onTap: onClearBinding, danger: true),
+              _TimelineWideAction(
+                  label: 'Очистить',
+                  icon: Icons.link_off_rounded,
+                  onTap: onClearBinding,
+                  danger: true),
             ],
           ),
           const SizedBox(height: 6),
@@ -9638,12 +11375,17 @@ class _TgPlaybackTimelineBar extends StatelessWidget {
                   borderRadius: BorderRadius.circular(8),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 180),
-                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
                     decoration: BoxDecoration(
-                      color: active ? TgScreenPalette.primaryGreen.withOpacity(0.12) : const Color(0xFFF8FAFC),
+                      color: active
+                          ? TgScreenPalette.primaryGreen.withOpacity(0.12)
+                          : const Color(0xFFF8FAFC),
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
-                        color: active ? TgScreenPalette.primaryGreen : TgScreenPalette.borderLight,
+                        color: active
+                            ? TgScreenPalette.primaryGreen
+                            : TgScreenPalette.borderLight,
                         width: active ? 1.8 : 1,
                       ),
                     ),
@@ -9654,10 +11396,14 @@ class _TgPlaybackTimelineBar extends StatelessWidget {
                           width: 16,
                           height: 16,
                           decoration: BoxDecoration(
-                            color: active ? TgScreenPalette.primaryGreen : Colors.white,
+                            color: active
+                                ? TgScreenPalette.primaryGreen
+                                : Colors.white,
                             shape: BoxShape.circle,
                             border: Border.all(
-                              color: active ? TgScreenPalette.primaryGreen : TgScreenPalette.borderLight,
+                              color: active
+                                  ? TgScreenPalette.primaryGreen
+                                  : TgScreenPalette.borderLight,
                             ),
                           ),
                           alignment: Alignment.center,
@@ -9667,7 +11413,9 @@ class _TgPlaybackTimelineBar extends StatelessWidget {
                               fontFamily: AppTypography.fontFamily,
                               fontSize: AppTypography.badgeSize,
                               fontWeight: FontWeight.w800,
-                              color: active ? Colors.white : TgScreenPalette.textSecondary,
+                              color: active
+                                  ? Colors.white
+                                  : TgScreenPalette.textSecondary,
                             ),
                           ),
                         ),
@@ -9678,7 +11426,9 @@ class _TgPlaybackTimelineBar extends StatelessWidget {
                             fontFamily: TgScreenPalette.fontFamily,
                             fontSize: AppTypography.badgeSize,
                             fontWeight: FontWeight.w700,
-                            color: active ? TgScreenPalette.primaryGreenDark : TgScreenPalette.textSecondary,
+                            color: active
+                                ? TgScreenPalette.primaryGreenDark
+                                : TgScreenPalette.textSecondary,
                           ),
                         ),
                       ],
@@ -9697,7 +11447,8 @@ class _TgPlaybackTimelineBar extends StatelessWidget {
 }
 
 class _TimelineAction extends StatelessWidget {
-  const _TimelineAction({required this.icon, required this.onTap, this.danger = false});
+  const _TimelineAction(
+      {required this.icon, required this.onTap, this.danger = false});
 
   final IconData icon;
   final VoidCallback onTap;
@@ -9714,9 +11465,16 @@ class _TimelineAction extends StatelessWidget {
         decoration: BoxDecoration(
           color: danger ? const Color(0xFFFFF1F2) : const Color(0xFFF8FAFC),
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: danger ? const Color(0xFFFECDD3) : TgScreenPalette.borderLight),
+          border: Border.all(
+              color: danger
+                  ? const Color(0xFFFECDD3)
+                  : TgScreenPalette.borderLight),
         ),
-        child: Icon(icon, size: 18.0, color: danger ? const Color(0xFFE11D48) : TgScreenPalette.textSecondary),
+        child: Icon(icon,
+            size: 18.0,
+            color: danger
+                ? const Color(0xFFE11D48)
+                : TgScreenPalette.textSecondary),
       ),
     );
   }
@@ -9762,20 +11520,36 @@ class _TgStepBindingsStrip extends StatelessWidget {
                 width: 154,
                 padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                 decoration: BoxDecoration(
-                  color: item.isManual ? TgScreenPalette.lightGreen : const Color(0xFFF8FAFC),
+                  color: item.isManual
+                      ? TgScreenPalette.lightGreen
+                      : const Color(0xFFF8FAFC),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: item.isManual ? TgScreenPalette.primaryGreen.withOpacity(.35) : TgScreenPalette.borderLight),
+                  border: Border.all(
+                      color: item.isManual
+                          ? TgScreenPalette.primaryGreen.withOpacity(.35)
+                          : TgScreenPalette.borderLight),
                 ),
                 child: Row(
                   children: [
-                    Icon(item.isManual ? Icons.link_rounded : Icons.auto_awesome_rounded, size: 13, color: item.isManual ? TgScreenPalette.primaryGreen : TgScreenPalette.textMuted),
+                    Icon(
+                        item.isManual
+                            ? Icons.link_rounded
+                            : Icons.auto_awesome_rounded,
+                        size: 13,
+                        color: item.isManual
+                            ? TgScreenPalette.primaryGreen
+                            : TgScreenPalette.textMuted),
                     const SizedBox(width: 4),
                     Expanded(
                       child: Text(
                         '${item.subjectTitle} · ${item.routeTitle}',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontFamily: AppTypography.fontFamily, fontSize: AppTypography.captionSize, fontWeight: FontWeight.w800, color: TgScreenPalette.textPrimary),
+                        style: const TextStyle(
+                            fontFamily: AppTypography.fontFamily,
+                            fontSize: AppTypography.captionSize,
+                            fontWeight: FontWeight.w800,
+                            color: TgScreenPalette.textPrimary),
                       ),
                     ),
                     InkWell(
@@ -9783,7 +11557,8 @@ class _TgStepBindingsStrip extends StatelessWidget {
                       borderRadius: BorderRadius.circular(8),
                       child: const Padding(
                         padding: EdgeInsets.all(3),
-                        child: Icon(Icons.close_rounded, size: 13, color: Color(0xFFE11D48)),
+                        child: Icon(Icons.close_rounded,
+                            size: 13, color: Color(0xFFE11D48)),
                       ),
                     ),
                   ],
@@ -9806,14 +11581,19 @@ class _TgStepBindingsStrip extends StatelessWidget {
       child: bindings.isEmpty
           ? Row(
               children: [
-                const Icon(Icons.info_outline_rounded, size: 16, color: TgScreenPalette.textMuted),
+                const Icon(Icons.info_outline_rounded,
+                    size: 16, color: TgScreenPalette.textMuted),
                 const SizedBox(width: 4),
                 Expanded(
                   child: Text(
                     title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontFamily: AppTypography.fontFamily, fontSize: AppTypography.badgeSize, fontWeight: FontWeight.w700, color: TgScreenPalette.textMuted),
+                    style: const TextStyle(
+                        fontFamily: AppTypography.fontFamily,
+                        fontSize: AppTypography.badgeSize,
+                        fontWeight: FontWeight.w700,
+                        color: TgScreenPalette.textMuted),
                   ),
                 ),
               ],
@@ -9829,11 +11609,17 @@ class _TgStepBindingsStrip extends StatelessWidget {
                   borderRadius: BorderRadius.circular(8),
                   child: Container(
                     width: 196,
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
                     decoration: BoxDecoration(
-                      color: item.isManual ? TgScreenPalette.lightGreen : const Color(0xFFF8FAFC),
+                      color: item.isManual
+                          ? TgScreenPalette.lightGreen
+                          : const Color(0xFFF8FAFC),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: item.isManual ? TgScreenPalette.primaryGreen.withOpacity(.35) : TgScreenPalette.borderLight),
+                      border: Border.all(
+                          color: item.isManual
+                              ? TgScreenPalette.primaryGreen.withOpacity(.35)
+                              : TgScreenPalette.borderLight),
                     ),
                     child: Row(
                       children: [
@@ -9841,11 +11627,23 @@ class _TgStepBindingsStrip extends StatelessWidget {
                           width: 28,
                           height: 28,
                           decoration: BoxDecoration(
-                            color: item.isManual ? TgScreenPalette.primaryGreen : Colors.white,
+                            color: item.isManual
+                                ? TgScreenPalette.primaryGreen
+                                : Colors.white,
                             shape: BoxShape.circle,
-                            border: Border.all(color: item.isManual ? TgScreenPalette.primaryGreen : TgScreenPalette.borderLight),
+                            border: Border.all(
+                                color: item.isManual
+                                    ? TgScreenPalette.primaryGreen
+                                    : TgScreenPalette.borderLight),
                           ),
-                          child: Icon(item.isManual ? Icons.link_rounded : Icons.auto_awesome_rounded, size: 15, color: item.isManual ? Colors.white : TgScreenPalette.textMuted),
+                          child: Icon(
+                              item.isManual
+                                  ? Icons.link_rounded
+                                  : Icons.auto_awesome_rounded,
+                              size: 15,
+                              color: item.isManual
+                                  ? Colors.white
+                                  : TgScreenPalette.textMuted),
                         ),
                         const SizedBox(width: 4),
                         Expanded(
@@ -9857,13 +11655,21 @@ class _TgStepBindingsStrip extends StatelessWidget {
                                 item.subjectTitle,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontFamily: AppTypography.fontFamily, fontSize: AppTypography.captionSize, fontWeight: FontWeight.w900, color: TgScreenPalette.textPrimary),
+                                style: const TextStyle(
+                                    fontFamily: AppTypography.fontFamily,
+                                    fontSize: AppTypography.captionSize,
+                                    fontWeight: FontWeight.w900,
+                                    color: TgScreenPalette.textPrimary),
                               ),
                               Text(
                                 item.routeTitle,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontFamily: AppTypography.fontFamily, fontSize: AppTypography.badgeSize, fontWeight: FontWeight.w700, color: TgScreenPalette.textMuted),
+                                style: const TextStyle(
+                                    fontFamily: AppTypography.fontFamily,
+                                    fontSize: AppTypography.badgeSize,
+                                    fontWeight: FontWeight.w700,
+                                    color: TgScreenPalette.textMuted),
                               ),
                             ],
                           ),
@@ -9873,7 +11679,8 @@ class _TgStepBindingsStrip extends StatelessWidget {
                           borderRadius: BorderRadius.circular(10),
                           child: const Padding(
                             padding: EdgeInsets.all(5),
-                            child: Icon(Icons.close_rounded, size: 16, color: Color(0xFFE11D48)),
+                            child: Icon(Icons.close_rounded,
+                                size: 16, color: Color(0xFFE11D48)),
                           ),
                         ),
                       ],
@@ -9887,7 +11694,11 @@ class _TgStepBindingsStrip extends StatelessWidget {
 }
 
 class _TimelineWideAction extends StatelessWidget {
-  const _TimelineWideAction({required this.label, required this.icon, required this.onTap, this.danger = false});
+  const _TimelineWideAction(
+      {required this.label,
+      required this.icon,
+      required this.onTap,
+      this.danger = false});
 
   final String label;
   final IconData icon;
@@ -9905,12 +11716,19 @@ class _TimelineWideAction extends StatelessWidget {
         decoration: BoxDecoration(
           color: danger ? const Color(0xFFFFF1F2) : const Color(0xFFF8FAFC),
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: danger ? const Color(0xFFFECDD3) : TgScreenPalette.borderLight),
+          border: Border.all(
+              color: danger
+                  ? const Color(0xFFFECDD3)
+                  : TgScreenPalette.borderLight),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 15, color: danger ? const Color(0xFFE11D48) : TgScreenPalette.textSecondary),
+            Icon(icon,
+                size: 15,
+                color: danger
+                    ? const Color(0xFFE11D48)
+                    : TgScreenPalette.textSecondary),
             const SizedBox(width: 3),
             Text(
               label,
@@ -9918,7 +11736,9 @@ class _TimelineWideAction extends StatelessWidget {
                 fontFamily: TgScreenPalette.fontFamily,
                 fontSize: AppTypography.captionSize,
                 fontWeight: FontWeight.w700,
-                color: danger ? const Color(0xFFE11D48) : TgScreenPalette.textPrimary,
+                color: danger
+                    ? const Color(0xFFE11D48)
+                    : TgScreenPalette.textPrimary,
               ),
             ),
           ],
@@ -9945,7 +11765,8 @@ class _TgPlaybackOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (!visible || canvasState == null || routes.isEmpty) return const SizedBox.shrink();
+    if (!visible || canvasState == null || routes.isEmpty)
+      return const SizedBox.shrink();
     return CustomPaint(
       painter: _TgPlaybackPainter(
         canvasState: canvasState!,
@@ -9976,10 +11797,14 @@ class _TgPlaybackPainter extends CustomPainter {
     final active = routes.where((e) => e.stepIndex == activeStep).toList();
     for (int i = 0; i < active.length; i++) {
       final route = active[i];
-      final t = Curves.easeInOut.transform((progress.clamp(0.0, 1.0) as num).toDouble());
+      final t = Curves.easeInOut
+          .transform((progress.clamp(0.0, 1.0) as num).toDouble());
       final scene = route.pointAt(t);
       final pos = canvasState.sceneToViewport(scene);
-      if (pos.dx < -60 || pos.dy < -60 || pos.dx > size.width + 60 || pos.dy > size.height + 60) {
+      if (pos.dx < -60 ||
+          pos.dy < -60 ||
+          pos.dx > size.width + 60 ||
+          pos.dy > size.height + 60) {
         continue;
       }
       final start = canvasState.sceneToViewport(route.startPoint);
@@ -9995,7 +11820,8 @@ class _TgPlaybackPainter extends CustomPainter {
       final halo = Paint()
         ..color = route.binding.color.withOpacity(0.18)
         ..style = PaintingStyle.fill;
-      canvas.drawCircle(pos, route.binding.subject == _TgPlaybackSubject.ball ? 13 : 18, halo);
+      canvas.drawCircle(pos,
+          route.binding.subject == _TgPlaybackSubject.ball ? 13 : 18, halo);
     }
   }
 
@@ -10005,7 +11831,13 @@ class _TgPlaybackPainter extends CustomPainter {
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
     canvas.drawCircle(pos + const Offset(0, 7), 10, shadow);
     canvas.drawCircle(pos, 10, Paint()..color = Colors.white);
-    canvas.drawCircle(pos, 10, Paint()..style = PaintingStyle.stroke..strokeWidth = 1.8..color = const Color(0xFF0F172A));
+    canvas.drawCircle(
+        pos,
+        10,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.8
+          ..color = const Color(0xFF0F172A));
     canvas.drawCircle(pos, 3.2, Paint()..color = const Color(0xFF0F172A));
   }
 
@@ -10015,12 +11847,22 @@ class _TgPlaybackPainter extends CustomPainter {
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12);
     canvas.drawCircle(pos + const Offset(0, 9), 15, shadow);
     canvas.drawCircle(pos, 14, Paint()..color = const Color(0xFFF8FAFC));
-    canvas.drawCircle(pos, 14, Paint()..style = PaintingStyle.stroke..strokeWidth = 2.2..color = Colors.white.withOpacity(0.96));
+    canvas.drawCircle(
+        pos,
+        14,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2.2
+          ..color = Colors.white.withOpacity(0.96));
     canvas.drawCircle(pos, 11.6, Paint()..color = binding.color);
     final tp = TextPainter(
       text: TextSpan(
         text: binding.number.isNotEmpty ? binding.number : binding.initials,
-        style: const TextStyle(fontFamily: AppTypography.fontFamily, color: Colors.white, fontSize: AppTypography.badgeSize, fontWeight: FontWeight.w800),
+        style: const TextStyle(
+            fontFamily: AppTypography.fontFamily,
+            color: Colors.white,
+            fontSize: AppTypography.badgeSize,
+            fontWeight: FontWeight.w800),
       ),
       textDirection: TextDirection.ltr,
     )..layout();
@@ -10032,8 +11874,15 @@ class _TgPlaybackPainter extends CustomPainter {
       ..color = binding.color.withOpacity(0.24)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12);
     canvas.drawCircle(pos, 16, glow);
-    canvas.drawCircle(pos, 11, Paint()..color = binding.color.withOpacity(0.96));
-    canvas.drawCircle(pos, 11, Paint()..style = PaintingStyle.stroke..strokeWidth = 2..color = Colors.white.withOpacity(0.96));
+    canvas.drawCircle(
+        pos, 11, Paint()..color = binding.color.withOpacity(0.96));
+    canvas.drawCircle(
+        pos,
+        11,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2
+          ..color = Colors.white.withOpacity(0.96));
   }
 
   @override

@@ -1,0 +1,262 @@
+name: sportoteka
+description: Sportoteka Flutter App
+
+publish_to: "none"
+
+version: 4.0.45+105
+
+environment:
+  sdk: ">=3.1.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  cupertino_icons: ^1.0.5
+  get: ^4.6.6
+  sqflite: ^2.3.0
+  path: ^1.8.3
+  path_provider: ^2.1.1
+  shared_preferences: ^2.2.2
+  connectivity_plus: ^7.3.1
+  cached_network_image: ^3.3.1
+  flutter_staggered_animations: ^1.1.1
+  fluttertoast: ^10.0.0
+  expandable_text: ^2.3.0
+  flutter_rating_bar: ^4.0.1
+  calendar_date_picker2: ^3.0.0
+  pinput: ^6.0.2
+  sms_autofill: ^2.3.0
+  intl: ^0.20.2
+  http: ^1.3.0
+  html: ^0.15.4
+  url_launcher: ^6.2.4
+  table_calendar: ^3.0.8
+  video_player: ^2.7.0
+  qr_flutter: ^4.1.0
+  fl_chart: ^1.2.0
+  font_awesome_flutter: ^11.0.0
+  flutter_colorpicker: ^1.0.3
+  syncfusion_flutter_calendar: ^33.2.15
+  image_picker: ^1.0.7
+  animate_do: ^5.1.0
+  dio: ^5.4.0
+  pool: ^1.5.1
+  emoji_picker_flutter: ^4.3.0
+  shimmer: ^3.0.0
+  chewie: ^1.4.0
+  camera: ^0.12.0+2
+  google_mlkit_pose_detection: ^0.15.0
+  sensors_plus: ^7.1.0
+  geolocator: ^14.0.2
+  share_plus: ^12.0.2
+  pdf: ^3.11.0
+  printing: ^5.13.0
+  google_maps_flutter: ^2.9.0
+  video_thumbnail: ^0.5.3
+  package_info_plus: ^9.0.1
+  device_info_plus: 12.3.0
+  firebase_core: ^4.13.0
+  file_picker: ^11.0.3
+  flutter_html: ^3.0.0-beta.2
+  flutter_pdfview: ^1.3.2   
+  syncfusion_flutter_pdfviewer: ^33.2.13
+  flutter_widget_from_html: ^0.17.2
+  firebase_messaging: ^16.5.0
+  flutter_local_notifications: ^22.3.0
+  flutter_svg: ^2.0.10
+  excel: ^4.0.6
+  youtube_player_iframe: ^6.0.2
+  crypto: ^3.0.3
+  flutter_reactive_ble: ^5.3.1
+  cross_file: ^0.3.4+2
+  desktop_drop: ^0.7.1
+  open_filex: ^4.7.0
+  flutter_blue_plus: ^1.34.5
+  web_socket_channel: ^3.0.3
+  webview_flutter: ^4.4.0
+  video_player_win: ^3.2.2
+  flutter_blue_plus_windows: ^1.26.1
+  phosphoricons_flutter: ^1.0.0
+  permission_handler: 12.0.3
+  livekit_client: ^2.11.0
+  http_parser: ^4.1.2
+  mime: ^2.0.0
+  app_badge_plus: ^1.3.4
+  flutter_callkit_incoming: ^3.1.5
+  audioplayers: ^6.4.0
+  thermion_flutter: 0.5.0
+  sportoteka_stadium_android:
+    path: packages/sportoteka_stadium_android
+  
+
+
+dependency_overrides:
+  device_info_plus: 12.3.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
+
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  remove_alpha_ios: true
+  image_path: "assets/icon/app_icon.png"
+  
+flutter:
+  uses-material-design: true
+
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Inter-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Inter-Bold.ttf
+          weight: 700
+
+  assets:
+    - assets/sounds/outgoing_ringback.wav
+    - assets/sportoteka.db
+    - assets/images/dinamo_logo.png
+    - assets/icons/
+    - assets/images/onboarding1.png
+    - assets/images/onboarding2.png
+    - assets/images/onboarding3.png
+    - assets/images/dynamo_trainer2.png
+    - assets/events/football1.jpg
+    - assets/events/football2.jpg
+    - assets/images/inventar.png
+    - assets/images/medcard.png
+    - assets/images/sportpit.png
+    - assets/images/video.png
+    - assets/images/statistica.png
+    - assets/images/raspisanie.png
+    - assets/images/trening.png
+    - assets/images/transfer.png
+    - assets/images/banners/team.png
+    - assets/images/banners/matches.png
+    - assets/images/banners/club.png
+    - assets/images/banners/table.png
+    - assets/images/banners/tickets.png
+    - assets/images/banners/staff.png
+    - assets/staff/tolmash.jpg
+    - assets/staff/yermolovich.jpg
+    - assets/staff/moroz.jpg
+    - assets/staff/pavlyuchuk.jpg
+    - assets/images/bron.png
+    - assets/training/field.png
+    - assets/training/3d/
+    - assets/training/stamps/player_m/run.png
+    - assets/training/stamps/player_m/pass.png
+    - assets/training/stamps/player_m/stand.png
+    - assets/training/stamps/player_m/jump.png
+    - assets/training/stamps/player_m/goalkeeper.png
+    - assets/training/stamps/player_f/run.png
+    - assets/training/stamps/player_f/pass.png
+    - assets/training/stamps/player_f/stand.png
+    - assets/training/stamps/player_f/jump.png
+    - assets/training/stamps/player_f/goalkeeper.png
+    - assets/training/stamps/coach/male.png
+    - assets/training/stamps/coach/female.png
+    - assets/fonts/times.ttf
+    - assets/fonts/timesbd.ttf
+    - assets/icons/logofc.png
+    - assets/training/stamps/props/cap.svg
+    - assets/training/stamps/props/cone.svg
+    - assets/training/stamps/props/dummy.svg
+    - assets/training/stamps/props/flag_feet.svg
+    - assets/training/stamps/props/flag.svg
+    - assets/training/stamps/props/front.svg
+    - assets/training/stamps/props/ladder.svg
+    - assets/training/stamps/props/landscape.png
+    - assets/training/stamps/props/neutral.png
+    - assets/training/stamps/props/pole.svg
+    - assets/training/stamps/props/ring.svg
+    - assets/training/stamps/run_svg/front_left.svg
+    - assets/training/stamps/run_svg/front_angle_left.svg
+    - assets/training/stamps/run_svg/front_angle_right.svg
+    - assets/training/stamps/run_svg/side_left.svg
+    - assets/training/stamps/run_svg/side_right.svg
+    - assets/training/stamps/run_svg/back_left.svg
+    - assets/training/stamps/run_svg/back_right.svg
+    - assets/training/stamps/run_svg/back_angle_left.svg
+    - assets/training/stamps/run_svg/back_angle_right.svg
+    - assets/training/stamps/run_svg/frontal_links.svg
+    - assets/training/stamps/pass_svg/front_left.svg
+    - assets/training/stamps/pass_svg/front_angle_left.svg
+    - assets/training/stamps/pass_svg/front_angle_right.svg
+    - assets/training/stamps/pass_svg/side_left.svg
+    - assets/training/stamps/pass_svg/side_right.svg
+    - assets/training/stamps/pass_svg/back_left.svg
+    - assets/training/stamps/pass_svg/back_right.svg
+    - assets/training/stamps/pass_svg/back_angle_left.svg
+    - assets/training/stamps/pass_svg/back_angle_right.svg
+    - assets/training/stamps/pass_svg/front_right.svg
+    - assets/training/stamps/stand_svg/front_left.svg
+    - assets/training/stamps/stand_svg/front_angle_left.svg
+    - assets/training/stamps/stand_svg/front_angle_right.svg
+    - assets/training/stamps/stand_svg/side_left.svg
+    - assets/training/stamps/stand_svg/side_right.svg
+    - assets/training/stamps/stand_svg/back_left.svg
+    - assets/training/stamps/stand_svg/back_right.svg
+    - assets/training/stamps/stand_svg/back_angle_left.svg
+    - assets/training/stamps/stand_svg/back_angle_right.svg
+    - assets/training/stamps/stand_svg/front_right.svg
+    - assets/training/stamps/jump_svg/front_left.svg
+    - assets/training/stamps/jump_svg/front_right.svg
+    - assets/training/stamps/jump_svg/side_right.svg
+    - assets/training/stamps/jump_svg/side_left.svg
+    - assets/training/stamps/jump_svg/back_right.svg
+    - assets/training/stamps/jump_svg/back_left.svg
+    - assets/training/stamps/vrat_svg/front_left.svg
+    - assets/training/stamps/vrat_svg/front_angle_left.svg
+    - assets/training/stamps/vrat_svg/front_angle_right.svg
+    - assets/training/stamps/vrat_svg/side_left.svg
+    - assets/training/stamps/vrat_svg/side_right.svg
+    - assets/training/stamps/vrat_svg/back_left.svg
+    - assets/training/stamps/vrat_svg/back_right.svg
+    - assets/training/stamps/vrat_svg/back_angle_left.svg
+    - assets/training/stamps/vrat_svg/back_angle_right.svg
+    - assets/training/stamps/vrat_svg/front_right.svg
+    - assets/training/stamps/vorota1/back.png
+    - assets/training/stamps/vorota1/front.png
+    - assets/training/stamps/vorota1/left.png
+    - assets/training/stamps/vorota1/right.png
+    - assets/training/stamps/fields/bottom.svg
+    - assets/training/stamps/fields/bottom1.svg
+    - assets/training/stamps/fields/bottom7.svg
+    - assets/training/stamps/fields/futsal_bottom.svg
+    - assets/training/stamps/fields/futsal_left8.svg
+    - assets/training/stamps/fields/futsal_right.svg
+    - assets/training/stamps/fields/futsal_top.svg
+    - assets/training/stamps/fields/landscape.svg
+    - assets/training/stamps/fields/landscape1.svg
+    - assets/training/stamps/fields/landscape2.svg
+    - assets/training/stamps/fields/landscape4.svg
+    - assets/training/stamps/fields/landscape6.svg
+    - assets/training/stamps/fields/left.svg
+    - assets/training/stamps/fields/left1.svg
+    - assets/training/stamps/fields/left2.svg
+    - assets/training/stamps/fields/left7.svg
+    - assets/training/stamps/fields/portrait.svg
+    - assets/training/stamps/fields/portrait3.svg
+    - assets/training/stamps/fields/portrait5.svg
+    - assets/training/stamps/fields/right.svg
+    - assets/training/stamps/fields/right2.svg
+    - assets/training/stamps/fields/right3.svg
+    - assets/training/stamps/fields/right4.svg
+    - assets/training/stamps/fields/right5.svg
+    - assets/training/stamps/fields/top.svg
+    - assets/training/stamps/fields/top1.svg
+    - assets/training/stamps/fields/top3.svg
+    - assets/training/stamps/fields/top4.svg
+    - assets/training/stamps/fields/top6.svg
+    - assets/images/sportoteka_tracker_kit.png
+    - assets/images/workspace_hub/

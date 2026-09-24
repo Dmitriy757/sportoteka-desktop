@@ -1,0 +1,3 @@
+/Users/dmitrij/.pub-cache/hosted/pub.dev/thermion_flutter-0.5.0/android/.cxx/Debug/5vf2x3ck/x86/CMakeFiles/thermion_flutter_android.dir
+/Users/dmitrij/.pub-cache/hosted/pub.dev/thermion_flutter-0.5.0/android/.cxx/Debug/5vf2x3ck/x86/CMakeFiles/edit_cache.dir
+/Users/dmitrij/.pub-cache/hosted/pub.dev/thermion_flutter-0.5.0/android/.cxx/Debug/5vf2x3ck/x86/CMakeFiles/rebuild_cache.dir

@@ -1,0 +1,60 @@
+{
+	"configurations" : 
+	[
+		{
+			"directories" : 
+			[
+				{
+					"build" : ".",
+					"jsonFile" : "directory-.-RelWithDebInfo-f5ebdc15457944623624.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.10.0"
+					},
+					"projectIndex" : 0,
+					"source" : ".",
+					"targetIndexes" : 
+					[
+						0
+					]
+				}
+			],
+			"name" : "RelWithDebInfo",
+			"projects" : 
+			[
+				{
+					"directoryIndexes" : 
+					[
+						0
+					],
+					"name" : "thermion_flutter_android",
+					"targetIndexes" : 
+					[
+						0
+					]
+				}
+			],
+			"targets" : 
+			[
+				{
+					"directoryIndex" : 0,
+					"id" : "thermion_flutter_android::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-thermion_flutter_android-RelWithDebInfo-b3bcb1d3c70adc2ec513.json",
+					"name" : "thermion_flutter_android",
+					"projectIndex" : 0
+				}
+			]
+		}
+	],
+	"kind" : "codemodel",
+	"paths" : 
+	{
+		"build" : "/Users/dmitrij/.pub-cache/hosted/pub.dev/thermion_flutter-0.5.0/android/.cxx/RelWithDebInfo/142i3d4d/x86",
+		"source" : "/Users/dmitrij/.pub-cache/hosted/pub.dev/thermion_flutter-0.5.0/android"
+	},
+	"version" : 
+	{
+		"major" : 2,
+		"minor" : 3
+	}
+}

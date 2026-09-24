@@ -7,7 +7,7 @@ plugins {
 
 android {
     namespace = "com.example.sportoteka"
-    compileSdk = 36
+    compileSdk = 37
 
     // Лучше держать версию NDK, которую использует Unity 6000.5.
     // Если Gradle начнет ругаться, можно вернуть 27.0.12077973.
@@ -20,15 +20,12 @@ android {
     }
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
         isCoreLibraryDesugaringEnabled = true
     }
 
-    kotlinOptions {
-        jvmTarget = "11"
-    }
-
+    
     defaultConfig {
         applicationId = "com.example.sportoteka"
         minSdk = 26
@@ -44,11 +41,11 @@ android {
     }
 
     // Фикс дубля libc++_shared.so: Unity + pdfium-android.
-    packagingOptions {
-        pickFirst("lib/arm64-v8a/libc++_shared.so")
-        pickFirst("lib/armeabi-v7a/libc++_shared.so")
-        pickFirst("lib/x86/libc++_shared.so")
-        pickFirst("lib/x86_64/libc++_shared.so")
+    packaging {
+        jniLibs.pickFirsts.add("lib/arm64-v8a/libc++_shared.so")
+        jniLibs.pickFirsts.add("lib/armeabi-v7a/libc++_shared.so")
+        jniLibs.pickFirsts.add("lib/x86/libc++_shared.so")
+        jniLibs.pickFirsts.add("lib/x86_64/libc++_shared.so")
     }
 
     buildTypes {
@@ -57,7 +54,7 @@ android {
             isMinifyEnabled = false
             isShrinkResources = false
             proguardFiles(
-                getDefaultProguardFile("proguard-android.txt"),
+                getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
         }
@@ -92,4 +89,11 @@ dependencies {
 
 flutter {
     source = "../.."
+}
+
+// SPORTOTEKA FIX 38: Kotlin 2.4 typed compiler DSL.
+kotlin {
+    compilerOptions {
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
+    }
 }

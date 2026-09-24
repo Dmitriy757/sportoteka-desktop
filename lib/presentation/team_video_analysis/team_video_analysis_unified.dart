@@ -24,7 +24,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:video_thumbnail/video_thumbnail.dart';
 import 'package:sportoteka/core/constants/app_colors.dart';
 import 'package:video_player/video_player.dart';
-import 'package:excel/excel.dart' as excel;
+import 'package:excel_community/excel_community.dart' as excel;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:share_plus/share_plus.dart';
@@ -261,7 +261,13 @@ class Player {
       lastName: json['last_name']?.toString() ?? json['surname']?.toString() ?? '',
       photo: json['photo']?.toString() ?? json['image']?.toString(),
       position: json['position']?.toString(),
-      jerseyNumber: int.tryParse(json['jersey_number']?.toString() ?? ''),
+      jerseyNumber: int.tryParse((json['jersey_number'] ??
+              json['player_number'] ??
+              json['shirt_number'] ??
+              json['jerseyNumber'] ??
+              json['game_number'] ??
+              json['number'])
+          ?.toString() ?? ''),
     );
   }
 
@@ -350,6 +356,7 @@ const List<TtdMetric> mainTtd = [
   TtdMetric(code: "recovery_ball", title: "Подбор мяча", color: Color(0xFF10B981)),
   TtdMetric(code: "header_play", title: "Игра головой", color: Color(0xFF84CC16)),
   TtdMetric(code: "throw_ins", title: "Ауты", color: Color(0xFFF97316)),
+  TtdMetric(code: "corner", title: "Угловые", color: Color(0xFFF59E0B)),
   TtdMetric(code: "pass_avp", title: "Пас в АВП", color: Color(0xFF2563EB)),
 ];
 
@@ -386,6 +393,7 @@ const List<Map<String, dynamic>> eventTypes = [
   {"code": "assist", "title": "Голевая", "positive": true, "icon": Icons.assistant_direction, "color": Color(0xFF2563EB)},
   {"code": "shot_on_goal", "title": "Удар", "positive": true, "icon": Icons.ads_click, "color": Color(0xFF0EA5E9)},
   {"code": "pass_avp", "title": "Пас в АВП", "positive": true, "icon": Icons.compare_arrows_rounded, "color": Color(0xFF2563EB)},
+  {"code": "corner", "title": "Угловой", "positive": true, "icon": Icons.flag_rounded, "color": Color(0xFFF59E0B)},
   {"code": "tackle_duel", "title": "Отбор", "positive": true, "icon": Icons.shield_outlined, "color": Color(0xFF059669)},
   {"code": "mistake", "title": "Ошибка", "positive": false, "icon": Icons.error_outline, "color": Color(0xFFDC2626)},
 ];
@@ -839,7 +847,7 @@ class PlayerTrack {
   final String id;
   int? boundPlayerId;
   String boundPlayerName;
-  final Color color;
+  Color color;
   final List<TrackPoint> points;
   double? speed;
   final bool isLocked;
@@ -847,8 +855,17 @@ class PlayerTrack {
   final int lastSeenTimeMs;
   final Rect? lockedBox;
 
-  final String? teamTag;
-  final int? jerseyNumber;
+  String? teamTag;
+  int? jerseyNumber;
+
+  /// True only for the tactical/map representation when the real player has
+  /// been identified but is temporarily outside the camera view. Never draw a
+  /// stale bounding box on top of the video for such a track.
+  bool isTemporarilyLost;
+
+  /// Coach confirmation is authoritative for the match and survives temporary
+  /// DeepSort track changes.
+  bool identityManuallyConfirmed;
 
   PlayerTrack({
     required this.id,
@@ -863,6 +880,8 @@ class PlayerTrack {
     this.lockedBox,
     this.teamTag,
     this.jerseyNumber,
+    this.isTemporarilyLost = false,
+    this.identityManuallyConfirmed = false,
   });
 
   TrackPoint? get lastPoint => points.isNotEmpty ? points.last : null;
@@ -884,6 +903,8 @@ class PlayerTrack {
     Rect? lockedBox,
     String? teamTag,
     int? jerseyNumber,
+    bool? isTemporarilyLost,
+    bool? identityManuallyConfirmed,
   }) {
     return PlayerTrack(
       id: id ?? this.id,
@@ -898,6 +919,9 @@ class PlayerTrack {
       lockedBox: lockedBox ?? this.lockedBox,
       teamTag: teamTag ?? this.teamTag,
       jerseyNumber: jerseyNumber ?? this.jerseyNumber,
+      isTemporarilyLost: isTemporarilyLost ?? this.isTemporarilyLost,
+      identityManuallyConfirmed:
+          identityManuallyConfirmed ?? this.identityManuallyConfirmed,
     );
   }
 
@@ -921,6 +945,8 @@ class PlayerTrack {
             },
       'teamTag': teamTag,
       'jerseyNumber': jerseyNumber,
+      'isTemporarilyLost': isTemporarilyLost,
+      'identityManuallyConfirmed': identityManuallyConfirmed,
       'points': points.map((e) => e.toJson()).toList(),
     };
   }
@@ -951,6 +977,8 @@ class PlayerTrack {
       lockedBox: parsedLockedBox,
       teamTag: json['teamTag']?.toString(),
       jerseyNumber: json['jerseyNumber'] as int?,
+      isTemporarilyLost: json['isTemporarilyLost'] == true,
+      identityManuallyConfirmed: json['identityManuallyConfirmed'] == true,
       points: rawPoints
           .whereType<Map>()
           .map((e) => TrackPoint.fromJson(Map<String, dynamic>.from(e)))
@@ -1534,7 +1562,7 @@ class AiDetectedEvent {
     final title = (json['title'] ?? json['event_title'] ?? 'Событие')
         .toString()
         .trim();
-    final team = (json['team'] ?? json['side'] ?? '').toString().trim();
+    final team = (json['team'] ?? json['team_id'] ?? json['side'] ?? '').toString().trim();
     final startRaw = json['start_ms'] ?? json['time_ms'] ?? json['timeMs'] ?? 0;
     final startMs = asInt(startRaw);
     final endMs = asInt(json['end_ms'] ?? json['end_time_ms'] ?? startMs);
@@ -1549,11 +1577,13 @@ class AiDetectedEvent {
         .map((e) => Map<String, dynamic>.from(e))
         .toList();
 
-    final meta = json['meta'] is Map<String, dynamic>
-        ? Map<String, dynamic>.from(json['meta'] as Map<String, dynamic>)
-        : json['meta'] is Map
-            ? Map<String, dynamic>.from(json['meta'] as Map)
-            : <String, dynamic>{};
+    final evidence = json['evidence'] is Map
+        ? Map<String, dynamic>.from(json['evidence'] as Map)
+        : <String, dynamic>{};
+    final explicitMeta = json['meta'] is Map
+        ? Map<String, dynamic>.from(json['meta'] as Map)
+        : <String, dynamic>{};
+    final meta = <String, dynamic>{...evidence, ...explicitMeta};
 
     final subtitle = _buildSubtitle(
       type: type,
@@ -1581,12 +1611,12 @@ class AiDetectedEvent {
         'event_type': json['event_type'],
         'is_positive': json['is_positive'],
         'participants': participants,
-        'player_id': json['player_id'],
-        'target_player_id': json['target_player_id'],
-        'track_id': json['track_id'],
-        'target_track_id': json['target_track_id'],
-        'player_id': json['player_id'],
-        'target_player_id': json['target_player_id'],
+        'player_id': json['player_id'] ?? meta['player_id'],
+        'target_player_id': json['target_player_id'] ?? meta['target_player_id'],
+        'track_id': json['track_id'] ?? meta['track_id'],
+        'target_track_id': json['target_track_id'] ?? meta['target_track_id'],
+        'status': json['status'] ?? meta['status'],
+        'jersey_number': json['jersey_number'] ?? meta['jersey_number'],
         'description': json['description'] ?? json['note'],
         'id': json['id'],
       },
@@ -1604,7 +1634,7 @@ class AiDetectedEvent {
         .where((e) => e.isNotEmpty)
         .toList();
 
-    if (type == 'pass' && names.length >= 2) {
+    if ((type == 'pass' || type.startsWith('pass_')) && names.length >= 2) {
       return '${names[0]} → ${names[1]}';
     }
 
@@ -1612,7 +1642,7 @@ class AiDetectedEvent {
       return team.isEmpty ? names.join(', ') : '$team • ${names.join(', ')}';
     }
 
-    if (type == 'pass') {
+    if (type == 'pass' || type.startsWith('pass_')) {
       final direction = (meta['direction'] ?? '').toString();
       final lengthType = (meta['length_type'] ?? '').toString();
       final parts = [direction, lengthType].where((e) => e.isNotEmpty).toList();
@@ -1662,7 +1692,12 @@ class AiDetectedEvent {
       case 'direction_change':
         return Icons.turn_right_rounded;
       case 'shot':
+      case 'shot_on_goal':
         return Icons.sports_soccer_rounded;
+      case 'corner':
+        return Icons.flag_rounded;
+      case 'throw_in':
+        return Icons.sports_handball_rounded;
       default:
         return Icons.analytics_outlined;
     }
@@ -1702,7 +1737,12 @@ class AiDetectedEvent {
       case 'direction_change':
         return const Color(0xFF7C3AED);
       case 'shot':
+      case 'shot_on_goal':
         return const Color(0xFFEA580C);
+      case 'corner':
+        return const Color(0xFFF59E0B);
+      case 'throw_in':
+        return const Color(0xFFF97316);
       default:
         return const Color(0xFF334155);
     }
@@ -1746,11 +1786,13 @@ class AiTtdSuggestion {
         ? asBool(json['success'])
         : !json.containsKey('is_positive') || asBool(json['is_positive']);
 
-    final meta = json['meta'] is Map<String, dynamic>
-        ? Map<String, dynamic>.from(json['meta'] as Map<String, dynamic>)
-        : json['meta'] is Map
-            ? Map<String, dynamic>.from(json['meta'] as Map)
-            : <String, dynamic>{};
+    final evidence = json['evidence'] is Map
+        ? Map<String, dynamic>.from(json['evidence'] as Map)
+        : <String, dynamic>{};
+    final explicitMeta = json['meta'] is Map
+        ? Map<String, dynamic>.from(json['meta'] as Map)
+        : <String, dynamic>{};
+    final meta = <String, dynamic>{...evidence, ...explicitMeta};
 
     return AiTtdSuggestion(
       code: type.isEmpty ? 'unknown' : type,
@@ -1761,14 +1803,20 @@ class AiTtdSuggestion {
       success: success,
       meta: {
         ...meta,
-        'team': json['team'],
-        'participants': json['participants'],
-        'track_id': json['track_id'],
-        'target_track_id': json['target_track_id'],
-        'description': json['description'] ?? json['note'],
+        'team': json['team'] ?? json['team_id'] ?? json['side'] ?? meta['team'],
+        'participants': json['participants'] ?? meta['participants'],
+        'player_id': json['player_id'] ?? meta['player_id'],
+        'target_player_id': json['target_player_id'] ?? meta['target_player_id'],
+        'track_id': json['track_id'] ?? meta['track_id'],
+        'target_track_id': json['target_track_id'] ?? meta['target_track_id'],
+        'jersey_number': json['jersey_number'] ?? meta['jersey_number'],
+        'target_jersey_number': json['target_jersey_number'] ?? meta['target_jersey_number'],
+        'status': json['status'] ?? meta['status'],
+        'success': json['success'] ?? meta['success'],
+        'description': json['description'] ?? json['note'] ?? meta['description'],
         'time_ms': timeMs,
-        'event_title': json['event_title'],
-        'is_positive': json['is_positive'],
+        'event_title': json['event_title'] ?? meta['event_title'],
+        'is_positive': json['is_positive'] ?? meta['is_positive'],
         'id': json['id'],
       },
     );
@@ -1989,6 +2037,64 @@ class AiTrackingController extends ChangeNotifier {
   int sampleMs = 80;
 
   List<PlayerTrack> tracks = [];
+
+  // V6.5 persistent player identity for the tactical map. Active video tracks
+  // stay short-lived, but a confirmed SPORTOTEKA player keeps his name, shirt
+  // number and last known position while temporarily outside the camera view.
+  final Map<int, PlayerTrack> _persistentPlayerTracks = <int, PlayerTrack>{};
+  final Map<int, int> _persistentPlayerLastSeenMs = <int, int>{};
+  int _persistentIdentityClockMs = 0;
+  static const int _persistentMapGhostMs = 45000;
+
+  List<PlayerTrack> get mapTracks {
+    final result = <PlayerTrack>[];
+    final activePlayerIds = <int>{};
+
+    for (final track in tracks) {
+      final pid = track.boundPlayerId;
+      if (pid != null && pid > 0) activePlayerIds.add(pid);
+      result.add(track.copyWith(isTemporarilyLost: false));
+    }
+
+    for (final entry in _persistentPlayerTracks.entries) {
+      final pid = entry.key;
+      if (activePlayerIds.contains(pid)) continue;
+      final lastSeen = _persistentPlayerLastSeenMs[pid] ?? 0;
+      if (_persistentIdentityClockMs - lastSeen > _persistentMapGhostMs) continue;
+      result.add(entry.value.copyWith(isTemporarilyLost: true));
+    }
+    return result;
+  }
+
+  void syncPersistentIdentityTracks(List<PlayerTrack> activeTracks, int nowMs) {
+    _persistentIdentityClockMs = nowMs;
+    for (final track in activeTracks) {
+      final pid = track.boundPlayerId;
+      if (pid == null || pid <= 0) continue;
+      _persistentPlayerTracks[pid] = track.copyWith(isTemporarilyLost: false);
+      _persistentPlayerLastSeenMs[pid] = nowMs;
+    }
+  }
+
+  void confirmPersistentPlayerIdentity({
+    required PlayerTrack track,
+    required int playerId,
+    required String playerName,
+    int? jerseyNumber,
+    String? teamTag,
+  }) {
+    final confirmed = track.copyWith(
+      boundPlayerId: playerId,
+      boundPlayerName: playerName,
+      jerseyNumber: jerseyNumber ?? track.jerseyNumber,
+      teamTag: teamTag ?? track.teamTag,
+      isTemporarilyLost: false,
+      identityManuallyConfirmed: true,
+    );
+    _persistentPlayerTracks[playerId] = confirmed;
+    _persistentPlayerLastSeenMs[playerId] =
+        track.lastSeenTimeMs > 0 ? track.lastSeenTimeMs : _persistentIdentityClockMs;
+  }
 
   String? selectedTrackId;
   PlayerTrack? selectedTrack;
@@ -2426,7 +2532,7 @@ aiPlayerStats
       'goal', 'assist', 'pass', 'shot', 'shot_on_goal',
       'interception', 'interception_ball', 'recovery', 'recovery_ball',
       'dribble', 'feint_dribble', 'tackle', 'tackle_duel', 'duel',
-      'header', 'header_play', 'throw_in', 'throw_ins', 'mistake',
+      'header', 'header_play', 'throw_in', 'throw_ins', 'corner', 'mistake',
       'yellow_card', 'red_card', 'card_yellow', 'card_red',
       'save', 'gk_save', 'gk_saves', 'goalkeeper_save',
       'goalkeeper_exit', 'gk_exit', 'gk_close_combat',
@@ -2467,6 +2573,9 @@ aiDangerMoments.clear();
 aiPlayerStats.clear();
       
     tracks.clear();
+    _persistentPlayerTracks.clear();
+    _persistentPlayerLastSeenMs.clear();
+    _persistentIdentityClockMs = 0;
     selectedTrackId = null;
     selectedTrack = null;
 
@@ -3089,23 +3198,40 @@ aiPlayerStats.clear();
   void bindSelectedTrackToPlayer({
     required int playerId,
     required String playerName,
+    int? jerseyNumber,
+    String? teamTag,
+    bool manualConfirmed = true,
   }) {
-    if (lockedTrack == null) return;
+    final target = selectedTrack ?? lockedTrack;
+    if (target == null) return;
+    final targetId = target.id;
 
-    lockedTrack!.boundPlayerId = playerId;
-    lockedTrack!.boundPlayerName = playerName;
-
-    if (tracks.isNotEmpty) {
-      tracks[0].boundPlayerId = playerId;
-      tracks[0].boundPlayerName = playerName;
+    void apply(PlayerTrack track) {
+      track.boundPlayerId = playerId;
+      track.boundPlayerName = playerName;
+      track.jerseyNumber = jerseyNumber ?? track.jerseyNumber;
+      track.teamTag = teamTag ?? track.teamTag;
+      track.identityManuallyConfirmed = manualConfirmed;
     }
 
-    if (selectedTrack != null) {
-      selectedTrack!.boundPlayerId = playerId;
-      selectedTrack!.boundPlayerName = playerName;
+    // IMPORTANT: the old code always modified tracks[0], which could label a
+    // completely different footballer when the selected box was not first in
+    // the list. Bind only the actually selected/locked transport track.
+    if (lockedTrack != null && lockedTrack!.id == targetId) apply(lockedTrack!);
+    if (selectedTrack != null && selectedTrack!.id == targetId) apply(selectedTrack!);
+    for (final track in tracks) {
+      if (track.id == targetId) apply(track);
     }
 
-    debugPrint('✅ Locked track bound to player $playerName');
+    confirmPersistentPlayerIdentity(
+      track: target,
+      playerId: playerId,
+      playerName: playerName,
+      jerseyNumber: jerseyNumber,
+      teamTag: teamTag,
+    );
+
+    debugPrint('✅ Selected track bound persistently to player $playerName');
     notifyListeners();
   }
 
@@ -3855,6 +3981,9 @@ class AiVideoAnalysisController extends ChangeNotifier {
     String? videoUrl,
     String? localVideoPath,
     Map<String, dynamic>? teamColors,
+    List<Map<String, dynamic>>? players,
+    String homeTeamKey = 'home',
+    String awayTeamKey = 'away',
   }) async {
     isCreatingJob = true;
     errorText = null;
@@ -3868,6 +3997,9 @@ class AiVideoAnalysisController extends ChangeNotifier {
           videoUrl: videoUrl,
           localVideoPath: localVideoPath,
           teamColors: teamColors,
+          players: players,
+          homeTeamKey: homeTeamKey,
+          awayTeamKey: awayTeamKey,
         ),
       );
 
@@ -3951,6 +4083,73 @@ class AiVideoAnalysisController extends ChangeNotifier {
       errorText = e.toString();
       debugPrint('❌ Failed to load job status raw: $errorText');
       _safeNotify();
+      return null;
+    }
+  }
+
+  Future<Map<String, dynamic>?> restoreActiveAnalysis({
+    required int matchId,
+    required int teamId,
+  }) async {
+    try {
+      final active = await service.attachActiveAnalysis(
+        matchId: matchId,
+        teamId: teamId,
+      );
+      if (active == null || active['active'] != true) return null;
+
+      final restoredJobId =
+          (active['match_live_id'] ?? '').toString().trim();
+      if (restoredJobId.isEmpty) return null;
+
+      final rawProgress = active['progress'];
+      final progress = rawProgress is num
+          ? rawProgress.toInt()
+          : int.tryParse('${rawProgress ?? ''}') ?? 1;
+      jobId = restoredJobId;
+      jobStatus = AiJobStatusResponse.fromJson(<String, dynamic>{
+        ...active,
+        'job_id': restoredJobId,
+        'match_live_id': restoredJobId,
+        'status': 'processing',
+        'progress': progress.clamp(1, 99),
+      });
+      errorText = null;
+      _safeNotify();
+      return active;
+    } catch (e) {
+      debugPrint('Active AI restore warning: $e');
+      return null;
+    }
+  }
+
+  Future<Map<String, dynamic>?> restoreLatestSavedAnalysis({
+    required int matchId,
+    required int teamId,
+  }) async {
+    try {
+      final report = await service.attachSavedAnalysis(
+        matchId: matchId,
+        teamId: teamId,
+      );
+      if (report == null) return null;
+
+      final restoredJobId = (report['match_live_id'] ?? '').toString().trim();
+      if (restoredJobId.isEmpty) return null;
+
+      jobId = restoredJobId;
+      jobStatus = AiJobStatusResponse.fromJson(<String, dynamic>{
+        ...report,
+        'job_id': restoredJobId,
+        'match_live_id': restoredJobId,
+        'status': 'completed',
+        'progress': 100,
+      });
+      errorText = null;
+      _safeNotify();
+      return report;
+    } catch (e) {
+      debugPrint('Saved AI restore warning: $e');
       return null;
     }
   }
@@ -4068,12 +4267,16 @@ class AiVideoAnalysisController extends ChangeNotifier {
     required String trackId,
     required int playerId,
     required String playerName,
+    int? jerseyNumber,
+    String? teamTag,
   }) async {
     try {
       await service.bindPlayer(
         trackId: trackId,
         playerId: playerId,
         playerName: playerName,
+        jerseyNumber: jerseyNumber,
+        teamTag: teamTag,
       );
     } catch (e) {
       debugPrint('bindPlayer failed: $e');
@@ -5382,6 +5585,11 @@ class PlayerTrackingPainter extends CustomPainter {
 
   void _drawLiveDetections(Canvas canvas) {
     if (!controller.showBoundingBoxes) return;
+    // V6.7: server PlayerTrack boxes and liveDetections describe the same
+    // footballers. Drawing both layers created double rectangles/names and the
+    // older layer visibly lagged behind the video. Keep liveDetections for tap
+    // selection, but render them only when no synchronized server tracks exist.
+    if (controller.tracks.isNotEmpty) return;
     final detections = controller.liveDetections;
     if (detections.isEmpty) return;
 
@@ -5443,11 +5651,13 @@ class PlayerTrackingPainter extends CustomPainter {
             : '';
         final playerName = detection.playerName?.trim();
         final number = detection.jerseyNumber;
-        final identity = number != null
-            ? '#$number'
-            : (playerName != null && playerName.isNotEmpty
-                ? playerName
-                : '${detection.id}');
+        final hasName = playerName != null &&
+            playerName.isNotEmpty &&
+            !RegExp(r'^(Игрок|Трек)\s+\d+$', caseSensitive: false)
+                .hasMatch(playerName);
+        final identity = number != null && number > 0
+            ? (hasName ? '№$number $playerName' : '№$number')
+            : (hasName ? playerName : 'Игрок');
         final rolePrefix = isReferee
             ? 'REF'
             : (label == 'player' || label.isEmpty ? '' : '${detection.label} ');
@@ -5611,16 +5821,31 @@ class PlayerTrackingPainter extends CustomPainter {
     );
   }
 
+  String _sportotekaPlayerLabel(PlayerTrack track) {
+    final rawName = track.boundPlayerName.trim();
+    final genericTrackName = RegExp(r'^(Игрок|Трек)\s+\d+$', caseSensitive: false).hasMatch(rawName);
+    final number = track.jerseyNumber;
+
+    if (number != null && number > 0) {
+      if (rawName.isNotEmpty && !genericTrackName && rawName.toLowerCase() != 'игрок') {
+        return '№$number $rawName';
+      }
+      return '№$number';
+    }
+
+    if (rawName.isNotEmpty && !genericTrackName) return rawName;
+    // DeepSort id is an internal transport id. Do not show it to a coach as
+    // if it were a shirt/player number.
+    return 'Игрок';
+  }
+
   void _drawLabel(Canvas canvas, PlayerTrack track, bool isSelected) {
     if (!controller.showLabels) return;
 
     final rect = _displayRectForTrack(track);
     if (rect == null) return;
 
-    final label = (track.boundPlayerName.isNotEmpty
-            ? track.boundPlayerName
-            : track.id)
-        .trim();
+    final label = _sportotekaPlayerLabel(track);
 
     final textPainter = TextPainter(
       text: TextSpan(
@@ -6190,15 +6415,17 @@ class TrackingOverlayPainter extends CustomPainter {
   }
 
   String _buildTrackLabel(PlayerTrack track) {
-    final number = track.jerseyNumber != null ? '#${track.jerseyNumber}' : '';
-    final name = track.boundPlayerName.trim().isNotEmpty
-        ? track.boundPlayerName.trim()
-        : 'Игрок';
-
-    if (number.isNotEmpty) {
-      return '$number $name';
+    final rawName = track.boundPlayerName.trim();
+    final genericTrackName = RegExp(r'^(Игрок|Трек)\s+\d+$', caseSensitive: false).hasMatch(rawName);
+    final number = track.jerseyNumber;
+    if (number != null && number > 0) {
+      if (rawName.isNotEmpty && !genericTrackName && rawName.toLowerCase() != 'игрок') {
+        return '№$number $rawName';
+      }
+      return '№$number';
     }
-    return name;
+    if (rawName.isNotEmpty && !genericTrackName) return rawName;
+    return 'Игрок';
   }
 
   void _drawSpeed(
@@ -7187,6 +7414,28 @@ class StandardPitchPainter extends CustomPainter {
     }
   }
 
+  String _mapIdentityLabel(PlayerTrack track) {
+    final rawName = track.boundPlayerName.trim();
+    final generic = rawName.isEmpty ||
+        rawName.toLowerCase() == 'игрок' ||
+        RegExp(r'^(Игрок|Трек)\s+\d+$', caseSensitive: false).hasMatch(rawName);
+    final number = track.jerseyNumber;
+    String label;
+    if (number != null && number > 0 && !generic) {
+      label = '№$number $rawName';
+    } else if (number != null && number > 0) {
+      label = '№$number';
+    } else if (!generic) {
+      label = rawName;
+    } else {
+      label = 'Игрок';
+    }
+    if (track.isTemporarilyLost && label != 'Игрок') {
+      return '$label · вне кадра';
+    }
+    return label;
+  }
+
   void _drawCurrentDots(Canvas canvas, Rect pitch, Rect bounds) {
     for (final track in tracks) {
       final last = track.lastPoint;
@@ -7194,26 +7443,35 @@ class StandardPitchPainter extends CustomPainter {
 
       final isSelected = track.id == selectedTrackId;
       final color = _trackColor(track);
+      final lost = track.isTemporarilyLost;
       final center = _mapPoint(last.position, pitch, bounds);
-      final radius = isSelected ? 7.5 : 5.5;
+      final radius = isSelected ? 7.5 : (lost ? 4.8 : 5.5);
+      final alpha = lost ? 0.38 : 1.0;
 
-      canvas.drawCircle(center, radius + 8, Paint()..color = color.withOpacity(0.16));
-      canvas.drawCircle(center, radius, Paint()..color = color);
+      canvas.drawCircle(
+        center,
+        radius + 8,
+        Paint()..color = color.withOpacity(lost ? 0.07 : 0.16),
+      );
+      canvas.drawCircle(center, radius, Paint()..color = color.withOpacity(alpha));
       canvas.drawCircle(
         center,
         radius,
         Paint()
-          ..color = Colors.white.withOpacity(0.9)
+          ..color = Colors.white.withOpacity(lost ? 0.58 : 0.9)
           ..style = PaintingStyle.stroke
           ..strokeWidth = isSelected ? 2 : 1.2,
       );
 
-      if (isSelected || track.boundPlayerName.isNotEmpty) {
+      final label = _mapIdentityLabel(track);
+      final hasRealIdentity = track.boundPlayerId != null && track.boundPlayerId! > 0;
+      if (isSelected || hasRealIdentity ||
+          (track.boundPlayerName.isNotEmpty && track.boundPlayerName != 'Игрок')) {
         _drawLabel(
           canvas,
-          track.boundPlayerName.isNotEmpty ? track.boundPlayerName : track.id,
+          label,
           center.translate(0, 14),
-          color,
+          lost ? color.withOpacity(0.58) : color,
         );
       }
     }
@@ -8314,6 +8572,9 @@ class AiAnalyticsPanelWidget extends StatefulWidget {
   final ValueChanged<AiTtdSuggestion> onConfirmSuggestion;
   final VoidCallback? onConfirmTopAi;
   final VoidCallback? onOpenTeamSetup;
+  final VoidCallback? onOpenRosterSetup;
+  final ValueChanged<int>? onTabChanged;
+  final String rosterStatusText;
   final VoidCallback? onCoachPauseNote;
   final VoidCallback? onToggleCoachBoard;
   final bool coachBoardActive;
@@ -8338,6 +8599,9 @@ class AiAnalyticsPanelWidget extends StatefulWidget {
     required this.onConfirmSuggestion,
     this.onConfirmTopAi,
     this.onOpenTeamSetup,
+    this.onOpenRosterSetup,
+    this.onTabChanged,
+    this.rosterStatusText = 'состав не выбран',
     this.onCoachPauseNote,
     this.onToggleCoachBoard,
     this.coachBoardActive = false,
@@ -8379,15 +8643,23 @@ class _AiAnalyticsPanelWidgetState extends State<AiAnalyticsPanelWidget>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 7, vsync: this);
+    _tabController = TabController(length: 6, vsync: this);
+    _tabController.addListener(_handleAiTabChanged);
     widget.aiTracking.addListener(_refresh);
   }
 
   @override
   void dispose() {
     widget.aiTracking.removeListener(_refresh);
+    _tabController.removeListener(_handleAiTabChanged);
     _tabController.dispose();
     super.dispose();
+  }
+
+  void _handleAiTabChanged() {
+    if (!mounted) return;
+    widget.onTabChanged?.call(_tabController.index);
+    setState(() {});
   }
 
   void _refresh() {
@@ -8432,6 +8704,12 @@ class _AiAnalyticsPanelWidgetState extends State<AiAnalyticsPanelWidget>
   }
 
   Widget _buildTrackerInspector(_AiMatchSummary summary, _AiLiveStats live, PlayerTrack? track) {
+    // TTD is a reading/review workflow. Give it the whole right inspector
+    // instead of keeping the large AI hero/action header pinned above it.
+    if (_tabController.index == 2) {
+      return _buildFullHeightTtdInspector(summary);
+    }
+
     final running = widget.aiTracking.isRunning || widget.isAiLoading;
     final selectedName = track?.boundPlayerName.trim().isNotEmpty == true
         ? track!.boundPlayerName.trim()
@@ -8476,7 +8754,7 @@ class _AiAnalyticsPanelWidgetState extends State<AiAnalyticsPanelWidget>
                                 decoration: BoxDecoration(
                                   color: const Color(0xFFF3FAF5),
                                   borderRadius: BorderRadius.circular(999),
-                                  border: Border.all(color: const Color(0xFFD7EEE0)),
+                                  border: null,
                                 ),
                                 child: const Text('КОНТЕКСТ', style: TextStyle(fontSize: 9.2, fontWeight: FontWeight.w900, color: _AiPanelColors.greenDark)),
                               ),
@@ -8498,7 +8776,7 @@ class _AiAnalyticsPanelWidgetState extends State<AiAnalyticsPanelWidget>
                       decoration: BoxDecoration(
                         color: running ? const Color(0xFFF0FAF4) : const Color(0xFFF8FAF9),
                         borderRadius: BorderRadius.circular(9),
-                        border: Border.all(color: const Color(0xFFE9ECEA)),
+                        border: null,
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -8534,6 +8812,10 @@ class _AiAnalyticsPanelWidgetState extends State<AiAnalyticsPanelWidget>
                         _inspectorAction(icon: Icons.palette_outlined, label: 'Цвета', onTap: widget.onOpenTeamSetup),
                         const SizedBox(width: 6),
                       ],
+                      if (widget.onOpenRosterSetup != null) ...[
+                        _inspectorAction(icon: Icons.groups_2_outlined, label: 'Состав AI', onTap: widget.onOpenRosterSetup),
+                        const SizedBox(width: 6),
+                      ],
                       _inspectorAction(
                         icon: Icons.local_fire_department_outlined,
                         label: widget.showHeatmap ? 'Heatmap ON' : 'Heatmap',
@@ -8561,14 +8843,31 @@ class _AiAnalyticsPanelWidgetState extends State<AiAnalyticsPanelWidget>
                   _buildTtdTab(summary),
                   _buildMapTab(track, live),
                   _buildPlayersTab(),
-                  _buildAiNotesTab(summary),
                   _buildExportTab(summary),
                 ],
               ),
             ),
           ),
-          const Divider(height: 1, color: _AiPanelColors.line),
-          _buildPersistentQuestionBar(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFullHeightTtdInspector(_AiMatchSummary summary) {
+    return Container(
+      color: Colors.white,
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
+            child: _buildTabSelector(),
+          ),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
+              child: _buildTtdTab(summary),
+            ),
+          ),
         ],
       ),
     );
@@ -8589,7 +8888,7 @@ class _AiAnalyticsPanelWidgetState extends State<AiAnalyticsPanelWidget>
         decoration: BoxDecoration(
           color: primary ? _AiPanelColors.black : Colors.white,
           borderRadius: BorderRadius.circular(9),
-          border: Border.all(color: primary ? _AiPanelColors.black : _AiPanelColors.line),
+          border: null,
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -8616,6 +8915,7 @@ class _AiAnalyticsPanelWidgetState extends State<AiAnalyticsPanelWidget>
               _inspectorRow('Активные треки', '${widget.aiTracking.tracks.length}'),
               _inspectorRow('Мяч', widget.aiTracking.ballTrack != null ? 'найден' : 'нет данных'),
               _inspectorRow('Фокус', selectedName),
+              _inspectorRow('Состав AI', widget.rosterStatusText),
             ],
           ),
           const SizedBox(height: 8),
@@ -8652,7 +8952,7 @@ class _AiAnalyticsPanelWidgetState extends State<AiAnalyticsPanelWidget>
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _AiPanelColors.line),
+        border: null,
       ),
       child: Column(
         children: [
@@ -8702,7 +9002,7 @@ class _AiAnalyticsPanelWidgetState extends State<AiAnalyticsPanelWidget>
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(11),
-                border: Border.all(color: _AiPanelColors.line),
+                border: null,
               ),
               child: const Row(
                 children: [
@@ -8710,7 +9010,7 @@ class _AiAnalyticsPanelWidgetState extends State<AiAnalyticsPanelWidget>
                   SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'Спросите: почему потеряли мяч, покажи эпизод…',
+                      'Анализ эпизода',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(fontSize: 10.7, fontWeight: FontWeight.w600, color: _AiPanelColors.textMuted),
@@ -8727,7 +9027,7 @@ class _AiAnalyticsPanelWidgetState extends State<AiAnalyticsPanelWidget>
             decoration: BoxDecoration(
               color: const Color(0xFFF3FAF5),
               borderRadius: BorderRadius.circular(11),
-              border: Border.all(color: const Color(0xFFD7EEE0)),
+              border: null,
             ),
             child: const Icon(Icons.arrow_upward_rounded, color: _AiPanelColors.green, size: 19),
           ),
@@ -8737,27 +9037,9 @@ class _AiAnalyticsPanelWidgetState extends State<AiAnalyticsPanelWidget>
   }
 
   Widget _buildWideBody(_AiMatchSummary summary, _AiLiveStats live, PlayerTrack? track) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          flex: 12,
-          child: _buildTabsBody(summary, live, track),
-        ),
-        const SizedBox(width: 10),
-        SizedBox(
-          width: 380,
-          child: Column(
-            children: [
-              _buildAiNotesCompact(summary),
-              const SizedBox(height: 8),
-              Expanded(child: _buildAiAskPanel(summary)),
-            ],
-          ),
-        ),
-      ],
-    );
+    return _buildTabsBody(summary, live, track);
   }
+
 
   Widget _buildTabsBody(_AiMatchSummary summary, _AiLiveStats live, PlayerTrack? track) {
     return TabBarView(
@@ -8768,7 +9050,6 @@ class _AiAnalyticsPanelWidgetState extends State<AiAnalyticsPanelWidget>
         _buildTtdTab(summary),
         _buildMapTab(track, live),
         _buildPlayersTab(),
-        _buildAiNotesTab(summary),
         _buildExportTab(summary),
       ],
     );
@@ -8784,7 +9065,7 @@ class _AiAnalyticsPanelWidgetState extends State<AiAnalyticsPanelWidget>
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: _AiPanelColors.surface,
-        border: Border.all(color: _AiPanelColors.line),
+        border: null,
         borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
@@ -8823,7 +9104,7 @@ class _AiAnalyticsPanelWidgetState extends State<AiAnalyticsPanelWidget>
                           decoration: BoxDecoration(
                             color: const Color(0xFFF3FAF5),
                             borderRadius: BorderRadius.circular(999),
-                            border: Border.all(color: const Color(0xFFD7EEE0)),
+                            border: null,
                           ),
                           child: const Text(
                             'КОНТЕКСТ',
@@ -8834,7 +9115,7 @@ class _AiAnalyticsPanelWidgetState extends State<AiAnalyticsPanelWidget>
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      widget.statusText.isEmpty ? 'Видеоанализ матча · игроки, мяч, события и вопросы по текущему эпизоду' : widget.statusText,
+                      widget.statusText.isEmpty ? 'Видеоанализ матча · игроки, мяч, события и ТТД' : widget.statusText,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
@@ -8948,7 +9229,7 @@ class _AiAnalyticsPanelWidgetState extends State<AiAnalyticsPanelWidget>
       decoration: BoxDecoration(
         color: color,
         borderRadius: BorderRadius.circular(3),
-        border: Border.all(color: Colors.white, width: 2),
+        border: null,
         boxShadow: [BoxShadow(color: color.withOpacity(0.30), blurRadius: 8)],
       ),
     );
@@ -8991,7 +9272,7 @@ class _AiAnalyticsPanelWidgetState extends State<AiAnalyticsPanelWidget>
       _actionPill(
         icon: widget.isAiLoading ? Icons.hourglass_top_rounded : Icons.auto_awesome_rounded,
         label: widget.isAiLoading
-            ? (widget.aiProgress != null ? 'AI ${(widget.aiProgress! * 100).round()}%' : 'AI...')
+            ? (widget.aiProgress != null ? 'AI ${((widget.aiProgress!.clamp(0.0, 1.0)) * 100).round()}%' : 'AI...')
             : 'Запустить AI',
         color: _AiPanelColors.black,
         onTap: widget.isAiLoading ? null : widget.onToggleAi,
@@ -9003,6 +9284,13 @@ class _AiAnalyticsPanelWidgetState extends State<AiAnalyticsPanelWidget>
           label: 'Цвета команд',
           color: _AiPanelColors.teal,
           onTap: widget.onOpenTeamSetup!,
+        ),
+      if (widget.onOpenRosterSetup != null)
+        _actionPill(
+          icon: Icons.groups_2_outlined,
+          label: 'Состав AI · ${widget.rosterStatusText}',
+          color: _AiPanelColors.green,
+          onTap: widget.onOpenRosterSetup!,
         ),
       _actionPill(
         icon: widget.showHeatmap ? Icons.local_fire_department_rounded : Icons.heat_pump_rounded,
@@ -9070,7 +9358,7 @@ class _AiAnalyticsPanelWidgetState extends State<AiAnalyticsPanelWidget>
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: _AiPanelColors.surface,
-        border: Border.all(color: _AiPanelColors.line),
+        border: null,
         borderRadius: BorderRadius.circular(10),
       ),
       child: Column(
@@ -9115,7 +9403,7 @@ class _AiAnalyticsPanelWidgetState extends State<AiAnalyticsPanelWidget>
       padding: const EdgeInsets.all(3),
       decoration: BoxDecoration(
         color: _AiPanelColors.surface,
-        border: Border.all(color: _AiPanelColors.line),
+        border: null,
         borderRadius: BorderRadius.circular(11),
       ),
       child: TabBar(
@@ -9136,7 +9424,6 @@ class _AiAnalyticsPanelWidgetState extends State<AiAnalyticsPanelWidget>
           Tab(text: 'ТТД'),
           Tab(text: 'Карта'),
           Tab(text: 'Игроки'),
-          Tab(text: 'Вопросы'),
           Tab(text: 'Экспорт'),
         ],
       ),
@@ -9212,7 +9499,7 @@ class _AiAnalyticsPanelWidgetState extends State<AiAnalyticsPanelWidget>
                   (v) => widget.aiTracking.updateDisplay(boundingBoxes: v),
                 ),
                 _switchRow(
-                  'Имена / Track ID',
+                  'Имена и номера игроков',
                   widget.aiTracking.showLabels,
                   (v) => widget.aiTracking.updateDisplay(labels: v),
                 ),
@@ -9364,7 +9651,7 @@ class _AiAnalyticsPanelWidgetState extends State<AiAnalyticsPanelWidget>
             decoration: BoxDecoration(
               color: _AiPanelColors.surface,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: _AiPanelColors.line),
+              border: null,
             ),
             padding: const EdgeInsets.all(8),
             child: ClipRRect(
@@ -9430,29 +9717,10 @@ class _AiAnalyticsPanelWidgetState extends State<AiAnalyticsPanelWidget>
   Widget _buildAiNotesTab(_AiMatchSummary summary) {
     return SingleChildScrollView(
       padding: const EdgeInsets.only(bottom: 12),
-      child: Column(
-        children: [
-          _buildAiNotesCompact(summary),
-          const SizedBox(height: 8),
-          _buildAiAskPanel(summary, compact: true),
-          const SizedBox(height: 8),
-          _surfaceBlock(
-            title: 'Следующий шаг для LLM / Sportoteka AI',
-            icon: Icons.smart_toy_outlined,
-            color: _AiPanelColors.violet,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _hintLine('AI будет получать JSON матча: события, ТТД, владение, карту, игроков и заметки тренера.'),
-                _hintLine('На выходе: объяснение эпизода, рекомендации, слабые зоны и задания на тренировку.'),
-                _hintLine('Дальше можно добавить ответы в форматах: для тренера, для игрока, для родителя и для Telegram.')
-              ],
-            ),
-          ),
-        ],
-      ),
+      child: _buildAiNotesCompact(summary),
     );
   }
+
 
   Widget _buildAiNotesCompact(_AiMatchSummary summary) {
     final quality = summary.avgSuggestionConfidence;
@@ -9471,7 +9739,7 @@ class _AiAnalyticsPanelWidgetState extends State<AiAnalyticsPanelWidget>
         children: [
           _hintLine(qualityText),
           _hintLine('Найдено: ${summary.eventsCount} событий, ${summary.suggestionsCount} ТТД, ${summary.goals} голов, ${summary.cards} карточек.'),
-          _hintLine('YOLO / видео-слои: игроков ${widget.aiTracking.tracks.length}, heatmap ${widget.showHeatmap ? 'включён' : 'выключен'}, мяч ${widget.aiTracking.showBall ? 'виден' : 'скрыт'}.'),
+          _hintLine('Видео-слои: игроков ${widget.aiTracking.tracks.length}, тепловая карта ${widget.showHeatmap ? 'включена' : 'выключена'}, мяч ${widget.aiTracking.showBall ? 'виден' : 'скрыт'}.'),
           _hintLine('Перед экспортом желательно подтвердить спорные AI-подсказки вручную.'),
         ],
       ),
@@ -9479,76 +9747,9 @@ class _AiAnalyticsPanelWidgetState extends State<AiAnalyticsPanelWidget>
   }
 
   Widget _buildAiAskPanel(_AiMatchSummary summary, {bool compact = false}) {
-    return _surfaceBlock(
-      title: 'Правый вопросник AI',
-      icon: Icons.chat_bubble_outline_rounded,
-      color: _AiPanelColors.green,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF8FAF9),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFFE9ECEA)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Что можно спросить',
-                  style: TextStyle(fontSize: 12.2, fontWeight: FontWeight.w800, color: _AiPanelColors.text),
-                ),
-                const SizedBox(height: 8),
-                _hintLine('Почему потеряли мяч в этом эпизоде?'),
-                _hintLine('Покажи момент, где крайний защитник опоздал в перестроении.'),
-                _hintLine('Сделай краткий разбор по выбранному игроку.'),
-                _hintLine('Нарисуй схему и сформулируй подсказку тренеру.'),
-              ],
-            ),
-          ),
-          const SizedBox(height: 10),
-          TextField(
-            readOnly: true,
-            minLines: compact ? 2 : 3,
-            maxLines: compact ? 2 : 3,
-            decoration: InputDecoration(
-              hintText: 'Спросите: почему потеряли мяч, сделай анализ, нарисуй схему…',
-              hintStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _AiPanelColors.textMuted),
-              filled: true,
-              fillColor: Colors.white,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: Color(0xFFE9ECEA)),
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
-          Align(
-            alignment: Alignment.centerRight,
-            child: SizedBox(
-              height: 42,
-              child: ElevatedButton.icon(
-                onPressed: () {},
-                icon: const Icon(Icons.arrow_upward_rounded, size: 18),
-                label: const Text('Скоро подключим'),
-                style: ElevatedButton.styleFrom(
-                  elevation: 0,
-                  backgroundColor: const Color(0xFF00A750),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  textStyle: const TextStyle(fontSize: 11.6, fontWeight: FontWeight.w800),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
+    return const SizedBox.shrink();
   }
+
 
   Widget _buildExportTab(_AiMatchSummary summary) {
     return SingleChildScrollView(
@@ -9670,7 +9871,7 @@ class _AiAnalyticsPanelWidgetState extends State<AiAnalyticsPanelWidget>
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _AiPanelColors.line),
+        border: null,
       ),
       child: Row(
         children: [
@@ -9710,7 +9911,7 @@ class _AiAnalyticsPanelWidgetState extends State<AiAnalyticsPanelWidget>
                   decoration: BoxDecoration(
                     color: const Color(0xFFF7FAF8),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: const Color(0xFFE9ECEA)),
+                    border: null,
                   ),
                   child: const Icon(Icons.play_arrow_rounded, size: 16, color: _AiPanelColors.text),
                 ),
@@ -9729,7 +9930,7 @@ class _AiAnalyticsPanelWidgetState extends State<AiAnalyticsPanelWidget>
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _AiPanelColors.line),
+        border: null,
       ),
       child: Column(
         children: [
@@ -9770,7 +9971,7 @@ class _AiAnalyticsPanelWidgetState extends State<AiAnalyticsPanelWidget>
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
       decoration: BoxDecoration(
         color: _AiPanelColors.surface,
-        border: Border.all(color: _AiPanelColors.line),
+        border: null,
         borderRadius: BorderRadius.circular(14),
       ),
       child: Column(
@@ -9804,7 +10005,7 @@ class _AiAnalyticsPanelWidgetState extends State<AiAnalyticsPanelWidget>
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: _AiPanelColors.line),
+        border: null,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -9831,7 +10032,7 @@ class _AiAnalyticsPanelWidgetState extends State<AiAnalyticsPanelWidget>
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _AiPanelColors.line),
+        border: null,
       ),
       child: Row(
         children: [
@@ -9866,7 +10067,7 @@ class _AiAnalyticsPanelWidgetState extends State<AiAnalyticsPanelWidget>
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _AiPanelColors.line),
+        border: null,
       ),
       child: Column(
         children: [
@@ -9891,7 +10092,7 @@ class _AiAnalyticsPanelWidgetState extends State<AiAnalyticsPanelWidget>
           decoration: BoxDecoration(
             color: filled ? _AiPanelColors.black : Colors.white,
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: filled ? _AiPanelColors.black : _AiPanelColors.line),
+            border: null,
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -10058,8 +10259,9 @@ class _AiAnalyticsPanelWidgetState extends State<AiAnalyticsPanelWidget>
   }
 
   List<PlayerTrack> _visibleTracks() {
-    if (!_showOnlyMyTeam) return widget.aiTracking.tracks;
-    return widget.aiTracking.tracks.where((t) => t.teamTag == widget.myTeamTag).toList();
+    final source = widget.aiTracking.mapTracks;
+    if (!_showOnlyMyTeam) return source;
+    return source.where((t) => t.teamTag == widget.myTeamTag).toList();
   }
 
   _AiLiveStats _buildLiveStats(PlayerTrack? track) {
@@ -10836,9 +11038,7 @@ class EpisodesListWidget extends StatelessWidget {
       decoration: BoxDecoration(
         color: isPositive ? const Color(0xFFF0FDF4) : const Color(0xFFFEF2F2),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isPositive ? const Color(0xFFBBF7D0) : const Color(0xFFFECACA),
-        ),
+        border: null,
       ),
       child: Row(
         children: [
@@ -10918,12 +11118,7 @@ class EpisodesListWidget extends StatelessWidget {
                   ? const Color(0xFF2563EB).withOpacity(0.06)
                   : Colors.white,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: isSelected
-                    ? const Color(0xFF2563EB)
-                    : Colors.grey.shade200,
-                width: isSelected ? 2 : 1,
-              ),
+              border: null,
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withOpacity(isSelected ? 0.1 : 0.03),
@@ -11331,7 +11526,15 @@ class _MatchPlayersSelectionWidgetState
   }
   
   String _number(Map<String, dynamic> p) {
-    final variants = [p["number"], p["player_number"], p["game_number"]];
+    final variants = [
+      p["number"],
+      p["player_number"],
+      p["shirt_number"],
+      p["jersey_number"],
+      p["jerseyNumber"],
+      p["shirtNumber"],
+      p["game_number"],
+    ];
     for (final item in variants) {
       final value = item?.toString().trim() ?? '';
       if (value.isNotEmpty) return value;
@@ -15068,7 +15271,7 @@ class _TtdPanelWidgetState extends State<TtdPanelWidget> {
     return Container(
       width: 58,
       padding: const EdgeInsets.symmetric(vertical: 5),
-      decoration: BoxDecoration(border: Border.all(color: _line), color: _soft, borderRadius: BorderRadius.circular(8)),
+      decoration: BoxDecoration(border: null, color: _soft, borderRadius: BorderRadius.circular(8)),
       child: Column(
         children: [
           Text(value, style: _title(12.2)),
@@ -15100,7 +15303,7 @@ class _TtdPanelWidgetState extends State<TtdPanelWidget> {
   Widget _buildSummaryLine() {
     return Container(
       padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(color: _soft, border: Border.all(color: _line), borderRadius: BorderRadius.circular(10)),
+      decoration: BoxDecoration(color: _soft, border: null, borderRadius: BorderRadius.circular(10)),
       child: Row(
         children: [
           Expanded(child: _summaryItem('Удачно', '${_successTotal()}', _green)),
@@ -15162,7 +15365,7 @@ class _TtdPanelWidgetState extends State<TtdPanelWidget> {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
         color: widget.isMessageError ? _redSoft : _greenSoft,
-        border: Border.all(color: widget.isMessageError ? const Color(0xFFFECACA) : const Color(0xFFD7F0E2)),
+        border: null,
         borderRadius: BorderRadius.circular(10),
       ),
       child: Text(widget.message ?? '', style: _body(11.2, color: widget.isMessageError ? _red : _green, weight: FontWeight.w600)),
@@ -15173,7 +15376,7 @@ class _TtdPanelWidgetState extends State<TtdPanelWidget> {
     final metrics = _sections[_currentSection] ?? _sections['main']!;
 
     return Container(
-      decoration: BoxDecoration(color: _panel, border: Border.all(color: _line), borderRadius: BorderRadius.circular(12)),
+      decoration: BoxDecoration(color: _panel, border: null, borderRadius: BorderRadius.circular(12)),
       child: Column(
         children: [
           Container(
@@ -15234,7 +15437,7 @@ class _TtdPanelWidgetState extends State<TtdPanelWidget> {
         child: Container(
           height: 30,
           alignment: Alignment.center,
-          decoration: BoxDecoration(color: color.withOpacity(.08), border: Border.all(color: color.withOpacity(.24)), borderRadius: BorderRadius.circular(8)),
+          decoration: BoxDecoration(color: color.withOpacity(.08), border: null, borderRadius: BorderRadius.circular(8)),
           child: Text('$sign $value', style: _body(11.4, color: color, weight: FontWeight.w700)),
         ),
       ),
@@ -15262,7 +15465,7 @@ class _TtdPanelWidgetState extends State<TtdPanelWidget> {
         width: 28,
         height: 28,
         alignment: Alignment.center,
-        decoration: BoxDecoration(color: _soft, border: Border.all(color: _line), borderRadius: BorderRadius.circular(7)),
+        decoration: BoxDecoration(color: _soft, border: null, borderRadius: BorderRadius.circular(7)),
         child: Icon(icon, size: 15, color: onTap == null ? _subtle : _muted),
       ),
     );
@@ -15288,7 +15491,7 @@ class _TtdPanelWidgetState extends State<TtdPanelWidget> {
 
   Widget _buildRatingAndNote() {
     return Container(
-      decoration: BoxDecoration(color: _panel, border: Border.all(color: _line), borderRadius: BorderRadius.circular(12)),
+      decoration: BoxDecoration(color: _panel, border: null, borderRadius: BorderRadius.circular(12)),
       child: Column(
         children: [
           Padding(
@@ -15333,9 +15536,9 @@ class _TtdPanelWidgetState extends State<TtdPanelWidget> {
                 fillColor: _soft,
                 isDense: true,
                 contentPadding: const EdgeInsets.all(10),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: _line)),
-                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: _line)),
-                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: _green)),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
               ),
             ),
           ),
@@ -27976,6 +28179,18 @@ class _VideoMatchReviewScreenState extends State<VideoMatchReviewScreen>
     with SingleTickerProviderStateMixin {
   bool get _effectiveInternalVideoControls => true;
      
+  String _sportotekaIdentityText(PlayerTrack track) {
+    final name = track.boundPlayerName.trim();
+    final generic = name.isEmpty ||
+        name.toLowerCase() == 'игрок' ||
+        RegExp(r'^(Игрок|Трек)\s+\d+$', caseSensitive: false).hasMatch(name);
+    final number = track.jerseyNumber;
+    if (number != null && number > 0 && !generic) return '№$number $name';
+    if (number != null && number > 0) return '№$number';
+    if (!generic) return name;
+    return 'не привязан';
+  }
+
      void _bindAiTrackToPlayer() {
   unawaited(_bindAiTrackToPlayerAsync());
 }
@@ -27985,7 +28200,7 @@ Future<void> _bindAiTrackToPlayerAsync() async {
   if (track == null) {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Сначала выбери трек игрока на видео')),
+        const SnackBar(content: Text('Сначала выбери игрока рамкой на видео')),
       );
     }
     return;
@@ -27993,41 +28208,100 @@ Future<void> _bindAiTrackToPlayerAsync() async {
 
   await _pickOwnPlayerForAi();
   if (_selectedPlayer == null) return;
+  await _bindTrackToRosterPlayer(track, _selectedPlayer!);
+}
 
-  final playerId = _i(_selectedPlayer!['id']);
+Future<void> _bindTrackToRosterPlayer(
+  PlayerTrack track,
+  Map<String, dynamic> player, {
+  bool showMessage = true,
+}) async {
+  final playerId = _rosterPlayerId(player);
   if (playerId <= 0) return;
 
-  final playerName = _playerFullName(_selectedPlayer!);
+  Map<String, dynamic> resolvedPlayer = player;
+  for (final rosterPlayer in _mergedAiRosterSource()) {
+    if (_rosterPlayerId(rosterPlayer) == playerId) {
+      resolvedPlayer = rosterPlayer;
+      break;
+    }
+  }
 
+  final jerseyNumber = _rosterJerseyNumber(resolvedPlayer);
+  final playerNameRaw = _playerFullName(resolvedPlayer).trim();
+  final playerName = playerNameRaw.isNotEmpty
+      ? playerNameRaw
+      : (jerseyNumber != null ? '№$jerseyNumber' : 'Игрок');
+  final ownTeamTag = _sideTagToString(_myTeamConfig.sideTag).toLowerCase();
+
+  // A manual roster confirmation is authoritative for the current match.
+  // Apply it immediately to the on-screen object instead of waiting for the
+  // next WebSocket packet, then persist the same binding on the server.
   track.boundPlayerId = playerId;
   track.boundPlayerName = playerName;
+  track.jerseyNumber = jerseyNumber ?? track.jerseyNumber;
+  track.teamTag = ownTeamTag;
+  track.color = _myTeamConfig.primaryColor;
   _aiTrackPlayerBindings[track.id] = playerId;
   _aiTrackPlayerNames[track.id] = playerName;
-
-  _aiTracking.bindSelectedTrackToPlayer(
+  _aiTracking.confirmPersistentPlayerIdentity(
+    track: track,
     playerId: playerId,
     playerName: playerName,
+    jerseyNumber: jerseyNumber,
+    teamTag: ownTeamTag,
   );
+
+  if (_aiTracking.selectedTrack?.id == track.id ||
+      _aiTracking.lockedTrack?.id == track.id) {
+    _aiTracking.bindSelectedTrackToPlayer(
+      playerId: playerId,
+      playerName: playerName,
+      jerseyNumber: jerseyNumber,
+      teamTag: ownTeamTag,
+      manualConfirmed: true,
+    );
+  }
 
   await _aiServerController.bindPlayer(
     trackId: track.id,
     playerId: playerId,
     playerName: playerName,
+    jerseyNumber: jerseyNumber,
+    teamTag: ownTeamTag,
   );
 
   _scheduleAutoPersistAiTtd();
 
   if (mounted) {
     setState(() {});
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$playerName привязан к треку ${track.id}')),
-    );
+    if (showMessage) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            jerseyNumber == null
+                ? '$playerName привязан к выбранной рамке и карте'
+                : '№$jerseyNumber $playerName привязан к рамке и карте. AI восстановит игрока после потери из кадра.',
+          ),
+        ),
+      );
+    }
   }
 }
 
 void _jumpToTime(int timeMs) {
+  unawaited(_jumpToTtdTime(timeMs));
+}
+
+Future<void> _jumpToTtdTime(int timeMs) async {
   if (!_controller.value.isInitialized) return;
-  _controller.seekTo(Duration(milliseconds: timeMs));
+  // Show the action, not only the frame after it.  The marker itself remains
+  // at exact timeMs; playback starts 1.5 s earlier for visual context.
+  final targetMs = math.max(0, timeMs - 1500);
+  await _controller.pause();
+  await _controller.seekTo(Duration(milliseconds: targetMs));
+  await _controller.play();
+  if (mounted) setState(() {});
 }
 
 void _exportAiAnalysis() {
@@ -28543,6 +28817,7 @@ void _clearCoachAnnotations() {
 
 
   ReviewOverlayPanel _activeOverlayPanel = ReviewOverlayPanel.none;
+  int _aiAnalyticsTabIndex = 0;
   
 
   bool _showOverlayUi = true;
@@ -28580,7 +28855,7 @@ int? _lastAppliedServerFrameSignature;
 final Map<String, List<TrackPoint>> _serverAiTrackHistory = <String, List<TrackPoint>>{};
 final Map<String, PlayerTrack> _serverAiLastTracks = <String, PlayerTrack>{};
 int _lastServerAiPacketTimeMs = -1;
-static const double _aiAutoSaveMinConfidence = 0.62;
+static const double _aiAutoSaveMinConfidence = 0.78;
 final Map<String, int> _aiTrackPlayerBindings = <String, int>{};
 final Map<String, String> _aiTrackPlayerNames = <String, String>{};
 final Set<String> _aiPersistedTtdKeys = <String>{};
@@ -28729,6 +29004,543 @@ Future<void> _saveAiAnalyzedMarker() async {
   }
 }
 
+Future<void> _restoreServerSavedAnalysis() async {
+  try {
+    // V6.9: first reattach to a server-owned job that may still be running
+    // after the coach closed the match/window. No restart and no duplicate
+    // analysis is required.
+    final active = await _aiServerController.restoreActiveAnalysis(
+      matchId: widget.matchId,
+      teamId: widget.teamId,
+    );
+    if (!mounted) return;
+    if (active != null && active['active'] == true) {
+      final rawProgress = active['progress'];
+      final progress = rawProgress is num
+          ? rawProgress.toInt()
+          : int.tryParse('${rawProgress ?? ''}') ?? 1;
+      final activeReportRaw = active['report'];
+      if (activeReportRaw is Map) {
+        final activeReport = Map<String, dynamic>.from(activeReportRaw);
+        final activeEvents = _aiJsonList(activeReport['events']);
+        _aiTracking.applyServerAnalysis(<String, dynamic>{
+          ...activeReport,
+          'events': activeEvents,
+          'auto_ttd': activeEvents,
+          'status': 'processing',
+          'progress': progress.clamp(1, 99),
+        });
+      }
+      setState(() {
+        _aiAlreadyAnalyzed = false;
+        _aiUploading = true;
+        _aiLoading = false;
+        _aiUploadProgress = (progress.clamp(1, 99)) / 100.0;
+        _aiStatusText =
+            'AI ${progress.clamp(1, 99)}% • анализ продолжается на сервере';
+      });
+      _notifyPlaybackBridge();
+      debugPrint(
+        '✅ Reattached to background AI: ${active['match_live_id']} • $progress%',
+      );
+      return;
+    }
+
+    final report = await _aiServerController.restoreLatestSavedAnalysis(
+      matchId: widget.matchId,
+      teamId: widget.teamId,
+    );
+    if (!mounted || report == null || report['success'] == false) return;
+
+    final rawEvents = _aiJsonList(report['events']);
+    final normalized = <String, dynamic>{
+      ...report,
+      'events': rawEvents,
+      'auto_ttd': rawEvents,
+      'status': 'completed',
+      'progress': 100,
+    };
+    _aiTracking.applyServerAnalysis(normalized);
+
+    final eventsCount = rawEvents.whereType<Map>().where((e) {
+      final status = (e['status'] ?? '').toString();
+      return status != 'rejected';
+    }).length;
+    final ttdCount = rawEvents.whereType<Map>().where((e) {
+      final map = Map<String, dynamic>.from(e);
+      final status = (map['status'] ?? '').toString();
+      return status != 'rejected' && _aiTracking._isFootballTtdEvent(map);
+    }).length;
+
+    setState(() {
+      _aiAlreadyAnalyzed = true;
+      _aiUploading = false;
+      _aiLoading = false;
+      _aiUploadProgress = 1.0;
+      _aiStatusText =
+          'Матч проанализирован • $eventsCount событий • $ttdCount ТТД • результат сохранён';
+    });
+    _notifyPlaybackBridge();
+    unawaited(_saveAiAnalyzedMarker());
+
+    // If video is already ready, restore the overlay immediately. Otherwise
+    // _onVideoPositionChanged will request the first persisted Replay packet.
+    if (_controller.value.isInitialized) {
+      final packet = await _aiServerController.loadFramePacket(
+        _controller.value.position.inMilliseconds,
+      );
+      if (mounted && packet != null) {
+        _applyServerPacketToOverlay(packet);
+      }
+    }
+  } catch (e) {
+    debugPrint('Server saved analysis restore warning: $e');
+  }
+}
+
+Future<void> _restoreAiRosterConfirmation() async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final saved = prefs.getString(
+      'sportoteka_ai_roster_signature_${widget.teamId}_${widget.matchId}',
+    );
+    if (!mounted) return;
+    setState(() => _aiRosterConfirmedSignature = saved);
+  } catch (e) {
+    debugPrint('AI roster confirmation restore warning: $e');
+  }
+}
+
+Future<void> _saveAiRosterConfirmation(String signature) async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      'sportoteka_ai_roster_signature_${widget.teamId}_${widget.matchId}',
+      signature,
+    );
+    if (!mounted) return;
+    setState(() => _aiRosterConfirmedSignature = signature);
+  } catch (e) {
+    debugPrint('AI roster confirmation save warning: $e');
+  }
+}
+
+String get _aiRosterNumberOverridesPrefsKey =>
+    'sportoteka_ai_roster_number_overrides_${widget.teamId}_${widget.matchId}';
+
+Future<void> _restoreAiRosterNumberOverrides() async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_aiRosterNumberOverridesPrefsKey);
+    if (raw == null || raw.trim().isEmpty) return;
+    final decoded = jsonDecode(raw);
+    if (decoded is! Map) return;
+    final restored = <int, int>{};
+    decoded.forEach((key, value) {
+      final playerId = int.tryParse('$key') ?? 0;
+      final number = value is num ? value.toInt() : int.tryParse('$value') ?? 0;
+      if (playerId > 0 && number >= 1 && number <= 99) {
+        restored[playerId] = number;
+      }
+    });
+    if (!mounted) return;
+    setState(() {
+      _aiRosterNumberOverrides
+        ..clear()
+        ..addAll(restored);
+    });
+  } catch (e) {
+    debugPrint('AI roster number override restore warning: $e');
+  }
+}
+
+Future<void> _saveAiRosterNumberOverrides() async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final encoded = <String, int>{
+      for (final entry in _aiRosterNumberOverrides.entries)
+        entry.key.toString(): entry.value,
+    };
+    await prefs.setString(
+      _aiRosterNumberOverridesPrefsKey,
+      jsonEncode(encoded),
+    );
+  } catch (e) {
+    debugPrint('AI roster number override save warning: $e');
+  }
+}
+
+Future<void> _editAiRosterNumber(Map<String, dynamic> player) async {
+  final playerId = _rosterPlayerId(player);
+  if (playerId <= 0 || !mounted) return;
+  final current = _aiRosterNumberOverrides[playerId] ?? _rosterJerseyNumber(player);
+  final controller = TextEditingController(text: current?.toString() ?? '');
+  final name = _playerFullName(player).trim();
+  try {
+    final value = await showDialog<int?>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.white,
+        title: const Text('Номер игрока для AI'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(name.isEmpty ? 'Игрок #$playerId' : name),
+            const SizedBox(height: 10),
+            const Text(
+              'Укажите игровой номер, который реально виден на форме в этом матче. '
+              'Он используется только для идентификации AI и не меняет профиль игрока.',
+              style: TextStyle(fontSize: 11, color: Color(0xFF6B7280), height: 1.35),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              keyboardType: TextInputType.number,
+              maxLength: 2,
+              decoration: const InputDecoration(
+                hintText: '1–99',
+                counterText: '',
+                filled: true,
+                fillColor: Color(0xFFF7F8F7),
+                border: InputBorder.none,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(0),
+            child: const Text('Сбросить'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(null),
+            child: const Text('Отмена'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final number = int.tryParse(controller.text.trim()) ?? 0;
+              if (number < 1 || number > 99) return;
+              Navigator.of(dialogContext).pop(number);
+            },
+            child: const Text('Сохранить'),
+          ),
+        ],
+      ),
+    );
+    if (value == null || !mounted) return;
+    setState(() {
+      if (value == 0) {
+        _aiRosterNumberOverrides.remove(playerId);
+      } else {
+        _aiRosterNumberOverrides[playerId] = value;
+      }
+      // Any number edit invalidates the previous roster confirmation.
+      _aiRosterConfirmedSignature = null;
+    });
+    await _saveAiRosterNumberOverrides();
+  } finally {
+    controller.dispose();
+  }
+}
+
+Future<bool> _openAiRosterConfirmation({bool beforeStart = false}) async {
+  if (_players.isEmpty) await _loadPlayers();
+  if (_matchPlayers.isEmpty) await _loadSavedMatchPlayers();
+  if (!mounted) return false;
+
+  final roster = _mergedAiRosterSource();
+  final counts = <int, int>{};
+  for (final player in roster) {
+    final n = _rosterJerseyNumber(player);
+    if (n != null) counts[n] = (counts[n] ?? 0) + 1;
+  }
+  final missing = roster.where((p) => _rosterJerseyNumber(p) == null).length;
+  final duplicatedNumbers = counts.entries.where((e) => e.value > 1).map((e) => e.key).toSet();
+  final signature = _aiRosterSignature();
+
+  final confirmed = await showModalBottomSheet<bool>(
+    context: context,
+    useRootNavigator: true,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (sheetContext) => FractionallySizedBox(
+      heightFactor: .86,
+      child: Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+        ),
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 16, 12, 12),
+              child: Row(
+                children: [
+                  Container(
+                    width: 7,
+                    height: 7,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFF00A750),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 9),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Состав для AI-анализа',
+                          style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          '${roster.length} игроков · ${roster.length - missing}/${roster.length} номеров${duplicatedNumbers.isEmpty ? '' : ' · есть дубли'}',
+                          style: const TextStyle(fontSize: 11, color: Color(0xFF6B7280)),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.of(sheetContext).pop(false),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1, color: Color(0xFFE9ECEA)),
+            if ((_aiTracking.selectedTrack ?? _aiTracking.lockedTrack) != null)
+              Container(
+                margin: const EdgeInsets.fromLTRB(14, 10, 14, 0),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF3FAF6),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Builder(
+                  builder: (_) {
+                    final selectedVideoTrack =
+                        _aiTracking.selectedTrack ?? _aiTracking.lockedTrack;
+                    final selectedName = selectedVideoTrack == null
+                        ? 'не выбран'
+                        : _sportotekaIdentityText(selectedVideoTrack);
+                    final isBound = selectedVideoTrack?.boundPlayerId != null &&
+                        (selectedVideoTrack!.boundPlayerId ?? 0) > 0;
+                    return Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(Icons.touch_app_rounded, size: 17, color: Color(0xFF08713E)),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Выбрана рамка футболиста на видео',
+                                style: TextStyle(fontSize: 10.9, fontWeight: FontWeight.w800, color: Color(0xFF08713E)),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                isBound
+                                    ? 'Сейчас привязан: $selectedName. Можно выбрать другого игрока ниже.'
+                                    : 'Сейчас: $selectedName. Нажмите «Привязать к рамке» напротив нужного игрока состава.',
+                                style: const TextStyle(fontSize: 10.5, color: Color(0xFF374151), height: 1.3),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              )
+            else
+              Container(
+                margin: const EdgeInsets.fromLTRB(14, 10, 14, 0),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF7F8F7),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Text(
+                  'Для ручного подтверждения сначала нажмите на рамку игрока на видео. Автопривязка продолжит работать по номеру из состава.',
+                  style: TextStyle(fontSize: 10.6, color: Color(0xFF6B7280), height: 1.3),
+                ),
+              ),
+            Expanded(
+              child: roster.isEmpty
+                  ? const Center(child: Text('Состав матча не выбран'))
+                  : ListView.separated(
+                      padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
+                      itemCount: roster.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0xFFF0F2F4)),
+                      itemBuilder: (_, index) {
+                        final player = roster[index];
+                        final playerId = _rosterPlayerId(player);
+                        final number = _rosterJerseyNumber(player);
+                        final duplicate = number != null && duplicatedNumbers.contains(number);
+                        final name = _playerFullName(player).trim();
+                        final ok = number != null && !duplicate;
+                        PlayerTrack? boundTrack;
+                        for (final track in _aiTracking.mapTracks) {
+                          if (track.boundPlayerId == playerId && playerId > 0) {
+                            boundTrack = track;
+                            break;
+                          }
+                        }
+                        final selectedTrack = _aiTracking.selectedTrack ?? _aiTracking.lockedTrack;
+                        final identified = boundTrack != null;
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          child: Row(
+                            children: [
+                              SizedBox(
+                                width: 48,
+                                child: Text(
+                                  number == null ? '№ —' : '№ $number',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w800,
+                                    color: ok ? const Color(0xFF08713E) : const Color(0xFFD97706),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      name.isEmpty ? 'Игрок #${_rosterPlayerId(player)}' : name,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(fontSize: 12.4, fontWeight: FontWeight.w700),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      identified
+                                          ? 'Подтверждён на видео${number == null ? '' : ' · №$number'}'
+                                          : duplicate
+                                              ? 'Номер дублируется — нужна ручная привязка'
+                                              : number == null
+                                                  ? 'Номер не указан — нужна ручная привязка'
+                                                  : '№$number из состава · ожидает подтверждения AI',
+                                      style: TextStyle(
+                                        fontSize: 10.2,
+                                        color: identified
+                                            ? const Color(0xFF08713E)
+                                            : (ok ? const Color(0xFF6B7280) : const Color(0xFFD97706)),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              IconButton(
+                                tooltip: 'Номер для AI',
+                                visualDensity: VisualDensity.compact,
+                                onPressed: () async {
+                                  Navigator.of(sheetContext).pop(false);
+                                  await _editAiRosterNumber(player);
+                                  if (mounted) {
+                                    await _openAiRosterConfirmation(beforeStart: beforeStart);
+                                  }
+                                },
+                                icon: const Icon(
+                                  Icons.numbers_rounded,
+                                  size: 17,
+                                  color: Color(0xFF6B7280),
+                                ),
+                              ),
+                              const SizedBox(width: 2),
+                              if (identified)
+                                const Icon(
+                                  Icons.verified_rounded,
+                                  size: 18,
+                                  color: Color(0xFF00A750),
+                                )
+                              else if (selectedTrack != null)
+                                TextButton(
+                                  onPressed: () async {
+                                    Navigator.of(sheetContext).pop(false);
+                                    await _bindTrackToRosterPlayer(
+                                      selectedTrack,
+                                      player,
+                                    );
+                                  },
+                                  child: const Text('Привязать к рамке'),
+                                )
+                              else
+                                Icon(
+                                  ok ? Icons.schedule_rounded : Icons.warning_amber_rounded,
+                                  size: 18,
+                                  color: ok ? const Color(0xFF6B7280) : const Color(0xFFF59E0B),
+                                ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 10, 14, 16),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextButton(
+                      onPressed: () async {
+                        Navigator.of(sheetContext).pop(false);
+                        await _openMatchPlayersSelection();
+                      },
+                      child: const Text('Изменить состав'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: roster.isEmpty
+                          ? null
+                          : () async {
+                              await _saveAiRosterConfirmation(signature);
+                              if (sheetContext.mounted) Navigator.of(sheetContext).pop(true);
+                            },
+                      style: ElevatedButton.styleFrom(
+                        elevation: 0,
+                        backgroundColor: const Color(0xFF00A750),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        minimumSize: const Size.fromHeight(42),
+                      ),
+                      child: Text(
+                        missing == 0 && duplicatedNumbers.isEmpty
+                            ? 'Подтвердить состав'
+                            : 'Подтвердить доступные номера',
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+
+  if (confirmed == true && beforeStart && (missing > 0 || duplicatedNumbers.isNotEmpty)) {
+    final warnings = <String>[];
+    if (missing > 0) warnings.add('$missing игрок(а) без номера');
+    if (duplicatedNumbers.isNotEmpty) warnings.add('${duplicatedNumbers.length} дублирующихся номер(а)');
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('AI запустится, но ${warnings.join(' и ')} потребуют ручной привязки.')),
+    );
+  }
+  return confirmed == true;
+}
+
 Future<void> _startServerAiAnalysis() async {
   if (_aiLoading) return;
 
@@ -28752,6 +29564,58 @@ Future<void> _startServerAiAnalysis() async {
   }
 
   try {
+    // Send the real match roster to Video AI before the first frame.  Jersey
+    // OCR can then resolve home/away #10 directly to the SPORTOTEKA player ID
+    // instead of attaching official TTD to an ephemeral DeepSort track.
+    if (_matchPlayers.isEmpty && _players.isEmpty) {
+      await _loadPlayers();
+      await _loadSavedMatchPlayers();
+    } else if (_matchPlayers.isEmpty) {
+      await _loadSavedMatchPlayers();
+    }
+
+    final rosterSource = _mergedAiRosterSource();
+    final currentRosterSignature = _aiRosterSignature();
+    // V6.6 one-click workflow: roster confirmation is optional review, never a
+    // blocker. Pressing Play/AI immediately starts the full recording scan.
+    // The server accumulates shirt-number evidence across the whole match and
+    // reconciles names/TTD at completion when a number becomes visible later.
+    if (_aiRosterConfirmedSignature != currentRosterSignature) {
+      unawaited(_saveAiRosterConfirmation(currentRosterSignature));
+    }
+
+    final ownTeamTag = _sideTagToString(_myTeamConfig.sideTag).toLowerCase();
+    final aiRoster = <Map<String, dynamic>>[];
+    final seenNumbers = <int>{};
+    final duplicatedNumbers = <int>{};
+    for (final player in rosterSource) {
+      final playerId = _rosterPlayerId(player);
+      final jerseyNumber = _rosterJerseyNumber(player);
+      if (playerId <= 0 || jerseyNumber == null) continue;
+      if (!seenNumbers.add(jerseyNumber)) duplicatedNumbers.add(jerseyNumber);
+      final fullName = _playerFullName(player).trim();
+      aiRoster.add(<String, dynamic>{
+        'id': playerId,
+        'player_id': playerId,
+        'name': fullName,
+        'player_name': fullName,
+        'jersey_number': jerseyNumber,
+        'player_number': jerseyNumber,
+        'shirt_number': jerseyNumber,
+        'jerseyNumber': jerseyNumber,
+        'number': jerseyNumber,
+        'team_id': ownTeamTag,
+        'team': ownTeamTag,
+      });
+    }
+    final finalRosterNumbers = aiRoster
+        .map((p) => '${p['jersey_number']}:${p['player_name']}')
+        .toList();
+    debugPrint(
+      'AI QUALITY roster=${aiRoster.length}/${rosterSource.length} side=$ownTeamTag '
+      'duplicates=${duplicatedNumbers.toList()..sort()} players=$finalRosterNumbers',
+    );
+
     final localVideoPath = _buildLocalVideoPathFromUrl(widget.videoUrl);
 
     String colorToHex(Color color) {
@@ -28768,6 +29632,9 @@ Future<void> _startServerAiAnalysis() async {
         'home': colorToHex(_myTeamConfig.primaryColor),
         'away': colorToHex(_opponentTeamConfig.primaryColor),
       },
+      players: aiRoster,
+      homeTeamKey: 'home',
+      awayTeamKey: 'away',
     );
     if (!mounted) return;
 debugPrint('STEP 1 createdJobId = $createdJobId'); 
@@ -28839,6 +29706,14 @@ debugPrint('STEP 3 AFTER APPLY aiMatchStats = ${_aiTracking.aiMatchStats}');
  debugPrint('STEP 5 AFTER RAW APPLY aiSummary = ${_aiTracking.aiSummary}');
   debugPrint('STEP 5 AFTER RAW APPLY aiMatchStats = ${_aiTracking.aiMatchStats}');
     }
+
+    // Flush confirmed AI events to the normal SPORTOTEKA TTD endpoint
+    // before the UI announces completion. Previously this ran only from a
+    // debounce timer, so a finished analysis could still show an empty TTD
+    // table until another frame/change happened.
+    await _autoPersistAiTtd();
+    await _loadMatchDataLight();
+    if (!mounted) return;
 
     final eventsCount = _aiSafeCount(rawStatus?['events']) > 0
         ? _aiSafeCount(rawStatus?['events'])
@@ -29012,6 +29887,19 @@ int _resolveAiSuggestionPlayerId(AiTtdSuggestion suggestion) {
     }
   }
 
+  // If the event engine already has a stable shirt number but a DeepSort
+  // transport id changed before Flutter received the bind packet, resolve the
+  // real player directly from the current match roster.
+  final jerseyNumber = _i(meta['jersey_number'] ?? meta['number']);
+  if (jerseyNumber > 0 && (team.isEmpty || team == ownTeam)) {
+    final roster = _matchPlayers.isNotEmpty ? _matchPlayers : _players;
+    final matches = roster.where((player) => _rosterJerseyNumber(player) == jerseyNumber).toList();
+    if (matches.length == 1) {
+      final rosterPlayerId = _i(matches.first['id'] ?? matches.first['player_id']);
+      if (rosterPlayerId > 0) return rosterPlayerId;
+    }
+  }
+
   final trackId = (meta['track_id'] ?? '').toString().trim();
   if (trackId.isNotEmpty) {
     final remembered = _aiTrackPlayerBindings[trackId];
@@ -29065,8 +29953,13 @@ String? _persistableAiMetricCode(AiTtdSuggestion suggestion) {
     return _normalizeMetricCode('pass_${direction}_$length');
   }
 
-  if (raw == 'shot' || raw.contains('shot_on_goal')) {
+  if (raw == 'shot_on_goal' || raw == 'shot_on_target') {
     return 'shot_on_goal';
+  }
+  // Generic off-target `shot` stays review-only and is not silently converted
+  // into the official "Удары в ворота" metric.
+  if (raw == 'corner') {
+    return 'corner';
   }
   if (raw == 'interception' || raw == 'interception_ball') {
     return _normalizeMetricCode('interception_ball');
@@ -29114,9 +30007,25 @@ Future<void> _autoPersistAiTtd() async {
 
     for (final suggestion in suggestions) {
       if (suggestion.confidence < _aiAutoSaveMinConfidence) continue;
+      final meta = suggestion.meta ?? const <String, dynamic>{};
+      final status = (meta['status'] ?? '').toString().trim().toLowerCase();
+      // QUALITY TTD: only engine-confirmed/corrected events are written to the
+      // player's official statistics automatically. Old engines without a
+      // status field need very high confidence to remain backward compatible.
+      final safeLegacy = status.isEmpty && suggestion.confidence >= 0.94;
+      if (status != 'confirmed' && status != 'corrected' && !safeLegacy) {
+        continue;
+      }
 
       final playerId = _resolveAiSuggestionPlayerId(suggestion);
-      if (playerId <= 0) continue;
+      if (playerId <= 0) {
+        debugPrint(
+          'AI TTD skip unresolved-player code=${suggestion.code} '
+          'time=${suggestion.timeMs} team=${meta['team']} '
+          'track=${meta['track_id']} number=${meta['jersey_number'] ?? meta['number']}',
+        );
+        continue;
+      }
 
       final code = _persistableAiMetricCode(suggestion);
       if (code == null || code.isEmpty) continue;
@@ -29225,14 +30134,14 @@ void _onVideoPositionChanged() {
   // Поэтому не блокируемся на isReady — иначе LIVE-слой остаётся на первом кадре.
   final moving = value.isPlaying ||
       (_lastServerAiPacketTimeMs < 0) ||
-      (currentMs - _lastServerAiPacketTimeMs).abs() > 220;
+      (currentMs - _lastServerAiPacketTimeMs).abs() > 90;
 
   if (!moving) return;
 
   _isLoadingServerFrame = true;
   _aiServerController.loadFramePacketDebounced(
     currentMs,
-    delay: const Duration(milliseconds: 260),
+    delay: const Duration(milliseconds: 55),
   );
 }
  
@@ -29349,7 +30258,7 @@ void _onAiServerControllerChanged() {
 
     // While video is playing, never draw a remote timestamp over the current
     // frame. Ask the cache for the nearest packet instead.
-    if (_controller.value.isPlaying && deltaMs > 1200) {
+    if (_controller.value.isPlaying && deltaMs > 420) {
       if (!_isLoadingServerFrame) {
         _isLoadingServerFrame = true;
         unawaited(
@@ -29438,14 +30347,46 @@ void _applyServerPacketToOverlay(AiFramePacket packet) {
   // в футбольном видео бывают перекрытия, камера и дальний план. Держим
   // последний bbox короткое время, чтобы квадраты не моргали и не пропадали.
   _serverAiLastTracks.removeWhere(
-    (id, track) => frameTimeMs - track.lastSeenTimeMs > 900,
+    (id, track) => frameTimeMs - track.lastSeenTimeMs > 420,
   );
 
+  // V6.7: after whole-match identity reconciliation several historical
+  // transport IDs may point to one real player. That is correct across time,
+  // but never draw two simultaneous boxes for one player. Prefer a track that
+  // is visible in the current packet; if both are current, prefer the larger
+  // bbox (normally the stronger/closer detection).
+  final byPlayerId = <int, PlayerTrack>{};
+  final unresolvedTracks = <PlayerTrack>[];
+  for (final track in _serverAiLastTracks.values) {
+    final pid = track.boundPlayerId ?? 0;
+    if (pid <= 0) {
+      unresolvedTracks.add(track);
+      continue;
+    }
+    final prev = byPlayerId[pid];
+    if (prev == null) {
+      byPlayerId[pid] = track;
+      continue;
+    }
+    final trackVisible = visibleIds.contains(track.id);
+    final prevVisible = visibleIds.contains(prev.id);
+    final trackRect = track.currentBoundingBox;
+    final prevRect = prev.currentBoundingBox;
+    final trackArea = trackRect == null ? 0.0 : trackRect.width * trackRect.height;
+    final prevArea = prevRect == null ? 0.0 : prevRect.width * prevRect.height;
+    if ((trackVisible && !prevVisible) ||
+        (trackVisible == prevVisible && trackArea > prevArea)) {
+      byPlayerId[pid] = track;
+    }
+  }
+
   final stabilizedTracks = <PlayerTrack>[
-    ..._serverAiLastTracks.values,
+    ...unresolvedTracks,
+    ...byPlayerId.values,
   ];
 
   _autoBindTracksByJersey(stabilizedTracks);
+  _aiTracking.syncPersistentIdentityTracks(stabilizedTracks, frameTimeMs);
   _aiTracking.tracks = stabilizedTracks;
   _applyServerBallPacket(packet);
 
@@ -29557,10 +30498,14 @@ void _applyServerBallPacket(AiFramePacket packet) {
 
 int? _rosterJerseyNumber(Map<String, dynamic> player) {
   for (final key in const [
-    'jersey_number',
-    'player_number',
-    'game_number',
     'number',
+    'player_number',
+    'shirt_number',
+    'jersey_number',
+    'jerseyNumber',
+    'shirtNumber',
+    'game_number',
+    'gameNumber',
   ]) {
     final raw = player[key];
     if (raw == null) continue;
@@ -29570,8 +30515,96 @@ int? _rosterJerseyNumber(Map<String, dynamic> player) {
   return null;
 }
 
+int _rosterPlayerId(Map<String, dynamic> player) {
+  for (final key in const ['id', 'player_id', 'playerId', 'user_id', 'userId']) {
+    final raw = player[key];
+    if (raw == null) continue;
+    final value = raw is num ? raw.toInt() : int.tryParse(raw.toString().trim());
+    if (value != null && value > 0) return value;
+  }
+  return 0;
+}
+
+List<Map<String, dynamic>> _mergedAiRosterSource() {
+  // CMR roster is the canonical identity source. Match-selection rows often
+  // contain only id/name/start flags and may carry null/0 number fields.  Do
+  // not let such sparse rows erase the shirt number stored in the club roster.
+  final full = _allTeamPlayers.isNotEmpty ? _allTeamPlayers : _players;
+  final fullById = <int, Map<String, dynamic>>{};
+  for (final player in full) {
+    final id = _rosterPlayerId(player);
+    if (id > 0) fullById[id] = Map<String, dynamic>.from(player);
+  }
+
+  final selected = _matchPlayers.isNotEmpty ? _matchPlayers : _players;
+  final merged = <Map<String, dynamic>>[];
+  final seen = <int>{};
+
+  for (final selectedPlayer in selected) {
+    final id = _rosterPlayerId(selectedPlayer);
+    if (id <= 0 || !seen.add(id)) continue;
+
+    final canonical = fullById[id];
+    final canonicalNumber = canonical == null ? null : _rosterJerseyNumber(canonical);
+    final matchNumber = _rosterJerseyNumber(selectedPlayer);
+    final overrideNumber = _aiRosterNumberOverrides[id];
+    // Match-specific AI confirmation wins first. Then use the canonical CMR
+    // roster number, and only then a sparse match-selection value.
+    final number = overrideNumber ?? canonicalNumber ?? matchNumber;
+
+    final row = <String, dynamic>{
+      ...?canonical,
+      ...selectedPlayer,
+      'id': id,
+      'player_id': id,
+    };
+
+    if (number != null) {
+      row['number'] = number;
+      row['player_number'] = number;
+      row['shirt_number'] = number;
+      row['jersey_number'] = number;
+      row['jerseyNumber'] = number;
+      row['shirtNumber'] = number;
+      row['game_number'] = number;
+      row['gameNumber'] = number;
+    }
+
+    final canonicalName = canonical == null ? '' : _playerFullName(canonical).trim();
+    if (canonicalName.isNotEmpty) {
+      row['player_name'] = canonicalName;
+      row['name'] = canonicalName;
+    }
+
+    merged.add(row);
+  }
+  return merged;
+}
+
+String _aiRosterStatusText() {
+  final roster = _mergedAiRosterSource();
+  if (roster.isEmpty) return 'состав не выбран';
+  final numbered = roster.where((p) => _rosterJerseyNumber(p) != null).length;
+  final counts = <int, int>{};
+  for (final p in roster) {
+    final n = _rosterJerseyNumber(p);
+    if (n != null) counts[n] = (counts[n] ?? 0) + 1;
+  }
+  final duplicates = counts.values.where((v) => v > 1).length;
+  final issue = duplicates > 0 ? ' · дублей $duplicates' : '';
+  return '$numbered/${roster.length} номеров$issue';
+}
+
+String _aiRosterSignature() {
+  final rows = _mergedAiRosterSource()
+      .map((p) => '${_rosterPlayerId(p)}:${_rosterJerseyNumber(p) ?? 0}')
+      .toList()
+    ..sort();
+  return rows.join('|');
+}
+
 void _autoBindTracksByJersey(List<PlayerTrack> tracks) {
-  final roster = _matchPlayers.isNotEmpty ? _matchPlayers : _players;
+  final roster = _mergedAiRosterSource();
   if (roster.isEmpty) return;
 
   final ownTeamTag = _sideTagToString(_myTeamConfig.sideTag).toLowerCase();
@@ -29598,7 +30631,7 @@ void _autoBindTracksByJersey(List<PlayerTrack> tracks) {
     if (candidates.length != 1) continue;
 
     final player = candidates.first;
-    final playerId = _i(player['id']);
+    final playerId = _rosterPlayerId(player);
     if (playerId <= 0) continue;
 
     track.boundPlayerId = playerId;
@@ -29613,6 +30646,8 @@ void _autoBindTracksByJersey(List<PlayerTrack> tracks) {
         trackId: track.id,
         playerId: playerId,
         playerName: track.boundPlayerName,
+        jerseyNumber: number,
+        teamTag: ownTeamTag,
       ),
     );
   }
@@ -29687,15 +30722,63 @@ PlayerTrack _buildLiveServerTrack(PlayerTrack rawTrack, int frameTimeMs) {
 
   _serverAiTrackHistory[rawTrack.id] = trimmedHistory;
 
-  final rememberedPlayerId =
+  int? rememberedPlayerId =
       rawTrack.boundPlayerId ?? _aiTrackPlayerBindings[rawTrack.id];
-  final rememberedPlayerName = rememberedPlayerId != null
+  String rememberedPlayerName = rememberedPlayerId != null
       ? (_aiTrackPlayerNames[rawTrack.id] ?? rawTrack.boundPlayerName)
       : rawTrack.boundPlayerName;
+  int? rememberedNumber = rawTrack.jerseyNumber;
+  String? rememberedTeam = rawTrack.teamTag;
+
+  // Resolve the display identity from the CMR roster even when the server
+  // packet contains only player_id or only a stable jersey number.  This keeps
+  // the overlay human-readable and prevents transport track IDs from leaking
+  // into the coach UI.
+  final roster = _mergedAiRosterSource();
+  Map<String, dynamic>? rosterPlayer;
+
+  if (rememberedPlayerId != null && rememberedPlayerId > 0) {
+    for (final player in roster) {
+      if (_rosterPlayerId(player) == rememberedPlayerId) {
+        rosterPlayer = player;
+        break;
+      }
+    }
+  }
+
+  if (rosterPlayer == null && rememberedNumber != null && rememberedNumber > 0) {
+    final ownTeamTag = _sideTagToString(_myTeamConfig.sideTag).toLowerCase();
+    final rawTeam = (rememberedTeam ?? '').trim().toLowerCase();
+    if (rawTeam.isEmpty || rawTeam == ownTeamTag) {
+      final matches = roster
+          .where((player) => _rosterJerseyNumber(player) == rememberedNumber)
+          .toList();
+      if (matches.length == 1) rosterPlayer = matches.first;
+    }
+  }
+
+  if (rosterPlayer != null) {
+    final rosterId = _rosterPlayerId(rosterPlayer);
+    final rosterNumber = _rosterJerseyNumber(rosterPlayer);
+    final rosterName = _playerFullName(rosterPlayer).trim();
+    final ownTeamTag = _sideTagToString(_myTeamConfig.sideTag).toLowerCase();
+
+    if (rosterId > 0) rememberedPlayerId = rosterId;
+    if (rosterNumber != null) rememberedNumber = rosterNumber;
+    if (rosterName.isNotEmpty) rememberedPlayerName = rosterName;
+    rememberedTeam = ownTeamTag;
+
+    if (rememberedPlayerId != null && rememberedPlayerId! > 0) {
+      _aiTrackPlayerBindings[rawTrack.id] = rememberedPlayerId!;
+      _aiTrackPlayerNames[rawTrack.id] = rememberedPlayerName;
+    }
+  }
 
   return rawTrack.copyWith(
     boundPlayerId: rememberedPlayerId,
     boundPlayerName: rememberedPlayerName,
+    teamTag: rememberedTeam,
+    jerseyNumber: rememberedNumber,
     points: trimmedHistory,
     speed: motion.speedKmh,
     createdAtMs: trimmedHistory.first.timeMs,
@@ -30004,6 +31087,8 @@ String _formatAiTime(int ms) {
   List<Map<String, dynamic>> _filteredPlayers = [];
   List<Map<String, dynamic>> _allTeamPlayers = [];
   List<Map<String, dynamic>> _matchPlayers = [];
+  String? _aiRosterConfirmedSignature;
+  final Map<int, int> _aiRosterNumberOverrides = <int, int>{};
 
 
   List<Map<String, dynamic>> _mainReportRows = [];
@@ -30510,7 +31595,7 @@ double _adaptiveGap(double screenWidth) {
   }
 
   Widget _buildReview3DMapSurface() {
-    final tracks = List<PlayerTrack>.from(_aiTracking.tracks);
+    final tracks = List<PlayerTrack>.from(_aiTracking.mapTracks);
     final selectedTrack = _aiTracking.selectedTrack;
     final heatmapPoints = selectedTrack?.points ??
         tracks.expand((track) => track.points).toList(growable: false);
@@ -30902,7 +31987,7 @@ double _adaptiveGap(double screenWidth) {
             if (!compact) ...[
               _buildReviewTopButton('Эпизод', Icons.add_photo_alternate_outlined, _createEpisodeFromCurrentFrame, false),
               const SizedBox(width: 8),
-              _buildReviewTopButton(_aiLoading ? 'AI ${(_aiUploadProgress * 100).round()}%' : 'Полный AI-анализ', Icons.auto_awesome_rounded, _aiLoading ? null : _startServerAiAnalysis, true),
+              _buildReviewTopButton(_aiLoading ? 'AI ${((_aiUploadProgress.clamp(0.0, 1.0)) * 100).round()}%' : 'Полный AI-анализ', Icons.auto_awesome_rounded, _aiLoading ? null : _startServerAiAnalysis, true),
               const SizedBox(width: 8),
             ],
             _buildReviewTopIcon(Icons.tune_rounded, onTap: () => _togglePanel(ReviewOverlayPanel.analytics)),
@@ -32498,7 +33583,7 @@ Widget _buildAiQuickLaunchCard() {
                     : const Icon(Icons.smart_toy_outlined),
                 label: Text(
                   _aiLoading
-                      ? 'AI ${(_aiUploadProgress * 100).round()}% • ${_aiTracking.ttdSuggestions.length} ТТД'
+                      ? 'AI ${((_aiUploadProgress.clamp(0.0, 1.0)) * 100).round()}% • ${_aiTracking.ttdSuggestions.length} ТТД'
                       : _aiAlreadyAnalyzed
                           ? 'Запустить анализ ещё раз'
                           : 'Запустить полный AI-анализ',
@@ -32550,6 +33635,8 @@ Widget _buildAiAnalysisSection() {
   onConfirmSuggestion: _confirmAiSuggestion,
    onConfirmTopAi: _confirmTopAiSuggestions,
      onOpenTeamSetup: _openTeamIdentitySheet,
+     onOpenRosterSetup: () => _openAiRosterConfirmation(),
+     rosterStatusText: _aiRosterStatusText(),
      onCoachPauseNote: _coachPauseAndNote,
      onToggleCoachBoard: _toggleCoachBoard,
      coachBoardActive: _coachBoardEnabled,
@@ -33378,8 +34465,7 @@ void initState() {
     ),
   )..addListener(_onAiServerControllerChanged);
 
-  _loadInitialData();
-  unawaited(_restoreAiAnalyzedMarker());
+  unawaited(_initializeMatchAndAiState());
 }
 
 
@@ -33902,6 +34988,15 @@ Future<void> _bindAiTrackToSelectedPlayer() async {
   );
 }
 
+
+  Future<void> _initializeMatchAndAiState() async {
+    await _loadInitialData();
+    if (!mounted) return;
+    await _restoreAiAnalyzedMarker();
+    await _restoreAiRosterConfirmation();
+    await _restoreAiRosterNumberOverrides();
+    await _restoreServerSavedAnalysis();
+  }
 
   Future<void> _loadInitialData() async {
   await Future.wait([
@@ -35575,6 +36670,12 @@ Future<void> _warmupDetections() async {
     if (_controller.value.isPlaying) {
       await _controller.pause();
     } else {
+      // Normal coach workflow: one Play press starts both playback and the
+      // server-side full-match AI scan. No roster dialog or manual binding is
+      // required; late number observations are reconciled automatically.
+      if (!_aiLoading && !_aiAlreadyAnalyzed) {
+        unawaited(_startServerAiAnalysis());
+      }
       await _controller.play();
     }
     if (mounted) setState(() {});
@@ -36575,6 +37676,8 @@ Future<void> _saveQuickTtd(
   onConfirmSuggestion: _confirmAiSuggestion,
   onConfirmTopAi: _confirmTopAiSuggestions,
   onOpenTeamSetup: _openTeamIdentitySheet,
+  onOpenRosterSetup: () => _openAiRosterConfirmation(),
+  rosterStatusText: _aiRosterStatusText(),
   onCoachPauseNote: _coachPauseAndNote,
   onToggleCoachBoard: _toggleCoachBoard,
   coachBoardActive: _coachBoardEnabled,
@@ -37912,11 +39015,7 @@ Widget _buildPlayersPanelWithBottomSelection() {
               ? Colors.green.withOpacity(0.08)
               : Colors.red.withOpacity(0.08),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: positive
-                ? Colors.green.withOpacity(0.22)
-                : Colors.red.withOpacity(0.22),
-          ),
+          border: null,
         ),
         child: Row(
           children: [
@@ -37970,7 +39069,7 @@ Widget _buildPlayersPanelWithBottomSelection() {
           ],
         ),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        border: null,
       ),
       child: Row(
         children: [
@@ -39557,6 +40656,7 @@ Widget _buildPossessionBadge() {
 
               setState(() {
                 _matchPlayers = List<Map<String, dynamic>>.from(selectedPlayers);
+                _aiRosterConfirmedSignature = null;
                 _filteredPlayers =
                     List<Map<String, dynamic>>.from(selectedPlayers);
 
@@ -39693,6 +40793,8 @@ if (_showAiPanelInline) ...[
   onConfirmSuggestion: _confirmAiSuggestion,
   onConfirmTopAi: _confirmTopAiSuggestions,
   onOpenTeamSetup: _openTeamIdentitySheet,
+  onOpenRosterSetup: () => _openAiRosterConfirmation(),
+  rosterStatusText: _aiRosterStatusText(),
   onCoachPauseNote: _coachPauseAndNote,
   onToggleCoachBoard: _toggleCoachBoard,
   coachBoardActive: _coachBoardEnabled,
@@ -40132,13 +41234,16 @@ if (_showAiPanelInline) ...[
   
     Widget _buildSlidingOverlayPanel() {
     final bool isOpen = _activeOverlayPanel != ReviewOverlayPanel.none;
+    final bool fullHeightTtd =
+        _activeOverlayPanel == ReviewOverlayPanel.ttd ||
+        (_activeOverlayPanel == ReviewOverlayPanel.analytics && _aiAnalyticsTabIndex == 2);
 
     return AnimatedPositioned(
       duration: const Duration(milliseconds: 300),
       curve: Curves.easeOutCubic,
       right: isOpen ? 84 : -460,
-      top: 90,
-      bottom: 20,
+      top: fullHeightTtd ? 58 : 90,
+      bottom: fullHeightTtd ? 8 : 20,
       child: AnimatedOpacity(
         duration: const Duration(milliseconds: 220),
         opacity: isOpen ? 1 : 0,
@@ -40160,8 +41265,10 @@ if (_showAiPanelInline) ...[
             ),
             child: Column(
               children: [
-                _buildSlidingPanelHeader(),
-                const Divider(height: 1, color: ReviewUiPalette.line),
+                if (!fullHeightTtd) ...[
+                  _buildSlidingPanelHeader(),
+                  const Divider(height: 1, color: ReviewUiPalette.line),
+                ],
                 Expanded(
                   child: ClipRRect(
                     borderRadius: const BorderRadius.vertical(
@@ -40464,6 +41571,13 @@ if (_showAiPanelInline) ...[
           onConfirmSuggestion: _confirmAiSuggestion,
           onConfirmTopAi: _confirmTopAiSuggestions,
           onOpenTeamSetup: _openTeamIdentitySheet,
+          onOpenRosterSetup: () => _openAiRosterConfirmation(),
+          onTabChanged: (index) {
+            if (mounted && _aiAnalyticsTabIndex != index) {
+              setState(() => _aiAnalyticsTabIndex = index);
+            }
+          },
+          rosterStatusText: _aiRosterStatusText(),
           onCoachPauseNote: _coachPauseAndNote,
           onToggleCoachBoard: _toggleCoachBoard,
           coachBoardActive: _coachBoardEnabled,

@@ -1,0 +1,19 @@
+                        -H/Users/dmitrij/.pub-cache/hosted/pub.dev/thermion_flutter-0.5.0/android
+-DCMAKE_SYSTEM_NAME=Android
+-DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+-DCMAKE_SYSTEM_VERSION=22
+-DANDROID_PLATFORM=android-22
+-DANDROID_ABI=x86
+-DCMAKE_ANDROID_ARCH_ABI=x86
+-DANDROID_NDK=/Users/dmitrij/Library/Android/sdk/ndk/28.2.13676358
+-DCMAKE_ANDROID_NDK=/Users/dmitrij/Library/Android/sdk/ndk/28.2.13676358
+-DCMAKE_TOOLCHAIN_FILE=/Users/dmitrij/Library/Android/sdk/ndk/28.2.13676358/build/cmake/android.toolchain.cmake
+-DCMAKE_MAKE_PROGRAM=/Users/dmitrij/Library/Android/sdk/cmake/3.22.1/bin/ninja
+-DCMAKE_LIBRARY_OUTPUT_DIRECTORY=/Users/dmitrij/Documents/sportoteka2.0/build/thermion_flutter/intermediates/cxx/Debug/5vf2x3ck/obj/x86
+-DCMAKE_RUNTIME_OUTPUT_DIRECTORY=/Users/dmitrij/Documents/sportoteka2.0/build/thermion_flutter/intermediates/cxx/Debug/5vf2x3ck/obj/x86
+-DCMAKE_BUILD_TYPE=Debug
+-B/Users/dmitrij/.pub-cache/hosted/pub.dev/thermion_flutter-0.5.0/android/.cxx/Debug/5vf2x3ck/x86
+-GNinja
+-DANDROID_STL=none
+                        Build command args: []
+                        Version: 2
