@@ -4,13 +4,14 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:sportoteka/core/theme/app_typography.dart';
+import 'package:sportoteka/presentation/workspace_os/workspace_attachment_preview.dart';
 import 'package:sportoteka/presentation/workspace_os/workspace_server_storage.dart';
+import 'package:sportoteka/presentation/workspace_os/workspace_sync_signal.dart';
 import 'package:sportoteka/presentation/workspace_os/workspace_finder_models.dart';
 import 'package:sportoteka/presentation/workspace_os/workspace_document_editor.dart';
 import 'package:sportoteka/presentation/workspace_os/workspace_window_manager.dart';
 import 'package:sportoteka/presentation/workspace_os/sportoteka_workspace_icons.dart';
 import 'package:sportoteka/presentation/plans/plan_detail_screen.dart';
-import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 
 import 'training_lifecycle_api.dart';
 
@@ -20,6 +21,7 @@ class TrainingMaterialsPanel extends StatefulWidget {
   final int teamId;
   final int eventId;
   final int currentUserId;
+  final bool parentScroll;
 
   const TrainingMaterialsPanel({
     super.key,
@@ -28,6 +30,7 @@ class TrainingMaterialsPanel extends StatefulWidget {
     required this.teamId,
     required this.eventId,
     this.currentUserId = 0,
+    this.parentScroll = false,
   });
 
   @override
@@ -47,6 +50,7 @@ class _TrainingMaterialsPanelState extends State<TrainingMaterialsPanel> {
   bool uploading = false;
   bool linking = false;
   bool planPickerOpen = false;
+  final Set<String> deletingFiles = <String>{};
   String? error;
   int linkedPlanId = 0;
   List<Map<String, dynamic>> plans = [];
@@ -372,6 +376,7 @@ class _TrainingMaterialsPanelState extends State<TrainingMaterialsPanel> {
         }
       }
       await _load();
+      WorkspaceSyncSignal.calendarChanged(teamId: widget.teamId);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Документы добавлены в тренировку и Sportoteka OS')),
@@ -521,70 +526,209 @@ class _TrainingMaterialsPanelState extends State<TrainingMaterialsPanel> {
   }
 
   Widget _floatingFileViewer(Map<String, dynamic> row) {
-    final url = _fileUrl(row);
-    final title = _fileTitle(row);
-    final ext = _extensionFromRow(row);
-    final lower = ext.toLowerCase();
-    final isPdf = lower == 'pdf';
-    final isImage = const {'jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp'}.contains(lower);
-    final isText = const {'txt', 'md', 'json', 'csv', 'log', 'xml'}.contains(lower);
-
-    if (isPdf) {
-      return ColoredBox(
-        color: Colors.white,
-        child: SfPdfViewer.network(
-          url,
-          canShowScrollHead: true,
-          canShowScrollStatus: true,
-          enableDoubleTapZooming: true,
-        ),
-      );
-    }
-
-    if (isImage) {
-      return ColoredBox(
-        color: const Color(0xFFF8FAF9),
-        child: InteractiveViewer(
-          minScale: .7,
-          maxScale: 5,
-          child: Center(
-            child: Image.network(
-              url,
-              fit: BoxFit.contain,
-              loadingBuilder: (context, child, progress) {
-                if (progress == null) return child;
-                return const Center(child: CircularProgressIndicator(strokeWidth: 2, color: _green));
-              },
-              errorBuilder: (_, __, ___) => _previewUnsupported(title, ext),
-            ),
-          ),
-        ),
-      );
-    }
-
-    if (isText) {
-      return FutureBuilder<String>(
-        future: _loadTextPreview(url),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator(strokeWidth: 2, color: _green));
-          }
-          return ColoredBox(
-            color: Colors.white,
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(18),
-              child: SelectableText(
-                snapshot.data ?? 'Документ пуст.',
-                style: AppTypography.body(color: _text),
-              ),
-            ),
-          );
-        },
-      );
-    }
-
-    return _previewUnsupported(title, ext);
+    final url = _absoluteWorkspaceFileUrl(row);
+    return WorkspaceAttachmentInlinePreview(
+      title: _fileTitle(row),
+      fileUrl: url,
+      mimeType: '${row['mime_type'] ?? row['mime'] ?? row['content_type'] ?? ''}',
+    );
   }
+
+
+  String _attachmentEditorKey(Map<String, dynamic> row) {
+    final id = _id(row['id'] ?? row['attachment_id'] ?? row['attachmentId']);
+    if (id > 0) return 'training-attachment-edit:${widget.eventId}:$id';
+
+    final source = '${_absoluteWorkspaceFileUrl(row)}|${_fileTitle(row)}';
+    var hash = 0x811C9DC5;
+    for (final unit in source.codeUnits) {
+      hash ^= unit;
+      hash = (hash * 0x01000193) & 0x7FFFFFFF;
+    }
+    return 'training-attachment-edit:${widget.eventId}:${hash.toRadixString(16)}';
+  }
+
+  bool _isAttachmentEditorDocument(Map<String, dynamic> row) {
+    final key = _firstText(
+      row,
+      const ['document_key', 'client_uid', 'documentKey'],
+    );
+    return key.startsWith('training-attachment-edit:${widget.eventId}:');
+  }
+
+  List<Map<String, dynamic>> get _visibleLinkedDocuments => linkedDocuments
+      .where((row) => !_isAttachmentEditorDocument(row))
+      .toList(growable: false);
+
+  String _editableAttachmentTitle(Map<String, dynamic> row) {
+    final title = _fileTitle(row).trim();
+    if (title.isEmpty) return 'Документ тренировки';
+    final extension = _fileExtension(title);
+    if (extension.isEmpty) return title;
+    return title.substring(0, title.length - extension.length - 1).trim();
+  }
+
+  bool _canEditAttachment(Map<String, dynamic> row) {
+    final ext = _extensionFromRow(row).toLowerCase();
+    final mime = '${row['mime_type'] ?? row['mime'] ?? row['content_type'] ?? ''}'
+        .toLowerCase();
+    return ext == 'docx' ||
+        mime.contains('wordprocessingml.document') ||
+        mime.startsWith('text/') ||
+        const <String>{'txt', 'md', 'csv', 'json', 'xml', 'log', 'yaml', 'yml'}
+            .contains(ext);
+  }
+
+  Future<_AttachmentEditorSeed> _prepareAttachmentEditor(
+    Map<String, dynamic> row,
+  ) async {
+    final fileUrl = _absoluteWorkspaceFileUrl(row);
+    if (fileUrl.isEmpty) {
+      throw Exception('У документа нет ссылки для редактирования');
+    }
+
+    final documentKey = _attachmentEditorKey(row);
+    final sourceName = _fileTitle(row);
+    final mimeType =
+        '${row['mime_type'] ?? row['mime'] ?? row['content_type'] ?? ''}';
+    final sourceExtension = _extensionFromRow(row);
+    var title = _editableAttachmentTitle(row);
+    var body = '';
+    var existing = false;
+
+    try {
+      final loaded = await _storage.loadDocument(clientUid: documentKey);
+      if (loaded != null) {
+        existing = true;
+        final loadedTitle = _firstText(loaded, const ['title', 'name']);
+        if (loadedTitle.isNotEmpty) title = loadedTitle;
+        body = '${loaded['body'] ?? ''}';
+      }
+    } catch (_) {
+      // Редактируемая версия ещё не создавалась.
+    }
+
+    if (!existing) {
+      body = await loadWorkspaceEditableAttachmentBody(
+        title: sourceName,
+        fileUrl: fileUrl,
+        mimeType: mimeType,
+      );
+
+      final node = WorkspaceFinderNode(
+        id: documentKey,
+        title: title,
+        subtitle: 'Редактируемая версия · Документ тренировки',
+        kind: WorkspaceFinderNodeKind.note,
+        moduleKey: 'trainings',
+        parentId: 'entity:training:${widget.eventId}',
+        payload: <String, dynamic>{
+          'club_id': widget.clubId,
+          'team_id': widget.teamId,
+          'entity_type': 'training',
+          'entity_id': widget.eventId,
+          'source_attachment_id':
+              _id(row['id'] ?? row['attachment_id'] ?? row['attachmentId']),
+          'source_file_url': fileUrl,
+          'source_file_name': sourceName,
+        },
+        updatedAt: DateTime.now(),
+      );
+      await _storage.syncNodeDocument(
+        node: node,
+        body: body,
+        createHint: true,
+      );
+      await _storage.linkDocument(
+        documentKey: documentKey,
+        entityType: 'training',
+        entityId: '${widget.eventId}',
+        sectionKey: 'documents',
+        title: title,
+      );
+      WorkspaceSyncSignal.calendarChanged(teamId: widget.teamId);
+    }
+
+    return _AttachmentEditorSeed(
+      documentKey: documentKey,
+      title: title,
+      body: body,
+      sourceName: sourceName,
+      sourceUrl: fileUrl,
+      mimeType: mimeType,
+      sourceExtension: sourceExtension,
+    );
+  }
+
+  Widget _buildAttachmentEditor(
+    Map<String, dynamic> row,
+    _AttachmentEditorSeed seed,
+    VoidCallback closeWindow,
+  ) {
+    return WorkspaceDocumentEditor(
+      initialTitle: seed.title,
+      initialBody: seed.body,
+      contextLabel: 'Тренировка',
+      contextName: 'Команда ${widget.teamId}',
+      documentType: 'Документ',
+      compactWorkspaceChrome: true,
+      liveBlocksKey: seed.documentKey,
+      aiDocumentKey: seed.documentKey,
+      aiClubId: widget.clubId,
+      aiUserId: widget.currentUserId,
+      aiTeamId: widget.teamId,
+      // Важно: не включаем document_ai. Иначе редактор открывал специальный
+      // блок «РАСПОЗНАННЫЙ ТЕКСТ». Для DOCX сначала показывается оригинал,
+      // а после карандаша — обычный визуальный редактор Sportoteka OS.
+      aiExtraPayload: <String, dynamic>{
+        'document_filename': seed.sourceName,
+        'document_file_url': seed.sourceUrl,
+        'document_extension': seed.sourceExtension,
+        'document_file_size':
+            row['size'] ?? row['file_size'] ?? row['bytes'] ?? 0,
+        'workspace_section': 'trainings',
+        'workspace_entity_type': 'training',
+        'workspace_entity_id': widget.eventId,
+        'source_attachment_id':
+            _id(row['id'] ?? row['attachment_id'] ?? row['attachmentId']),
+      },
+      onUploadImage: _uploadDocumentImage,
+      onClose: closeWindow,
+      onSave: (savedTitle, savedBody) async {
+        final safeTitle =
+            savedTitle.trim().isEmpty ? 'Без названия' : savedTitle.trim();
+        final node = WorkspaceFinderNode(
+          id: seed.documentKey,
+          title: safeTitle,
+          subtitle: 'Редактируемая версия · Документ тренировки',
+          kind: WorkspaceFinderNodeKind.note,
+          moduleKey: 'trainings',
+          parentId: 'entity:training:${widget.eventId}',
+          payload: <String, dynamic>{
+            'club_id': widget.clubId,
+            'team_id': widget.teamId,
+            'entity_type': 'training',
+            'entity_id': widget.eventId,
+            'source_attachment_id':
+                _id(row['id'] ?? row['attachment_id'] ?? row['attachmentId']),
+            'source_file_url': seed.sourceUrl,
+            'source_file_name': seed.sourceName,
+          },
+          updatedAt: DateTime.now(),
+        );
+        await _storage.syncNodeDocument(node: node, body: savedBody);
+        await _storage.linkDocument(
+          documentKey: seed.documentKey,
+          entityType: 'training',
+          entityId: '${widget.eventId}',
+          sectionKey: 'documents',
+          title: safeTitle,
+        );
+        WorkspaceSyncSignal.calendarChanged(teamId: widget.teamId);
+      },
+    );
+  }
+
 
   String _absoluteWorkspaceFileUrl(Map<String, dynamic> row) {
     for (final key in const ['url', 'file_url', 'download_url', 'path', 'file']) {
@@ -703,6 +847,7 @@ class _TrainingMaterialsPanelState extends State<TrainingMaterialsPanel> {
             sectionKey: 'documents',
             title: safeTitle,
           );
+          WorkspaceSyncSignal.calendarChanged(teamId: widget.teamId);
 
           // Keep autosave silent: reloading the whole materials panel here
           // showed a full loading state after every pause in typing. The editor
@@ -712,13 +857,16 @@ class _TrainingMaterialsPanelState extends State<TrainingMaterialsPanel> {
     );
   }
 
-  void _openFile(Map<String, dynamic> row, {required bool linked}) {
+  Future<void> _openFile(
+    Map<String, dynamic> row, {
+    required bool linked,
+  }) async {
     if (linked) {
-      _openWorkspaceDocument(row);
+      await _openWorkspaceDocument(row);
       return;
     }
 
-    final raw = _fileUrl(row);
+    final raw = _absoluteWorkspaceFileUrl(row);
     if (raw.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('У документа нет ссылки для просмотра')),
@@ -726,17 +874,133 @@ class _TrainingMaterialsPanelState extends State<TrainingMaterialsPanel> {
       return;
     }
 
-    showWorkspaceManagedWindow(
-      context,
-      id: 'training-file:${_id(row['id'] ?? row['attachment_id'])}:${_fileTitle(row)}',
-      title: _fileTitle(row),
-      subtitle: _fileSubtitle(row, linked: false).isEmpty
-          ? 'Документ тренировки'
-          : _fileSubtitle(row, linked: false),
-      iconKind: SportotekaWorkspaceIconKind.document,
-      preferredSize: const Size(900, 680),
-      builder: (_) => _floatingFileViewer(row),
+    final canEdit = _canEditAttachment(row);
+    final editMode = ValueNotifier<bool>(false);
+    try {
+      await showWorkspaceManagedWindow(
+        context,
+        id: 'training-file:${_id(row['id'] ?? row['attachment_id'])}:${_fileTitle(row)}',
+        title: _fileTitle(row),
+        subtitle: _fileSubtitle(row, linked: false).isEmpty
+            ? 'Документ тренировки'
+            : _fileSubtitle(row, linked: false),
+        iconKind: SportotekaWorkspaceIconKind.document,
+        preferredSize: const Size(900, 680),
+        headerActions: canEdit
+            ? <WorkspaceWindowAction>[
+                WorkspaceWindowAction(
+                  icon: Icons.edit_rounded,
+                  tooltip: 'Редактирование / оригинал',
+                  onTap: () => editMode.value = !editMode.value,
+                ),
+              ]
+            : const <WorkspaceWindowAction>[],
+        builder: (_) => canEdit
+            ? _AttachmentViewerEditorShell(
+                editMode: editMode,
+                title: _fileTitle(row),
+                fileUrl: raw,
+                mimeType:
+                    '${row['mime_type'] ?? row['mime'] ?? row['content_type'] ?? ''}',
+                loadEditor: () => _prepareAttachmentEditor(row),
+                editorBuilder: (seed) => _buildAttachmentEditor(
+                  row,
+                  seed,
+                  () => editMode.value = false,
+                ),
+              )
+            : _floatingFileViewer(row),
+      );
+    } finally {
+      editMode.dispose();
+    }
+  }
+
+
+  String _deleteFileKey(Map<String, dynamic> row, {required bool linked}) {
+    if (linked) {
+      return 'doc:${_firstText(row, const ['document_key', 'client_uid', 'documentKey'])}';
+    }
+    return 'attachment:${_id(row['id'] ?? row['attachment_id'] ?? row['attachmentId'])}';
+  }
+
+  Future<bool> _confirmDeleteFile(
+    Map<String, dynamic> row, {
+    required bool linked,
+  }) async {
+    final title = _fileTitle(row);
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Удалить файл?'),
+        content: Text(
+          linked
+              ? '«$title» будет удалён из Sportoteka OS и из этой тренировки.'
+              : '«$title» будет удалён из документов этой тренировки и Sportoteka OS.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Отмена'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            style: TextButton.styleFrom(foregroundColor: const Color(0xFFB42318)),
+            child: const Text('Удалить'),
+          ),
+        ],
+      ),
     );
+    return result == true;
+  }
+
+  Future<void> _deleteFile(
+    Map<String, dynamic> row, {
+    required bool linked,
+  }) async {
+    final key = _deleteFileKey(row, linked: linked);
+    if (deletingFiles.contains(key)) return;
+    if (!await _confirmDeleteFile(row, linked: linked) || !mounted) return;
+
+    setState(() => deletingFiles.add(key));
+    try {
+      if (linked) {
+        final documentKey = _firstText(
+          row,
+          const ['document_key', 'client_uid', 'documentKey'],
+        );
+        if (documentKey.isEmpty) {
+          throw Exception('Не найден ключ документа Sportoteka OS');
+        }
+        await _storage.deleteNode(documentKey);
+      } else {
+        final attachmentId = _id(
+          row['id'] ?? row['attachment_id'] ?? row['attachmentId'],
+        );
+        if (attachmentId <= 0) {
+          throw Exception('Не найден ID файла');
+        }
+        await _storage.deleteAttachment(attachmentId);
+      }
+
+      await _load();
+      WorkspaceSyncSignal.calendarChanged(teamId: widget.teamId);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Файл удалён')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Не удалось удалить файл: ${e.toString().replaceFirst('Exception: ', '')}',
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => deletingFiles.remove(key));
+    }
   }
 
 
@@ -1103,12 +1367,12 @@ class _TrainingMaterialsPanelState extends State<TrainingMaterialsPanel> {
     final linked = plans.where((p) => _id(p['id'] ?? p['plan_id']) == linkedPlanId).toList();
     final linkedPlan = linked.isEmpty ? null : linked.first;
 
-    return RefreshIndicator(
-      color: _green,
-      onRefresh: _load,
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(0, 0, 0, 14),
-        children: [
+    final list = ListView(
+      primary: false,
+      shrinkWrap: widget.parentScroll,
+      physics: widget.parentScroll ? const NeverScrollableScrollPhysics() : null,
+      padding: const EdgeInsets.fromLTRB(0, 0, 0, 14),
+      children: [
           _section(
             icon: Icons.assignment_turned_in_outlined,
             title: 'План на тренировку',
@@ -1185,7 +1449,7 @@ class _TrainingMaterialsPanelState extends State<TrainingMaterialsPanel> {
           _section(
             icon: Icons.folder_copy_outlined,
             title: 'Документы тренировки',
-            subtitle: '${attachments.length + linkedDocuments.length} ${_filesWord(attachments.length + linkedDocuments.length)}',
+            subtitle: '${attachments.length + _visibleLinkedDocuments.length} ${_filesWord(attachments.length + _visibleLinkedDocuments.length)}',
             trailing: TextButton.icon(
               onPressed: uploading ? null : _upload,
               style: TextButton.styleFrom(foregroundColor: _greenDark),
@@ -1194,7 +1458,7 @@ class _TrainingMaterialsPanelState extends State<TrainingMaterialsPanel> {
                   : const Icon(Icons.add_rounded, size: 17),
               label: Text(uploading ? 'Загрузка...' : 'Добавить'),
             ),
-            child: attachments.isEmpty && linkedDocuments.isEmpty
+            child: attachments.isEmpty && _visibleLinkedDocuments.isEmpty
                 ? Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
@@ -1226,7 +1490,7 @@ class _TrainingMaterialsPanelState extends State<TrainingMaterialsPanel> {
                 : Column(
                     children: [
                       for (final row in attachments) _fileRow(row, Icons.attach_file_rounded, linked: false),
-                      for (final row in linkedDocuments) _fileRow(row, Icons.description_outlined, linked: true),
+                      for (final row in _visibleLinkedDocuments) _fileRow(row, Icons.description_outlined, linked: true),
                     ],
                   ),
           ),
@@ -1234,8 +1498,14 @@ class _TrainingMaterialsPanelState extends State<TrainingMaterialsPanel> {
             const SizedBox(height: 10),
             Text(error!, style: AppTypography.caption(color: Colors.red.shade700)),
           ],
-        ],
-      ),
+      ],
+    );
+
+    if (widget.parentScroll) return list;
+    return RefreshIndicator(
+      color: _green,
+      onRefresh: _load,
+      child: list,
     );
   }
 
@@ -1303,6 +1573,11 @@ class _TrainingMaterialsPanelState extends State<TrainingMaterialsPanel> {
     final url = _fileUrl(row);
     final canOpen = linked || url.isNotEmpty;
     final subtitle = _fileSubtitle(row, linked: linked);
+    final deleteKey = _deleteFileKey(row, linked: linked);
+    final deleting = deletingFiles.contains(deleteKey);
+    final canDelete = linked
+        ? _firstText(row, const ['document_key', 'client_uid', 'documentKey']).isNotEmpty
+        : _id(row['id'] ?? row['attachment_id'] ?? row['attachmentId']) > 0;
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -1356,15 +1631,50 @@ class _TrainingMaterialsPanelState extends State<TrainingMaterialsPanel> {
                   decoration: BoxDecoration(
                     color: _soft,
                     borderRadius: BorderRadius.circular(10),
-                                      ),
+                  ),
                   child: const Icon(Icons.visibility_outlined, size: 15, color: _muted),
+                ),
+                const SizedBox(width: 6),
+              ],
+              if (canDelete) ...[
+                Tooltip(
+                  message: 'Удалить файл',
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(10),
+                    onTap: deleting ? null : () => _deleteFile(row, linked: linked),
+                    child: Container(
+                      width: 32,
+                      height: 32,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFF4F2),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: deleting
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 1.7,
+                                color: Color(0xFFB42318),
+                              ),
+                            )
+                          : const Icon(
+                              Icons.delete_outline_rounded,
+                              size: 16,
+                              color: Color(0xFFB42318),
+                            ),
+                    ),
+                  ),
                 ),
                 const SizedBox(width: 6),
               ],
               PopupMenuButton<String>(
                 tooltip: 'Действия',
+                enabled: !deleting,
                 onSelected: (value) {
                   if (value == 'open' && canOpen) _openFile(row, linked: linked);
+                  if (value == 'delete' && canDelete) _deleteFile(row, linked: linked);
                   if (value == 'refresh') _load();
                 },
                 itemBuilder: (_) => <PopupMenuEntry<String>>[
@@ -1372,6 +1682,17 @@ class _TrainingMaterialsPanelState extends State<TrainingMaterialsPanel> {
                     PopupMenuItem<String>(
                       value: 'open',
                       child: Text(linked ? 'Открыть в редакторе' : 'Открыть в новом окне'),
+                    ),
+                  if (canDelete)
+                    const PopupMenuItem<String>(
+                      value: 'delete',
+                      child: Row(
+                        children: [
+                          Icon(Icons.delete_outline_rounded, size: 18, color: Color(0xFFB42318)),
+                          SizedBox(width: 8),
+                          Text('Удалить файл', style: TextStyle(color: Color(0xFFB42318))),
+                        ],
+                      ),
                     ),
                   const PopupMenuItem<String>(
                     value: 'refresh',
@@ -1392,6 +1713,131 @@ class _TrainingMaterialsPanelState extends State<TrainingMaterialsPanel> {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _AttachmentEditorSeed {
+  const _AttachmentEditorSeed({
+    required this.documentKey,
+    required this.title,
+    required this.body,
+    required this.sourceName,
+    required this.sourceUrl,
+    required this.mimeType,
+    required this.sourceExtension,
+  });
+
+  final String documentKey;
+  final String title;
+  final String body;
+  final String sourceName;
+  final String sourceUrl;
+  final String mimeType;
+  final String sourceExtension;
+}
+
+class _AttachmentViewerEditorShell extends StatefulWidget {
+  const _AttachmentViewerEditorShell({
+    required this.editMode,
+    required this.title,
+    required this.fileUrl,
+    required this.mimeType,
+    required this.loadEditor,
+    required this.editorBuilder,
+  });
+
+  final ValueNotifier<bool> editMode;
+  final String title;
+  final String fileUrl;
+  final String mimeType;
+  final Future<_AttachmentEditorSeed> Function() loadEditor;
+  final Widget Function(_AttachmentEditorSeed seed) editorBuilder;
+
+  @override
+  State<_AttachmentViewerEditorShell> createState() =>
+      _AttachmentViewerEditorShellState();
+}
+
+class _AttachmentViewerEditorShellState
+    extends State<_AttachmentViewerEditorShell> {
+  static const _green = Color(0xFF14915D);
+  static const _muted = Color(0xFF667085);
+  Future<_AttachmentEditorSeed>? _editorFuture;
+
+  Future<_AttachmentEditorSeed> _editor() {
+    return _editorFuture ??= widget.loadEditor();
+  }
+
+  void _retry() {
+    setState(() => _editorFuture = widget.loadEditor());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<bool>(
+      valueListenable: widget.editMode,
+      builder: (context, editing, _) {
+        if (!editing) {
+          // Всегда сначала показываем именно оригинальный DOCX/PDF внутри
+          // Sportoteka OS. Никакого автоматического «распознанного текста».
+          return WorkspaceAttachmentInlinePreview(
+            title: widget.title,
+            fileUrl: widget.fileUrl,
+            mimeType: widget.mimeType,
+          );
+        }
+
+        return FutureBuilder<_AttachmentEditorSeed>(
+          future: _editor(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState != ConnectionState.done) {
+              return const Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CircularProgressIndicator(strokeWidth: 2, color: _green),
+                    SizedBox(height: 12),
+                    Text('Подготавливаем документ для редактирования…'),
+                  ],
+                ),
+              );
+            }
+
+            if (snapshot.hasError || snapshot.data == null) {
+              final message = '${snapshot.error ?? 'Не удалось открыть редактор'}'
+                  .replaceFirst('Exception: ', '')
+                  .replaceFirst('Unsupported operation: ', '');
+              return Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.description_outlined, size: 40, color: _muted),
+                      const SizedBox(height: 12),
+                      Text(
+                        message,
+                        textAlign: TextAlign.center,
+                        style: AppTypography.secondary(color: _muted),
+                      ),
+                      const SizedBox(height: 12),
+                      TextButton.icon(
+                        onPressed: _retry,
+                        icon: const Icon(Icons.refresh_rounded, size: 17),
+                        label: const Text('Повторить'),
+                        style: TextButton.styleFrom(foregroundColor: _green),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }
+
+            return widget.editorBuilder(snapshot.data!);
+          },
+        );
+      },
     );
   }
 }

@@ -12,9 +12,12 @@ import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 
 import 'package:sportoteka/presentation/workspace_os/workspace_server_storage.dart';
-import 'package:sportoteka/presentation/plans/plan_detail_screen.dart';
+import 'package:sportoteka/presentation/workspace_os/workspace_document_editor.dart';
+import 'package:sportoteka/presentation/workspace_os/workspace_training_plan_codec.dart';
 import 'package:sportoteka/presentation/workspace_os/workspace_window_manager.dart';
 import 'package:sportoteka/presentation/workspace_os/sportoteka_workspace_icons.dart';
+import 'package:sportoteka/presentation/workspace_os/workspace_trainer_project_screen.dart';
+import 'package:sportoteka/presentation/trainer_profile_screen/cmr_trainer_profile_screen.dart';
 
 import 'package:sportoteka/core/theme/app_typography.dart';
 
@@ -431,6 +434,7 @@ class _CmrClubTeamsPanelState extends State<CmrClubTeamsPanel> {
   static const String getPlayersUrl = '$apiBase/get_players.php';
   static const String getTeamTrainersUrl = '$apiBase/get_team_trainers.php';
   static const String getTeamProfileExtendedUrl = '$apiBase/team_profile_extended.php';
+  static const String updateTeamUrl = '$apiBase/update_team_profile.php';
 
   final TextEditingController _searchC = TextEditingController();
   final ScrollController _listScroll = ScrollController();
@@ -459,7 +463,10 @@ class _CmrClubTeamsPanelState extends State<CmrClubTeamsPanel> {
 
   List<Map<String, dynamic>> get _effectiveTeams => widget.teams
       .map((team) => _effectiveTeam(team))
+      .where((team) => !_teamIsArchived(team))
       .toList(growable: false);
+
+  int get _activeTeamsCount => _effectiveTeams.length;
 
   Future<Map<String, dynamic>> _fetchTeamProfileExtended(int teamId) async {
     if (teamId <= 0) return <String, dynamic>{};
@@ -523,7 +530,7 @@ class _CmrClubTeamsPanelState extends State<CmrClubTeamsPanel> {
 
   void _requestCreateTeam() {
     final limit = _teamsLimit;
-    if (limit != null && limit > 0 && widget.teams.length >= limit) {
+    if (limit != null && limit > 0 && _activeTeamsCount >= limit) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Текущий тариф: можно создать до $limit команд.')),
       );
@@ -566,6 +573,328 @@ class _CmrClubTeamsPanelState extends State<CmrClubTeamsPanel> {
   void _closeEditTeam() {
     if (!mounted) return;
     setState(() => _rightMode = _TeamsRightMode.overview);
+  }
+
+  Future<void> _requestRenameTeam(Map<String, dynamic> rawTeam) async {
+    final team = _effectiveTeam(rawTeam);
+    final teamId = _teamId(team);
+    if (teamId <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Не удалось определить ID команды.')),
+      );
+      return;
+    }
+
+    final controller = TextEditingController(text: _teamName(team));
+    controller.selection = TextSelection(
+      baseOffset: 0,
+      extentOffset: controller.text.length,
+    );
+
+    final newName = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final value = controller.text.trim();
+            final canSave = value.isNotEmpty && value != _teamName(team).trim();
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(_CmrDecor.dialogRadius),
+              ),
+              title: const Text('Переименовать команду'),
+              content: SizedBox(
+                width: 420,
+                child: TextField(
+                  controller: controller,
+                  autofocus: true,
+                  textInputAction: TextInputAction.done,
+                  onChanged: (_) => setDialogState(() {}),
+                  onSubmitted: (_) {
+                    if (canSave) Navigator.of(dialogContext).pop(value);
+                  },
+                  decoration: InputDecoration(
+                    labelText: 'Название команды',
+                    hintText: 'Введите новое название',
+                    filled: true,
+                    fillColor: _CmrColors.soft,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text('Отмена'),
+                ),
+                FilledButton(
+                  onPressed: canSave
+                      ? () => Navigator.of(dialogContext).pop(value)
+                      : null,
+                  child: const Text('Переименовать'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+    controller.dispose();
+
+    if (newName == null || newName.trim().isEmpty || !mounted) return;
+    final name = newName.trim();
+
+    try {
+      final request = http.MultipartRequest('POST', Uri.parse(updateTeamUrl));
+      request.fields.addAll(<String, String>{
+        'team_id': '$teamId',
+        'id': '$teamId',
+        'club_id': '${widget.clubId}',
+        'team_name': name,
+        'name': name,
+        'sport': _teamSport(team),
+        'sport_name': _teamSport(team),
+        'category': _rawTeamGroup(team),
+      });
+      final streamed = await request.send().timeout(const Duration(seconds: 18));
+      final response = await http.Response.fromStream(streamed);
+      final decoded = _tryDecode(response.body);
+      final ok = response.statusCode >= 200 &&
+          response.statusCode < 300 &&
+          decoded is Map &&
+          (decoded['success'] == true ||
+              '${decoded['status'] ?? ''}'.toLowerCase() == 'success' ||
+              '${decoded['status'] ?? ''}'.toLowerCase() == 'ok');
+      if (!ok) {
+        final message = decoded is Map
+            ? _s(decoded['message'] ?? decoded['error'])
+            : '';
+        throw Exception(message.isEmpty
+            ? 'Сервер не подтвердил переименование команды'
+            : message);
+      }
+
+      final updated = <String, dynamic>{
+        ...team,
+        'id': teamId,
+        'team_id': teamId,
+        'name': name,
+        'team_name': name,
+      };
+      await _teamUpdated(updated);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Команда переименована в «$name»')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Не удалось переименовать команду: '
+            '${'$e'.replaceFirst('Exception: ', '')}',
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _requestArchiveTeam(Map<String, dynamic> rawTeam) async {
+    final team = _effectiveTeam(rawTeam);
+    final teamId = _teamId(team);
+    if (teamId <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Не удалось определить ID команды.')),
+      );
+      return;
+    }
+
+    final codeController = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final codeOk = codeController.text.trim().toLowerCase() == 'архив';
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(_CmrDecor.dialogRadius),
+              ),
+              title: const Text('Переместить команду в архив?'),
+              content: SizedBox(
+                width: 440,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Команда «${_teamName(team)}» будет скрыта из рабочего списка. '
+                      'Данные команды не удаляются.',
+                      style: _CmrText.muted(12.2),
+                    ),
+                    const SizedBox(height: 14),
+                    Text(
+                      'Для подтверждения введите кодовое слово «архив».',
+                      style: _CmrText.value(12.2),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: codeController,
+                      autofocus: true,
+                      textInputAction: TextInputAction.done,
+                      onChanged: (_) => setDialogState(() {}),
+                      onSubmitted: (_) {
+                        if (codeOk) Navigator.of(dialogContext).pop(true);
+                      },
+                      decoration: InputDecoration(
+                        hintText: 'архив',
+                        filled: true,
+                        fillColor: _CmrColors.soft,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(false),
+                  child: const Text('Отмена'),
+                ),
+                FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: _CmrColors.red,
+                    foregroundColor: Colors.white,
+                  ),
+                  onPressed: codeOk
+                      ? () => Navigator.of(dialogContext).pop(true)
+                      : null,
+                  child: const Text('В архив'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+    codeController.dispose();
+    if (confirmed != true || !mounted) return;
+
+    try {
+      final response = await http.post(
+        Uri.parse(getTeamProfileExtendedUrl),
+        headers: const <String, String>{
+          'Content-Type': 'application/x-www-form-urlencoded; charset=utf-8',
+        },
+        body: <String, String>{
+          'team_id': '$teamId',
+          'club_id': '${widget.clubId}',
+          'age_group': _rawTeamGroup(team),
+          'season': _rawTeamSeason(team),
+          'location': _rawTeamCity(team),
+          'head_coach': _rawTeamCoach(team),
+          'assistant_coach': _rawTeamAssistantCoach(team),
+          'goalkeeper_coach': _rawTeamGoalkeeperCoach(team),
+          'fitness_coach': _rawTeamFitnessCoach(team),
+          'analyst': _rawTeamAnalyst(team),
+          'team_status': 'Архив',
+          'description': _teamLongDescription(team),
+          'archived': '1',
+          'is_archived': '1',
+        },
+      ).timeout(const Duration(seconds: 15));
+      final decoded = _tryDecode(response.body);
+      final ok = response.statusCode >= 200 &&
+          response.statusCode < 300 &&
+          decoded is Map &&
+          (decoded['success'] == true ||
+              '${decoded['status'] ?? ''}'.toLowerCase() == 'success' ||
+              '${decoded['status'] ?? ''}'.toLowerCase() == 'ok');
+      if (!ok) {
+        final message = decoded is Map
+            ? _s(decoded['message'] ?? decoded['error'])
+            : '';
+        throw Exception(message.isEmpty
+            ? 'Сервер не подтвердил перенос команды в архив'
+            : message);
+      }
+
+      // Дополнительно передаём архивный статус старому профилю команды. Старые
+      // версии API могут его игнорировать, поэтому результат этого запроса не
+      // блокирует архивирование в расширенном паспорте.
+      try {
+        final request = http.MultipartRequest('POST', Uri.parse(updateTeamUrl));
+        request.fields.addAll(<String, String>{
+          'team_id': '$teamId',
+          'id': '$teamId',
+          'club_id': '${widget.clubId}',
+          'team_name': _teamName(team),
+          'name': _teamName(team),
+          'sport': _teamSport(team),
+          'sport_name': _teamSport(team),
+          'category': _rawTeamGroup(team),
+          'status': 'archive',
+          'team_status': 'Архив',
+          'archived': '1',
+          'is_archived': '1',
+        });
+        final streamed = await request.send().timeout(const Duration(seconds: 12));
+        await http.Response.fromStream(streamed);
+      } catch (_) {}
+
+      final wasActive = _activeTeamId == teamId;
+      Map<String, dynamic>? nextTeam;
+      setState(() {
+        _teamOverridesById[teamId] = <String, dynamic>{
+          ...?_teamOverridesById[teamId],
+          ...team,
+          'status': 'Архив',
+          'team_status': 'Архив',
+          'archived': 1,
+          'is_archived': 1,
+        };
+        final remaining = _effectiveTeams;
+        nextTeam = remaining.isEmpty ? null : remaining.first;
+        if (_activeTeamId == teamId) {
+          _localSelectedTeamId = nextTeam == null ? null : _teamId(nextTeam!);
+          _selectedIndex = 0;
+        }
+        _rightMode = _TeamsRightMode.overview;
+      });
+
+      if (wasActive && nextTeam != null) {
+        final selectCallback = widget.onSelectTeam;
+        if (selectCallback != null) {
+          selectCallback(nextTeam!);
+        } else {
+          widget.onOpenTeam(nextTeam!);
+        }
+      }
+      await widget.onRefresh?.call();
+      await _loadTeamProfilesExtended();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Команда «${_teamName(team)}» перемещена в архив')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Не удалось переместить команду в архив: '
+            '${'$e'.replaceFirst('Exception: ', '')}',
+          ),
+        ),
+      );
+    }
   }
 
   Future<void> _teamUpdated(Map<String, dynamic> updatedTeam) async {
@@ -974,7 +1303,7 @@ class _CmrClubTeamsPanelState extends State<CmrClubTeamsPanel> {
                 media.height - MediaQuery.paddingOf(context).vertical - 24,
               );
 
-        if (widget.teams.isEmpty) {
+        if (_effectiveTeams.isEmpty) {
           final createActive = _rightMode == _TeamsRightMode.create;
 
           return SizedBox(
@@ -998,7 +1327,7 @@ class _CmrClubTeamsPanelState extends State<CmrClubTeamsPanel> {
                     clubId: widget.clubId,
                     clubName: widget.clubName,
                     currentUserId: widget.currentUserId,
-                    currentTeamsCount: widget.teams.length,
+                    currentTeamsCount: _activeTeamsCount,
                     maxTeams: _teamsLimit,
                     onCancel: _closeCreateTeam,
                     onCreated: _teamCreated,
@@ -1065,6 +1394,8 @@ class _CmrClubTeamsPanelState extends State<CmrClubTeamsPanel> {
             countsLoading: _countsLoading,
             onOpenTeam: () => _openTeamOverview(selected),
             onEditTeam: () => _requestEditTeam(selected),
+            onRenameTeam: () => _requestRenameTeam(selected),
+            onArchiveTeam: () => _requestArchiveTeam(selected),
             onOpenRoster: widget.onOpenRoster,
             onOpenTrainers: widget.onOpenTrainers,
             onOpenCalendar: widget.onOpenCalendar,
@@ -1083,7 +1414,7 @@ class _CmrClubTeamsPanelState extends State<CmrClubTeamsPanel> {
 
         final list = _TeamsList(
           clubName: widget.clubName,
-          teamsCount: widget.teams.length,
+          teamsCount: _activeTeamsCount,
           visibleCount: visibleTeams.length,
           selectedTeamName: displaySelectedTeamName,
           searchC: _searchC,
@@ -1093,6 +1424,8 @@ class _CmrClubTeamsPanelState extends State<CmrClubTeamsPanel> {
           filter: _filter,
           onFilterChanged: (value) => setState(() => _filter = value),
           onSelect: _selectTeam,
+          onRenameTeam: _requestRenameTeam,
+          onArchiveTeam: _requestArchiveTeam,
           onCreateTeam: _requestCreateTeam,
           onRefresh: widget.onRefresh,
           maxTeams: _teamsLimit,
@@ -1118,7 +1451,7 @@ class _CmrClubTeamsPanelState extends State<CmrClubTeamsPanel> {
               clubId: widget.clubId,
               clubName: widget.clubName,
               currentUserId: widget.currentUserId,
-              currentTeamsCount: widget.teams.length,
+              currentTeamsCount: _activeTeamsCount,
               maxTeams: _teamsLimit,
               onCancel: _closeCreateTeam,
               onCreated: _teamCreated,
@@ -1156,7 +1489,7 @@ class _CmrClubTeamsPanelState extends State<CmrClubTeamsPanel> {
                           children: [
                       _TeamSelectorHeader(
                         clubName: widget.clubName,
-                        teamsCount: widget.teams.length,
+                        teamsCount: _activeTeamsCount,
                         visibleCount: visibleTeams.length,
                         selectedTeam: selected,
                         playersCount: selected == null ? null : _playersCountByTeam[_teamId(selected)],
@@ -1169,7 +1502,7 @@ class _CmrClubTeamsPanelState extends State<CmrClubTeamsPanel> {
                       ),
                       if (_hasPlanLimits)
                         _PlanCapacityBar(
-                          teamsUsed: widget.teams.length,
+                          teamsUsed: _activeTeamsCount,
                           maxTeams: _teamsLimit,
                           playersUsed: selectedPlayersCount,
                           maxPlayers: _playersLimit,
@@ -1192,7 +1525,7 @@ class _CmrClubTeamsPanelState extends State<CmrClubTeamsPanel> {
                           children: [
                             _TeamSelectorHeader(
                               clubName: widget.clubName,
-                              teamsCount: widget.teams.length,
+                              teamsCount: _activeTeamsCount,
                               visibleCount: visibleTeams.length,
                               selectedTeam: selected,
                               playersCount: selected == null ? null : _playersCountByTeam[_teamId(selected)],
@@ -1205,7 +1538,7 @@ class _CmrClubTeamsPanelState extends State<CmrClubTeamsPanel> {
                             ),
                             if (_hasPlanLimits)
                               _PlanCapacityBar(
-                                teamsUsed: widget.teams.length,
+                                teamsUsed: _activeTeamsCount,
                                 maxTeams: _teamsLimit,
                                 playersUsed: selectedPlayersCount,
                                 maxPlayers: _playersLimit,
@@ -3194,6 +3527,8 @@ class _TeamsList extends StatelessWidget {
   final _TeamsFilter filter;
   final ValueChanged<_TeamsFilter> onFilterChanged;
   final ValueChanged<Map<String, dynamic>> onSelect;
+  final ValueChanged<Map<String, dynamic>> onRenameTeam;
+  final ValueChanged<Map<String, dynamic>> onArchiveTeam;
   final VoidCallback onCreateTeam;
   final Future<void> Function()? onRefresh;
   final int? maxTeams;
@@ -3215,6 +3550,8 @@ class _TeamsList extends StatelessWidget {
     required this.filter,
     required this.onFilterChanged,
     required this.onSelect,
+    required this.onRenameTeam,
+    required this.onArchiveTeam,
     required this.onCreateTeam,
     required this.onRefresh,
     required this.maxTeams,
@@ -3301,6 +3638,8 @@ class _TeamsList extends StatelessWidget {
                           team: team,
                           active: _teamId(team) == selectedTeamId,
                           onTap: () => onSelect(team),
+                          onRename: () => onRenameTeam(team),
+                          onArchive: () => onArchiveTeam(team),
                           mobile: mobile,
                         );
                       },
@@ -3469,12 +3808,16 @@ class _TeamTile extends StatelessWidget {
   final Map<String, dynamic> team;
   final bool active;
   final VoidCallback onTap;
+  final VoidCallback? onRename;
+  final VoidCallback? onArchive;
   final bool mobile;
 
   const _TeamTile({
     required this.team,
     required this.active,
     required this.onTap,
+    this.onRename,
+    this.onArchive,
     required this.mobile,
   });
 
@@ -3551,6 +3894,14 @@ class _TeamTile extends StatelessWidget {
                   ],
                 ),
               ),
+              if (onRename != null || onArchive != null) ...[
+                const SizedBox(width: 4),
+                _TeamManageMenu(
+                  onRename: onRename,
+                  onArchive: onArchive,
+                  compact: true,
+                ),
+              ],
             ],
           ),
         ),
@@ -3558,6 +3909,72 @@ class _TeamTile extends StatelessWidget {
     );
   }
 }
+
+class _TeamManageMenu extends StatelessWidget {
+  final VoidCallback? onRename;
+  final VoidCallback? onArchive;
+  final bool compact;
+
+  const _TeamManageMenu({
+    required this.onRename,
+    required this.onArchive,
+    this.compact = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<String>(
+      tooltip: 'Действия с командой',
+      color: Colors.white,
+      elevation: 8,
+      offset: const Offset(0, 34),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      onSelected: (value) {
+        if (value == 'rename') onRename?.call();
+        if (value == 'archive') onArchive?.call();
+      },
+      itemBuilder: (_) => <PopupMenuEntry<String>>[
+        PopupMenuItem<String>(
+          value: 'rename',
+          enabled: onRename != null,
+          child: const Row(
+            children: [
+              Icon(Icons.drive_file_rename_outline_rounded, size: 18),
+              SizedBox(width: 10),
+              Text('Переименовать'),
+            ],
+          ),
+        ),
+        PopupMenuItem<String>(
+          value: 'archive',
+          enabled: onArchive != null,
+          child: const Row(
+            children: [
+              Icon(Icons.archive_outlined, size: 18, color: _CmrColors.red),
+              SizedBox(width: 10),
+              Text('Удалить в архив', style: TextStyle(color: _CmrColors.red)),
+            ],
+          ),
+        ),
+      ],
+      child: Container(
+        width: compact ? 32 : 36,
+        height: compact ? 32 : 36,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Icon(
+          Icons.more_horiz_rounded,
+          size: compact ? 18 : 20,
+          color: _CmrColors.subtle,
+        ),
+      ),
+    );
+  }
+}
+
 
 class _ActiveDot extends StatelessWidget {
   const _ActiveDot();
@@ -3792,6 +4209,8 @@ class _TeamDetails extends StatelessWidget {
   final bool countsLoading;
   final VoidCallback onOpenTeam;
   final VoidCallback onEditTeam;
+  final VoidCallback onRenameTeam;
+  final VoidCallback onArchiveTeam;
   final VoidCallback? onOpenRoster;
   final VoidCallback? onOpenTrainers;
   final VoidCallback? onOpenCalendar;
@@ -3818,6 +4237,8 @@ class _TeamDetails extends StatelessWidget {
     required this.countsLoading,
     required this.onOpenTeam,
     required this.onEditTeam,
+    required this.onRenameTeam,
+    required this.onArchiveTeam,
     required this.onOpenRoster,
     required this.onOpenTrainers,
     required this.onOpenCalendar,
@@ -3871,19 +4292,45 @@ class _TeamDetails extends StatelessWidget {
         final compact = constraints.maxWidth < 640;
         final radius = 0.0;
         final contentPadding = compact ? 10.0 : 12.0;
+        final actionsKey = GlobalObjectKey<_TeamActionsWithInlineTrainersState>(
+          'team_inline_trainers_${clubId}_${_teamId(team)}',
+        );
+
+        Future<void> revealInlineTrainers() async {
+          await actionsKey.currentState?.openFromStickyHeader();
+          final targetContext = actionsKey.currentContext;
+          if (targetContext != null) {
+            await Scrollable.ensureVisible(
+              targetContext,
+              duration: const Duration(milliseconds: 280),
+              curve: Curves.easeOutCubic,
+              alignment: .04,
+            );
+          }
+        }
 
         return Container(
           width: double.infinity,
           decoration: _CmrDecor.seamlessPane(radius: radius),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(radius),
-            child: SingleChildScrollView(
-              physics: const ClampingScrollPhysics(),
+            child: _TeamStickyScroll(
+              compact: compact,
+              revealOffset: compact ? 225 : 255,
               padding: EdgeInsets.fromLTRB(
                 contentPadding,
                 contentPadding,
                 contentPadding,
                 compact ? 112 : contentPadding,
+              ),
+              stickyHeader: _TeamStickyActionHeader(
+                teamName: name,
+                clubName: clubName,
+                compact: compact,
+                onEditTeam: onEditTeam,
+                onOpenRoster: onOpenRoster,
+                onOpenTrainers: revealInlineTrainers,
+                onOpenCalendar: onOpenCalendar,
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -3900,7 +4347,19 @@ class _TeamDetails extends StatelessWidget {
                   const SizedBox(height: 12),
                   _TeamOpenWorkProfileButton(onTap: onOpenTeam),
                   const SizedBox(height: 14),
-                  _safeActions(compact: compact),
+                  _TeamActionsWithInlineTrainers(
+                    key: actionsKey,
+                    clubId: clubId,
+                    clubName: clubName,
+                    currentUserId: currentUserId,
+                    team: team,
+                    teamId: _teamId(team),
+                    teamName: name,
+                    compact: compact,
+                    onEditTeam: onEditTeam,
+                    onOpenRoster: onOpenRoster,
+                    onOpenCalendar: onOpenCalendar,
+                  ),
                   const SizedBox(height: 18),
                   _safeKpiGrid(
                     context,
@@ -3954,10 +4413,12 @@ class _TeamDetails extends StatelessWidget {
                       'cmr_latest_plan_${clubId}_${_teamId(team)}',
                     ),
                     clubId: clubId,
+                    clubName: clubName,
                     teamId: _teamId(team),
                     teamName: name,
                     fallbackPlans: latestPlans,
                     onOpenPlans: onOpenPlans,
+                    currentUserId: currentUserId,
                   ),
                   const SizedBox(height: 12),
                   _TeamLiveOverviewBlock(
@@ -4080,6 +4541,12 @@ class _TeamDetails extends StatelessWidget {
                 const _CmrDotCluster(color: _CmrColors.greenDark),
               ],
             ),
+          ),
+          const SizedBox(width: 6),
+          _TeamManageMenu(
+            onRename: onRenameTeam,
+            onArchive: onArchiveTeam,
+            compact: compact,
           ),
         ],
       ),
@@ -4579,20 +5046,1084 @@ class _TeamDetails extends StatelessWidget {
 
 
 
+class _TeamStickyScroll extends StatefulWidget {
+  final bool compact;
+  final double revealOffset;
+  final EdgeInsetsGeometry padding;
+  final Widget stickyHeader;
+  final Widget child;
+
+  const _TeamStickyScroll({
+    required this.compact,
+    required this.revealOffset,
+    required this.padding,
+    required this.stickyHeader,
+    required this.child,
+  });
+
+  @override
+  State<_TeamStickyScroll> createState() => _TeamStickyScrollState();
+}
+
+class _TeamStickyScrollState extends State<_TeamStickyScroll> {
+  bool _showSticky = false;
+
+  bool _onScroll(ScrollNotification notification) {
+    if (notification.metrics.axis != Axis.vertical) return false;
+    final next = notification.metrics.pixels > widget.revealOffset;
+    if (next != _showSticky && mounted) {
+      setState(() => _showSticky = next);
+    }
+    return false;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: <Widget>[
+        NotificationListener<ScrollNotification>(
+          onNotification: _onScroll,
+          child: SingleChildScrollView(
+            physics: const ClampingScrollPhysics(),
+            padding: widget.padding,
+            child: widget.child,
+          ),
+        ),
+        Positioned(
+          left: widget.compact ? 8 : 10,
+          right: widget.compact ? 8 : 10,
+          top: 8,
+          child: IgnorePointer(
+            ignoring: !_showSticky,
+            child: AnimatedSlide(
+              duration: const Duration(milliseconds: 180),
+              curve: Curves.easeOutCubic,
+              offset: _showSticky ? Offset.zero : const Offset(0, -.22),
+              child: AnimatedOpacity(
+                duration: const Duration(milliseconds: 150),
+                opacity: _showSticky ? 1 : 0,
+                child: widget.stickyHeader,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _TeamStickyActionHeader extends StatefulWidget {
+  final String teamName;
+  final String clubName;
+  final bool compact;
+  final VoidCallback? onEditTeam;
+  final VoidCallback? onOpenRoster;
+  final VoidCallback? onOpenTrainers;
+  final VoidCallback? onOpenCalendar;
+
+  const _TeamStickyActionHeader({
+    required this.teamName,
+    required this.clubName,
+    required this.compact,
+    required this.onEditTeam,
+    required this.onOpenRoster,
+    required this.onOpenTrainers,
+    required this.onOpenCalendar,
+  });
+
+  @override
+  State<_TeamStickyActionHeader> createState() =>
+      _TeamStickyActionHeaderState();
+}
+
+class _TeamStickyActionHeaderState extends State<_TeamStickyActionHeader> {
+  int _pressedIndex = -1;
+
+  void _run(int index, VoidCallback? action) {
+    if (action == null) return;
+    setState(() => _pressedIndex = index);
+    action();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final actions = <({IconData icon, String label, VoidCallback? onTap})>[
+      (
+        icon: Icons.edit_outlined,
+        label: 'Редактировать',
+        onTap: widget.onEditTeam,
+      ),
+      (
+        icon: Icons.groups_2_outlined,
+        label: 'Состав',
+        onTap: widget.onOpenRoster,
+      ),
+      (
+        icon: Icons.badge_outlined,
+        label: 'Тренеры',
+        onTap: widget.onOpenTrainers,
+      ),
+      (
+        icon: Icons.calendar_month_outlined,
+        label: 'Календарь',
+        onTap: widget.onOpenCalendar,
+      ),
+    ];
+
+    // Та же геометрия, что у закреплённой панели в календаре:
+    // только округлая плавающая навигация, без белой прямоугольной подложки.
+    return Container(
+      height: widget.compact ? 48 : 50,
+      width: double.infinity,
+      padding: const EdgeInsets.all(5),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF9FBFA).withOpacity(.97),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: const Color(0xFFE4ECE8).withOpacity(.92),
+          width: 1,
+        ),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: Colors.black.withOpacity(.055),
+            blurRadius: 18,
+            offset: const Offset(0, 7),
+          ),
+          BoxShadow(
+            color: Colors.white.withOpacity(.85),
+            blurRadius: 1,
+            offset: const Offset(0, -1),
+          ),
+        ],
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final veryNarrow = constraints.maxWidth < 405;
+
+          if (veryNarrow) {
+            return SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              child: Row(
+                children: <Widget>[
+                  for (var i = 0; i < actions.length; i++)
+                    SizedBox(
+                      width: i == 0 ? 124 : 102,
+                      child: _TeamCalendarHeaderAction(
+                        icon: actions[i].icon,
+                        label: actions[i].label,
+                        selected: _pressedIndex == i,
+                        enabled: actions[i].onTap != null,
+                        onTap: () => _run(i, actions[i].onTap),
+                        compact: widget.compact,
+                      ),
+                    ),
+                ],
+              ),
+            );
+          }
+
+          return Row(
+            children: <Widget>[
+              for (var i = 0; i < actions.length; i++)
+                Expanded(
+                  child: _TeamCalendarHeaderAction(
+                    icon: actions[i].icon,
+                    label: actions[i].label,
+                    selected: _pressedIndex == i,
+                    enabled: actions[i].onTap != null,
+                    onTap: () => _run(i, actions[i].onTap),
+                    compact: widget.compact,
+                  ),
+                ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _TeamCalendarHeaderDots extends StatelessWidget {
+  final bool compact;
+
+  const _TeamCalendarHeaderDots({required this.compact});
+
+  @override
+  Widget build(BuildContext context) {
+    final sizes = compact
+        ? const <double>[3.0, 3.5, 4.2, 5.0]
+        : const <double>[3.2, 3.8, 4.6, 5.4];
+    final opacities = const <double>[.26, .42, .66, 1.0];
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        for (var i = 0; i < sizes.length; i++) ...<Widget>[
+          Container(
+            width: sizes[i],
+            height: sizes[i],
+            decoration: BoxDecoration(
+              color: _CmrColors.green.withOpacity(opacities[i]),
+              shape: BoxShape.circle,
+            ),
+          ),
+          if (i != sizes.length - 1) const SizedBox(width: 2.5),
+        ],
+      ],
+    );
+  }
+}
+
+class _TeamCalendarHeaderAction extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final bool enabled;
+  final VoidCallback onTap;
+  final bool compact;
+
+  const _TeamCalendarHeaderAction({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.enabled,
+    required this.onTap,
+    required this.compact,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final foreground = selected
+        ? const Color(0xFF111827)
+        : const Color(0xFF7A8492);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 1),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          onTap: enabled ? onTap : null,
+          borderRadius: BorderRadius.circular(16),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 160),
+            curve: Curves.easeOutCubic,
+            height: double.infinity,
+            padding: EdgeInsets.symmetric(
+              horizontal: compact ? 7 : 9,
+            ),
+            decoration: BoxDecoration(
+              color: selected ? const Color(0xFFEAF8F1) : Colors.transparent,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Opacity(
+              opacity: enabled ? 1 : .42,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Icon(
+                    icon,
+                    size: compact ? 13.0 : 13.5,
+                    color: selected
+                        ? _CmrColors.greenDark
+                        : const Color(0xFF7A8492),
+                  ),
+                  const SizedBox(width: 5),
+                  Flexible(
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.custom(
+                        size: compact ? 9.6 : 10.2,
+                        weight: selected ? FontWeight.w700 : FontWeight.w500,
+                        color: foreground,
+                        height: 1.0,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+
+
+
+class _TeamActionsWithInlineTrainers extends StatefulWidget {
+  final int clubId;
+  final String clubName;
+  final int currentUserId;
+  final Map<String, dynamic> team;
+  final int teamId;
+  final String teamName;
+  final bool compact;
+  final VoidCallback onEditTeam;
+  final VoidCallback? onOpenRoster;
+  final VoidCallback? onOpenCalendar;
+
+  const _TeamActionsWithInlineTrainers({
+    super.key,
+    required this.clubId,
+    required this.clubName,
+    required this.currentUserId,
+    required this.team,
+    required this.teamId,
+    required this.teamName,
+    required this.compact,
+    required this.onEditTeam,
+    required this.onOpenRoster,
+    required this.onOpenCalendar,
+  });
+
+  @override
+  State<_TeamActionsWithInlineTrainers> createState() =>
+      _TeamActionsWithInlineTrainersState();
+}
+
+class _TeamActionsWithInlineTrainersState
+    extends State<_TeamActionsWithInlineTrainers> {
+  bool _expanded = false;
+  bool _loading = false;
+  bool _loaded = false;
+  String? _error;
+  List<Map<String, dynamic>> _trainers = const <Map<String, dynamic>>[];
+
+  @override
+  void didUpdateWidget(covariant _TeamActionsWithInlineTrainers oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.teamId != widget.teamId) {
+      _expanded = false;
+      _loading = false;
+      _loaded = false;
+      _error = null;
+      _trainers = const <Map<String, dynamic>>[];
+    }
+  }
+
+  Future<void> _toggleTrainers() async {
+    final opening = !_expanded;
+    setState(() => _expanded = opening);
+    if (opening && !_loaded && !_loading) {
+      await _loadTrainers();
+    }
+  }
+
+  Future<void> openFromStickyHeader() async {
+    if (!_expanded && mounted) {
+      setState(() => _expanded = true);
+    }
+    if (!_loaded && !_loading) {
+      await _loadTrainers();
+    }
+  }
+
+  Future<void> _loadTrainers() async {
+    if (widget.teamId <= 0) {
+      setState(() {
+        _loaded = true;
+        _trainers = const <Map<String, dynamic>>[];
+      });
+      return;
+    }
+
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    List<Map<String, dynamic>> rows = const <Map<String, dynamic>>[];
+    try {
+      final response = await http
+          .post(
+            Uri.parse('https://sportotekaapp.ru/api/get_team_trainers.php'),
+            headers: const <String, String>{
+              'Content-Type': 'application/json; charset=utf-8',
+            },
+            body: jsonEncode(<String, dynamic>{'team_id': widget.teamId}),
+          )
+          .timeout(const Duration(seconds: 10));
+      rows = _extractList(
+        _tryDecode(response.body),
+        const <String>['trainers', 'coaches', 'users', 'items', 'data'],
+      );
+    } catch (_) {}
+
+    if (rows.isEmpty) {
+      try {
+        final response = await http
+            .post(
+              Uri.parse('https://sportotekaapp.ru/api/get_team_trainers.php'),
+              body: <String, String>{'team_id': '${widget.teamId}'},
+            )
+            .timeout(const Duration(seconds: 10));
+        rows = _extractList(
+          _tryDecode(response.body),
+          const <String>['trainers', 'coaches', 'users', 'items', 'data'],
+        );
+      } catch (_) {}
+    }
+
+    final unique = <String, Map<String, dynamic>>{};
+    for (final raw in rows) {
+      final trainer = Map<String, dynamic>.from(raw);
+      final id = _trainerId(trainer);
+      final name = _trainerName(trainer);
+      if (id <= 0 && name.isEmpty) continue;
+      trainer['team_id'] = widget.teamId;
+      trainer['team_name'] = widget.teamName;
+      if (id > 0) {
+        // get_team_trainers.php может вернуть id назначения. Для рабочего
+        // профиля Sportoteka OS нормализуем идентификатор к users.id.
+        trainer['trainer_id'] = id;
+        trainer['user_id'] ??= id;
+      }
+      trainer['teams'] = <Map<String, dynamic>>[
+        <String, dynamic>{
+          'id': widget.teamId,
+          'team_id': widget.teamId,
+          'name': widget.teamName,
+          'team_name': widget.teamName,
+          'club_id': widget.clubId,
+          'profile': trainer['profile'] ??
+              trainer['link_profile'] ??
+              trainer['role_code'] ??
+              trainer['staff_role'],
+        },
+      ];
+      final key = id > 0 ? 'id:$id' : 'name:${name.toLowerCase()}';
+      unique[key] = trainer;
+    }
+
+    final trainers = unique.values.toList(growable: true)
+      ..sort((a, b) {
+        final mainA = _isMainRole(a) ? 0 : 1;
+        final mainB = _isMainRole(b) ? 0 : 1;
+        if (mainA != mainB) return mainA.compareTo(mainB);
+        return _trainerName(a)
+            .toLowerCase()
+            .compareTo(_trainerName(b).toLowerCase());
+      });
+
+    if (!mounted) return;
+    setState(() {
+      _trainers = trainers;
+      _loading = false;
+      _loaded = true;
+      if (rows.isEmpty) _error = null;
+    });
+  }
+
+  int _trainerId(Map<String, dynamic> trainer) => _intFromAny(
+        trainer['user_id'] ??
+            trainer['userId'] ??
+            trainer['trainer_id'] ??
+            trainer['trainerId'] ??
+            trainer['coach_id'] ??
+            trainer['id'],
+      );
+
+  String _trainerName(Map<String, dynamic> trainer) {
+    final direct = _s(
+      trainer['full_name'] ??
+          trainer['fullName'] ??
+          trainer['display_name'] ??
+          trainer['trainer_name'] ??
+          trainer['coach_name'] ??
+          trainer['fio'] ??
+          trainer['name'],
+    ).trim();
+    if (direct.isNotEmpty) return direct;
+    return <String>[
+      _s(trainer['last_name']).trim(),
+      _s(trainer['first_name']).trim(),
+      _s(trainer['middle_name'] ?? trainer['patronymic']).trim(),
+    ].where((part) => part.isNotEmpty).join(' ');
+  }
+
+  String _trainerPhoto(Map<String, dynamic> trainer) {
+    final raw = _s(
+      trainer['photo'] ??
+          trainer['avatar'] ??
+          trainer['image'] ??
+          trainer['photo_url'] ??
+          trainer['avatar_url'] ??
+          trainer['image_url'],
+    ).trim();
+    if (raw.isEmpty || raw == 'null') return '';
+    if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
+    if (raw.startsWith('//')) return 'https:$raw';
+    if (raw.startsWith('sportotekaapp.ru/')) return 'https://$raw';
+    if (raw.startsWith('www.sportotekaapp.ru/')) return 'https://$raw';
+    if (raw.startsWith('/')) return 'https://sportotekaapp.ru$raw';
+    if (raw.startsWith('uploads/')) return 'https://sportotekaapp.ru/$raw';
+    return 'https://sportotekaapp.ru/uploads/$raw';
+  }
+
+  bool _isMainRole(Map<String, dynamic> trainer) {
+    final raw = _s(
+      trainer['profile'] ??
+          trainer['link_profile'] ??
+          trainer['role_code'] ??
+          trainer['staff_role'] ??
+          trainer['role'] ??
+          trainer['position'],
+    ).toLowerCase();
+    return raw == 'main' || raw == 'head' || raw.contains('глав');
+  }
+
+  String _trainerRole(Map<String, dynamic> trainer) {
+    final raw = _s(
+      trainer['profile'] ??
+          trainer['link_profile'] ??
+          trainer['role_code'] ??
+          trainer['staff_role'] ??
+          trainer['role_name'] ??
+          trainer['role'] ??
+          trainer['position'] ??
+          trainer['specialization'],
+    ).trim();
+    final v = raw.toLowerCase();
+    if (v.isEmpty || v == 'extra' || v == 'coach' || v == 'trainer') {
+      return 'Тренер';
+    }
+    if (v == 'main' || v == 'head' || v.contains('глав')) {
+      return 'Главный тренер';
+    }
+    if (v == 'assistant' || v.contains('ассист') || v.contains('помощ')) {
+      return 'Ассистент';
+    }
+    if (v == 'goalkeeper' ||
+        v == 'goalkeeper_coach' ||
+        v == 'gk' ||
+        v.contains('вратар')) {
+      return 'Тренер по вратарям';
+    }
+    if (v == 'doctor' || v == 'medic' || v.contains('врач') || v.contains('мед')) {
+      return 'Врач спортивной медицины';
+    }
+    if (v == 'press_assistant' ||
+        v == 'press' ||
+        v == 'press_service' ||
+        v.contains('пресс')) {
+      return 'Пресс-служба';
+    }
+    return raw;
+  }
+
+  Future<Map<String, dynamic>> _loadTrainerWorkingProfile(
+    Map<String, dynamic> trainer,
+  ) async {
+    final trainerId = _trainerId(trainer);
+    final merged = <String, dynamic>{...trainer};
+
+    if (trainerId > 0) {
+      try {
+        final response = await http
+            .post(
+              Uri.parse('https://sportotekaapp.ru/api/get_trainer_profile.php'),
+              headers: const <String, String>{
+                'Content-Type': 'application/json; charset=utf-8',
+              },
+              body: jsonEncode(<String, dynamic>{
+                'trainer_id': trainerId,
+                'club_id': widget.clubId,
+              }),
+            )
+            .timeout(const Duration(seconds: 12));
+
+        final decoded = _tryDecode(response.body);
+        dynamic raw = decoded;
+        if (decoded is Map) {
+          for (final key in const <String>['profile', 'trainer', 'user', 'data']) {
+            final candidate = decoded[key];
+            if (candidate is Map) {
+              raw = candidate;
+              break;
+            }
+          }
+        }
+
+        if (raw is Map) {
+          raw.forEach((key, value) {
+            if (value != null && value.toString().trim().isNotEmpty) {
+              merged[key.toString()] = value;
+            }
+          });
+        }
+      } catch (_) {
+        // Рабочий профиль всё равно откроется с данными из списка команды.
+      }
+    }
+
+    // В профиле оставляем именно текущее назначение команды, из которой
+    // пользователь его открыл. Это не даёт назначениям других клубов
+    // подменять роль/команду в рабочем профиле.
+    merged['team_id'] = widget.teamId;
+    merged['team_name'] = widget.teamName;
+    merged['teams'] = <Map<String, dynamic>>[
+      <String, dynamic>{
+        'id': widget.teamId,
+        'team_id': widget.teamId,
+        'name': widget.teamName,
+        'team_name': widget.teamName,
+        'club_id': widget.clubId,
+        'profile': trainer['profile'] ??
+            trainer['link_profile'] ??
+            trainer['role_code'] ??
+            trainer['staff_role'],
+      },
+    ];
+
+    // Для блока расписания рабочего профиля подмешиваем события выбранной
+    // команды. Если endpoint временно недоступен, профиль откроется без них.
+    try {
+      final uri = Uri.parse('https://sportotekaapp.ru/api/get_team_events.php')
+          .replace(queryParameters: <String, String>{
+        'team_id': '${widget.teamId}',
+      });
+      final response = await http.get(uri).timeout(const Duration(seconds: 10));
+      final events = _extractList(
+        _tryDecode(response.body),
+        const <String>['events', 'items', 'rows', 'data'],
+      );
+      merged['_schedule'] = events
+          .map(
+            (event) => <String, dynamic>{
+              ...event,
+              'team_id': widget.teamId,
+              'team_name': widget.teamName,
+            },
+          )
+          .toList(growable: false);
+    } catch (_) {}
+
+    return merged;
+  }
+
+  Future<void> _openTrainerWorkingProfile(
+    Map<String, dynamic> trainer,
+  ) async {
+    final profile = await _loadTrainerWorkingProfile(trainer);
+    if (!mounted) return;
+
+    final trainerId = _trainerId(profile);
+    final name = _trainerName(profile);
+    final team = <String, dynamic>{
+      ...widget.team,
+      'id': widget.teamId,
+      'team_id': widget.teamId,
+      'name': widget.teamName,
+      'team_name': widget.teamName,
+      'club_id': widget.clubId,
+    };
+
+    Widget buildProfile(VoidCallback? closeWindow) => CmrTrainerProfileScreen(
+          trainer: profile,
+          clubId: widget.clubId,
+          clubName: widget.clubName,
+          embeddedInWorkspace: true,
+          allowEdit: false,
+          initialSection: TrainerProfileSection.card,
+          onClose: closeWindow ?? () => Navigator.of(context).maybePop(),
+          onMessage: null,
+          onAssign: null,
+          availableTeams: <Map<String, dynamic>>[team],
+          onAssignTeam: null,
+          onChanged: () {},
+        );
+
+    final width = MediaQuery.sizeOf(context).width;
+    if (width < 760) {
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (_) => Scaffold(
+            backgroundColor: Colors.white,
+            body: SafeArea(child: buildProfile(null)),
+          ),
+        ),
+      );
+      return;
+    }
+
+    await showWorkspaceManagedWindow(
+      context,
+      id: 'team-inline-trainer-profile:${widget.teamId}:${trainerId > 0 ? trainerId : name.hashCode}',
+      title: name.isEmpty ? 'Рабочий профиль тренера' : name,
+      subtitle: 'Рабочий профиль · ${widget.teamName}',
+      iconKind: SportotekaWorkspaceIconKind.trainers,
+      preferredSize: const Size(1120, 760),
+      builder: (closeWindow) => buildProfile(closeWindow),
+    );
+  }
+
+  Future<void> _openTrainerInWorkspace(Map<String, dynamic> trainer) async {
+    final id = _trainerId(trainer);
+    final name = _trainerName(trainer);
+    final team = <String, dynamic>{
+      ...widget.team,
+      'id': widget.teamId,
+      'team_id': widget.teamId,
+      'name': widget.teamName,
+      'team_name': widget.teamName,
+      'club_id': widget.clubId,
+    };
+
+    Widget buildProject(VoidCallback? closeWindow) =>
+        SportotekaTrainerProjectScreen(
+          trainer: trainer,
+          clubId: widget.clubId,
+          currentUserId: widget.currentUserId,
+          teams: <Map<String, dynamic>>[team],
+          players: const <Map<String, dynamic>>[],
+          onClose: closeWindow,
+        );
+
+    final width = MediaQuery.sizeOf(context).width;
+    if (width < 760) {
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (_) => Scaffold(
+            backgroundColor: Colors.white,
+            body: SafeArea(child: buildProject(null)),
+          ),
+        ),
+      );
+      return;
+    }
+
+    await showWorkspaceManagedWindow(
+      context,
+      id: 'team-inline-trainer:${widget.teamId}:${id > 0 ? id : name.hashCode}',
+      title: name.isEmpty ? 'Тренер' : name,
+      subtitle: '${_trainerRole(trainer)} · ${widget.teamName}',
+      iconKind: SportotekaWorkspaceIconKind.trainers,
+      preferredSize: const Size(1120, 760),
+      builder: (closeWindow) => buildProject(closeWindow),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: <Widget>[
+        _TeamInspectorAction(
+          icon: Icons.edit_outlined,
+          title: 'Редактировать команду',
+          subtitle: 'Название, логотип, паспорт и описание',
+          onTap: widget.onEditTeam,
+          compact: widget.compact,
+          accent: true,
+        ),
+        _TeamInspectorAction(
+          icon: Icons.groups_2_outlined,
+          title: 'Состав команды',
+          subtitle: 'Игроки, номера и роли команды',
+          onTap: widget.onOpenRoster,
+          compact: widget.compact,
+        ),
+        _TeamInspectorAction(
+          icon: Icons.badge_outlined,
+          title: 'Тренеры команды',
+          subtitle: _expanded
+              ? 'Штаб команды показан ниже'
+              : 'Показать тренеров этой команды',
+          onTap: _toggleTrainers,
+          compact: widget.compact,
+        ),
+        AnimatedCrossFade(
+          duration: const Duration(milliseconds: 180),
+          crossFadeState: _expanded
+              ? CrossFadeState.showFirst
+              : CrossFadeState.showSecond,
+          firstChild: _buildTrainerBlock(),
+          secondChild: const SizedBox.shrink(),
+        ),
+        _TeamInspectorAction(
+          icon: Icons.calendar_month_outlined,
+          title: 'Календарь',
+          subtitle: 'Матчи, тренировки и события',
+          onTap: widget.onOpenCalendar,
+          compact: widget.compact,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTrainerBlock() {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.fromLTRB(8, 4, 8, 8),
+      padding: const EdgeInsets.fromLTRB(12, 11, 12, 12),
+      decoration: BoxDecoration(
+        color: _CmrColors.greenSoft2,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _CmrColors.greenBorder, width: .75),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              const _CmrDotCluster(),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Тренеры команды',
+                  style: _CmrText.value(widget.compact ? 13.0 : 12.6),
+                ),
+              ),
+              if (_loaded && _trainers.isNotEmpty)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    '${_trainers.length}',
+                    style: _CmrText.caption().copyWith(
+                      color: _CmrColors.greenDark,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 9),
+          if (_loading)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 12),
+              child: Center(
+                child: SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 1.8,
+                    color: _CmrColors.green,
+                  ),
+                ),
+              ),
+            )
+          else if (_error != null)
+            Text(
+              _error!,
+              style: _CmrText.muted(11.0).copyWith(color: _CmrColors.red),
+            )
+          else if (_trainers.isEmpty)
+            Text(
+              'Для этой команды тренеры пока не назначены.',
+              style: _CmrText.muted(widget.compact ? 12.0 : 11.2),
+            )
+          else
+            ..._trainers.map(
+              (trainer) => Padding(
+                padding: const EdgeInsets.only(bottom: 7),
+                child: _TeamInlineTrainerTile(
+                  name: _trainerName(trainer),
+                  role: _trainerRole(trainer),
+                  photoUrl: _trainerPhoto(trainer),
+                  compact: widget.compact,
+                  onOpenProfile: () => _openTrainerWorkingProfile(trainer),
+                  onOpenOs: () => _openTrainerInWorkspace(trainer),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TeamInlineTrainerTile extends StatelessWidget {
+  final String name;
+  final String role;
+  final String photoUrl;
+  final bool compact;
+  final VoidCallback onOpenProfile;
+  final VoidCallback onOpenOs;
+
+  const _TeamInlineTrainerTile({
+    required this.name,
+    required this.role,
+    required this.photoUrl,
+    required this.compact,
+    required this.onOpenProfile,
+    required this.onOpenOs,
+  });
+
+  Widget _avatar() {
+    final fallback = Container(
+      alignment: Alignment.center,
+      color: _CmrColors.greenSoft,
+      child: Text(
+        _initials(name.isEmpty ? 'Тренер' : name),
+        style: _CmrText.value(11.0).copyWith(color: _CmrColors.greenDark),
+      ),
+    );
+
+    return Container(
+      width: compact ? 42 : 46,
+      height: compact ? 42 : 46,
+      clipBehavior: Clip.antiAlias,
+      decoration: const BoxDecoration(shape: BoxShape.circle),
+      child: photoUrl.isEmpty
+          ? fallback
+          : Image.network(
+              photoUrl,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => fallback,
+            ),
+    );
+  }
+
+  Widget _info() => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            name.isEmpty ? 'Тренер' : name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: _CmrText.value(compact ? 12.3 : 12.0),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            role.isEmpty ? 'Тренер' : role,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: _CmrText.muted(compact ? 10.8 : 10.4),
+          ),
+        ],
+      );
+
+  Widget _actionButton({
+    required String label,
+    required IconData icon,
+    required VoidCallback onPressed,
+    required bool primary,
+  }) =>
+      TextButton.icon(
+        onPressed: onPressed,
+        style: TextButton.styleFrom(
+          foregroundColor: primary ? _CmrColors.greenDark : _CmrColors.text,
+          backgroundColor: primary ? _CmrColors.greenSoft : Colors.transparent,
+          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
+          minimumSize: const Size(0, 30),
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(9),
+          ),
+        ),
+        icon: Icon(
+          icon,
+          size: 14,
+          color: primary ? _CmrColors.greenDark : _CmrColors.green,
+        ),
+        label: Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: _CmrText.chip(
+            size: 10.3,
+            color: primary ? _CmrColors.greenDark : _CmrColors.text,
+          ).copyWith(fontWeight: FontWeight.w600),
+        ),
+      );
+
+  Widget _actions() => Wrap(
+        spacing: 3,
+        runSpacing: 4,
+        alignment: WrapAlignment.end,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: <Widget>[
+          _actionButton(
+            label: 'Открыть профиль',
+            icon: Icons.badge_outlined,
+            onPressed: onOpenProfile,
+            primary: true,
+          ),
+          _actionButton(
+            label: 'Sportoteka OS',
+            icon: Icons.grid_view_rounded,
+            onPressed: onOpenOs,
+            primary: false,
+          ),
+        ],
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final narrow = constraints.maxWidth < 500;
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(9),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: <BoxShadow>[
+              BoxShadow(
+                color: Colors.black.withOpacity(.022),
+                blurRadius: 12,
+                offset: const Offset(0, 5),
+              ),
+            ],
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: <Widget>[
+              _avatar(),
+              const SizedBox(width: 10),
+              Expanded(
+                child: narrow
+                    ? Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          _info(),
+                          const SizedBox(height: 4),
+                          _actions(),
+                        ],
+                      )
+                    : _info(),
+              ),
+              if (!narrow) ...<Widget>[
+                const SizedBox(width: 8),
+                _actions(),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
 class _TeamLatestPlanNotification extends StatefulWidget {
   final int clubId;
+  final String clubName;
   final int teamId;
   final String teamName;
   final List<Map<String, dynamic>> fallbackPlans;
   final VoidCallback? onOpenPlans;
+  final int currentUserId;
 
   const _TeamLatestPlanNotification({
     super.key,
     required this.clubId,
+    required this.clubName,
     required this.teamId,
     required this.teamName,
     required this.fallbackPlans,
     required this.onOpenPlans,
+    required this.currentUserId,
   });
 
   @override
@@ -4659,6 +6190,117 @@ class _TeamLatestPlanNotificationState
     });
   }
 
+  Future<List<Map<String, dynamic>>> _loadTeamTrainers() async {
+    if (widget.teamId <= 0) return const <Map<String, dynamic>>[];
+
+    dynamic data;
+    try {
+      final response = await http.post(
+        Uri.parse('https://sportotekaapp.ru/api/get_team_trainers.php'),
+        headers: const {'Content-Type': 'application/json; charset=utf-8'},
+        body: jsonEncode(<String, dynamic>{'team_id': widget.teamId}),
+      ).timeout(const Duration(seconds: 9));
+      data = _tryDecode(response.body);
+    } catch (_) {}
+
+    var list = _extractList(
+      data,
+      const ['trainers', 'coaches', 'users', 'items', 'data'],
+    );
+
+    if (list.isEmpty) {
+      try {
+        final response = await http.post(
+          Uri.parse('https://sportotekaapp.ru/api/get_team_trainers.php'),
+          body: <String, String>{'team_id': '${widget.teamId}'},
+        ).timeout(const Duration(seconds: 9));
+        list = _extractList(
+          _tryDecode(response.body),
+          const ['trainers', 'coaches', 'users', 'items', 'data'],
+        );
+      } catch (_) {}
+    }
+
+    final unique = <String, Map<String, dynamic>>{};
+    for (final raw in list) {
+      final item = Map<String, dynamic>.from(raw);
+      final id = _intFromAny(
+        item['id'] ?? item['trainer_id'] ?? item['user_id'] ?? item['coach_id'],
+      );
+      final name = _trainerDisplayName(item);
+      if (name.isEmpty) continue;
+      unique[id > 0 ? 'id:$id' : 'name:${name.toLowerCase()}'] = item;
+    }
+    return unique.values.toList(growable: false);
+  }
+
+  String _trainerDisplayName(Map<String, dynamic> item) {
+    final direct = _s(
+      item['full_name'] ?? item['name'] ?? item['trainer_name'] ??
+      item['coach_name'] ?? item['fio'] ?? item['display_name'],
+    ).trim();
+    if (direct.isNotEmpty) return direct;
+    return <String>[
+      _s(item['last_name']).trim(),
+      _s(item['first_name']).trim(),
+      _s(item['middle_name'] ?? item['patronymic']).trim(),
+    ].where((part) => part.isNotEmpty).join(' ');
+  }
+
+  String _trainerRole(Map<String, dynamic> item) {
+    return _s(
+      item['role_name'] ?? item['role'] ?? item['position'] ??
+      item['staff_role'] ?? item['specialization'],
+    ).trim();
+  }
+
+
+  Future<void> _openTrainerProfile(Map<String, dynamic> trainer) async {
+    final trainerId = _intFromAny(
+      trainer['trainer_id'] ?? trainer['id'] ?? trainer['user_id'],
+    );
+    final name = _trainerDisplayName(trainer);
+    final team = <String, dynamic>{
+      'id': widget.teamId,
+      'team_id': widget.teamId,
+      'name': widget.teamName,
+      'team_name': widget.teamName,
+    };
+
+    Widget buildProject(VoidCallback? closeWindow) =>
+        SportotekaTrainerProjectScreen(
+          trainer: trainer,
+          clubId: widget.clubId,
+          currentUserId: widget.currentUserId,
+          teams: <Map<String, dynamic>>[team],
+          players: const <Map<String, dynamic>>[],
+          onClose: closeWindow,
+        );
+
+    final width = MediaQuery.sizeOf(context).width;
+    if (width < 760) {
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (_) => Scaffold(
+            backgroundColor: Colors.white,
+            body: SafeArea(child: buildProject(null)),
+          ),
+        ),
+      );
+      return;
+    }
+
+    await showWorkspaceManagedWindow(
+      context,
+      id: 'cmr-team-trainer:${widget.teamId}:${trainerId > 0 ? trainerId : name.hashCode}',
+      title: name.isEmpty ? 'Тренер' : name,
+      subtitle: 'Тренер · ${widget.teamName}',
+      iconKind: SportotekaWorkspaceIconKind.trainers,
+      preferredSize: const Size(1080, 740),
+      builder: (closeWindow) => buildProject(closeWindow),
+    );
+  }
+
   Map<String, dynamic>? _fallbackLatestPlan() {
     final filtered = widget.fallbackPlans.where((item) {
       final id = _itemTeamId(item);
@@ -4695,14 +6337,22 @@ class _TeamLatestPlanNotificationState
   }
 
   String _description(Map<String, dynamic> item) {
-    return _s(
-      item['description'] ??
+    final raw = _s(
+      item['workspace_body'] ??
+          item['plan_description'] ??
+          item['description'] ??
           item['short_description'] ??
-          item['theme'] ??
-          item['topic'] ??
           item['body'] ??
           item['notes'],
     );
+    final decoded = WorkspaceTrainingPlanCodec.decodeFirst(raw);
+    if (decoded != null) {
+      final theme = _s(decoded['theme']).trim();
+      if (theme.isNotEmpty) return theme;
+      return 'План-конспект сохранён в формате Sportoteka OS';
+    }
+    if (raw.trim().isNotEmpty) return raw;
+    return _s(item['theme'] ?? item['topic']);
   }
 
   String _meta(Map<String, dynamic> item) {
@@ -4719,24 +6369,192 @@ class _TeamLatestPlanNotificationState
     final plan = _plan;
     if (plan == null) return;
 
-    final planId = _intFromAny(
-      plan['id'] ?? plan['plan_id'] ?? plan['planId'],
+    var planId = _intFromAny(
+      plan['plan_id'] ?? plan['id'] ?? plan['planId'],
     );
-    final title = _itemTitle(plan);
+    final title = _itemTitle(plan).trim().isEmpty
+        ? 'План-конспект'
+        : _itemTitle(plan).trim();
+    final folderId = _intFromAny(
+      plan['folder_id'] ?? plan['plan_folder_id'] ?? plan['folderId'],
+    );
 
-    final args = <String, dynamic>{
-      ...plan,
-      if (planId > 0) 'planId': planId,
-      if (planId > 0) 'plan_id': planId,
-      if (planId > 0) 'id': planId,
-      'clubId': widget.clubId,
-      'club_id': widget.clubId,
-      'teamId': widget.teamId,
-      'team_id': widget.teamId,
-      'teamName': widget.teamName,
-      'team_name': widget.teamName,
-      if (_author(plan).isNotEmpty) 'trainerName': _author(plan),
-    };
+    String firstNonEmpty(List<dynamic> values) {
+      for (final value in values) {
+        final text = _s(value).trim();
+        if (text.isNotEmpty) return text;
+      }
+      return '';
+    }
+
+    final storedBody = firstNonEmpty(<dynamic>[
+      plan['workspace_body'],
+      plan['plan_description'],
+      plan['description'],
+      plan['body'],
+    ]);
+    final hasWorkspaceBody =
+        WorkspaceTrainingPlanCodec.containsPlan(storedBody);
+    final trainerName = _author(plan).trim();
+
+    final seed = WorkspaceTrainingPlanCodec.newPlan(
+      clubName: widget.clubName,
+      teamName: widget.teamName,
+      trainerName: trainerName,
+      cycle: firstNonEmpty(<dynamic>[
+        plan['cycle_title'],
+        plan['cycle'],
+      ]),
+      date: firstNonEmpty(<dynamic>[
+        plan['plan_date'],
+        plan['date'],
+        plan['training_date'],
+      ]),
+      theme: firstNonEmpty(<dynamic>[
+        plan['theme'],
+        plan['topic'],
+        plan['title'],
+        title,
+      ]),
+      location: firstNonEmpty(<dynamic>[
+        plan['location'],
+        plan['place'],
+        plan['venue'],
+      ]),
+      playersCount:
+          plan['players_count'] ?? plan['player_count'] ?? plan['players'] ?? '',
+      durationMin:
+          plan['duration_min'] ?? plan['duration'] ?? plan['minutes'] ?? '',
+    );
+
+    Future<void> savePlan(String editorTitle, String body) async {
+      if (widget.teamId <= 0) {
+        throw StateError('Не выбрана команда для плана-конспекта');
+      }
+
+      final planData = WorkspaceTrainingPlanCodec.decodeFirst(body) ?? seed;
+      final now = DateTime.now();
+      final fallbackDate =
+          '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+      final theme = _s(planData['theme']).trim();
+
+      final response = await http
+          .post(
+            Uri.parse('https://sportotekaapp.ru/api/create_training_plan.php'),
+            headers: const <String, String>{
+              'Content-Type': 'application/json; charset=utf-8',
+            },
+            body: jsonEncode(<String, dynamic>{
+              'id': planId,
+              'plan_id': planId,
+              'club_id': widget.clubId,
+              'club_name': widget.clubName,
+              'team_id': widget.teamId,
+              'team_name': widget.teamName,
+              'folder_id': folderId,
+              if (trainerName.isNotEmpty) 'trainer_name': trainerName,
+              if (trainerName.isNotEmpty) 'coach_name': trainerName,
+              'theme': theme.isNotEmpty
+                  ? theme
+                  : (editorTitle.trim().isEmpty
+                      ? 'Новый план-конспект'
+                      : editorTitle.trim()),
+              'cycle_title': _s(planData['cycle']).trim(),
+              // Канонический формат Sportoteka OS. Именно этот body затем
+              // повторно открывается тем же WorkspaceDocumentEditor.
+              'description': body,
+              'plan_description': body,
+              'workspace_body': body,
+              'plan_date': _s(planData['date']).trim().isEmpty
+                  ? fallbackDate
+                  : _s(planData['date']).trim(),
+              'location': _s(planData['location']).trim(),
+              'players_count': _s(planData['players_count']).trim(),
+              'duration_min': _s(planData['duration_min']).trim(),
+            }),
+          )
+          .timeout(const Duration(seconds: 15));
+
+      final decoded = _tryDecode(response.body);
+      final ok = response.statusCode >= 200 &&
+          response.statusCode < 300 &&
+          decoded is Map &&
+          decoded['success'] == true;
+      if (!ok) {
+        throw StateError(
+          decoded is Map
+              ? _s(decoded['message'] ?? decoded['error']).trim().isEmpty
+                  ? 'Не удалось сохранить план-конспект'
+                  : _s(decoded['message'] ?? decoded['error']).trim()
+              : 'Не удалось сохранить план-конспект',
+        );
+      }
+
+      final savedId = _intFromAny(
+        decoded['plan_id'] ?? decoded['id'] ?? planId,
+      );
+      if (savedId > 0) planId = savedId;
+
+      if (mounted) {
+        setState(() {
+          _plan = <String, dynamic>{
+            ...plan,
+            'id': planId,
+            'plan_id': planId,
+            'team_id': widget.teamId,
+            'team_name': widget.teamName,
+            'folder_id': folderId,
+            'theme': theme,
+            'description': body,
+            'plan_description': body,
+            'workspace_body': body,
+          };
+        });
+      }
+    }
+
+    Widget buildEditor(VoidCallback closeWindow) => WorkspaceDocumentEditor(
+          initialTitle: title,
+          initialBody: hasWorkspaceBody ? storedBody : '',
+          startWithTrainingPlanTemplate: !hasWorkspaceBody,
+          initialTrainingPlanData: seed,
+          contextLabel: 'План-конспект',
+          contextName: widget.teamName,
+          documentType: 'План-конспект',
+          onSave: savePlan,
+          onClose: closeWindow,
+          compactWorkspaceChrome: true,
+          aiClubId: widget.clubId,
+          aiUserId: widget.currentUserId,
+          aiTeamId: widget.teamId,
+          aiClubName: widget.clubName,
+          aiTeamName: widget.teamName,
+          aiDocumentKey: planId > 0
+              ? 'training_plan_$planId'
+              : 'cmr_team_plan_${widget.teamId}_${title.hashCode}',
+          aiExtraPayload: <String, dynamic>{
+            'workspace_section': 'plans',
+            'folder_id': folderId,
+            'plan_id': planId,
+          },
+        );
+
+    final width = MediaQuery.sizeOf(context).width;
+    if (width < 760) {
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (routeContext) => Scaffold(
+            backgroundColor: Colors.white,
+            body: SafeArea(
+              child: buildEditor(
+                () => Navigator.of(routeContext).maybePop(),
+              ),
+            ),
+          ),
+        ),
+      );
+      return;
+    }
 
     await showWorkspaceManagedWindow(
       context,
@@ -4744,13 +6562,8 @@ class _TeamLatestPlanNotificationState
       title: title,
       subtitle: 'План-конспект · ${widget.teamName}',
       iconKind: SportotekaWorkspaceIconKind.plans,
-      preferredSize: const Size(1060, 720),
-      builder: (closeWindow) => PlanDetailScreen(
-        embedded: true,
-        workspaceWindowMode: true,
-        initialArgs: args,
-        onClose: closeWindow,
-      ),
+      preferredSize: const Size(1240, 820),
+      builder: (closeWindow) => buildEditor(closeWindow),
     );
   }
 
@@ -9099,6 +10912,21 @@ String _teamFitnessCoach(Map<String, dynamic> team) =>
 
 String _teamAnalyst(Map<String, dynamic> team) =>
     _rawTeamAnalyst(team);
+
+
+bool _teamIsArchived(Map<String, dynamic> team) {
+  final archivedRaw = _s(
+    team['is_archived'] ?? team['archived'] ?? team['in_archive'],
+  ).toLowerCase();
+  if (archivedRaw == '1' || archivedRaw == 'true' || archivedRaw == 'yes') {
+    return true;
+  }
+
+  final status = _s(
+    team['team_status'] ?? team['status'] ?? team['state'],
+  ).trim().toLowerCase();
+  return status == 'архив' || status == 'archive' || status == 'archived';
+}
 
 bool _teamIsFemale(Map<String, dynamic> team) {
   final explicit = _s(

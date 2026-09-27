@@ -1443,10 +1443,14 @@ class _WorkspaceEntityRecordDocumentState
   String _note = '';
   bool _busy = false;
   bool _detailsOpen = false;
+  // Word-like document mode: entity metadata is available on demand instead
+  // of permanently consuming vertical space above the document.
+  bool _propertiesOpen = false;
   bool _materialsOpen = false;
   WorkspaceServerStorage? _serverStorage;
   bool _serverAvailable = false;
   bool _relatedLoading = false;
+  bool _uploadingRelatedFile = false;
   List<Map<String, dynamic>> _relatedFiles = <Map<String, dynamic>>[];
 
   String get _notePendingKey => '${widget.noteKey}_workspace_sync_pending_v1';
@@ -1497,6 +1501,58 @@ class _WorkspaceEntityRecordDocumentState
       // Карточка сущности должна открываться даже при временной ошибке файлов.
     } finally {
       if (mounted) setState(() => _relatedLoading = false);
+    }
+  }
+
+  Future<void> _pickRelatedFiles() async {
+    if (!_canLoadRelatedFiles || _uploadingRelatedFile) return;
+    final server = _serverStorage;
+    if (server == null) return;
+
+    final picked = await FilePicker.pickFiles(allowMultiple: true);
+    if (picked == null) return;
+    final paths = picked.files
+        .map((file) => file.path)
+        .whereType<String>()
+        .where((path) => path.trim().isNotEmpty)
+        .toList(growable: false);
+    if (paths.isEmpty) return;
+
+    final entityId = int.tryParse(widget.entityId) ?? 0;
+    if (entityId <= 0) return;
+
+    if (mounted) setState(() => _uploadingRelatedFile = true);
+    try {
+      for (final path in paths) {
+        final fileName = path.split(RegExp(r'[\\/]')).last;
+        await server.uploadAttachment(
+          filePath: path,
+          entityType: widget.entityType,
+          entityId: entityId,
+          sectionKey: 'documents',
+          title: fileName.replaceFirst(RegExp(r'\.[^.]+$'), ''),
+        );
+      }
+      await _loadRelatedFiles();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              paths.length == 1
+                  ? 'Файл прикреплён.'
+                  : 'Прикреплено файлов: ${paths.length}.',
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Не удалось прикрепить файл: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _uploadingRelatedFile = false);
     }
   }
 
@@ -1671,6 +1727,30 @@ class _WorkspaceEntityRecordDocumentState
                 Icons.refresh_rounded,
                 size: 17,
                 color: _muted,
+              ),
+            ),
+            const SizedBox(width: 2),
+            TextButton.icon(
+              onPressed: _uploadingRelatedFile ? null : _pickRelatedFiles,
+              style: TextButton.styleFrom(
+                foregroundColor: _green,
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+                minimumSize: const Size(0, 32),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              icon: _uploadingRelatedFile
+                  ? const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 1.6,
+                        color: _green,
+                      ),
+                    )
+                  : const Icon(Icons.upload_file_rounded, size: 16),
+              label: Text(
+                _uploadingRelatedFile ? 'Загрузка…' : 'Добавить файл',
+                style: AppTypography.actionStrong(color: _green),
               ),
             ),
           ],
@@ -1874,167 +1954,138 @@ class _WorkspaceEntityRecordDocumentState
     final visible = widget.properties
         .where((p) => p.value.trim().isNotEmpty && p.value.trim() != '—')
         .toList();
-    final headline = visible.take(_insideWorkspaceWindow ? 5 : 4).toList();
-    final rest = visible.skip(_insideWorkspaceWindow ? 5 : 4).toList();
 
     return ColoredBox(
       color: Colors.white,
       child: Column(
         children: [
+          // One compact document bar, like a desktop editor title row.
+          // The Workspace window already shows the owner, so we do not repeat
+          // "owner — document" and the section subtitle here.
           Container(
-            height: _insideWorkspaceWindow ? 50 : 62,
-            padding: EdgeInsets.symmetric(
-              horizontal: _insideWorkspaceWindow ? 12 : 10,
-            ),
+            height: 48,
+            padding: const EdgeInsets.symmetric(horizontal: 10),
             child: Row(
               children: [
                 if (!_insideWorkspaceWindow) ...[
                   IconButton(
+                    tooltip: 'Назад',
+                    visualDensity: VisualDensity.compact,
                     onPressed: widget.onClose ??
                         () => Navigator.of(context).maybePop(),
                     icon: const SportotekaWorkspaceIcon(
                       kind: SportotekaWorkspaceIconKind.back,
-                      size: 20,
+                      size: 19,
                     ),
                   ),
-                  const SizedBox(width: 3),
+                  const SizedBox(width: 2),
                 ],
                 SportotekaWorkspaceIcon(
                   kind: widget.iconKind,
-                  size: _insideWorkspaceWindow ? 27 : 31,
+                  size: 25,
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 9),
                 Expanded(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '${widget.ownerTitle} — ${widget.title}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: _insideWorkspaceWindow
-                            ? AppTypography.itemTitle(color: _text).copyWith(
-                                fontSize: 15.2,
-                                fontWeight: FontWeight.w700,
-                              )
-                            : AppTypography.screenTitle(color: _text),
-                      ),
-                      if (!_insideWorkspaceWindow) ...[
-                        const SizedBox(height: 2),
-                        Text(
-                          widget.sectionTitle,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: AppTypography.caption(color: _muted),
-                        ),
-                      ],
-                    ],
+                  child: Text(
+                    widget.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.itemTitle(color: _text).copyWith(
+                      fontSize: 15.2,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
+                if (visible.isNotEmpty) ...[
+                  const SizedBox(width: 4),
+                  IconButton(
+                    tooltip: _propertiesOpen
+                        ? 'Скрыть данные записи'
+                        : 'Показать данные записи',
+                    visualDensity: VisualDensity.compact,
+                    onPressed: () =>
+                        setState(() => _propertiesOpen = !_propertiesOpen),
+                    icon: Icon(
+                      _propertiesOpen
+                          ? Icons.info_rounded
+                          : Icons.info_outline_rounded,
+                      size: 19,
+                      color: _propertiesOpen ? _green : _muted,
+                    ),
+                  ),
+                ],
                 if (_canLoadRelatedFiles) ...[
-                  const SizedBox(width: 8),
-                  _materialsHeaderButton(),
+                  const SizedBox(width: 2),
+                  IconButton(
+                    tooltip: _relatedFiles.isEmpty
+                        ? 'Материалы'
+                        : 'Материалы · ${_relatedFiles.length}',
+                    visualDensity: VisualDensity.compact,
+                    onPressed: _relatedLoading
+                        ? null
+                        : () =>
+                            setState(() => _materialsOpen = !_materialsOpen),
+                    icon: Icon(
+                      Icons.attach_file_rounded,
+                      size: 19,
+                      color: _materialsOpen ? _green : _muted,
+                    ),
+                  ),
                 ],
                 if (widget.onEdit != null) ...[
-                  const SizedBox(width: 4),
-                  if (_insideWorkspaceWindow)
-                    _compactHeaderAction(
-                      icon: Icons.edit_outlined,
-                      label: _busy ? 'Сохранение…' : 'Редактировать',
-                      onTap: _busy ? null : _edit,
-                    )
-                  else
-                    TextButton(
-                      onPressed: _busy ? null : _edit,
-                      child: Text(
-                        _busy ? 'Сохранение…' : 'Редактировать',
-                        style: AppTypography.actionStrong(color: _green),
-                      ),
+                  const SizedBox(width: 2),
+                  IconButton(
+                    tooltip: _busy ? 'Сохранение…' : 'Редактировать данные',
+                    visualDensity: VisualDensity.compact,
+                    onPressed: _busy ? null : _edit,
+                    icon: const Icon(
+                      Icons.edit_outlined,
+                      size: 18,
+                      color: _muted,
                     ),
+                  ),
                 ],
                 if (widget.fileUrl.isNotEmpty) ...[
                   const SizedBox(width: 2),
-                  if (_insideWorkspaceWindow)
-                    IconButton(
-                      tooltip: 'Открыть вложение',
-                      visualDensity: VisualDensity.compact,
-                      onPressed: _openAttachment,
-                      icon: const Icon(
-                        Icons.attach_file_rounded,
-                        size: 18,
-                        color: _green,
-                      ),
-                    )
-                  else
-                    TextButton(
-                      onPressed: _openAttachment,
-                      child: Text(
-                        'Вложение',
-                        style: AppTypography.actionStrong(color: _green),
-                      ),
+                  IconButton(
+                    tooltip: 'Открыть вложение',
+                    visualDensity: VisualDensity.compact,
+                    onPressed: _openAttachment,
+                    icon: const Icon(
+                      Icons.open_in_new_rounded,
+                      size: 18,
+                      color: _muted,
                     ),
+                  ),
                 ],
               ],
             ),
           ),
           const Divider(height: 1, color: _line),
-          if (headline.isNotEmpty)
+
+          // Entity metadata is no longer a permanent ribbon. It opens only
+          // when the user asks for it, preserving document workspace height.
+          if (_propertiesOpen && visible.isNotEmpty)
             Container(
               width: double.infinity,
-              padding: EdgeInsets.fromLTRB(
-                16,
-                _insideWorkspaceWindow ? 7 : 10,
-                16,
-                _insideWorkspaceWindow ? 7 : 9,
-              ),
+              padding: const EdgeInsets.fromLTRB(14, 8, 14, 9),
               color: const Color(0xFFFAFBFA),
               child: Wrap(
-                spacing: _insideWorkspaceWindow ? 14 : 18,
-                runSpacing: 5,
+                spacing: 18,
+                runSpacing: 7,
                 children: [
-                  for (final p in headline)
-                    _RibbonProperty(label: p.label, value: p.value),
-                  if (rest.isNotEmpty)
-                    InkWell(
-                      onTap: () =>
-                          setState(() => _detailsOpen = !_detailsOpen),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 2),
-                        child: Text(
-                          _detailsOpen ? 'Скрыть данные' : 'Все данные',
-                          style: AppTypography.action(color: _green),
-                        ),
-                      ),
+                  for (final p in visible)
+                    _RibbonProperty(
+                      label: p.label,
+                      value: p.value,
+                      multiline: true,
                     ),
                 ],
               ),
             ),
-          if (_detailsOpen && rest.isNotEmpty)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
-              decoration: const BoxDecoration(
-                border: Border(bottom: BorderSide(color: _line)),
-              ),
-              child: Wrap(
-                spacing: 22,
-                runSpacing: 10,
-                children: [
-                  for (final p in rest)
-                    SizedBox(
-                      width: 230,
-                      child: _RibbonProperty(
-                        label: p.label,
-                        value: p.value,
-                        multiline: true,
-                      ),
-                    ),
-                ],
-              ),
-            )
-          else
+          if (_propertiesOpen && visible.isNotEmpty)
             const Divider(height: 1, color: _line),
+
           _relatedFilesTray(),
           Expanded(
             child: WorkspaceDocumentEditor(
@@ -2046,7 +2097,10 @@ class _WorkspaceEntityRecordDocumentState
               contextName: widget.ownerTitle,
               documentType: 'Рабочая заметка',
               liveBlocksKey: widget.noteKey,
-              compactWorkspaceChrome: _insideWorkspaceWindow,
+              // The entity screen already owns the title row. Always use the
+              // compact editor chrome here so the redundant SPORTOTEKA OS row
+              // is not rendered above the formatting toolbar.
+              compactWorkspaceChrome: true,
               onSave: _saveNote,
               aiClubId: widget.clubId > 0 ? widget.clubId : null,
               aiUserId: widget.currentUserId > 0 ? widget.currentUserId : null,
@@ -2064,6 +2118,7 @@ class _WorkspaceEntityRecordDocumentState
       ),
     );
   }
+
 }
 
 class _RibbonProperty extends StatelessWidget {

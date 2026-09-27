@@ -9,11 +9,13 @@ list(APPEND FLUTTER_PLUGIN_LIST
   emoji_picker_flutter
   file_selector_windows
   firebase_core
+  flutter_angle
   flutter_webrtc
   geolocator_windows
   livekit_client
   permission_handler_windows
   printing
+  record_windows
   share_plus
   syncfusion_pdfviewer_windows
   thermion_flutter

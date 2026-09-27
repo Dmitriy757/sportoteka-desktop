@@ -7,12 +7,12 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sportoteka/core/theme/app_typography.dart';
+import 'package:sportoteka/presentation/workspace_os/workspace_attachment_preview.dart';
 import 'package:sportoteka/presentation/workspace_os/workspace_document_editor.dart';
 import 'package:sportoteka/presentation/workspace_os/workspace_entity_identity.dart';
 import 'package:sportoteka/presentation/workspace_os/workspace_player_data_bridge.dart';
 import 'package:sportoteka/presentation/workspace_os/workspace_finder_models.dart';
 import 'package:sportoteka/presentation/workspace_os/workspace_server_storage.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 enum WorkspacePlayerSection {
   card,
@@ -1168,9 +1168,12 @@ class _WorkspacePlayerSectionDocumentState
   Future<void> _openRecordAttachment(Map<String, dynamic> attachment) async {
     final raw = _recordAttachmentUrl(attachment);
     if (raw.isEmpty) return;
-    final uri = Uri.tryParse(_absoluteFileUrl(raw));
-    if (uri == null) return;
-    await launchUrl(uri, mode: LaunchMode.externalApplication);
+    await openWorkspaceAttachmentPreview(
+      context,
+      title: _recordAttachmentTitle(attachment),
+      fileUrl: _absoluteFileUrl(raw),
+      mimeType: '${attachment['mime_type'] ?? attachment['mime'] ?? attachment['content_type'] ?? ''}',
+    );
   }
 
   Future<void> _pickRecordAttachment() async {
@@ -1478,7 +1481,12 @@ class _WorkspacePlayerSectionDocumentState
   Future<void> _openRecordFile(String url) async {
     final uri = Uri.tryParse(url);
     if (uri == null) return;
-    await launchUrl(uri, mode: LaunchMode.externalApplication);
+    final title = uri.pathSegments.isEmpty ? 'Документ' : uri.pathSegments.last;
+    await openWorkspaceAttachmentPreview(
+      context,
+      title: title.isEmpty ? 'Документ' : title,
+      fileUrl: url,
+    );
   }
 
   int _diaryEntryId(Map<String, dynamic> record) {
@@ -2411,10 +2419,13 @@ class _WorkspacePlayerSectionDocumentState
     final raw =
         '${record['file_url'] ?? record['file'] ?? record['url'] ?? ''}'.trim();
     if (raw.isEmpty) return;
-    final url = _absoluteFileUrl(raw);
-    final uri = Uri.tryParse(url);
-    if (uri == null) return;
-    await launchUrl(uri, mode: LaunchMode.externalApplication);
+    final title = '${record['title'] ?? record['original_name'] ?? record['file_name'] ?? record['name'] ?? 'Документ'}'.trim();
+    await openWorkspaceAttachmentPreview(
+      context,
+      title: title.isEmpty ? 'Документ' : title,
+      fileUrl: _absoluteFileUrl(raw),
+      mimeType: '${record['mime_type'] ?? record['mime'] ?? record['content_type'] ?? ''}',
+    );
   }
 
   String _absoluteFileUrl(String raw) {

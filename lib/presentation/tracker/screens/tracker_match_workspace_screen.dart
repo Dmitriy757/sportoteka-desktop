@@ -16,6 +16,7 @@ import '../models/tracker_pro_models.dart';
 import '../services/action_tracker_ble_service.dart';
 import '../services/team_action_tracker_ble_pool.dart';
 import '../services/team_tracker_live_coordinator.dart';
+import '../services/tracker_workspace_ai_archive_service.dart';
 import '../team_live_debug_dialog.dart';
 import '../services/polar_heart_rate_ble_service.dart';
 import '../services/tracker_permissions.dart';
@@ -200,6 +201,10 @@ class _TrackerMatchWorkspaceScreenState
   late final HeartRateBleService _heart;
   late final TrackerProApi _api;
   late final TrackerLiveApi _liveApi;
+  final TrackerWorkspaceAiArchiveService _aiArchive = TrackerWorkspaceAiArchiveService();
+  bool _archiveAiBatchRunning = false;
+  int _archiveAiBatchDone = 0;
+  int _archiveAiBatchTotal = 0;
 
   final List<String> _logs = <String>[];
   final List<ActionTrackerRecord> _records = <ActionTrackerRecord>[];
@@ -2728,8 +2733,48 @@ class _TrackerMatchWorkspaceScreenState
             'Stop сохранён · recovery ATP работает в фоне без частых BLE-переподключений';
       });
     }
+    if (createFinalSession) {
+      unawaited(_archiveCompletedTeamTraining());
+    }
     unawaited(_logRemote('TEAM LIVE STOP: final=$createFinalSession',
         source: 'workspace_team_live_stop'));
+  }
+
+  Future<void> _archiveCompletedTeamTraining() async {
+    try {
+      // При обычном Stop session_id уже готовы. Если ATP recovery ещё идёт,
+      // ждём финальных id, чтобы ИИ анализировал полный маршрут, а не обрезанный Live.
+      for (var attempt = 0; attempt < 60; attempt++) {
+        final ids = _teamLiveCoordinator.finalSessionIds;
+        if (ids.isNotEmpty && !_teamLiveCoordinator.offlineRecoveryBusy) break;
+        await Future<void>.delayed(const Duration(seconds: 2));
+      }
+      final ids = _teamLiveCoordinator.finalSessionIds;
+      if (ids.isEmpty) {
+        debugPrint('[TRACKER_AI_ARCHIVE][TEAM] final session ids are not ready');
+        return;
+      }
+      await _aiArchive.archiveTraining(
+        clubId: widget.clubId,
+        userId: widget.userId,
+        teamId: widget.teamId,
+        teamName: widget.teamName,
+        sessionIds: ids,
+        personal: false,
+        finishedAt: DateTime.now(),
+      );
+      unawaited(_logRemote(
+        'TEAM AI ANALYSIS SAVED: sessions=${ids.join(',')}',
+        source: 'workspace_team_ai_archive',
+      ));
+    } catch (e) {
+      debugPrint('[TRACKER_AI_ARCHIVE][TEAM] $e');
+      unawaited(_logRemote(
+        'TEAM AI ANALYSIS ERROR: $e',
+        level: 'error',
+        source: 'workspace_team_ai_archive_error',
+      ));
+    }
   }
 
   String _recoveryClockShiftLabel(Object? value) {
@@ -9565,6 +9610,380 @@ class _TrackerMatchWorkspaceScreenState
     );
   }
 
+  DateTime? _aiHistorySessionDate(TrackerSessionModel session) {
+    return _trackerMoscowDateTime(session.createdAt) ??
+        DateTime.tryParse(session.createdAt.replaceFirst(' ', 'T'));
+  }
+
+  String _aiHistoryGroupKey(TrackerSessionModel session) {
+    final serverKey = session.sessionGroupKey.trim();
+    if (serverKey.isNotEmpty) {
+      return '${session.personalSession ? 'personal' : 'team'}|server:$serverKey';
+    }
+    final dt = _aiHistorySessionDate(session);
+    final day = dt == null
+        ? session.createdAt.trim().split(' ').first
+        : '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
+    var title = session.title.trim().toLowerCase().replaceAll('ё', 'е');
+    if (title.isEmpty || title == 'сессия') title = 'тренировочная сессия';
+    if (session.personalSession) {
+      final playerKey = (session.playerId ?? 0) > 0
+          ? 'id:${session.playerId}'
+          : 'name:${(session.playerName ?? '').trim().toLowerCase()}';
+      return 'personal|$day|$title|$playerKey';
+    }
+    return 'team|$day|$title';
+  }
+
+  Future<List<TrackerSessionModel>> _aiHistoryGroupFor(
+      TrackerSessionModel selected) async {
+    try {
+      final sessions = await _api.loadSessions(
+        teamId: widget.teamId,
+        limit: 500,
+        sessionKind: 'all',
+      );
+      final key = _aiHistoryGroupKey(selected);
+      final group = sessions
+          .where((session) => _aiHistoryGroupKey(session) == key)
+          .toList(growable: false);
+      if (group.isNotEmpty) return group;
+    } catch (e) {
+      debugPrint('[TRACKER_AI_HISTORY] group load failed: $e');
+    }
+    return <TrackerSessionModel>[selected];
+  }
+
+  String _aiHistoryPlayerName(TrackerSessionModel session) {
+    final direct = (session.playerName ?? '').trim();
+    if (direct.isNotEmpty && direct.toLowerCase() != 'игрок') return direct;
+    final id = session.playerId ?? 0;
+    if (id > 0) {
+      for (final player in _players) {
+        if (player.id == id && player.name.trim().isNotEmpty) {
+          return player.name.trim();
+        }
+      }
+    }
+    for (final name in session.participantNames) {
+      final clean = name.trim();
+      if (clean.isNotEmpty && clean.toLowerCase() != 'игрок') return clean;
+    }
+    return id > 0 ? 'Игрок #$id' : 'Игрок';
+  }
+
+  Future<TrackerAiAnalysisDocument> _archiveAiHistoryGroup(
+      List<TrackerSessionModel> group) async {
+    if (group.isEmpty) {
+      throw Exception('Не найдены Tracker-сессии для анализа.');
+    }
+    final selected = group.first;
+    final ids = group.map((e) => e.id).where((id) => id > 0).toSet().toList()
+      ..sort();
+    final personal = selected.personalSession;
+    return _aiArchive.archiveTraining(
+      clubId: widget.clubId,
+      userId: widget.userId,
+      teamId: widget.teamId,
+      teamName: widget.teamName,
+      sessionIds: ids.isEmpty ? <int>[selected.id] : ids,
+      personal: personal,
+      playerId: personal ? selected.playerId : null,
+      playerName: personal ? _aiHistoryPlayerName(selected) : '',
+      finishedAt: _aiHistorySessionDate(selected),
+    );
+  }
+
+  Future<TrackerAiAnalysisDocument> _generateAiHistoryGroup(
+      TrackerSessionModel selected) async {
+    final group = await _aiHistoryGroupFor(selected);
+    return _archiveAiHistoryGroup(group);
+  }
+
+  Future<void> _openAiHistoryAnalysis(TrackerSessionModel session) async {
+    TrackerAiAnalysisDocument? document;
+    Object? loadError;
+    try {
+      document = await _aiArchive.findExistingAnalysis(
+        clubId: widget.clubId,
+        userId: widget.userId,
+        teamId: widget.teamId,
+        sessionId: session.id,
+      );
+    } catch (e) {
+      loadError = e;
+    }
+    if (!mounted) return;
+
+    await showDialog<void>(
+      context: context,
+      barrierColor: Colors.black.withOpacity(.22),
+      builder: (dialogContext) {
+        var current = document;
+        var busy = false;
+        String? error = loadError == null ? null : '$loadError';
+        return StatefulBuilder(
+          builder: (context, setLocalState) {
+            Future<void> generate() async {
+              if (busy) return;
+              setLocalState(() {
+                busy = true;
+                error = null;
+              });
+              try {
+                final created = await _generateAiHistoryGroup(session);
+                if (!dialogContext.mounted) return;
+                setLocalState(() {
+                  current = created;
+                  busy = false;
+                });
+              } catch (e) {
+                if (!dialogContext.mounted) return;
+                setLocalState(() {
+                  busy = false;
+                  error = '$e';
+                });
+              }
+            }
+
+            final media = MediaQuery.sizeOf(dialogContext);
+            final width = math.min(980.0, math.max(320.0, media.width - 28));
+            final height = math.min(780.0, math.max(420.0, media.height - 28));
+            return Dialog(
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              insetPadding: const EdgeInsets.all(14),
+              child: Container(
+                width: width,
+                height: height,
+                clipBehavior: Clip.antiAlias,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: _TD.border, width: .8),
+                  boxShadow: _TD.windowShadow,
+                ),
+                child: Column(
+                  children: [
+                    Container(
+                      height: 58,
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        border: Border(
+                          bottom: BorderSide(color: _TD.softLine, width: .8),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 34,
+                            height: 34,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: _TD.greenSoft,
+                              borderRadius: BorderRadius.circular(9),
+                              border: Border.all(color: _TD.greenBorder, width: .8),
+                            ),
+                            child: const Icon(Icons.auto_awesome_rounded,
+                                color: _TD.green, size: 18),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  current?.title ?? 'Анализ ИИ · ${session.title}',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: _TD.text,
+                                    fontSize: AppTypography.sectionTitleSize,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                                Text(
+                                  session.personalSession
+                                      ? '${_aiHistoryPlayerName(session)} · ${session.createdAt}'
+                                      : '${widget.teamName} · ${session.createdAt}',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: _TD.muted,
+                                    fontSize: AppTypography.secondarySize,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          _DarkActionButton(
+                            icon: current == null
+                                ? Icons.auto_awesome_rounded
+                                : Icons.refresh_rounded,
+                            label: busy
+                                ? 'Анализирую…'
+                                : (current == null ? 'Создать анализ' : 'Обновить анализ'),
+                            primary: current == null,
+                            onTap: busy ? null : () => unawaited(generate()),
+                          ),
+                          const SizedBox(width: 6),
+                          IconButton(
+                            onPressed: () => Navigator.of(dialogContext).pop(),
+                            icon: const Icon(Icons.close_rounded, color: _TD.graphite),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Expanded(
+                      child: busy && current == null
+                          ? const Center(child: CircularProgressIndicator())
+                          : error != null && current == null
+                              ? _DarkError(
+                                  error: error!,
+                                  onRetry: () => unawaited(generate()),
+                                )
+                              : current == null
+                                  ? Center(
+                                      child: Padding(
+                                        padding: const EdgeInsets.all(28),
+                                        child: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            const Icon(Icons.auto_awesome_rounded,
+                                                color: _TD.green, size: 42),
+                                            const SizedBox(height: 12),
+                                            const Text(
+                                              'Для этой старой тренировки анализ ИИ ещё не создан.',
+                                              textAlign: TextAlign.center,
+                                              style: TextStyle(
+                                                color: _TD.text,
+                                                fontSize: AppTypography.itemTitleSize,
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 6),
+                                            const Text(
+                                              'SPORTOTEKA AI возьмёт фактические данные Tracker, игроков, нагрузку, GPS и пульс и сохранит результат в эту тренировку.',
+                                              textAlign: TextAlign.center,
+                                              style: TextStyle(
+                                                color: _TD.muted,
+                                                fontSize: AppTypography.bodySize,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 16),
+                                            _DarkActionButton(
+                                              icon: Icons.auto_awesome_rounded,
+                                              label: 'Запустить анализ ИИ',
+                                              primary: true,
+                                              onTap: () => unawaited(generate()),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    )
+                                  : Scrollbar(
+                                      child: SingleChildScrollView(
+                                        padding: const EdgeInsets.fromLTRB(22, 18, 22, 28),
+                                        child: SelectableText(
+                                          current!.body.trim().isEmpty
+                                              ? 'Анализ сохранён, но текст документа пока не загружен. Нажмите «Обновить анализ».'
+                                              : current!.body,
+                                          style: const TextStyle(
+                                            color: _TD.text,
+                                            fontSize: AppTypography.bodySize,
+                                            height: 1.55,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _generateMissingAiArchive() async {
+    if (_archiveAiBatchRunning) return;
+    setState(() {
+      _archiveAiBatchRunning = true;
+      _archiveAiBatchDone = 0;
+      _archiveAiBatchTotal = 0;
+    });
+    var created = 0;
+    var skipped = 0;
+    var failed = 0;
+    try {
+      final sessions = await _api.loadSessions(
+        teamId: widget.teamId,
+        limit: 500,
+        sessionKind: 'all',
+      );
+      final groupsByKey = <String, List<TrackerSessionModel>>{};
+      for (final session in sessions.where((s) => s.id > 0)) {
+        groupsByKey
+            .putIfAbsent(_aiHistoryGroupKey(session), () => <TrackerSessionModel>[])
+            .add(session);
+      }
+      final existing = await _aiArchive.existingAnalysisSessionIds(
+        clubId: widget.clubId,
+        userId: widget.userId,
+        teamId: widget.teamId,
+      );
+      final pending = groupsByKey.values.where((group) {
+        return !group.any((session) => existing.contains(session.id));
+      }).toList(growable: false)
+        ..sort((a, b) {
+          final ad = _aiHistorySessionDate(a.first) ?? DateTime.fromMillisecondsSinceEpoch(0);
+          final bd = _aiHistorySessionDate(b.first) ?? DateTime.fromMillisecondsSinceEpoch(0);
+          return bd.compareTo(ad);
+        });
+      skipped = groupsByKey.length - pending.length;
+      if (mounted) {
+        setState(() => _archiveAiBatchTotal = pending.length);
+      }
+
+      for (final group in pending) {
+        try {
+          await _archiveAiHistoryGroup(group);
+          created++;
+        } catch (e) {
+          failed++;
+          debugPrint('[TRACKER_AI_HISTORY] bulk failed group=${_aiHistoryGroupKey(group.first)} error=$e');
+        }
+        if (mounted) {
+          setState(() => _archiveAiBatchDone = created + failed);
+        }
+      }
+      if (mounted) {
+        _toast(
+          'Анализ ИИ',
+          pending.isEmpty
+              ? 'Все старые тренировки уже имеют анализ.'
+              : 'Готово: $created · уже было: $skipped${failed > 0 ? ' · ошибок: $failed' : ''}',
+        );
+      }
+    } catch (e) {
+      if (mounted) _toast('Анализ ИИ', '$e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _archiveAiBatchRunning = false;
+          _archiveAiBatchDone = 0;
+          _archiveAiBatchTotal = 0;
+        });
+      }
+    }
+  }
+
   Widget _sessions() {
     Future<void> processSession(TrackerSessionModel session) async {
       try {
@@ -9826,6 +10245,12 @@ class _TrackerMatchWorkspaceScreenState
                       teamName: widget.teamName,
                       players: _players,
                       apiBaseUrl: _api.apiBaseUrl,
+                      onOpenAiAnalysis: _openAiHistoryAnalysis,
+                      onBulkAiAnalysis: () => unawaited(_generateMissingAiArchive()),
+                      bulkAiRunning: _archiveAiBatchRunning,
+                      bulkAiProgressLabel: _archiveAiBatchRunning
+                          ? '$_archiveAiBatchDone/$_archiveAiBatchTotal'
+                          : '',
                     ),
                   ),
                 ],
@@ -9858,6 +10283,12 @@ class _TrackerMatchWorkspaceScreenState
               onDownloadRecords: () => unawaited(_openTeamGpsRecoverySheet()),
               onSaveGps: _savingRecord ? null : _saveRecordAsSession,
               savingRecord: _savingRecord,
+              onOpenAiAnalysis: _openAiHistoryAnalysis,
+              onBulkAiAnalysis: () => unawaited(_generateMissingAiArchive()),
+              bulkAiRunning: _archiveAiBatchRunning,
+              bulkAiProgressLabel: _archiveAiBatchRunning
+                  ? '$_archiveAiBatchDone/$_archiveAiBatchTotal'
+                  : '',
             ),
           );
         }
@@ -9877,6 +10308,23 @@ class _TrackerMatchWorkspaceScreenState
                   primary: true,
                   onTap: openSelectedReport,
                 ),
+              if (_selectedReportSession != null)
+                _DarkActionButton(
+                  icon: Icons.auto_awesome_rounded,
+                  label: 'Анализ ИИ',
+                  onTap: () => unawaited(
+                    _openAiHistoryAnalysis(_selectedReportSession!),
+                  ),
+                ),
+              _DarkActionButton(
+                icon: Icons.auto_awesome_rounded,
+                label: _archiveAiBatchRunning
+                    ? 'ИИ $_archiveAiBatchDone/$_archiveAiBatchTotal'
+                    : 'Анализ ИИ для архива',
+                onTap: _archiveAiBatchRunning
+                    ? null
+                    : () => unawaited(_generateMissingAiArchive()),
+              ),
               _DarkActionButton(
                 icon: Icons.refresh_rounded,
                 label: 'Обновить',
@@ -10624,7 +11072,7 @@ class _TrackerMatchWorkspaceScreenState
                       onTap: () => _openBindingsArchiveSheet()),
                   const SizedBox(width: 7),
                   toolChip(
-                      icon: Icons.auto_awesome_motion_rounded,
+                      icon: Icons.auto_awesome_rounded,
                       label: 'Авто',
                       onTap: () => _openTeamEquipmentModal()),
                   const SizedBox(width: 7),
@@ -11455,7 +11903,7 @@ class _TrackerMatchWorkspaceScreenState
                             }),
                         const SizedBox(height: 8),
                         _DarkActionButton(
-                            icon: Icons.auto_awesome_motion_rounded,
+                            icon: Icons.auto_awesome_rounded,
                             label: 'Автоназначение',
                             onTap: () {
                               Navigator.of(sheetContext).pop();
@@ -16931,6 +17379,10 @@ class _MobileSessionsReportPane extends StatefulWidget {
     required this.onDownloadRecords,
     required this.onSaveGps,
     required this.savingRecord,
+    required this.onOpenAiAnalysis,
+    required this.onBulkAiAnalysis,
+    required this.bulkAiRunning,
+    required this.bulkAiProgressLabel,
   });
 
   final TrackerProApi api;
@@ -16944,6 +17396,10 @@ class _MobileSessionsReportPane extends StatefulWidget {
   final VoidCallback onDownloadRecords;
   final VoidCallback? onSaveGps;
   final bool savingRecord;
+  final ValueChanged<TrackerSessionModel> onOpenAiAnalysis;
+  final VoidCallback onBulkAiAnalysis;
+  final bool bulkAiRunning;
+  final String bulkAiProgressLabel;
 
   @override
   State<_MobileSessionsReportPane> createState() =>
@@ -17141,6 +17597,10 @@ class _MobileSessionsReportPaneState extends State<_MobileSessionsReportPane> {
                       players: widget.players,
                       apiBaseUrl: widget.api.apiBaseUrl,
                       onPickSession: _openTrainingPickerSheet,
+                      onOpenAiAnalysis: widget.onOpenAiAnalysis,
+                      onBulkAiAnalysis: widget.onBulkAiAnalysis,
+                      bulkAiRunning: widget.bulkAiRunning,
+                      bulkAiProgressLabel: widget.bulkAiProgressLabel,
                     ),
                   ),
                 ),
@@ -17218,6 +17678,10 @@ class _MobileSessionsReportPaneState extends State<_MobileSessionsReportPane> {
             players: widget.players,
             apiBaseUrl: widget.api.apiBaseUrl,
             onPickSession: _openTrainingPickerSheet,
+            onOpenAiAnalysis: widget.onOpenAiAnalysis,
+            onBulkAiAnalysis: widget.onBulkAiAnalysis,
+            bulkAiRunning: widget.bulkAiRunning,
+            bulkAiProgressLabel: widget.bulkAiProgressLabel,
           ),
         );
       },
@@ -20367,6 +20831,10 @@ class _SelectedTrainingReportPane extends StatefulWidget {
     required this.players,
     required this.apiBaseUrl,
     this.onPickSession,
+    this.onOpenAiAnalysis,
+    this.onBulkAiAnalysis,
+    this.bulkAiRunning = false,
+    this.bulkAiProgressLabel = '',
   });
 
   final TrackerSessionModel? session;
@@ -20375,6 +20843,10 @@ class _SelectedTrainingReportPane extends StatefulWidget {
   final List<TrackerPlayerOption> players;
   final String apiBaseUrl;
   final VoidCallback? onPickSession;
+  final ValueChanged<TrackerSessionModel>? onOpenAiAnalysis;
+  final VoidCallback? onBulkAiAnalysis;
+  final bool bulkAiRunning;
+  final String bulkAiProgressLabel;
 
   @override
   State<_SelectedTrainingReportPane> createState() =>
@@ -23189,6 +23661,43 @@ class _SelectedTrainingReportPaneState
                   );
 
               final dataPreviewCards = <Widget>[
+                if (widget.onOpenAiAnalysis != null ||
+                    widget.onBulkAiAnalysis != null)
+                  mobileCard(
+                    icon: Icons.auto_awesome_rounded,
+                    title: 'Анализ ИИ',
+                    subtitle: 'разбор этой тренировки и старого архива',
+                    child: Row(
+                      children: [
+                        if (widget.onOpenAiAnalysis != null)
+                          Expanded(
+                            child: _MobileReportActionChip(
+                              icon: Icons.auto_awesome_rounded,
+                              label: 'Открыть / создать',
+                              primary: true,
+                              expanded: true,
+                              onTap: () => widget.onOpenAiAnalysis!(s),
+                            ),
+                          ),
+                        if (widget.onOpenAiAnalysis != null &&
+                            widget.onBulkAiAnalysis != null)
+                          const SizedBox(width: 8),
+                        if (widget.onBulkAiAnalysis != null)
+                          Expanded(
+                            child: _MobileReportActionChip(
+                              icon: Icons.auto_awesome_rounded,
+                              label: widget.bulkAiRunning
+                                  ? 'Архив ${widget.bulkAiProgressLabel}'
+                                  : 'Весь архив',
+                              expanded: true,
+                              onTap: widget.bulkAiRunning
+                                  ? null
+                                  : widget.onBulkAiAnalysis,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
                 if (_summary)
                   mobileCard(
                     icon: Icons.fact_check_rounded,
@@ -23985,6 +24494,23 @@ class _SelectedTrainingReportPaneState
                           icon: Icons.calendar_month_rounded,
                           label: 'Выбор тренировки',
                           onTap: widget.onPickSession!),
+                    if (widget.onOpenAiAnalysis != null)
+                      _DarkActionButton(
+                        icon: Icons.auto_awesome_rounded,
+                        label: 'Анализ ИИ',
+                        primary: true,
+                        onTap: () => widget.onOpenAiAnalysis!(s),
+                      ),
+                    if (widget.onBulkAiAnalysis != null)
+                      _DarkActionButton(
+                        icon: Icons.auto_awesome_rounded,
+                        label: widget.bulkAiRunning
+                            ? 'Архив ${widget.bulkAiProgressLabel}'
+                            : 'ИИ для архива',
+                        onTap: widget.bulkAiRunning
+                            ? null
+                            : widget.onBulkAiAnalysis,
+                      ),
                     _DarkActionButton(
                         icon: Icons.picture_as_pdf_rounded,
                         label: 'PDF / печать',

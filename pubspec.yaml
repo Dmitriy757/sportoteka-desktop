@@ -3,12 +3,13 @@ description: Sportoteka Flutter App
 
 publish_to: "none"
 
-version: 4.0.45+105
+version: 4.0.48+108
 
 environment:
   sdk: ">=3.1.0 <4.0.0"
 
 dependencies:
+  three_js: ^0.3.0
   flutter_blue_plus: 1.34.5
   flutter:
     sdk: flutter
@@ -84,6 +85,7 @@ dependencies:
   app_badge_plus: ^1.3.4
   flutter_callkit_incoming: ^3.1.5
   audioplayers: ^6.4.0
+  record: ^6.2.1
   thermion_flutter: 0.5.0
   sportoteka_stadium_android:
     path: packages/sportoteka_stadium_android
@@ -103,6 +105,14 @@ dependency_overrides:
     path: packages/flutter_blue_plus_fixed
   device_info_plus: 12.3.0
 
+
+  three_js_text:
+    path: packages/three_js_text_xml7
+  three_js_advanced_loaders:
+    path: packages/three_js_advanced_loaders_xml7
+
+  flutter_angle:
+    path: packages/flutter_angle_r27
 dev_dependencies:
   flutter_test:
     sdk: flutter

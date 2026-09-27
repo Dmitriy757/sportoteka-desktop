@@ -87,6 +87,13 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
       ? 'https://sportotekaapp.ru/api/ai/v1/personal/assistant/chat'
       : 'https://sportotekaapp.ru/api/ai/v1/assistant/chat';
 
+  String get _askStreamUrl => widget.personalProfileMode
+      ? 'https://sportotekaapp.ru/api/ai/v1/personal/assistant/chat/stream'
+      : 'https://sportotekaapp.ru/api/ai/v1/assistant/chat/stream';
+
+  String get _documentAskStreamUrl =>
+      'https://sportotekaapp.ru/api/ai/v1/documents/ask/stream';
+
   String get _mediaBase => widget.personalProfileMode
       ? 'https://sportotekaapp.ru/api/ai/v1/personal/media'
       : 'https://sportotekaapp.ru/api/ai/v1/media';
@@ -104,6 +111,7 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
   final Map<_AiMessage, GlobalKey> _messageKeys = <_AiMessage, GlobalKey>{};
   final Set<String> _confirmingActionIds = <String>{};
   final Map<String, String> _completedActionMessages = <String, String>{};
+  final Set<_AiMessage> _continuingMessages = <_AiMessage>{};
 
   late String _conversationId;
   bool _initialPromptSent = false;
@@ -111,7 +119,9 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
   bool _historyLoading = false;
   bool _historyRailOpen = false; // по умолчанию история закрыта
   Timer? _historySaveDebounce;
+  Timer? _streamFollowDebounce;
   bool _sending = false;
+  _AiMessage? _activeStreamingMessage;
   String? _error;
 
   final ImagePicker _mediaPicker = ImagePicker();
@@ -220,8 +230,10 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
       _messageKeys.clear();
       _completedActionMessages.clear();
       _confirmingActionIds.clear();
+      _continuingMessages.clear();
       _error = null;
       _sending = false;
+      _activeStreamingMessage = null;
       _composerMode = _AiComposerMode.text;
       _attachmentFile = null;
       _uploadedAttachment = null;
@@ -860,6 +872,7 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
   @override
   void dispose() {
     _historySaveDebounce?.cancel();
+    _streamFollowDebounce?.cancel();
     unawaited(_saveHistoryNow());
     _input.dispose();
     _scroll.dispose();
@@ -880,17 +893,26 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
     return result;
   }
 
-  Map<String, dynamic> _conversationMemory() {
-    final history = _messages
+  Map<String, dynamic> _conversationMemory({int? throughIndex}) {
+    final source = throughIndex == null
+        ? _messages
+        : _messages.take(math.min(throughIndex + 1, _messages.length));
+    final history = source
         .where((message) => message.text.trim().isNotEmpty)
         .toList(growable: false);
-    final from = math.max(0, history.length - 12);
+    final from = math.max(0, history.length - 8);
+    String compactText(String value) {
+      final text = value.trim();
+      if (text.length <= 1800) return text;
+      return '${text.substring(0, 850)}\n…\n${text.substring(text.length - 850)}';
+    }
+
     return <String, dynamic>{
       'policy': 'current_ui_context_first',
       'client_turns': history.sublist(from).map((message) {
         return <String, dynamic>{
           'role': message.role == _AiRole.user ? 'user' : 'assistant',
-          'text': message.text,
+          'text': compactText(message.text),
           if (message.toolSource.isNotEmpty) 'tool_source': message.toolSource,
           if (message.verifiedData) 'verified_data': true,
         };
@@ -1467,9 +1489,10 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
       if (mounted) {
         setState(() => _sending = false);
       }
-      final message = responseMessage;
-      if (message != null) {
-        _scrollToMessageStart(message);
+      // Во время streaming не перескакиваем от конца длинного ответа
+      // обратно к началу сообщения. Это и давало резкий «прыжок» после final.
+      if (_isNearChatBottom()) {
+        _scheduleStreamingFollow(force: true);
       }
       _scheduleHistorySave();
     }
@@ -1826,19 +1849,201 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
     _scheduleHistorySave();
   }
 
+  bool _isNearChatBottom({double threshold = 220}) {
+    if (!_scroll.hasClients) return true;
+    final position = _scroll.position;
+    final distance = position.maxScrollExtent - position.pixels;
+    return distance <= threshold;
+  }
+
+  void _scheduleStreamingFollow({bool force = false}) {
+    if (!mounted) return;
+    _streamFollowDebounce?.cancel();
+    _streamFollowDebounce = Timer(const Duration(milliseconds: 70), () {
+      if (!mounted) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_scroll.hasClients) return;
+        if (!force && !_isNearChatBottom()) return;
+        final target = _scroll.position.maxScrollExtent;
+        if ((target - _scroll.position.pixels).abs() < 1) return;
+        // Во время потока не запускаем десятки animateTo одновременно:
+        // именно это раньше давало заметные прыжки чата.
+        _scroll.jumpTo(target);
+      });
+    });
+  }
+
+  void _applyStreamingText(
+    String value, {
+    required bool append,
+  }) {
+    if (!mounted || value.isEmpty) return;
+
+    // Проверяем положение ДО setState. Если пользователь сам ушёл вверх,
+    // поток больше не перетягивает его обратно вниз.
+    final follow = _isNearChatBottom();
+
+    setState(() {
+      final current = _activeStreamingMessage;
+      if (current == null || !_messages.contains(current)) {
+        final created = _AiMessage.assistant(text: value);
+        _messages.add(created);
+        _activeStreamingMessage = created;
+        return;
+      }
+
+      final index = _messages.indexOf(current);
+      if (index < 0) return;
+      final updated = current.copyWith(
+        text: append ? '${current.text}$value' : value,
+      );
+      final existingKey = _messageKeys.remove(current);
+      _messages[index] = updated;
+      if (existingKey != null) _messageKeys[updated] = existingKey;
+      _activeStreamingMessage = updated;
+    });
+
+    if (follow) _scheduleStreamingFollow(force: true);
+  }
+
+  void _applyStreamingFinal(
+    Map<String, dynamic> data, {
+    required bool allowActions,
+  }) {
+    if (!mounted) return;
+    var finalMessage = _AiMessage.fromResponse(
+      data,
+      allowActions: allowActions,
+      fallbackText: 'Нашёл результаты.',
+    );
+
+    setState(() {
+      final current = _activeStreamingMessage;
+      if (current != null && _messages.contains(current)) {
+        // final-событие содержит метаданные, карточки и actions. Иногда его
+        // answer после серверной нормализации короче уже показанного потока.
+        // Текст на экране никогда не должен уменьшаться.
+        if (current.text.trimRight().length >
+            finalMessage.text.trimRight().length) {
+          finalMessage = finalMessage.copyWith(text: current.text);
+        }
+
+        final index = _messages.indexOf(current);
+        final existingKey = _messageKeys.remove(current);
+        _messages[index] = finalMessage;
+        if (existingKey != null) _messageKeys[finalMessage] = existingKey;
+      } else {
+        _messages.add(finalMessage);
+      }
+      // Не очищаем здесь: пока _sending=true, это предотвращает мигание
+      // индикатора набора между final-event и finally.
+      _activeStreamingMessage = finalMessage;
+    });
+  }
+
+  Future<Map<String, dynamic>> _postAiNdjsonStream({
+    required String url,
+    required Map<String, dynamic> payload,
+    required void Function(String event, Map<String, dynamic> packet) onEvent,
+  }) async {
+    final request = http.Request('POST', Uri.parse(url));
+    request.headers.addAll(const <String, String>{
+      'Content-Type': 'application/json; charset=utf-8',
+      'Accept': 'application/x-ndjson',
+      'Cache-Control': 'no-cache',
+    });
+    request.body = jsonEncode(payload);
+
+    final response = await request.send().timeout(const Duration(seconds: 30));
+    if (response.statusCode == 404 || response.statusCode == 405) {
+      await response.stream.drain();
+      throw const _AiStreamingUnavailable();
+    }
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      final body = await response.stream.bytesToString();
+      dynamic decoded;
+      try {
+        decoded = _decodeJson(body);
+      } catch (_) {}
+      throw Exception(
+        decoded is Map
+            ? (decoded['detail'] ?? decoded['message'] ?? 'HTTP ${response.statusCode}')
+            : 'HTTP ${response.statusCode}',
+      );
+    }
+
+    Map<String, dynamic>? finalData;
+    await for (final line in response.stream
+        .transform(utf8.decoder)
+        .transform(const LineSplitter())
+        .timeout(const Duration(seconds: 210))) {
+      final trimmed = line.trim();
+      if (trimmed.isEmpty) continue;
+
+      dynamic decoded;
+      try {
+        decoded = jsonDecode(trimmed);
+      } catch (_) {
+        continue;
+      }
+      if (decoded is! Map) continue;
+      final packet = Map<String, dynamic>.from(decoded);
+      final event = '${packet['event'] ?? ''}'.trim();
+      onEvent(event, packet);
+
+      if (event == 'final' && packet['data'] is Map) {
+        finalData = Map<String, dynamic>.from(packet['data'] as Map);
+      } else if (event == 'error') {
+        throw Exception('${packet['message'] ?? 'Ошибка потокового ответа'}');
+      }
+    }
+
+    if (finalData == null) {
+      throw Exception('Сервер завершил поток без final-события');
+    }
+    return finalData;
+  }
+
+  Future<Map<String, dynamic>> _postAiLegacyJson({
+    required String url,
+    required Map<String, dynamic> payload,
+  }) async {
+    final res = await http
+        .post(
+          Uri.parse(url),
+          headers: const <String, String>{
+            'Content-Type': 'application/json; charset=utf-8',
+            'Accept': 'application/json',
+          },
+          body: jsonEncode(payload),
+        )
+        .timeout(const Duration(seconds: 210));
+
+    final data = _decodeJson(res.body);
+    if (res.statusCode != 200 || data is! Map || data['success'] != true) {
+      throw Exception(
+        data is Map
+            ? (data['detail'] ?? data['message'] ?? 'Ошибка запроса')
+            : 'HTTP ${res.statusCode}',
+      );
+    }
+    return Map<String, dynamic>.from(data);
+  }
+
   Future<void> _ask([String? forced]) async {
     final q = (forced ?? _input.text).trim();
     if (q.isEmpty || _sending) return;
 
-    final documentId = _attachedDocumentId();
-    if (documentId.isNotEmpty && !widget.personalProfileMode) {
-      await _askAttachedDocument(q, documentId);
+    final attachedDocumentId = _attachedDocumentId();
+    if (attachedDocumentId.isNotEmpty && !widget.personalProfileMode) {
+      await _askAttachedDocument(q, attachedDocumentId);
       return;
     }
 
     setState(() {
       _error = null;
       _sending = true;
+      _activeStreamingMessage = null;
       _messages.add(_AiMessage.user(q));
       _input.clear();
     });
@@ -1913,6 +2118,7 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
             };
 
       final requestUrl = documentAi ? _documentAskUrl : _askUrl;
+      final streamUrl = documentAi ? _documentAskStreamUrl : _askStreamUrl;
       final requestPayload = documentAi
           ? <String, dynamic>{
               'club_id': widget.clubId,
@@ -1926,74 +2132,384 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
             }
           : payload;
 
-      debugPrint('[AI_CHAT] URL=$requestUrl');
-      debugPrint('[AI_CHAT] PAYLOAD=${jsonEncode(requestPayload)}');
-
-      final res = await http
-          .post(
-            Uri.parse(requestUrl),
-            headers: const <String, String>{
-              'Content-Type': 'application/json; charset=utf-8',
-              'Accept': 'application/json',
-            },
-            body: jsonEncode(requestPayload),
-          )
-          .timeout(const Duration(seconds: 210));
-
-      debugPrint('[AI_CHAT] STATUS=${res.statusCode}');
-      // Тело ответа может содержать одноразовый action_token v15.9.1.
-      // Не выводим его в debug/system logs.
-      debugPrint('[AI_CHAT] RESPONSE_BYTES=${res.bodyBytes.length}');
-
-      final data = _decodeJson(res.body);
-      if (res.statusCode != 200 || data is! Map || data['success'] != true) {
-        throw Exception(
-          data is Map
-              ? (data['detail'] ?? data['message'] ?? 'Ошибка запроса')
-              : 'HTTP ${res.statusCode}',
+      debugPrint('[AI_CHAT_STREAM] URL=$streamUrl');
+      Map<String, dynamic> data;
+      try {
+        data = await _postAiNdjsonStream(
+          url: streamUrl,
+          payload: requestPayload,
+          onEvent: (event, packet) {
+            if (event == 'delta') {
+              final text = '${packet['text'] ?? ''}';
+              if (text.isNotEmpty) {
+                _applyStreamingText(text, append: true);
+              }
+            } else if (event == 'snapshot') {
+              final text = '${packet['text'] ?? ''}';
+              if (text.isNotEmpty) {
+                _applyStreamingText(text, append: false);
+              }
+            }
+          },
+        );
+      } on _AiStreamingUnavailable {
+        debugPrint('[AI_CHAT_STREAM] endpoint unavailable; fallback=$requestUrl');
+        data = await _postAiLegacyJson(
+          url: requestUrl,
+          payload: requestPayload,
         );
       }
 
       if (!mounted) return;
-      setState(() {
-        responseMessage = _AiMessage.fromResponse(
-          Map<String, dynamic>.from(data),
-          allowActions: !widget.personalProfileMode,
-          fallbackText: 'Нашёл результаты.',
-        );
-        _messages.add(responseMessage!);
-      });
+      _applyStreamingFinal(
+        data,
+        allowActions: !widget.personalProfileMode,
+      );
+      responseMessage = _activeStreamingMessage;
     } catch (e) {
       if (!mounted) return;
+      final partial = _activeStreamingMessage;
       setState(() {
         _error = widget.personalProfileMode
             ? 'Не удалось получить ответ: $e'
             : 'Не удалось выполнить поиск: $e';
-        responseMessage = _AiMessage.assistant(
-          text: widget.personalProfileMode
-              ? 'Не смог получить ответ от Спортотека AI. Проверьте подключение и попробуйте ещё раз.'
-              : 'Не смог получить ответ от сервера. Можно попробовать короче: выбранный игрок + что ищем, например «отчёт за вчера» или «тренировки U13 за неделю».',
-          suggestions: widget.personalProfileMode
-              ? const <String>[
-                  'Объясни высокий прессинг',
-                  'Помоги написать короткий пост',
-                  'Придумай идею для публикации',
-                ]
-              : const <String>[
-                  'Последние тренировки команды',
-                  'Последняя GPS-сессия',
-                  'Матчи за месяц',
-                ],
-        );
-        _messages.add(responseMessage!);
+
+        if (partial != null && _messages.contains(partial)) {
+          final index = _messages.indexOf(partial);
+          final updated = partial.copyWith(canContinue: true);
+          final existingKey = _messageKeys.remove(partial);
+          _messages[index] = updated;
+          if (existingKey != null) _messageKeys[updated] = existingKey;
+          responseMessage = updated;
+          _activeStreamingMessage = updated;
+        } else {
+          responseMessage = _AiMessage.assistant(
+            text: widget.personalProfileMode
+                ? 'Не смог получить ответ от Спортотека AI. Проверьте подключение и попробуйте ещё раз.'
+                : 'Не смог получить ответ от сервера. Можно попробовать короче: выбранный игрок + что ищем, например «отчёт за вчера» или «тренировки U13 за неделю».',
+            suggestions: widget.personalProfileMode
+                ? const <String>[
+                    'Объясни высокий прессинг',
+                    'Помоги написать короткий пост',
+                    'Придумай идею для публикации',
+                  ]
+                : const <String>[
+                    'Последние тренировки команды',
+                    'Последняя GPS-сессия',
+                    'Матчи за месяц',
+                  ],
+          );
+          _messages.add(responseMessage!);
+          _activeStreamingMessage = responseMessage;
+        }
       });
     } finally {
-      if (mounted) setState(() => _sending = false);
-      final message = responseMessage;
-      if (message != null) {
-        _scrollToMessageStart(message);
+      if (mounted) {
+        setState(() {
+          _sending = false;
+          _activeStreamingMessage = null;
+        });
+      }
+      // После завершения потока не переносим viewport к началу большого
+      // сообщения. Если пользователь оставался внизу — остаёмся внизу;
+      // если он прокрутил вверх — вообще не вмешиваемся.
+      if (_isNearChatBottom()) {
+        _scheduleStreamingFollow(force: true);
       }
       _scheduleHistorySave();
+    }
+  }
+
+  String _stripContinuationPreamble(String value) {
+    var text = value.trim();
+    // Модель иногда начинает служебной фразой. В UI она только ломает
+    // ощущение единого ответа, поэтому убираем её перед склейкой.
+    text = text.replaceFirst(
+      RegExp(
+        r'^(?:#{1,6}\s*)?(?:продолжение|продолжаю|продолжение ответа)\s*[:.\-–—]*\s*',
+        caseSensitive: false,
+      ),
+      '',
+    );
+    return text.trimLeft();
+  }
+
+  bool _endsWithFinishedThought(String value) {
+    final text = value.trimRight();
+    if (text.isEmpty) return true;
+    return RegExp(r'''[.!?…\)\]\}»”"']$''').hasMatch(text);
+  }
+
+  bool _continuationLooksIncomplete(String value) {
+    final text = value.trimRight();
+    if (text.isEmpty) return false;
+    if (!_endsWithFinishedThought(text)) return true;
+    if (RegExp(r'[:;,\-–—]$').hasMatch(text)) return true;
+    if (RegExp(r'(?:^|\n)\s*(?:[-•*]|\d+[.)])\s*$').hasMatch(text)) {
+      return true;
+    }
+    return false;
+  }
+
+  String _mergeContinuationText(String current, String addition) {
+    final base = current.trimRight();
+    var next = _stripContinuationPreamble(addition);
+    if (next.isEmpty) return base;
+
+    // При «Далее» модель может повторить несколько последних символов/слов.
+    // Ищем даже короткий overlap: это важно для обрыва внутри слова,
+    // например «Манчестер Юнайт» + «Юнайтед ...».
+    final maxOverlap = math.min(math.min(base.length, next.length), 1200);
+    var overlap = 0;
+    for (var size = maxOverlap; size >= 4; size--) {
+      final left = base.substring(base.length - size);
+      final right = next.substring(0, size);
+      if (left.toLowerCase() == right.toLowerCase()) {
+        overlap = size;
+        break;
+      }
+    }
+    if (overlap > 0) {
+      next = next.substring(overlap);
+    }
+    next = next.trimLeft();
+    if (next.isEmpty) return base;
+
+    // Если предыдущая часть оборвалась, не создаём новый абзац. Сначала
+    // достраиваем оборванное слово/предложение, чтобы ответ читался цельно.
+    if (!_endsWithFinishedThought(base)) {
+      final first = next.substring(0, 1);
+      final last = base.substring(base.length - 1);
+      final nextStartsLowerOrPunctuation =
+          RegExp(r'^[а-яёa-z0-9,.;:!?…\)\]\}]$', caseSensitive: false)
+              .hasMatch(first) &&
+          first == first.toLowerCase();
+      final baseEndsWord = RegExp(r'[A-Za-zА-Яа-яЁё0-9]$').hasMatch(last);
+
+      if (baseEndsWord && nextStartsLowerOrPunctuation) {
+        return '$base$next';
+      }
+      return '$base $next';
+    }
+
+    return '$base\n\n$next';
+  }
+
+  Map<String, dynamic> _continuationContextPayload() {
+    if (widget.personalProfileMode) return <String, dynamic>{};
+    return <String, dynamic>{
+      ...?widget.initialPayload,
+      if (_uploadedAttachment != null) ...<String, dynamic>{
+        'attachment': _uploadedAttachment,
+        'attachment_analysis': <String, dynamic>{
+          'ocr': true,
+          'include_images': true,
+          'vision': true,
+        },
+      },
+      if (widget.playerOnlyMode) 'scope': 'player_profile',
+      if (widget.playerOnlyMode) 'player_only': true,
+      if (widget.playerOnlyMode && (widget.playerId ?? 0) > 0)
+        'player_id': widget.playerId,
+      if (widget.playerOnlyMode &&
+          (widget.playerName ?? '').trim().isNotEmpty)
+        'player_name': widget.playerName!.trim(),
+    };
+  }
+
+  Future<void> _continueAnswer(_AiMessage message) async {
+    if (_sending || _continuingMessages.isNotEmpty || !message.canContinue) {
+      return;
+    }
+    final index = _messages.indexOf(message);
+    if (index < 0) return;
+
+    var targetMessage = message;
+    setState(() {
+      _error = null;
+      _continuingMessages.add(targetMessage);
+    });
+
+    try {
+      final contextPayload = _continuationContextPayload();
+      final workspaceDocument = contextPayload['workspace_document'];
+      final nestedDocumentKey = workspaceDocument is Map
+          ? '${workspaceDocument['document_key'] ?? ''}'.trim()
+          : '';
+      final documentId =
+          '${contextPayload['document_id'] ?? ''}'.trim().isNotEmpty
+              ? '${contextPayload['document_id']}'.trim()
+              : (_attachedDocumentId().isNotEmpty
+                  ? _attachedDocumentId()
+                  : nestedDocumentKey);
+      final documentAi = documentId.isNotEmpty &&
+          (contextPayload['document_ai'] == true ||
+              _attachedDocumentId().isNotEmpty ||
+              nestedDocumentKey.isNotEmpty);
+
+      final currentText = message.text.trimRight();
+      final tailStart = math.max(0, currentText.length - 1400);
+      final answerTail = currentText.substring(tailStart);
+      final continuePrompt =
+          'Продолжи ПРЕДЫДУЩИЙ ответ непосредственно после его последнего '
+          'символа. Это не новый вопрос и не новый ответ. Если конец оборван '
+          'внутри слова или предложения, СНАЧАЛА допиши именно этот оборванный '
+          'фрагмент, затем продолжай мысль. Не перескакивай на другую тему, не '
+          'добавляй вступление «Продолжение», не повторяй заголовки и уже '
+          'показанный текст. Сохрани язык, структуру и нумерацию. Продолжай '
+          'до логического завершения текущего раздела или списка: не обрывай '
+          'ответ на двоеточии, незавершённом пункте, маркере или половине '
+          'предложения. Верни только текст, который должен идти сразу после '
+          'показанного конца.\n\n'
+          'ТОЧНЫЙ КОНЕЦ ПРЕДЫДУЩЕГО ОТВЕТА:\n'
+          '<<<$answerTail>>>\n\n'
+          'Продолжай строго после символов перед >>>.';
+
+      final memory = _conversationMemory(throughIndex: index);
+      final requestUrl = documentAi ? _documentAskUrl : _askUrl;
+      final streamUrl = documentAi ? _documentAskStreamUrl : _askStreamUrl;
+      final requestPayload = documentAi
+          ? <String, dynamic>{
+              'club_id': widget.clubId,
+              'user_id': widget.userId,
+              if ((widget.teamId ?? 0) > 0) 'team_id': widget.teamId,
+              'document_ids': <String>[documentId],
+              'q': continuePrompt,
+              'conversation_id': _conversationId,
+              'memory': memory,
+              'context': contextPayload,
+              'continuation': true,
+              'ocr': true,
+              'include_images': true,
+              'vision': true,
+              if (message.queryId > 0)
+                'continuation_of_query_id': message.queryId,
+            }
+          : widget.personalProfileMode
+              ? <String, dynamic>{
+                  'user_id': widget.userId,
+                  'conversation_id': _conversationId,
+                  'q': continuePrompt,
+                  'memory': memory,
+                  'continuation': true,
+                  if (message.queryId > 0)
+                    'continuation_of_query_id': message.queryId,
+                }
+              : <String, dynamic>{
+                  'club_id': widget.clubId,
+                  'user_id': widget.userId,
+                  if ((widget.teamId ?? 0) > 0) 'team_id': widget.teamId,
+                  'conversation_id': _conversationId,
+                  'q': continuePrompt,
+                  'context': contextPayload,
+                  'memory': memory,
+                  'continuation': true,
+                  if (message.queryId > 0)
+                    'continuation_of_query_id': message.queryId,
+                  if (_uploadedAttachment != null) 'ocr': true,
+                  if (_uploadedAttachment != null) 'include_images': true,
+                  if (_uploadedAttachment != null) 'vision': true,
+                };
+
+      var streamedPart = '';
+
+      void showContinuationPart(String nextPart) {
+        if (!mounted || nextPart.isEmpty) return;
+        final follow = _isNearChatBottom();
+        final currentIndex = _messages.indexOf(targetMessage);
+        if (currentIndex < 0) return;
+        final current = _messages[currentIndex];
+        final updated = current.copyWith(
+          text: _mergeContinuationText(currentText, nextPart),
+          canContinue: true,
+        );
+        final existingKey = _messageKeys.remove(current);
+        setState(() {
+          _messages[currentIndex] = updated;
+          if (existingKey != null) _messageKeys[updated] = existingKey;
+          _continuingMessages.remove(targetMessage);
+          targetMessage = updated;
+          _continuingMessages.add(targetMessage);
+        });
+        if (follow) _scheduleStreamingFollow(force: true);
+      }
+
+      Map<String, dynamic> data;
+      try {
+        data = await _postAiNdjsonStream(
+          url: streamUrl,
+          payload: requestPayload,
+          onEvent: (event, packet) {
+            if (event == 'delta') {
+              streamedPart += '${packet['text'] ?? ''}';
+              if (streamedPart.isNotEmpty) {
+                showContinuationPart(streamedPart);
+              }
+            } else if (event == 'snapshot') {
+              streamedPart = '${packet['text'] ?? ''}';
+              if (streamedPart.isNotEmpty) {
+                showContinuationPart(streamedPart);
+              }
+            }
+          },
+        );
+      } on _AiStreamingUnavailable {
+        data = await _postAiLegacyJson(
+          url: requestUrl,
+          payload: requestPayload,
+        );
+      }
+
+      final nextPart = _AiMessage.fromResponse(
+        data,
+        allowActions: false,
+        fallbackText: '',
+      );
+
+      if (!mounted) return;
+      final currentIndex = _messages.indexOf(targetMessage);
+      if (currentIndex < 0) return;
+      final current = _messages[currentIndex];
+
+      // Никогда не заменяем уже показанное потоковое продолжение более
+      // коротким final.answer — раньше несколько последних строк могли исчезать.
+      final finalPart = nextPart.text.trimRight().length >=
+              streamedPart.trimRight().length
+          ? nextPart.text
+          : streamedPart;
+      final mergedText = _mergeContinuationText(currentText, finalPart);
+      final keepContinue = finalPart.trim().isNotEmpty &&
+          (nextPart.canContinue || _continuationLooksIncomplete(mergedText));
+      final updated = current.copyWith(
+        text: mergedText,
+        canContinue: keepContinue,
+      );
+      final existingKey = _messageKeys.remove(current);
+
+      setState(() {
+        _messages[currentIndex] = updated;
+        if (existingKey != null) _messageKeys[updated] = existingKey;
+        _continuingMessages.remove(targetMessage);
+        targetMessage = updated;
+        _continuingMessages.add(targetMessage);
+      });
+      _scheduleHistorySave();
+      if (_isNearChatBottom()) {
+        _scheduleStreamingFollow(force: true);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = 'Не удалось загрузить продолжение: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Не удалось загрузить продолжение ответа')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _continuingMessages.remove(message);
+          _continuingMessages.remove(targetMessage);
+        });
+      }
     }
   }
 
@@ -2429,16 +2945,18 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
   }
 
   Widget _buildChat({required bool compact}) {
+    final showTyping = _sending && _activeStreamingMessage == null;
     return Container(
       color: Colors.transparent,
       child: ListView.builder(
         controller: _scroll,
         padding: EdgeInsets.fromLTRB(compact ? 10 : 18, compact ? 10 : 16,
             compact ? 10 : 18, compact ? 16 : 20),
-        itemCount: _messages.length + (_sending ? 1 : 0),
+        itemCount: _messages.length + (showTyping ? 1 : 0),
         itemBuilder: (context, index) {
-          if (_sending && index == _messages.length)
+          if (showTyping && index == _messages.length) {
             return const _AiTypingBubble();
+          }
           final msg = _messages[index];
           return KeyedSubtree(
             key: _messageKey(msg),
@@ -2449,6 +2967,8 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
               onOpenCard: _openCard,
               onOpenPdf: _openPdf,
               onFeedback: _sendFeedback,
+              onContinue: (message) => unawaited(_continueAnswer(message)),
+              continuing: _continuingMessages.contains(msg),
               onConfirmAction: (action) => unawaited(_confirmAction(action)),
               isActionBusy: (action) =>
                   _confirmingActionIds.contains(_actionKey(action)),
@@ -2880,6 +3400,8 @@ class _AiBubble extends StatelessWidget {
   final ValueChanged<_AiResultCard> onOpenCard;
   final ValueChanged<_AiResultCard> onOpenPdf;
   final void Function(_AiMessage message, int rating) onFeedback;
+  final ValueChanged<_AiMessage> onContinue;
+  final bool continuing;
   final ValueChanged<AiWorkspaceAction> onConfirmAction;
   final bool Function(AiWorkspaceAction action) isActionBusy;
   final String Function(AiWorkspaceAction action) actionResult;
@@ -2891,6 +3413,8 @@ class _AiBubble extends StatelessWidget {
     required this.onOpenCard,
     required this.onOpenPdf,
     required this.onFeedback,
+    required this.onContinue,
+    required this.continuing,
     required this.onConfirmAction,
     required this.isActionBusy,
     required this.actionResult,
@@ -2923,11 +3447,24 @@ class _AiBubble extends StatelessWidget {
                 padding: EdgeInsets.fromLTRB(compact ? 11 : 13,
                     compact ? 9 : 11, compact ? 11 : 13, compact ? 9 : 11),
                 decoration: user ? _AiDecor.userBubble() : _AiDecor.aiBubble(),
-                child: Text(message.text,
-                    style: user
-                        ? _AiText.userText(compact ? 12.5 : 13)
-                        : _AiText.value(compact ? 12.2 : 13)),
+                child: user
+                    ? Text(
+                        message.text,
+                        style: _AiText.userText(compact ? 12.5 : 13),
+                      )
+                    : _AiMarkdownText(
+                        text: message.text,
+                        compact: compact,
+                      ),
               ),
+              if (!user && message.canContinue) ...[
+                const SizedBox(height: 6),
+                _AiContinueButton(
+                  compact: compact,
+                  loading: continuing,
+                  onTap: () => onContinue(message),
+                ),
+              ],
               if (!user && message.jobId.isNotEmpty) ...[
                 const SizedBox(height: 8),
                 _AiGeneratedMediaCard(message: message, compact: compact),
@@ -3024,6 +3561,358 @@ class _AiBubble extends StatelessWidget {
                       .toList(),
                 ),
               ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+
+/// Lightweight Markdown renderer for streamed AI text.
+///
+/// It intentionally has no package dependency so this panel can be dropped into
+/// the existing SPORTOTEKA project without changing pubspec.yaml. The parser is
+/// tolerant of half-written Markdown while tokens are still arriving: opening
+/// ** / * / ` markers are rendered as formatting even before their closing
+/// marker arrives, so raw service characters do not flicker in the chat.
+class _AiMarkdownText extends StatelessWidget {
+  final String text;
+  final bool compact;
+
+  const _AiMarkdownText({
+    required this.text,
+    required this.compact,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final base = _AiText.value(compact ? 12.2 : 13).copyWith(height: 1.42);
+    final lines = text.replaceAll('\r\n', '\n').replaceAll('\r', '\n').split('\n');
+    final children = <Widget>[];
+
+    for (var i = 0; i < lines.length; i++) {
+      final raw = lines[i];
+      final trimmed = raw.trim();
+
+      if (trimmed.isEmpty) {
+        if (children.isNotEmpty && children.last is! SizedBox) {
+          children.add(SizedBox(height: compact ? 7 : 9));
+        }
+        continue;
+      }
+
+      final heading = RegExp(r'^(#{1,4})\s+(.+)$').firstMatch(trimmed);
+      if (heading != null) {
+        final level = heading.group(1)!.length;
+        final headingText = heading.group(2)!.trim();
+        final sizes = compact
+            ? const <double>[16.2, 14.8, 13.7, 12.9]
+            : const <double>[17.2, 15.6, 14.4, 13.5];
+        children.add(
+          Padding(
+            padding: EdgeInsets.only(
+              top: children.isEmpty ? 0 : (compact ? 3 : 4),
+              bottom: compact ? 2 : 3,
+            ),
+            child: Text.rich(
+              TextSpan(
+                children: _inlineSpans(
+                  headingText,
+                  base.copyWith(
+                    fontSize: sizes[level - 1],
+                    fontWeight: FontWeight.w800,
+                    height: 1.28,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        continue;
+      }
+
+      final quote = RegExp(r'^>\s?(.*)$').firstMatch(trimmed);
+      if (quote != null) {
+        final value = (quote.group(1) ?? '').trim();
+        if (value.isEmpty) continue;
+        children.add(
+          Container(
+            margin: EdgeInsets.symmetric(vertical: compact ? 2 : 3),
+            padding: EdgeInsets.fromLTRB(compact ? 9 : 10, 6, 8, 6),
+            decoration: BoxDecoration(
+              color: _AiColors.greenSoft.withOpacity(.45),
+              borderRadius: BorderRadius.circular(8),
+              border: const Border(
+                left: BorderSide(color: _AiColors.greenDark, width: 3),
+              ),
+            ),
+            child: Text.rich(
+              TextSpan(
+                children: _inlineSpans(
+                  value,
+                  base.copyWith(color: _AiColors.text2),
+                ),
+              ),
+            ),
+          ),
+        );
+        continue;
+      }
+
+      final ordered = RegExp(r'^(\d{1,3})[.)]\s+(.*)$').firstMatch(trimmed);
+      if (ordered != null) {
+        final body = (ordered.group(2) ?? '').trim();
+        if (body.isEmpty) continue;
+        children.add(
+          _AiMarkdownListLine(
+            marker: '${ordered.group(1)}.',
+            spans: _inlineSpans(body, base),
+            baseStyle: base,
+            compact: compact,
+          ),
+        );
+        continue;
+      }
+
+      final bullet = RegExp(r'^[-*•]\s+(.*)$').firstMatch(trimmed);
+      if (bullet != null) {
+        final body = (bullet.group(1) ?? '').trim();
+        // Streaming can briefly end in a bare bullet marker. Hiding an empty
+        // marker prevents the two orphan dots visible in the old UI.
+        if (body.isEmpty) continue;
+        children.add(
+          _AiMarkdownListLine(
+            marker: '•',
+            spans: _inlineSpans(body, base),
+            baseStyle: base,
+            compact: compact,
+          ),
+        );
+        continue;
+      }
+
+      // Ignore a bare Markdown list marker that arrived as the final token.
+      if (trimmed == '•' || trimmed == '-' || trimmed == '*') continue;
+
+      children.add(
+        Padding(
+          padding: EdgeInsets.only(bottom: compact ? 2 : 3),
+          child: Text.rich(
+            TextSpan(children: _inlineSpans(raw.trim(), base)),
+          ),
+        ),
+      );
+    }
+
+    while (children.isNotEmpty && children.last is SizedBox) {
+      children.removeLast();
+    }
+
+    if (children.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: children,
+    );
+  }
+
+  static List<InlineSpan> _inlineSpans(String source, TextStyle base) {
+    final spans = <InlineSpan>[];
+    final plain = StringBuffer();
+
+    void flushPlain() {
+      if (plain.isEmpty) return;
+      spans.add(TextSpan(text: plain.toString(), style: base));
+      plain.clear();
+    }
+
+    var i = 0;
+    while (i < source.length) {
+      if (source.startsWith('**', i) || source.startsWith('__', i)) {
+        final marker = source.substring(i, i + 2);
+        final end = source.indexOf(marker, i + 2);
+        flushPlain();
+        final content = end >= 0
+            ? source.substring(i + 2, end)
+            : source.substring(i + 2);
+        if (content.isNotEmpty) {
+          spans.addAll(
+            _inlineSpans(
+              content,
+              base.copyWith(fontWeight: FontWeight.w800),
+            ),
+          );
+        }
+        i = end >= 0 ? end + 2 : source.length;
+        continue;
+      }
+
+      if (source[i] == '`') {
+        final end = source.indexOf('`', i + 1);
+        flushPlain();
+        final content = end >= 0
+            ? source.substring(i + 1, end)
+            : source.substring(i + 1);
+        if (content.isNotEmpty) {
+          spans.add(
+            TextSpan(
+              text: content,
+              style: base.copyWith(
+                fontFamily: 'monospace',
+                fontSize: (base.fontSize ?? 13) * .94,
+                backgroundColor: const Color(0xFFF0F2F4),
+                color: _AiColors.text2,
+              ),
+            ),
+          );
+        }
+        i = end >= 0 ? end + 1 : source.length;
+        continue;
+      }
+
+      if (source[i] == '*' || source[i] == '_') {
+        final marker = source[i];
+        final end = source.indexOf(marker, i + 1);
+        // Do not interpret punctuation-like underscores inside identifiers.
+        final previousIsWord = i > 0 && RegExp(r'[A-Za-zА-Яа-яЁё0-9]').hasMatch(source[i - 1]);
+        final nextIsWord = i + 1 < source.length &&
+            RegExp(r'[A-Za-zА-Яа-яЁё0-9]').hasMatch(source[i + 1]);
+        if (marker == '_' && previousIsWord && nextIsWord) {
+          plain.write(source[i]);
+          i++;
+          continue;
+        }
+        flushPlain();
+        final content = end >= 0
+            ? source.substring(i + 1, end)
+            : source.substring(i + 1);
+        if (content.isNotEmpty) {
+          spans.addAll(
+            _inlineSpans(
+              content,
+              base.copyWith(fontStyle: FontStyle.italic),
+            ),
+          );
+        }
+        i = end >= 0 ? end + 1 : source.length;
+        continue;
+      }
+
+      // Markdown escape: \* -> * etc.
+      if (source[i] == r'\' && i + 1 < source.length) {
+        final next = source[i + 1];
+        if ('*_`#>-'.contains(next)) {
+          plain.write(next);
+          i += 2;
+          continue;
+        }
+      }
+
+      plain.write(source[i]);
+      i++;
+    }
+
+    flushPlain();
+    return spans;
+  }
+}
+
+class _AiMarkdownListLine extends StatelessWidget {
+  final String marker;
+  final List<InlineSpan> spans;
+  final TextStyle baseStyle;
+  final bool compact;
+
+  const _AiMarkdownListLine({
+    required this.marker,
+    required this.spans,
+    required this.baseStyle,
+    required this.compact,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: compact ? 3 : 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: marker == '•' ? 17 : (compact ? 27 : 30),
+            child: Text(
+              marker,
+              textAlign: marker == '•' ? TextAlign.center : TextAlign.right,
+              style: baseStyle.copyWith(
+                fontWeight: marker == '•' ? FontWeight.w800 : FontWeight.w700,
+                color: marker == '•' ? _AiColors.greenDark : _AiColors.text2,
+              ),
+            ),
+          ),
+          SizedBox(width: marker == '•' ? 5 : 7),
+          Expanded(
+            child: Text.rich(TextSpan(children: spans)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AiContinueButton extends StatelessWidget {
+  final bool compact;
+  final bool loading;
+  final VoidCallback onTap;
+
+  const _AiContinueButton({
+    required this.compact,
+    required this.loading,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: _AiColors.greenSoft,
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        onTap: loading ? null : onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: compact ? 10 : 12,
+            vertical: compact ? 7 : 8,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (loading)
+                SizedBox(
+                  width: compact ? 13 : 14,
+                  height: compact ? 13 : 14,
+                  child: const CircularProgressIndicator(
+                    strokeWidth: 1.8,
+                    color: _AiColors.greenDark,
+                  ),
+                )
+              else
+                Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  size: compact ? 16 : 18,
+                  color: _AiColors.greenDark,
+                ),
+              const SizedBox(width: 5),
+              Text(
+                loading ? 'Продолжаю…' : 'Далее',
+                style: _AiText.chip(
+                  size: compact ? 10.2 : 10.8,
+                  color: _AiColors.greenDark,
+                ),
+              ),
             ],
           ),
         ),
@@ -4339,6 +5228,10 @@ class _AiBadge extends StatelessWidget {
   }
 }
 
+class _AiStreamingUnavailable implements Exception {
+  const _AiStreamingUnavailable();
+}
+
 enum _AiComposerMode { text, image, video }
 
 enum _AiRole { user, assistant }
@@ -4361,6 +5254,7 @@ class _AiMessage {
   final String jobId;
   final String mediaStatus;
   final int mediaProgress;
+  final bool canContinue;
 
   const _AiMessage._({
     required this.role,
@@ -4380,6 +5274,7 @@ class _AiMessage {
     this.jobId = '',
     this.mediaStatus = '',
     this.mediaProgress = 0,
+    this.canContinue = false,
   });
 
   factory _AiMessage.user(String text) =>
@@ -4397,6 +5292,7 @@ class _AiMessage {
     List<String> suggestions = const <String>[],
     String toolSource = '',
     bool verifiedData = false,
+    bool canContinue = false,
   }) {
     return _AiMessage._(
       role: _AiRole.assistant,
@@ -4411,6 +5307,7 @@ class _AiMessage {
       suggestions: suggestions,
       toolSource: toolSource,
       verifiedData: verifiedData,
+      canContinue: canContinue,
     );
   }
 
@@ -4455,9 +5352,24 @@ class _AiMessage {
             .toList(growable: false)
         : <String>[];
 
+    final answer = '${data['answer'] ?? fallbackText}'.trim();
+    final finishReason = '${data['finish_reason'] ?? data['stop_reason'] ?? data['termination_reason'] ?? ''}'
+        .trim()
+        .toLowerCase();
+    final explicitlyMore = data['has_more'] == true ||
+        data['truncated'] == true ||
+        data['can_continue'] == true ||
+        finishReason == 'length' ||
+        finishReason == 'max_tokens' ||
+        finishReason == 'token_limit';
+    // Даже если сервер пока не отдаёт has_more/finish_reason, длинный ответ
+    // получает кнопку «Далее». Это закрывает текущий случай, когда модель
+    // упирается в серверный лимит генерации, но API не помечает truncation.
+    final canContinue = explicitlyMore || answer.length >= 700;
+
     return _AiMessage._(
       role: _AiRole.assistant,
-      text: '${data['answer'] ?? fallbackText}'.trim(),
+      text: answer,
       queryId: int.tryParse('${data['query_id'] ?? 0}') ?? 0,
       insights: insights,
       cards: cards,
@@ -4468,6 +5380,7 @@ class _AiMessage {
       suggestions: suggestions,
       toolSource: '${data['tool_source'] ?? ''}'.trim(),
       verifiedData: data['verified_data'] == true,
+      canContinue: canContinue,
     );
   }
 
@@ -4516,6 +5429,7 @@ class _AiMessage {
       if (jobId.isNotEmpty) 'job_id': jobId,
       if (mediaStatus.isNotEmpty) 'media_status': mediaStatus,
       if (mediaProgress > 0) 'media_progress': mediaProgress,
+      if (canContinue) 'can_continue': true,
     };
   }
 
@@ -4555,6 +5469,7 @@ class _AiMessage {
       jobId: '${map['job_id'] ?? ''}',
       mediaStatus: '${map['media_status'] ?? ''}',
       mediaProgress: int.tryParse('${map['media_progress'] ?? 0}') ?? 0,
+      canContinue: map['can_continue'] == true || restored.canContinue,
     );
   }
 
@@ -4563,6 +5478,7 @@ class _AiMessage {
     String? mediaUrl,
     String? mediaStatus,
     int? mediaProgress,
+    bool? canContinue,
   }) {
     return _AiMessage._(
       role: role,
@@ -4582,6 +5498,7 @@ class _AiMessage {
       jobId: jobId,
       mediaStatus: mediaStatus ?? this.mediaStatus,
       mediaProgress: mediaProgress ?? this.mediaProgress,
+      canContinue: canContinue ?? this.canContinue,
     );
   }
 }

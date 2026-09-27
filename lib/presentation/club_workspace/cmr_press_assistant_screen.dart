@@ -1676,42 +1676,119 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
     );
   }
 
-  Widget _buildMobileSectionTabs() {
-    Widget chip(String label, _PressContentSection section) {
+  Widget _buildSectionTabs({required bool compact}) {
+    Widget tab(
+      String label,
+      IconData icon,
+      _PressContentSection section,
+    ) {
       final active = _contentSection == section;
-      return ChoiceChip(
-        label: Text(label),
-        selected: active,
-        onSelected: (_) => _selectContentSection(section),
+      return Material(
+        color: active ? _CmrPressColors.greenSoft : Colors.transparent,
+        borderRadius: BorderRadius.circular(10),
+        child: InkWell(
+          onTap: () => _selectContentSection(section),
+          borderRadius: BorderRadius.circular(10),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 160),
+            curve: Curves.easeOutCubic,
+            constraints: const BoxConstraints(minHeight: 38),
+            padding: EdgeInsets.symmetric(
+              horizontal: compact ? 10 : 12,
+              vertical: 8,
+            ),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: active
+                    ? _CmrPressColors.greenBorder
+                    : _CmrPressColors.line.withOpacity(.7),
+                width: .7,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  icon,
+                  size: 16,
+                  color: active
+                      ? _CmrPressColors.greenDark
+                      : _CmrPressColors.muted2,
+                ),
+                const SizedBox(width: 7),
+                Text(
+                  label,
+                  style: _CmrPressText.action().copyWith(
+                    color: active
+                        ? _CmrPressColors.greenDark
+                        : _CmrPressColors.text,
+                    fontSize: compact ? 10.2 : 10.6,
+                    fontWeight: active ? FontWeight.w600 : FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       );
     }
 
-    return SizedBox(
-      height: 48,
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.fromLTRB(10, 4, 10, 6),
-        children: [
-          chip('Новости клуба', _PressContentSection.clubNews),
-          const SizedBox(width: 6),
-          chip('Пресс-лента', _PressContentSection.publicFeed),
-          const SizedBox(width: 6),
-          chip('Мои', _PressContentSection.myMaterials),
-        ],
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(
+          bottom: BorderSide(color: _CmrPressColors.line, width: .55),
+        ),
+      ),
+      child: SizedBox(
+        height: 52,
+        child: ListView(
+          scrollDirection: Axis.horizontal,
+          physics: const BouncingScrollPhysics(),
+          padding: EdgeInsets.fromLTRB(
+            compact ? 10 : 14,
+            6,
+            compact ? 10 : 14,
+            7,
+          ),
+          children: [
+            tab(
+              'Новости клуба',
+              Icons.newspaper_outlined,
+              _PressContentSection.clubNews,
+            ),
+            const SizedBox(width: 7),
+            tab(
+              'Пресс-лента',
+              Icons.public_rounded,
+              _PressContentSection.publicFeed,
+            ),
+            const SizedBox(width: 7),
+            tab(
+              compact ? 'Мои' : 'Мои материалы',
+              Icons.folder_outlined,
+              _PressContentSection.myMaterials,
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildWorkingArea({
     required bool mobile,
+    bool tablet = false,
   }) {
     return ColoredBox(
       color: Colors.white,
       child: Column(
         children: [
-          if (mobile) _buildHeader(mobile: true),
-          if (mobile && !_editorOpen && !_profileOpen) _buildProfileStrip(),
-          if (mobile && !_editorOpen && !_profileOpen) _buildMobileSectionTabs(),
+          if (mobile || tablet) _buildHeader(mobile: mobile),
+          if ((mobile || tablet) && !_editorOpen && !_profileOpen)
+            _buildProfileStrip(),
+          if ((mobile || tablet) && !_editorOpen && !_profileOpen)
+            _buildSectionTabs(compact: mobile),
           Expanded(
             child: _editorOpen
                 ? _editor()
@@ -2108,125 +2185,276 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
                 ? _teamNameById(normalizedTeamId)
                 : 'Команда';
 
-    final clubPost = normalizedScope == 'club' || normalizedTeamId <= 0;
     final contentVisibility = _s(
       post['_content_visibility'] ?? post['visibility'],
     ).toLowerCase();
-    final contentLabel = contentVisibility == 'club_internal'
-        ? 'Внутренняя'
-        : 'Публичная';
+    final internal = contentVisibility == 'club_internal';
+    final contentLabel = internal ? 'Внутренняя' : 'Публичная';
 
-    return Material(
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(9),
-      child: InkWell(
-        onTap: () => _openPost(post),
-        borderRadius: BorderRadius.circular(9),
-        child: Container(
-          constraints: const BoxConstraints(minHeight: 66),
-          padding: const EdgeInsets.fromLTRB(10, 8, 8, 8),
-          decoration: BoxDecoration(
-            color: Colors.transparent,
-            borderRadius: BorderRadius.circular(9),
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              _PressGlowDot(
-                color:
-                    clubPost ? _CmrPressColors.green : _CmrPressColors.muted2,
-                size: clubPost ? 6.4 : 4.8,
-                opacity: clubPost ? 1 : .48,
-                halo: clubPost,
-              ),
-              const SizedBox(width: 9),
-              Container(
-                width: 38,
-                height: 38,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: _CmrPressColors.soft,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(
-                  Icons.article_outlined,
-                  color: _CmrPressColors.greenDark,
-                  size: 17,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: _CmrPressText.value(11),
-                    ),
-                    if (plain.isNotEmpty) ...[
-                      const SizedBox(height: 3),
-                      Text(
-                        plain,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: _CmrPressText.muted(10.2),
-                      ),
-                    ],
-                    const SizedBox(height: 4),
-                    Text(
-                      <String>[
-                        contentLabel,
-                        scopeLabel,
-                        if (created.isNotEmpty) created,
-                      ].join(' · '),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: _CmrPressText.caption(),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 6),
-              if (_canEditPost(post))
-                PopupMenuButton<String>(
-                  tooltip: 'Действия',
-                  padding: EdgeInsets.zero,
-                  onSelected: (value) {
-                    if (value == 'edit') _openEditPost(post);
-                    if (value == 'delete') _deletePost(post);
-                  },
-                  itemBuilder: (_) => const <PopupMenuEntry<String>>[
-                    PopupMenuItem<String>(
-                      value: 'edit',
-                      child: Text('Редактировать'),
-                    ),
-                    PopupMenuItem<String>(
-                      value: 'delete',
-                      child: Text(
-                        'Удалить',
-                        style: TextStyle(color: _CmrPressColors.red),
-                      ),
-                    ),
-                  ],
-                  icon: const Icon(
-                    Icons.more_horiz_rounded,
-                    size: 18,
-                    color: _CmrPressColors.subtle,
-                  ),
-                )
-              else
-                const Icon(
-                  Icons.visibility_outlined,
-                  size: 18,
-                  color: _CmrPressColors.subtle,
-                ),
-            ],
+    final authorName =
+        '${_s(post['first_name'])} ${_s(post['last_name'])}'.trim();
+    final author = authorName.isNotEmpty
+        ? authorName
+        : (_s(post['author']).isNotEmpty ? _s(post['author']) : _displayName);
+
+    final cover = _normalizePostMediaUrl(
+      _s(post['image'] ?? post['image_url'] ?? post['cover_url']),
+    );
+
+    Widget metaPill({
+      required IconData icon,
+      required String text,
+      bool accent = false,
+    }) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+        decoration: BoxDecoration(
+          color: accent ? _CmrPressColors.greenSoft : _CmrPressColors.soft,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: accent
+                ? _CmrPressColors.greenBorder
+                : _CmrPressColors.line.withOpacity(.65),
+            width: .65,
           ),
         ),
-      ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 13,
+              color: accent
+                  ? _CmrPressColors.greenDark
+                  : _CmrPressColors.muted2,
+            ),
+            const SizedBox(width: 5),
+            Text(
+              text,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: _CmrPressText.caption().copyWith(
+                color: accent
+                    ? _CmrPressColors.greenDark
+                    : _CmrPressColors.muted2,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    Widget actions() {
+      if (!_canEditPost(post)) {
+        return const SizedBox(
+          width: 34,
+          height: 34,
+          child: Icon(
+            Icons.visibility_outlined,
+            size: 17,
+            color: _CmrPressColors.subtle,
+          ),
+        );
+      }
+
+      return PopupMenuButton<String>(
+        tooltip: 'Действия',
+        padding: EdgeInsets.zero,
+        onSelected: (value) {
+          if (value == 'edit') _openEditPost(post);
+          if (value == 'delete') _deletePost(post);
+        },
+        itemBuilder: (_) => const <PopupMenuEntry<String>>[
+          PopupMenuItem<String>(
+            value: 'edit',
+            child: Row(
+              children: [
+                Icon(Icons.edit_outlined, size: 17),
+                SizedBox(width: 9),
+                Text('Редактировать'),
+              ],
+            ),
+          ),
+          PopupMenuItem<String>(
+            value: 'delete',
+            child: Row(
+              children: [
+                Icon(
+                  Icons.delete_outline_rounded,
+                  size: 17,
+                  color: _CmrPressColors.red,
+                ),
+                SizedBox(width: 9),
+                Text(
+                  'Удалить',
+                  style: TextStyle(color: _CmrPressColors.red),
+                ),
+              ],
+            ),
+          ),
+        ],
+        icon: const Icon(
+          Icons.more_horiz_rounded,
+          size: 19,
+          color: _CmrPressColors.subtle,
+        ),
+      );
+    }
+
+    Widget preview(double size) {
+      if (cover.isNotEmpty) {
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: SizedBox(
+            width: size,
+            height: size,
+            child: Image.network(
+              cover,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => Container(
+                color: _CmrPressColors.soft,
+                alignment: Alignment.center,
+                child: const Icon(
+                  Icons.broken_image_outlined,
+                  color: _CmrPressColors.subtle,
+                  size: 20,
+                ),
+              ),
+            ),
+          ),
+        );
+      }
+
+      return Container(
+        width: size,
+        height: size,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: internal
+              ? _CmrPressColors.greenSoft
+              : _CmrPressColors.soft,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Icon(
+          internal ? Icons.newspaper_rounded : Icons.public_rounded,
+          color: internal
+              ? _CmrPressColors.greenDark
+              : _CmrPressColors.graphiteSoft,
+          size: size >= 82 ? 23 : 20,
+        ),
+      );
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 560;
+        final previewSize = compact ? 74.0 : 88.0;
+
+        return Material(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          child: InkWell(
+            onTap: () => _openPost(post),
+            borderRadius: BorderRadius.circular(14),
+            child: Container(
+              width: double.infinity,
+              padding: EdgeInsets.all(compact ? 10 : 12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: _CmrPressColors.line.withOpacity(.8),
+                  width: .7,
+                ),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  preview(previewSize),
+                  SizedBox(width: compact ? 10 : 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                title,
+                                maxLines: compact ? 2 : 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: _CmrPressText.value(
+                                  compact ? 11.4 : 12.1,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            actions(),
+                          ],
+                        ),
+                        if (plain.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            plain,
+                            maxLines: compact ? 2 : 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: _CmrPressText.muted(
+                              compact ? 10.1 : 10.5,
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: [
+                            metaPill(
+                              icon: internal
+                                  ? Icons.lock_outline_rounded
+                                  : Icons.public_rounded,
+                              text: contentLabel,
+                              accent: internal,
+                            ),
+                            metaPill(
+                              icon: Icons.groups_2_outlined,
+                              text: scopeLabel,
+                            ),
+                            if (!compact && author.trim().isNotEmpty)
+                              metaPill(
+                                icon: Icons.person_outline_rounded,
+                                text: author,
+                              ),
+                            if (!compact && created.isNotEmpty)
+                              metaPill(
+                                icon: Icons.schedule_rounded,
+                                text: created,
+                              ),
+                          ],
+                        ),
+                        if (compact &&
+                            (author.trim().isNotEmpty || created.isNotEmpty)) ...[
+                          const SizedBox(height: 7),
+                          Text(
+                            <String>[
+                              if (author.trim().isNotEmpty) author,
+                              if (created.isNotEmpty) created,
+                            ].join(' · '),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: _CmrPressText.caption(),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -2322,16 +2550,32 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
       );
     }
 
-    return RefreshIndicator(
-      onRefresh: _loadPosts,
-      color: _CmrPressColors.green,
-      child: ListView.separated(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(10, 6, 10, 18),
-        itemCount: _posts.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 4),
-        itemBuilder: (_, index) => _buildPostTile(_posts[index]),
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 640;
+        final horizontal = constraints.maxWidth >= 1280
+            ? 24.0
+            : (constraints.maxWidth >= 760 ? 16.0 : 10.0);
+
+        return RefreshIndicator(
+          onRefresh: _loadPosts,
+          color: _CmrPressColors.green,
+          child: ListView.separated(
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: EdgeInsets.fromLTRB(
+              horizontal,
+              compact ? 8 : 12,
+              horizontal,
+              22,
+            ),
+            itemCount: _posts.length,
+            separatorBuilder: (_, __) =>
+                SizedBox(height: compact ? 7 : 9),
+            itemBuilder: (_, index) => _buildPostTile(_posts[index]),
+          ),
+        );
+      },
     );
   }
 
@@ -2428,53 +2672,52 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
         color: _CmrPressColors.workspace,
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final mobile = constraints.maxWidth < 640;
-            final compact = constraints.maxWidth < 980;
-
+            final phone = constraints.maxWidth < 640;
+            final tablet = constraints.maxWidth >= 640 &&
+                constraints.maxWidth < 1120;
             final menuWidth = constraints.maxWidth >= 1700
                 ? 306.0
-                : (constraints.maxWidth >= 1440
-                    ? 286.0
-                    : (constraints.maxWidth >= 1180 ? 262.0 : 232.0));
+                : (constraints.maxWidth >= 1440 ? 286.0 : 252.0);
 
-            if (mobile) {
+            if (phone || tablet) {
+              final outerPadding = phone ? 6.0 : 8.0;
+              final radius = phone
+                  ? _CmrPressDecor.mobileRadius
+                  : _CmrPressDecor.desktopRadius;
+
               return Container(
                 width: double.infinity,
                 color: _CmrPressColors.workspace,
-                padding: const EdgeInsets.all(6),
+                padding: EdgeInsets.all(outerPadding),
                 child: ClipRRect(
-                  borderRadius: BorderRadius.circular(
-                    _CmrPressDecor.mobileRadius,
-                  ),
+                  borderRadius: BorderRadius.circular(radius),
                   child: Container(
                     decoration: BoxDecoration(
                       color: Colors.white,
-                      borderRadius: BorderRadius.circular(
-                        _CmrPressDecor.mobileRadius,
-                      ),
+                      borderRadius: BorderRadius.circular(radius),
+                      boxShadow: tablet ? _CmrPressDecor.windowShadow : null,
                     ),
                     child: _buildWorkingArea(
-                      mobile: true,
+                      mobile: phone,
+                      tablet: tablet,
                     ),
                   ),
                 ),
               );
             }
 
-            final radius = compact
-                ? _CmrPressDecor.mobileRadius
-                : _CmrPressDecor.desktopRadius;
-
             return Container(
               width: double.infinity,
               color: _CmrPressColors.workspace,
-              padding: EdgeInsets.all(compact ? 8 : 10),
+              padding: const EdgeInsets.all(10),
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(radius),
+                borderRadius:
+                    BorderRadius.circular(_CmrPressDecor.desktopRadius),
                 child: Container(
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(radius),
+                    borderRadius:
+                        BorderRadius.circular(_CmrPressDecor.desktopRadius),
                     boxShadow: _CmrPressDecor.windowShadow,
                   ),
                   child: Row(

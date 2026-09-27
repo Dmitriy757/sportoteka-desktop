@@ -118,6 +118,9 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
 
   late List<PostBlock> _blocks;
 
+  final Map<int, TextEditingController> _pressTextControllers =
+      <int, TextEditingController>{};
+
   String _coverUrl = "";
   File? _newCoverFile;
 
@@ -182,6 +185,10 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
   @override
   void dispose() {
     widget.composerController?._detach();
+    for (final controller in _pressTextControllers.values) {
+      controller.dispose();
+    }
+    _pressTextControllers.clear();
     _title.dispose();
     _caption.dispose();
     super.dispose();
@@ -221,6 +228,169 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
       selection: TextSelection.collapsed(offset: updated.length),
     );
     setState(() {});
+  }
+
+  TextEditingController _pressTextController(int index, String initialText) {
+    final existing = _pressTextControllers[index];
+    if (existing != null) return existing;
+
+    final controller = TextEditingController(text: initialText);
+    controller.selection =
+        TextSelection.collapsed(offset: controller.text.length);
+    _pressTextControllers[index] = controller;
+    return controller;
+  }
+
+  void _resetPressTextControllers() {
+    for (final controller in _pressTextControllers.values) {
+      controller.dispose();
+    }
+    _pressTextControllers.clear();
+  }
+
+  void _insertEmojiIntoPressText(int index, String emoji) {
+    if (index < 0 || index >= _blocks.length) return;
+    final block = _blocks[index];
+    if (block is! TextBlock) return;
+
+    final controller = _pressTextController(index, block.text);
+    final selection = controller.selection;
+    final start = selection.isValid
+        ? selection.start.clamp(0, controller.text.length).toInt()
+        : controller.text.length;
+    final end = selection.isValid
+        ? selection.end.clamp(0, controller.text.length).toInt()
+        : controller.text.length;
+
+    final updated = controller.text.replaceRange(start, end, emoji);
+    controller.value = TextEditingValue(
+      text: updated,
+      selection: TextSelection.collapsed(offset: start + emoji.length),
+    );
+    _blocks[index] = TextBlock(updated);
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _showPressEmojiPicker(int index) async {
+    const emojis = <String>[
+      '⚽',
+      '🔥',
+      '💚',
+      '👏',
+      '💪',
+      '🏆',
+      '🥇',
+      '🎯',
+      '⭐',
+      '🚀',
+      '✅',
+      '📣',
+      '📸',
+      '🎥',
+      '🙌',
+      '😊',
+      '😎',
+      '🤝',
+      '❤️',
+      '🟢',
+      '⚡',
+      '🎉',
+      '💥',
+      '👊',
+    ];
+
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: false,
+      builder: (sheetContext) {
+        final width = MediaQuery.sizeOf(sheetContext).width;
+        final horizontal = width < 600 ? 12.0 : 18.0;
+
+        return SafeArea(
+          child: Container(
+            margin: EdgeInsets.fromLTRB(horizontal, 0, horizontal, 10),
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(.08),
+                  blurRadius: 24,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    _brandDots(),
+                    const SizedBox(width: 9),
+                    Expanded(
+                      child: Text(
+                        'Добавить смайлик',
+                        style: _editorText(
+                          12.4,
+                          weight: FontWeight.w600,
+                          color: const Color(0xFF0B0F14),
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Закрыть',
+                      onPressed: () => Navigator.pop(sheetContext),
+                      icon: const Icon(Icons.close_rounded, size: 18),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 7,
+                  runSpacing: 7,
+                  children: [
+                    for (final emoji in emojis)
+                      Material(
+                        color: const Color(0xFFF7F9F8),
+                        borderRadius: BorderRadius.circular(10),
+                        child: InkWell(
+                          onTap: () => Navigator.pop(sheetContext, emoji),
+                          borderRadius: BorderRadius.circular(10),
+                          child: SizedBox(
+                            width: 44,
+                            height: 42,
+                            child: Center(
+                              child: Text(
+                                emoji,
+                                style: const TextStyle(fontSize: 22),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 9),
+                Text(
+                  'Можно также использовать системную клавиатуру emoji — символы сохраняются вместе с текстом.',
+                  style: _editorText(
+                    9.5,
+                    color: const Color(0xFF8A9099),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    if (selected != null && selected.isNotEmpty) {
+      _insertEmojiIntoPressText(index, selected);
+    }
   }
 
   void _snack(String t) {
@@ -851,6 +1021,7 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
 
   void _moveUp(int i) {
     if (i <= 0) return;
+    _resetPressTextControllers();
     setState(() {
       final tmp = _blocks[i - 1];
       _blocks[i - 1] = _blocks[i];
@@ -860,6 +1031,7 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
 
   void _moveDown(int i) {
     if (i >= _blocks.length - 1) return;
+    _resetPressTextControllers();
     setState(() {
       final tmp = _blocks[i + 1];
       _blocks[i + 1] = _blocks[i];
@@ -868,6 +1040,7 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
   }
 
   void _deleteBlock(int i) {
+    _resetPressTextControllers();
     setState(() => _blocks.removeAt(i));
   }
 
@@ -1200,6 +1373,75 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
                     : _targetTeamNameById(ids.first))
                 : '${ids.length} команды';
 
+    Widget audiencePill({
+      required String label,
+      required bool selected,
+      required VoidCallback? onTap,
+      IconData? icon,
+    }) {
+      return Material(
+        color: selected
+            ? const Color(0xFFF3FAF6)
+            : const Color(0xFFF7F9F8),
+        borderRadius: BorderRadius.circular(999),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(999),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            curve: Curves.easeOutCubic,
+            constraints: const BoxConstraints(minHeight: 36),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 11,
+              vertical: 7,
+            ),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(
+                color: selected
+                    ? const Color(0xFFD7F0E2)
+                    : const Color(0xFFE9ECEA),
+                width: .7,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (icon != null) ...[
+                  Icon(
+                    icon,
+                    size: 15,
+                    color: selected
+                        ? const Color(0xFF067A46)
+                        : const Color(0xFF667085),
+                  ),
+                  const SizedBox(width: 6),
+                ],
+                if (selected) ...[
+                  const Icon(
+                    Icons.check_rounded,
+                    size: 14,
+                    color: Color(0xFF067A46),
+                  ),
+                  const SizedBox(width: 5),
+                ],
+                Text(
+                  label,
+                  style: _editorText(
+                    10.2,
+                    weight: selected ? FontWeight.w600 : FontWeight.w500,
+                    color: selected
+                        ? const Color(0xFF067A46)
+                        : const Color(0xFF374151),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     return _editorSection(
       title: 'Получатели',
       subtitle: 'Эта новость не попадёт в общую Community-ленту',
@@ -1210,59 +1452,58 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (widget.allowWholeClubTarget)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: ChoiceChip(
-                label: const Text('Весь клуб'),
-                selected: _targetWholeClub,
-                onSelected: _saving
-                    ? null
-                    : (selected) {
-                        if (!selected) return;
-                        setState(() {
-                          _targetWholeClub = true;
-                          _selectedTargetTeamIds.clear();
-                        });
-                      },
-              ),
-            ),
-          if (widget.availableTargetTeams.isNotEmpty)
-            Wrap(
-              spacing: 7,
-              runSpacing: 7,
-              children: [
-                for (final team in widget.availableTargetTeams)
-                  Builder(
-                    builder: (_) {
-                      final id = _targetTeamId(team);
-                      final selected = _selectedTargetTeamIds.contains(id);
-                      return FilterChip(
-                        label: Text(_targetTeamName(team)),
-                        selected: selected,
-                        onSelected: _saving || id <= 0
-                            ? null
-                            : (value) {
-                                setState(() {
-                                  _targetWholeClub = false;
-                                  if (value) {
-                                    _selectedTargetTeamIds.add(id);
-                                  } else {
-                                    _selectedTargetTeamIds.remove(id);
-                                  }
-                                });
-                              },
-                      );
-                    },
-                  ),
-              ],
-            ),
+          Wrap(
+            spacing: 7,
+            runSpacing: 7,
+            children: [
+              if (widget.allowWholeClubTarget)
+                audiencePill(
+                  label: 'Весь клуб',
+                  icon: Icons.apartment_rounded,
+                  selected: _targetWholeClub,
+                  onTap: _saving
+                      ? null
+                      : () {
+                          setState(() {
+                            _targetWholeClub = true;
+                            _selectedTargetTeamIds.clear();
+                          });
+                        },
+                ),
+              for (final team in widget.availableTargetTeams)
+                Builder(
+                  builder: (_) {
+                    final id = _targetTeamId(team);
+                    final selected = _selectedTargetTeamIds.contains(id);
+                    return audiencePill(
+                      label: _targetTeamName(team),
+                      icon: Icons.groups_2_outlined,
+                      selected: selected,
+                      onTap: _saving || id <= 0
+                          ? null
+                          : () {
+                              setState(() {
+                                _targetWholeClub = false;
+                                if (selected) {
+                                  _selectedTargetTeamIds.remove(id);
+                                } else {
+                                  _selectedTargetTeamIds.add(id);
+                                }
+                              });
+                            },
+                    );
+                  },
+                ),
+            ],
+          ),
           if (!widget.allowWholeClubTarget &&
-              widget.availableTargetTeams.isEmpty)
+              widget.availableTargetTeams.isEmpty) ...[
+            const SizedBox(height: 8),
             Text(
               'Нет доступных команд для публикации.',
               style: _editorText(10.2, color: const Color(0xFFD92D20)),
             ),
+          ],
         ],
       ),
     );
@@ -1472,23 +1713,28 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
 
   Widget _buildTextBlockPreview(TextBlock b, int index) {
     if (widget.pressMode) {
+      final controller = _pressTextController(index, b.text);
+
       return Container(
         width: double.infinity,
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(9),
+          borderRadius: BorderRadius.circular(10),
           border: Border.all(
             color: const Color(0xFFE9ECEA),
             width: .7,
           ),
         ),
-        child: TextFormField(
-          initialValue: b.text,
+        child: TextField(
+          controller: controller,
           autofocus: b.text.trim().isEmpty && index == _blocks.length - 1,
           minLines: 5,
-          maxLines: 16,
+          maxLines: 18,
           keyboardType: TextInputType.multiline,
           textInputAction: TextInputAction.newline,
+          textCapitalization: TextCapitalization.sentences,
+          enableSuggestions: true,
+          autocorrect: true,
           style: AppTypography.body(
             color: const Color(0xFF111827),
           ).copyWith(
@@ -1496,9 +1742,6 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
             fontWeight: FontWeight.w500,
           ),
           onChanged: (value) {
-            // Не вызываем setState на каждый символ:
-            // TextFormField сохраняет позицию курсора,
-            // а _save() получит уже обновлённый TextBlock из _blocks.
             _blocks[index] = TextBlock(value);
           },
           decoration: InputDecoration(
@@ -1509,7 +1752,20 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
             ),
             filled: true,
             fillColor: Colors.transparent,
-            contentPadding: const EdgeInsets.all(12),
+            contentPadding: const EdgeInsets.fromLTRB(12, 12, 4, 12),
+            suffixIconConstraints: const BoxConstraints(
+              minWidth: 44,
+              minHeight: 44,
+            ),
+            suffixIcon: IconButton(
+              tooltip: 'Добавить смайлик',
+              onPressed: _saving ? null : () => _showPressEmojiPicker(index),
+              icon: const Icon(
+                Icons.emoji_emotions_outlined,
+                size: 20,
+                color: Color(0xFF067A46),
+              ),
+            ),
             border: InputBorder.none,
             enabledBorder: InputBorder.none,
             focusedBorder: InputBorder.none,
@@ -1761,127 +2017,173 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
     final hasRemoteCover = _coverUrl.trim().isNotEmpty;
     final hasCover = hasLocalCover || hasRemoteCover;
 
+    final composerWidth = MediaQuery.sizeOf(context).width;
+    final wideComposer = widget.hideChrome && composerWidth >= 680;
+
     Widget mediaPreview() {
-      if (!hasCover) {
-        return Material(
-          color: const Color(0xFFF4F6F5),
-          child: InkWell(
-            onTap: _saving ? null : _pickCover,
-            child: AspectRatio(
-              aspectRatio: 1,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    width: 58,
-                    height: 58,
-                    decoration: const BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.add_photo_alternate_outlined,
-                      color: Color(0xFF00A750),
-                      size: 27,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'Выбрать фото',
-                    style: _editorText(
-                      12.4,
-                      weight: FontWeight.w600,
-                      color: const Color(0xFF0B0F14),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Фото будет показано в ленте квадратом',
-                    style: _editorText(
-                      10.2,
-                      color: const Color(0xFF8A9099),
-                    ),
+      Widget emptyContent() {
+        return Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: wideComposer ? 54 : 58,
+              height: wideComposer ? 54 : 58,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(.045),
+                    blurRadius: 18,
+                    offset: const Offset(0, 7),
                   ),
                 ],
               ),
+              child: const Icon(
+                Icons.add_photo_alternate_outlined,
+                color: Color(0xFF00A750),
+                size: 27,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Выбрать фото',
+              style: _editorText(
+                12.4,
+                weight: FontWeight.w600,
+                color: const Color(0xFF0B0F14),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              wideComposer
+                  ? 'Фото аккуратно впишется в публикацию'
+                  : 'Фото будет показано в ленте квадратом',
+              textAlign: TextAlign.center,
+              style: _editorText(
+                10.2,
+                color: const Color(0xFF8A9099),
+              ),
+            ),
+          ],
+        );
+      }
+
+      if (!hasCover) {
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(wideComposer ? 16 : 0),
+          child: Material(
+            color: const Color(0xFFF4F6F5),
+            child: InkWell(
+              onTap: _saving ? null : _pickCover,
+              child: wideComposer
+                  ? SizedBox(
+                      height: 410,
+                      child: emptyContent(),
+                    )
+                  : AspectRatio(
+                      aspectRatio: 1,
+                      child: emptyContent(),
+                    ),
             ),
           ),
         );
       }
 
-      return Stack(
-        children: [
-          AspectRatio(
-            aspectRatio: 1,
-            child: hasLocalCover
-                ? Image.file(
-                    _newCoverFile!,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                  )
-                : Image.network(
-                    _coverUrl,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
-                      color: const Color(0xFFF4F6F5),
-                      alignment: Alignment.center,
-                      child: const Icon(
-                        Icons.broken_image_outlined,
-                        color: Color(0xFF98A2B3),
-                        size: 34,
-                      ),
-                    ),
-                  ),
+      Widget image() {
+        if (hasLocalCover) {
+          return Image.file(
+            _newCoverFile!,
+            width: double.infinity,
+            height: double.infinity,
+            fit: wideComposer ? BoxFit.contain : BoxFit.cover,
+          );
+        }
+
+        return Image.network(
+          _coverUrl,
+          width: double.infinity,
+          height: double.infinity,
+          fit: wideComposer ? BoxFit.contain : BoxFit.cover,
+          errorBuilder: (_, __, ___) => Container(
+            color: const Color(0xFFF4F6F5),
+            alignment: Alignment.center,
+            child: const Icon(
+              Icons.broken_image_outlined,
+              color: Color(0xFF98A2B3),
+              size: 34,
+            ),
           ),
-          Positioned(
-            top: 10,
-            right: 10,
-            child: Row(
-              children: [
-                Material(
-                  color: Colors.black.withOpacity(.58),
-                  shape: const CircleBorder(),
-                  child: InkWell(
-                    onTap: _saving ? null : _pickCover,
-                    customBorder: const CircleBorder(),
-                    child: const SizedBox(
-                      width: 38,
-                      height: 38,
-                      child: Icon(
-                        Icons.edit_outlined,
-                        color: Colors.white,
-                        size: 18,
-                      ),
-                    ),
-                  ),
-                ),
-                if (hasLocalCover) ...[
-                  const SizedBox(width: 7),
+        );
+      }
+
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(wideComposer ? 16 : 0),
+        child: Stack(
+          children: [
+            if (wideComposer)
+              Container(
+                height: 410,
+                width: double.infinity,
+                color: const Color(0xFFF4F6F5),
+                alignment: Alignment.center,
+                padding: const EdgeInsets.all(10),
+                child: image(),
+              )
+            else
+              AspectRatio(
+                aspectRatio: 1,
+                child: image(),
+              ),
+            Positioned(
+              top: 10,
+              right: 10,
+              child: Row(
+                children: [
                   Material(
                     color: Colors.black.withOpacity(.58),
                     shape: const CircleBorder(),
                     child: InkWell(
-                      onTap: _saving
-                          ? null
-                          : () => setState(() => _newCoverFile = null),
+                      onTap: _saving ? null : _pickCover,
                       customBorder: const CircleBorder(),
                       child: const SizedBox(
                         width: 38,
                         height: 38,
                         child: Icon(
-                          Icons.close_rounded,
+                          Icons.edit_outlined,
                           color: Colors.white,
                           size: 18,
                         ),
                       ),
                     ),
                   ),
+                  if (hasLocalCover) ...[
+                    const SizedBox(width: 7),
+                    Material(
+                      color: Colors.black.withOpacity(.58),
+                      shape: const CircleBorder(),
+                      child: InkWell(
+                        onTap: _saving
+                            ? null
+                            : () => setState(() => _newCoverFile = null),
+                        customBorder: const CircleBorder(),
+                        child: const SizedBox(
+                          width: 38,
+                          height: 38,
+                          child: Icon(
+                            Icons.close_rounded,
+                            color: Colors.white,
+                            size: 18,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       );
     }
 
@@ -1894,131 +2196,203 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
       '#спорт',
     ];
 
-    return ListView(
-      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-      padding: EdgeInsets.only(
-        bottom:
-            widget.hideChrome ? MediaQuery.paddingOf(context).bottom + 96 : 40,
-      ),
-      children: [
-        mediaPreview(),
-        Container(
-          color: Colors.white,
-          padding: const EdgeInsets.fromLTRB(14, 14, 14, 8),
-          child: TextField(
-            controller: _caption,
-            minLines: 4,
-            maxLines: 10,
-            maxLength: 2200,
-            textCapitalization: TextCapitalization.sentences,
-            style: _editorText(
-              13.2,
-              weight: FontWeight.w400,
-              color: const Color(0xFF0B0F14),
-            ).copyWith(height: 1.42),
-            decoration: InputDecoration(
-              hintText: 'Напишите подпись… Добавьте #хэштеги',
-              hintStyle: _editorText(
-                12.4,
-                color: const Color(0xFF98A2B3),
-              ),
-              border: InputBorder.none,
-              enabledBorder: InputBorder.none,
-              focusedBorder: InputBorder.none,
-              counterStyle: _editorText(9.2, color: const Color(0xFF98A2B3)),
-              contentPadding: EdgeInsets.zero,
+    Widget captionAndSettings() {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            color: Colors.white,
+            padding: EdgeInsets.fromLTRB(
+              wideComposer ? 4 : 14,
+              wideComposer ? 2 : 14,
+              wideComposer ? 4 : 14,
+              8,
             ),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(14, 4, 14, 12),
-          child: TextField(
-            controller: _title,
-            style: _editorText(
-              11.2,
-              weight: FontWeight.w500,
-              color: const Color(0xFF0B0F14),
-            ),
-            decoration: InputDecoration(
-              labelText: 'Заголовок (необязательно)',
-              hintText: 'Например: Победа в важном матче',
-              labelStyle: _editorText(10.2, color: const Color(0xFF667085)),
-              hintStyle: _editorText(10.2, color: const Color(0xFF98A2B3)),
-              filled: true,
-              fillColor: const Color(0xFFF7F9F8),
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 12,
-              ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: BorderSide.none,
+            child: TextField(
+              controller: _caption,
+              minLines: wideComposer ? 7 : 4,
+              maxLines: wideComposer ? 14 : 10,
+              maxLength: 2200,
+              textCapitalization: TextCapitalization.sentences,
+              style: _editorText(
+                wideComposer ? 12.4 : 13.2,
+                weight: FontWeight.w400,
+                color: const Color(0xFF0B0F14),
+              ).copyWith(height: 1.42),
+              decoration: InputDecoration(
+                hintText: 'Напишите подпись… Добавьте #хэштеги',
+                hintStyle: _editorText(
+                  12.0,
+                  color: const Color(0xFF98A2B3),
+                ),
+                filled: wideComposer,
+                fillColor:
+                    wideComposer ? const Color(0xFFF8FAF9) : Colors.transparent,
+                border: wideComposer
+                    ? OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      )
+                    : InputBorder.none,
+                enabledBorder: wideComposer
+                    ? OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      )
+                    : InputBorder.none,
+                focusedBorder: wideComposer
+                    ? OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(
+                          color: Color(0x3300A750),
+                        ),
+                      )
+                    : InputBorder.none,
+                counterStyle:
+                    _editorText(9.2, color: const Color(0xFF98A2B3)),
+                contentPadding: wideComposer
+                    ? const EdgeInsets.all(12)
+                    : EdgeInsets.zero,
               ),
             ),
           ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(14, 2, 14, 12),
-          child: Wrap(
-            spacing: 7,
-            runSpacing: 7,
-            children: [
-              for (final hashtag in suggestions)
-                Material(
-                  color: const Color(0xFFF3FAF6),
-                  borderRadius: BorderRadius.circular(999),
-                  child: InkWell(
-                    onTap: () => _insertHashtag(hashtag),
+          Padding(
+            padding: EdgeInsets.fromLTRB(
+              wideComposer ? 4 : 14,
+              4,
+              wideComposer ? 4 : 14,
+              12,
+            ),
+            child: TextField(
+              controller: _title,
+              style: _editorText(
+                11.2,
+                weight: FontWeight.w500,
+                color: const Color(0xFF0B0F14),
+              ),
+              decoration: InputDecoration(
+                labelText: 'Заголовок (необязательно)',
+                hintText: 'Например: Победа в важном матче',
+                labelStyle:
+                    _editorText(10.2, color: const Color(0xFF667085)),
+                hintStyle:
+                    _editorText(10.2, color: const Color(0xFF98A2B3)),
+                filled: true,
+                fillColor: const Color(0xFFF7F9F8),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 12,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+          ),
+          Padding(
+            padding: EdgeInsets.fromLTRB(
+              wideComposer ? 4 : 14,
+              2,
+              wideComposer ? 4 : 14,
+              12,
+            ),
+            child: Wrap(
+              spacing: 7,
+              runSpacing: 7,
+              children: [
+                for (final hashtag in suggestions)
+                  Material(
+                    color: const Color(0xFFF3FAF6),
                     borderRadius: BorderRadius.circular(999),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 7,
-                      ),
-                      child: Text(
-                        hashtag,
-                        style: _editorText(
-                          10.1,
-                          weight: FontWeight.w600,
-                          color: const Color(0xFF067A46),
+                    child: InkWell(
+                      onTap: () => _insertHashtag(hashtag),
+                      borderRadius: BorderRadius.circular(999),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 7,
+                        ),
+                        child: Text(
+                          hashtag,
+                          style: _editorText(
+                            10.1,
+                            weight: FontWeight.w600,
+                            color: const Color(0xFF067A46),
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
-            ],
-          ),
-        ),
-        const Divider(height: 1, color: Color(0xFFF0F2F1)),
-        ListTile(
-          onTap: _saving
-              ? null
-              : () {
-                  _syncCaptionToBlocks();
-                  setState(() => _showAdvancedMobileEditor = true);
-                },
-          leading: const Icon(
-            Icons.tune_rounded,
-            color: Color(0xFF111827),
-          ),
-          title: Text(
-            'Расширенный редактор',
-            style: _editorText(
-              11.5,
-              weight: FontWeight.w600,
-              color: const Color(0xFF0B0F14),
+              ],
             ),
           ),
-          subtitle: Text(
-            'Текстовые блоки, дополнительные фото, ссылки и видео',
-            style: _editorText(9.8, color: const Color(0xFF8A9099)),
+          const Divider(height: 1, color: Color(0xFFF0F2F1)),
+          ListTile(
+            dense: wideComposer,
+            contentPadding: EdgeInsets.symmetric(
+              horizontal: wideComposer ? 4 : 14,
+            ),
+            onTap: _saving
+                ? null
+                : () {
+                    _syncCaptionToBlocks();
+                    setState(() => _showAdvancedMobileEditor = true);
+                  },
+            leading: const Icon(
+              Icons.tune_rounded,
+              color: Color(0xFF111827),
+            ),
+            title: Text(
+              'Расширенный редактор',
+              style: _editorText(
+                11.5,
+                weight: FontWeight.w600,
+                color: const Color(0xFF0B0F14),
+              ),
+            ),
+            subtitle: Text(
+              'Текстовые блоки, дополнительные фото, ссылки и видео',
+              style: _editorText(9.8, color: const Color(0xFF8A9099)),
+            ),
+            trailing: const Icon(
+              Icons.chevron_right_rounded,
+              color: Color(0xFF98A2B3),
+            ),
           ),
-          trailing: const Icon(
-            Icons.chevron_right_rounded,
-            color: Color(0xFF98A2B3),
-          ),
-        ),
-        const Divider(height: 1, color: Color(0xFFF0F2F1)),
+          const Divider(height: 1, color: Color(0xFFF0F2F1)),
+        ],
+      );
+    }
+
+    return ListView(
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      padding: EdgeInsets.fromLTRB(
+        wideComposer ? 14 : 0,
+        wideComposer ? 12 : 0,
+        wideComposer ? 14 : 0,
+        widget.hideChrome ? MediaQuery.paddingOf(context).bottom + 96 : 40,
+      ),
+      children: [
+        if (wideComposer)
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                flex: 11,
+                child: mediaPreview(),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                flex: 9,
+                child: captionAndSettings(),
+              ),
+            ],
+          )
+        else ...[
+          mediaPreview(),
+          captionAndSettings(),
+        ],
       ],
     );
   }
@@ -2075,9 +2449,61 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
     );
   }
 
+  Widget _buildResponsiveAdvancedEditor() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final phone = width < 600;
+        final tablet = width >= 600 && width < 1050;
+
+        final maxContentWidth = widget.pressMode
+            ? (phone
+                ? width
+                : tablet
+                    ? 820.0
+                    : 1040.0)
+            : (phone
+                ? width
+                : tablet
+                    ? 860.0
+                    : 1080.0);
+
+        final horizontal = phone
+            ? (widget.embedded ? 10.0 : 12.0)
+            : tablet
+                ? 16.0
+                : 22.0;
+
+        return ListView(
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+          padding: EdgeInsets.fromLTRB(
+            horizontal,
+            phone ? 8 : 12,
+            horizontal,
+            widget.hideChrome
+                ? MediaQuery.paddingOf(context).bottom + 28
+                : 28,
+          ),
+          children: [
+            Center(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: maxContentWidth),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: _buildEditorChildren(),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final isPhone = MediaQuery.sizeOf(context).width < 600;
+    final width = MediaQuery.sizeOf(context).width;
+    final isPhone = width < 600;
 
     final useSimpleComposer =
         (widget.forceSimpleComposer || isPhone) && !widget.pressMode;
@@ -2086,15 +2512,7 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
         ? (_showAdvancedMobileEditor
             ? _buildAdvancedMobileEditor()
             : _buildInstagramMobileEditor())
-        : ListView(
-            padding: EdgeInsets.fromLTRB(
-              widget.embedded ? 12 : 16,
-              10,
-              widget.embedded ? 12 : 16,
-              24,
-            ),
-            children: _buildEditorChildren(),
-          );
+        : _buildResponsiveAdvancedEditor();
 
     final baseTheme = Theme.of(context);
     final themed = Theme(

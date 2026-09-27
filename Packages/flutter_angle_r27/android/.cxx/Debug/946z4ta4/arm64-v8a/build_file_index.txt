@@ -1,0 +1,1 @@
+/Users/dmitrij/Documents/sportoteka2.0/packages/flutter_angle_r27/android/src/main/cpp/CMakeLists.txt

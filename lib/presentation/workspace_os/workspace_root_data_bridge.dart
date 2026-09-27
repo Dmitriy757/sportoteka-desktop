@@ -267,6 +267,21 @@ class WorkspaceRootDataBridge {
           raw['_workspace_section'] = moduleKey;
           raw['_workspace_entity_type'] = _entityTypeForKind(kind);
           raw['_workspace_entity_id'] = _entityIdForKind(kind, raw, index);
+          // Real matches and calendar/training events behave like Finder folders.
+          // The backend entity remains canonical; its documents/files live
+          // inside a stable entity folder and therefore are visible from both
+          // Calendar and Sportoteka OS.
+          if (kind == WorkspaceFinderNodeKind.match ||
+              kind == WorkspaceFinderNodeKind.training ||
+              kind == WorkspaceFinderNodeKind.calendar) {
+            raw['_workspace_entity_folder'] = true;
+            raw['_workspace_entity_folder_parent'] = switch (kind) {
+              WorkspaceFinderNodeKind.match => 'matches',
+              WorkspaceFinderNodeKind.training => 'trainings',
+              WorkspaceFinderNodeKind.calendar => 'calendar',
+              _ => moduleKey,
+            };
+          }
           final date = _rowDate(raw);
           return WorkspaceFinderNode(
             id: 'real:$moduleKey:$teamId:${_recordId(raw, index)}',
@@ -424,6 +439,11 @@ class WorkspaceRootDataBridge {
           record['_workspace_section'] = 'tracker';
           record['_workspace_entity_type'] = 'tracker';
           record['_workspace_entity_id'] = _entityIdForKind(WorkspaceFinderNodeKind.tracker, record, index);
+          // A Tracker session is a real Sportoteka OS folder. Opening it must
+          // show the session card, AI analysis and user documents INSIDE it,
+          // instead of opening the Tracker record as a standalone document.
+          record['_workspace_entity_folder'] = true;
+          record['_workspace_entity_folder_parent'] = 'tracker';
           final date = _rowDate(record);
           final playerName = _first(record, const <String>['player_name', 'athlete_name', 'name']);
           final sessionTitle = _first(record, const <String>['title', 'session_title']);
@@ -497,8 +517,38 @@ class WorkspaceRootDataBridge {
   String _eventSubtitle(Map<String, dynamic> row) => _join(<String>[
         _friendlyDate(_rowDate(row)),
         _first(row, const <String>['location', 'venue', 'place']),
-        _first(row, const <String>['type', 'event_type']),
+        _eventTypeLabel(_first(row, const <String>['type', 'event_type'])),
       ]);
+
+  String _eventTypeLabel(String raw) {
+    final type = raw.trim().toLowerCase();
+    switch (type) {
+      case 'training':
+        return 'Тренировка';
+      case 'gym':
+      case 'ofp':
+      case 'training_gym':
+        return 'ОФП / Зал';
+      case 'league':
+      case 'league_match':
+      case 'championship':
+      case 'official':
+        return 'Игра (чемпионат)';
+      case 'friendly':
+      case 'friendly_match':
+        return 'Товарищеская игра';
+      case 'theory':
+      case 'lecture':
+      case 'class':
+        return 'Теория';
+      case 'dayoff':
+      case 'day_off':
+      case 'off':
+        return 'Выходной';
+      default:
+        return raw.trim();
+    }
+  }
 
   String _planTitle(Map<String, dynamic> row) =>
       _first(row, const <String>['title', 'name', 'plan_title', 'topic'], fallback: 'План-конспект');
@@ -518,7 +568,14 @@ class WorkspaceRootDataBridge {
 
   bool _isTraining(Map<String, dynamic> row) {
     final type = _first(row, const <String>['type', 'event_type', 'kind', 'category']).toLowerCase();
-    if (type.contains('training') || type.contains('трен')) return true;
+    if (type.contains('training') ||
+        type.contains('трен') ||
+        type == 'gym' ||
+        type.contains('ofp') ||
+        type.contains('офп') ||
+        type.contains('зал')) {
+      return true;
+    }
     final title = _eventTitleRaw(row).toLowerCase();
     return title.contains('трениров');
   }

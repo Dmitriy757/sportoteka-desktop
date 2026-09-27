@@ -30,11 +30,35 @@ class ReelsScreen extends StatefulWidget {
   final int initialIndex;
   final bool openCommentsOnStart;
 
+  /// Если задан, экран показывает только Reels конкретного пользователя.
+  /// Используется при открытии ролика из профиля, чтобы воспроизведение,
+  /// лайки, комментарии и пересылка работали тем же кодом, что и в общей ленте.
+  final int? userIdFilter;
+
+  /// Поисковый запрос из глобального поиска. Сервер фильтрует по описанию/хештегу,
+  /// а локальная проверка оставлена для совместимости со старым API.
+  final String? searchQuery;
+
+  /// Заголовок для режима просмотра Reels из профиля.
+  final String? title;
+
+  /// В общей мобильной ленте кнопка назад обычно рисуется shell-ом.
+  /// При открытии из профиля нужен собственный back.
+  final bool showBackButton;
+
+  /// Кнопку добавления оставляем только там, где она действительно нужна.
+  final bool allowUpload;
+
   const ReelsScreen({
     super.key,
     this.initialReelId,
     this.initialIndex = 0,
     this.openCommentsOnStart = false,
+    this.userIdFilter,
+    this.searchQuery,
+    this.title,
+    this.showBackButton = false,
+    this.allowUpload = true,
   });
 
   @override
@@ -225,7 +249,16 @@ class _ReelsScreenState extends State<ReelsScreen>
   // ===== REELS =====
   Future<void> _fetchReels() async {
     try {
-      final url = Uri.parse("$_getReelsUrl?limit=100&offset=0&me=${_meId()}");
+      final query = <String, String>{
+        'limit': '200',
+        'offset': '0',
+        'me': _meId().toString(),
+        if (widget.userIdFilter != null && widget.userIdFilter! > 0)
+          'user_id': widget.userIdFilter!.toString(),
+        if ((widget.searchQuery ?? '').trim().isNotEmpty)
+          'q': (widget.searchQuery ?? '').trim(),
+      };
+      final url = Uri.parse(_getReelsUrl).replace(queryParameters: query);
       final resp = await http.get(url);
 
       if (!mounted) return;
@@ -248,13 +281,35 @@ class _ReelsScreenState extends State<ReelsScreen>
 
       final parsed = _parseReels(jsonAny);
 
+      Iterable<Map<String, dynamic>> visible = parsed;
+
+      // В профиле сервер обычно уже фильтрует по user_id, но оставляем
+      // локальную проверку, чтобы никогда не "подмешивать" чужие Reels.
+      if (widget.userIdFilter != null && widget.userIdFilter! > 0) {
+        visible = visible.where(
+          (m) => _toInt(m['user_id']) == widget.userIdFilter,
+        );
+      }
+
+      final searchNeedle = (widget.searchQuery ?? '')
+          .trim()
+          .replaceFirst(RegExp(r'^#'), '')
+          .toLowerCase();
+      if (searchNeedle.isNotEmpty) {
+        visible = visible.where((m) {
+          final description = (m['description'] ?? '').toString().toLowerCase();
+          final username = (m['username'] ?? '').toString().toLowerCase();
+          return description.contains(searchNeedle) || username.contains(searchNeedle);
+        });
+      }
+
       if (kShowAll) {
-        reels = parsed.where((m) {
+        reels = visible.where((m) {
           final vu = (m['video_url'] ?? '').toString().trim();
           return vu.isNotEmpty;
         }).toList();
       } else {
-        reels = parsed.where((m) {
+        reels = visible.where((m) {
           final blockedAuthor = _blockedUserIds.contains(m['user_id'] ?? -1);
           if (blockedAuthor) return false;
 
@@ -1361,7 +1416,7 @@ class _ReelsScreenState extends State<ReelsScreen>
           ),
           child: Row(
             children: [
-              if (!isMobileTopBar) ...[
+              if (widget.showBackButton || !isMobileTopBar) ...[
                 Material(
                   color: Colors.black.withOpacity(.26),
                   borderRadius: BorderRadius.circular(9),
@@ -1386,12 +1441,18 @@ class _ReelsScreenState extends State<ReelsScreen>
                 compact: true,
               ),
               const SizedBox(width: 8),
-              Text(
-                'REELS',
-                style: _uiText(
-                  isLandscape ? 11.5 : 12.2,
-                  weight: FontWeight.w600,
-                  color: Colors.white,
+              Flexible(
+                child: Text(
+                  (widget.title ?? '').trim().isNotEmpty
+                      ? widget.title!.trim()
+                      : 'REELS',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: _uiText(
+                    isLandscape ? 11.5 : 12.2,
+                    weight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
                 ),
               ),
               const Spacer(),
@@ -1417,21 +1478,23 @@ class _ReelsScreenState extends State<ReelsScreen>
                   }
                 },
               ),
-              const SizedBox(width: 6),
-              _topAction(
-                label: 'Добавить',
-                active: true,
-                onTap: () async {
-                  await Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) =>
-                          UploadReelScreen(onUploadComplete: _fetchReels),
-                    ),
-                  );
-                  _fetchReels();
-                },
-              ),
+              if (widget.allowUpload) ...[
+                const SizedBox(width: 6),
+                _topAction(
+                  label: 'Добавить',
+                  active: true,
+                  onTap: () async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) =>
+                            UploadReelScreen(onUploadComplete: _fetchReels),
+                      ),
+                    );
+                    _fetchReels();
+                  },
+                ),
+              ],
             ],
           ),
         ),

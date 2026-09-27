@@ -11,10 +11,12 @@ import 'package:sportoteka/presentation/chat_screen/chat_room_screen.dart';
 
 class CallHistoryPanel extends StatefulWidget {
   final int userId;
+  final int clubId;
 
   const CallHistoryPanel({
     super.key,
     required this.userId,
+    this.clubId = 0,
   });
 
   @override
@@ -434,6 +436,7 @@ class _CallHistoryPanelState extends State<CallHistoryPanel> {
           builder: (_) => ChatRoomScreen(
             chatId: chatId,
             userId: widget.userId,
+            clubId: widget.clubId,
             chatName: _peerName(call),
           ),
         ),

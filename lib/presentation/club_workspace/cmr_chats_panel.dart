@@ -18,6 +18,7 @@ import 'package:sportoteka/presentation/chat_screen/chat_screen.dart';
 import 'package:sportoteka/presentation/chat_screen/create_group_chat_screen.dart';
 import 'package:sportoteka/presentation/chat_screen/cmr_notifications_panel.dart';
 import 'package:sportoteka/presentation/chat_screen/call_history_panel.dart';
+import 'package:sportoteka/presentation/my_profile_screen/my_profile_screen.dart';
 import 'package:sportoteka/presentation/club_workspace/cmr_club_ai_assistant_panel.dart';
 
 enum _CmrChatMode { privateChats, groups, users }
@@ -571,23 +572,151 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
   }
 
   String _photo(Map<String, dynamic> item) {
-    final raw = (item['peer_photo'] ??
-            item['opponent_photo'] ??
-            item['companion_photo'] ??
-            item['interlocutor_photo'] ??
-            item['avatar_url'] ??
-            item['avatar'] ??
-            item['photo'] ??
-            item['image'] ??
-            item['logo'] ??
-            '')
-        .toString()
-        .trim();
+    final keys = _isPrivate(item)
+        ? const <String>[
+            'peer_photo',
+            'peer_photo_url',
+            'opponent_photo',
+            'opponent_photo_url',
+            'companion_photo',
+            'interlocutor_photo',
+            'photo',
+            'photo_url',
+            'avatar',
+            'avatar_url',
+            'user_photo',
+            'user_avatar',
+          ]
+        : const <String>[
+            'group_photo',
+            'group_photo_url',
+            'group_avatar',
+            'group_avatar_url',
+            'chat_photo',
+            'chat_avatar',
+            'photo',
+            'photo_url',
+            'avatar',
+            'avatar_url',
+            'image',
+            'logo',
+          ];
 
-    if (raw.isEmpty || raw.toLowerCase() == 'null') return '';
-    if (raw.startsWith('http')) return raw;
-    if (raw.startsWith('/')) return 'https://sportotekaapp.ru$raw';
-    return 'https://sportotekaapp.ru/uploads/$raw';
+    for (final key in keys) {
+      final raw = (item[key] ?? '').toString().replaceAll('\\', '/').trim();
+      if (raw.isEmpty ||
+          const {'null', 'undefined', 'false', '0'}
+              .contains(raw.toLowerCase())) {
+        continue;
+      }
+      if (raw.startsWith('https://') || raw.startsWith('http://')) return raw;
+      if (raw.startsWith('//')) return 'https:$raw';
+      if (raw.startsWith('/')) return 'https://sportotekaapp.ru$raw';
+      if (raw.startsWith('uploads/') || raw.startsWith('api/')) {
+        return 'https://sportotekaapp.ru/$raw';
+      }
+      return 'https://sportotekaapp.ru/uploads/$raw';
+    }
+    return '';
+  }
+
+  int _peerUserId(Map<String, dynamic>? chat) {
+    if (chat == null || !_isPrivate(chat)) return 0;
+    for (final key in const <String>[
+      'peer_id',
+      'peer_user_id',
+      'other_user_id',
+      'opponent_id',
+      'companion_id',
+      'interlocutor_id',
+      'participant_id',
+      'receiver_id',
+      'sender_id',
+      'user_id',
+    ]) {
+      final id = _asInt(chat[key]);
+      if (id > 0 && id != widget.userId) return id;
+    }
+    return 0;
+  }
+
+  Future<void> _ensurePrivatePeerData(Map<String, dynamic>? chat) async {
+    if (chat == null || !_isPrivate(chat)) return;
+    final chatId = _asInt(chat['id'] ?? chat['chat_id']);
+    if (chatId <= 0) return;
+
+    // Если и ID, и фото уже пришли из get_user_chats.php, лишний запрос не нужен.
+    if (_peerUserId(chat) > 0 && _photo(chat).isNotEmpty) return;
+
+    try {
+      final res = await http
+          .get(Uri.parse('$_apiBase/get_chat_members.php?chat_id=$chatId'))
+          .timeout(const Duration(seconds: 8));
+      if (res.statusCode != 200) return;
+
+      final decoded = _decodeJson(res.body);
+      final raw = decoded is List
+          ? decoded
+          : decoded is Map
+              ? (decoded['members'] ?? decoded['data'] ?? <dynamic>[])
+              : <dynamic>[];
+      if (raw is! List) return;
+
+      Map<String, dynamic>? peer;
+      for (final entry in raw.whereType<Map>()) {
+        final member = Map<String, dynamic>.from(entry);
+        final id = _asInt(member['user_id'] ?? member['userId'] ?? member['id']);
+        if (id > 0 && id != widget.userId) {
+          peer = member;
+          break;
+        }
+      }
+      if (peer == null) return;
+
+      final peerId =
+          _asInt(peer['user_id'] ?? peer['userId'] ?? peer['id']);
+      final peerPhoto = _photo(<String, dynamic>{
+        ...peer,
+        'is_private': 1,
+        'peer_photo': peer['peer_photo'] ??
+            peer['photo'] ??
+            peer['photo_url'] ??
+            peer['avatar'] ??
+            peer['avatar_url'] ??
+            peer['user_photo'] ??
+            peer['user_avatar'],
+      });
+      final peerName = _userTitle(peer);
+
+      chat['peer_id'] = peerId;
+      if (peerPhoto.isNotEmpty) chat['peer_photo'] = peerPhoto;
+      if (!_isBadChatName(peerName)) chat['peer_name'] = peerName;
+
+      if (!mounted) return;
+      final selectedId = _selectedChatId;
+      if (selectedId == chatId) {
+        setState(() {
+          _selectedChat = Map<String, dynamic>.from(chat!);
+          if (_isBadChatName(_selectedChatName) && !_isBadChatName(peerName)) {
+            _selectedChatName = peerName;
+          }
+        });
+      }
+    } catch (_) {
+      // Сам чат должен продолжать работать даже при старом API участников.
+    }
+  }
+
+  Future<void> _openPeerProfile(Map<String, dynamic>? chat) async {
+    if (chat == null || !_isPrivate(chat)) return;
+    if (_peerUserId(chat) <= 0) await _ensurePrivatePeerData(chat);
+    final peerId = _peerUserId(chat);
+    if (peerId <= 0 || !mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => MyProfileScreen(userId: peerId, publicView: true),
+      ),
+    );
   }
 
   List<Map<String, dynamic>> _visibleChatsRaw() {
@@ -760,6 +889,11 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
     Map<String, dynamic>? chat,
   }) async {
     if (chatId <= 0) return;
+    var resolvedTitle = title;
+    if (chat != null && _isPrivate(chat)) {
+      await _ensurePrivatePeerData(chat);
+      resolvedTitle = _chatTitle(chat);
+    }
     final unread = _asInt(chat?['unread_count']);
     if (chat != null) chat['unread_count'] = 0;
     if (mounted) setState(() {});
@@ -773,7 +907,14 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
         builder: (_) => ChatRoomScreen(
           chatId: chatId,
           userId: widget.userId,
-          chatName: title,
+          clubId: widget.clubId ?? 0,
+          chatName: resolvedTitle,
+          isGroup: chat == null ? false : !_isPrivate(chat),
+          groupAvatarUrl:
+              chat == null || _isPrivate(chat) ? '' : _photo(chat),
+          peerUserId: _peerUserId(chat),
+          peerAvatarUrl:
+              chat != null && _isPrivate(chat) ? _photo(chat) : '',
           embedded: false,
         ),
       ),
@@ -803,6 +944,7 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
       _selectedChatName = title;
       chat['unread_count'] = 0;
     });
+    if (_isPrivate(chat)) unawaited(_ensurePrivatePeerData(chat));
     if (unread > 0) {
       _markReadServer(id);
       _fetchUnreadTotal();
@@ -848,6 +990,8 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
                 'name': title,
                 'is_private': 1,
                 'peer_name': title,
+                'peer_id': peerId,
+                'peer_photo': _photo(user),
               },
             ));
             return;
@@ -863,6 +1007,8 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
               'name': title,
               'is_private': 1,
               'peer_name': title,
+              'peer_id': peerId,
+              'peer_photo': _photo(user),
             };
           });
           return;
@@ -1650,6 +1796,9 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
               avatarUrl: avatar,
               initials: _initials(_selectedChatName),
               isGroup: chat == null ? false : !_isPrivate(chat),
+              onProfileTap: chat != null && _isPrivate(chat)
+                  ? () => unawaited(_openPeerProfile(chat))
+                  : null,
               onBack: showBack
                   ? () => setState(() {
                         _selectedChatId = null;
@@ -1662,7 +1811,14 @@ class _CmrChatsPanelState extends State<CmrChatsPanel> {
                 key: ValueKey('cmr-chat-$chatId'),
                 chatId: chatId,
                 userId: widget.userId,
+                clubId: widget.clubId ?? 0,
                 chatName: _selectedChatName,
+                isGroup: chat == null ? false : !_isPrivate(chat),
+                groupAvatarUrl:
+                    chat == null || _isPrivate(chat) ? '' : avatar,
+                peerUserId: _peerUserId(chat),
+                peerAvatarUrl:
+                    chat != null && _isPrivate(chat) ? avatar : '',
                 embedded: true,
               ),
             ),
@@ -2493,6 +2649,7 @@ class _EmbeddedChatHeader extends StatelessWidget {
   final String initials;
   final bool isGroup;
   final VoidCallback? onBack;
+  final VoidCallback? onProfileTap;
 
   const _EmbeddedChatHeader({
     required this.title,
@@ -2501,6 +2658,7 @@ class _EmbeddedChatHeader extends StatelessWidget {
     required this.initials,
     required this.isGroup,
     this.onBack,
+    this.onProfileTap,
   });
 
   @override
@@ -2519,28 +2677,50 @@ class _EmbeddedChatHeader extends StatelessWidget {
                 tooltip: 'К списку чатов'),
             const SizedBox(width: 8),
           ],
-          _Avatar(
-            url: avatarUrl,
-            initials: initials,
-            icon: isGroup ? Icons.groups_2_rounded : Icons.person_rounded,
-            size: 34,
-          ),
-          const SizedBox(width: 10),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: _CmrChatText.title(14.4)),
-                const SizedBox(height: 3),
-                Text(subtitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: _CmrChatText.subtle(10.6)),
-              ],
+            child: Material(
+              color: Colors.transparent,
+              borderRadius: BorderRadius.circular(10),
+              child: InkWell(
+                onTap: onProfileTap,
+                borderRadius: BorderRadius.circular(10),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  child: Row(
+                    children: [
+                      _Avatar(
+                        url: avatarUrl,
+                        initials: initials,
+                        icon:
+                            isGroup ? Icons.groups_2_rounded : Icons.person_rounded,
+                        size: 34,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: _CmrChatText.title(14.4)),
+                            const SizedBox(height: 3),
+                            Text(
+                              onProfileTap == null
+                                  ? subtitle
+                                  : '$subtitle · профиль',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: _CmrChatText.subtle(10.6),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ),
           ),
           const SizedBox(width: 8),

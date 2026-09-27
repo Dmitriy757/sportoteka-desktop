@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:sportoteka/core/theme/app_typography.dart';
 import 'package:sportoteka/presentation/workspace_os/sportoteka_workspace_icons.dart';
@@ -281,7 +282,13 @@ class _SportotekaTrainerProjectScreenState extends State<SportotekaTrainerProjec
   ];
 
   Future<void> _open(_TrainerSectionFile file) async {
-    final child = file.section == _TrainerSection.card ? _cardDocument() : _browser(file);
+    // В проекте тренера каждый раздел ведёт себя именно как папка.
+    // Документы остаются файлами внутри своей папки, а реальные данные
+    // (расписание, посещаемость, тестирование и т.д.) сначала
+    // раскладываются по автоматически созданным подпапкам.
+    final child = file.section == _TrainerSection.documents
+        ? _browser(file)
+        : _folderBrowser(file);
     await _openChild(child);
   }
 
@@ -360,14 +367,185 @@ class _SportotekaTrainerProjectScreenState extends State<SportotekaTrainerProjec
           : null,
       contextLabel: 'Тренер',
       openRecord: (context, row) => _openRecord(file, row),
-      emptyText: 'В этом разделе пока нет записей.',
+      emptyText: 'В этой папке пока нет документов.',
     );
+  }
+
+  Widget _folderBrowser(_TrainerSectionFile file) {
+    return _TrainerSectionFolderBrowser(
+      ownerTitle: _trainerName,
+      sectionTitle: file.title,
+      sectionIcon: file.icon,
+      trainerId: _trainerId,
+      clubId: widget.clubId,
+      currentUserId: widget.currentUserId,
+      sectionKey: file.section.name,
+      loadRows: () => _loadSection(file.section),
+      folderKeyFor: (row) => _folderKeyFor(file.section, row),
+      folderTitleFor: (rows) => _folderTitleFor(file.section, rows),
+      folderSubtitleFor: (rows) => _folderSubtitleFor(file.section, rows),
+      onOpenFolder: (folder) => _openAutoFolder(file, folder),
+      onOpenSectionDocuments: () => _openSectionDocuments(file),
+    );
+  }
+
+  Future<void> _openSectionDocuments(_TrainerSectionFile file) async {
+    final child = WorkspaceEntityRecordBrowser(
+      ownerTitle: _trainerName,
+      sectionTitle: '${file.title} · Документы',
+      iconKind: SportotekaWorkspaceIconKind.documents,
+      loadRecords: () async => <Map<String, dynamic>>[],
+      titleFor: (row) => _bridge.asString(row['title'] ?? row['name']),
+      subtitleFor: (row) => _bridge.asString(row['subtitle'] ?? row['description']),
+      dateFor: (row) => _bridge.asString(row['updated_at'] ?? row['created_at']),
+      propertiesFor: (row) => <WorkspaceEntityProperty>[
+        WorkspaceEntityProperty('Раздел', file.title),
+      ],
+      localStorageKey: '',
+      clubId: widget.clubId,
+      currentUserId: widget.currentUserId,
+      serverParentKey: 'trainer:${_trainerId}:${file.section.name}',
+      allowCreateDocuments: true,
+      attachmentEntityType: 'trainer',
+      attachmentEntityId: _trainerId,
+      attachmentSectionKey: '${file.section.name}:root',
+      contextLabel: 'Тренер',
+      emptyText: 'В папке пока нет документов. Можно создать документ или добавить файл.',
+      openRecord: (context, row) async {},
+    );
+    await _openChild(child);
+  }
+
+  Future<void> _openAutoFolder(
+    _TrainerSectionFile file,
+    _TrainerAutoFolder folder,
+  ) async {
+    final child = WorkspaceEntityRecordBrowser(
+      ownerTitle: _trainerName,
+      sectionTitle: folder.title,
+      iconKind: file.icon,
+      loadRecords: () async => folder.rows
+          .map((row) => Map<String, dynamic>.from(row))
+          .toList(growable: false),
+      titleFor: (row) => _titleFor(file.section, row),
+      subtitleFor: (row) => _subtitleFor(file.section, row),
+      dateFor: (row) => _dateFor(file.section, row),
+      propertiesFor: (row) => _propertiesFor(file.section, row),
+      localStorageKey: '',
+      clubId: widget.clubId,
+      currentUserId: widget.currentUserId,
+      serverParentKey: folder.serverParentKey,
+      allowCreateDocuments: true,
+      attachmentEntityType: 'trainer',
+      attachmentEntityId: _trainerId,
+      attachmentSectionKey: '${file.section.name}:${folder.key}',
+      contextLabel: 'Тренер',
+      openRecord: (context, row) => _openRecord(file, row),
+      emptyText: 'Папка пустая. Здесь можно создать документ или добавить файл.',
+    );
+    await _openChild(child);
+  }
+
+  String _folderKeyFor(_TrainerSection section, Map<String, dynamic> row) {
+    String safe(String value) {
+      final normalized = value
+          .toLowerCase()
+          .replaceAll('ё', 'е')
+          .replaceAll(RegExp(r'[^a-z0-9а-я_-]+', caseSensitive: false), '_')
+          .replaceAll(RegExp(r'_+'), '_')
+          .replaceAll(RegExp(r'^_|_$'), '');
+      return normalized.isEmpty ? 'item' : normalized;
+    }
+
+    if (section == _TrainerSection.card) return 'profile';
+
+    if (section == _TrainerSection.work) {
+      if (row['_trainer_location_folder'] == true) {
+        final location = _bridge.asString(
+          row['location'] ?? row['venue'] ?? row['address'] ?? row['name'],
+        );
+        return 'location:${safe(location)}';
+      }
+      final teamId = _bridge.teamId(row);
+      if (teamId > 0) return 'team:$teamId';
+      return 'team:${safe(_bridge.teamName(row))}';
+    }
+
+    final dateRaw = _dateFor(section, row);
+    final date = DateTime.tryParse(dateRaw.replaceFirst(' ', 'T'));
+    if (date != null) {
+      String two(int value) => value.toString().padLeft(2, '0');
+      return 'date:${date.year}-${two(date.month)}-${two(date.day)}';
+    }
+
+    return 'record:${safe(_recordKey(row))}';
+  }
+
+  String _folderTitleFor(
+    _TrainerSection section,
+    List<Map<String, dynamic>> rows,
+  ) {
+    if (rows.isEmpty) return 'Папка';
+    final first = rows.first;
+
+    if (section == _TrainerSection.card) return 'Основные данные';
+
+    if (section == _TrainerSection.work) {
+      if (first['_trainer_location_folder'] == true) {
+        final location = _bridge.asString(
+          first['location'] ?? first['venue'] ?? first['address'] ?? first['name'],
+        );
+        return location.isEmpty ? 'Локация' : location;
+      }
+      final team = _bridge.teamName(first);
+      return team.isEmpty ? 'Команда' : team;
+    }
+
+    final dateRaw = _dateFor(section, first);
+    if (dateRaw.isNotEmpty) return _friendlyDate(dateRaw);
+    return _titleFor(section, first);
+  }
+
+  String _folderSubtitleFor(
+    _TrainerSection section,
+    List<Map<String, dynamic>> rows,
+  ) {
+    if (rows.isEmpty) return 'Папка';
+    final first = rows.first;
+    if (section == _TrainerSection.card) {
+      return 'Профиль тренера · документы и заметки';
+    }
+    if (section == _TrainerSection.work) {
+      if (first['_trainer_location_folder'] == true) {
+        final team = _bridge.asString(first['team_name']);
+        return <String>['Локация', if (team.isNotEmpty) team].join(' · ');
+      }
+      final location = _bridge.asString(
+        first['location'] ?? first['venue'] ?? first['address'],
+      );
+      return <String>[
+        'Команда',
+        if (location.isNotEmpty) location,
+      ].join(' · ');
+    }
+
+    final names = rows
+        .map((row) => _titleFor(section, row))
+        .where((value) => value.trim().isNotEmpty)
+        .toSet()
+        .take(2)
+        .join(' · ');
+    final count = rows.length;
+    return <String>[
+      '$count ${count == 1 ? 'запись' : 'записей'}',
+      if (names.isNotEmpty) names,
+    ].join(' · ');
   }
 
   Future<List<Map<String, dynamic>>> _loadSection(_TrainerSection section) async {
     switch (section) {
       case _TrainerSection.work:
-        return _bridge.trainerTeams(_trainer, widget.teams);
+        return _loadTrainerWorkFolders();
       case _TrainerSection.schedule:
         return _bridge.loadTrainerSchedule(trainer: _trainer, allTeams: widget.teams);
       case _TrainerSection.attendance:
@@ -381,8 +559,94 @@ class _SportotekaTrainerProjectScreenState extends State<SportotekaTrainerProjec
       case _TrainerSection.documents:
         return _loadTrainerDocumentsLinked();
       case _TrainerSection.card:
-        return <Map<String, dynamic>>[];
+        return <Map<String, dynamic>>[
+          <String, dynamic>{
+            ..._trainer,
+            '_trainer_profile_record': true,
+            'title': 'Основные данные',
+          },
+        ];
     }
+  }
+
+  Future<List<Map<String, dynamic>>> _loadTrainerWorkFolders() async {
+    final teams = _bridge
+        .trainerTeams(_trainer, widget.teams)
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList(growable: true);
+
+    final locations = <String, Map<String, dynamic>>{};
+
+    String normalize(String value) => value
+        .toLowerCase()
+        .replaceAll('ё', 'е')
+        .replaceAll(RegExp(r'[«»"“”„]'), '')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+
+    void addLocation(String value, {String teamName = '', String source = ''}) {
+      final clean = value.trim();
+      if (clean.isEmpty) return;
+      final key = normalize(clean);
+      if (key.isEmpty) return;
+      locations.putIfAbsent(
+        key,
+        () => <String, dynamic>{
+          '_trainer_location_folder': true,
+          'name': clean,
+          'location': clean,
+          if (teamName.trim().isNotEmpty) 'team_name': teamName.trim(),
+          if (source.trim().isNotEmpty) 'source': source.trim(),
+        },
+      );
+    }
+
+    for (final team in teams) {
+      final teamName = _bridge.teamName(team);
+      for (final key in const <String>[
+        'location',
+        'venue',
+        'address',
+        'training_base',
+        'base',
+        'stadium',
+      ]) {
+        addLocation(
+          _bridge.asString(team[key]),
+          teamName: teamName,
+          source: 'Команда',
+        );
+      }
+    }
+
+    try {
+      final schedule = await _bridge.loadTrainerSchedule(
+        trainer: _trainer,
+        allTeams: widget.teams,
+      );
+      for (final event in schedule) {
+        addLocation(
+          _bridge.asString(
+            event['location'] ?? event['venue'] ?? event['address'] ?? event['place'],
+          ),
+          teamName: _bridge.asString(event['team_name']),
+          source: 'Расписание',
+        );
+      }
+    } catch (_) {}
+
+    final stored = _bridge.asString(
+      _trainer['work_locations'] ?? _trainer['locations'],
+    );
+    final marker = '#club:${widget.clubId}|';
+    for (final raw in stored.split(RegExp(r'[\r\n]+'))) {
+      var line = raw.trim();
+      if (line.startsWith('#club:') && !line.startsWith(marker)) continue;
+      if (line.startsWith(marker)) line = line.substring(marker.length).trim();
+      addLocation(line, source: 'Профиль тренера');
+    }
+
+    return <Map<String, dynamic>>[...teams, ...locations.values];
   }
 
   String _titleFor(_TrainerSection section, Map<String, dynamic> row) {
@@ -409,13 +673,22 @@ class _SportotekaTrainerProjectScreenState extends State<SportotekaTrainerProjec
         final title = _bridge.asString(row['title'] ?? row['name'] ?? row['file_name'] ?? row['type']);
         return title.isEmpty ? 'Документ' : title;
       case _TrainerSection.card:
-        return 'Карточка тренера';
+        return _bridge.asString(row['title']).isEmpty
+            ? 'Основные данные'
+            : _bridge.asString(row['title']);
     }
   }
 
   String _subtitleFor(_TrainerSection section, Map<String, dynamic> row) {
     switch (section) {
       case _TrainerSection.work:
+        if (row['_trainer_location_folder'] == true) {
+          return <String>[
+            'Локация',
+            _bridge.asString(row['team_name']),
+            _bridge.asString(row['source']),
+          ].where((e) => e.isNotEmpty).join(' · ');
+        }
         return <String>[
           _bridge.asString(row['link_profile'] ?? row['profile'] ?? row['role']),
           _bridge.asString(row['location'] ?? row['venue'] ?? row['address']),
@@ -436,7 +709,10 @@ class _SportotekaTrainerProjectScreenState extends State<SportotekaTrainerProjec
       case _TrainerSection.documents:
         return _bridge.asString(row['type'] ?? row['record_type'] ?? row['description']);
       case _TrainerSection.card:
-        return '';
+        return <String>[
+          if (_role.isNotEmpty) _role,
+          _bridge.asString(_trainer['specialization'] ?? _trainer['speciality']),
+        ].where((e) => e.isNotEmpty).join(' · ');
     }
   }
 
@@ -459,9 +735,15 @@ class _SportotekaTrainerProjectScreenState extends State<SportotekaTrainerProjec
     if (date.isNotEmpty) out.add(WorkspaceEntityProperty('Дата', _friendlyDate(date)));
     switch (section) {
       case _TrainerSection.work:
-        add('Роль', row['link_profile'] ?? row['profile'] ?? row['role']);
-        add('Локация', row['location'] ?? row['venue'] ?? row['address']);
-        add('Категория', row['category'] ?? row['age_group']);
+        if (row['_trainer_location_folder'] == true) {
+          add('Локация', row['location'] ?? row['venue'] ?? row['address'] ?? row['name']);
+          add('Команда', row['team_name']);
+          add('Источник', row['source']);
+        } else {
+          add('Роль', row['link_profile'] ?? row['profile'] ?? row['role']);
+          add('Локация', row['location'] ?? row['venue'] ?? row['address']);
+          add('Категория', row['category'] ?? row['age_group']);
+        }
         break;
       case _TrainerSection.schedule:
         add('Команда', row['team_name']);
@@ -494,13 +776,25 @@ class _SportotekaTrainerProjectScreenState extends State<SportotekaTrainerProjec
         add('Обновлено', row['updated_at'] ?? row['created_at']);
         break;
       case _TrainerSection.card:
+        add('Должность', _role);
+        add('Специализация', _trainer['specialization'] ?? _trainer['speciality']);
+        add('Телефон', _trainer['phone'] ?? _trainer['phone_number']);
+        add('Email', _trainer['email']);
+        add('Город', _trainer['city'] ?? _trainer['town']);
+        add('Опыт', _trainer['experience'] ?? _trainer['work_experience']);
         break;
     }
     return out;
   }
 
   Future<void> _openRecord(_TrainerSectionFile file, Map<String, dynamic> row) async {
-    if (file.section == _TrainerSection.work) {
+    if (file.section == _TrainerSection.card) {
+      await _openChild(_cardDocument());
+      return;
+    }
+
+    if (file.section == _TrainerSection.work &&
+        row['_trainer_location_folder'] != true) {
       await _openChild(
         SportotekaTeamProjectScreen(
           team: Map<String, dynamic>.from(row),
@@ -951,6 +1245,635 @@ class _SportotekaTrainerProjectScreenState extends State<SportotekaTrainerProjec
 }
 
 
+class _TrainerAutoFolder {
+  const _TrainerAutoFolder({
+    required this.key,
+    required this.title,
+    required this.subtitle,
+    required this.serverParentKey,
+    required this.rows,
+  });
+
+  final String key;
+  final String title;
+  final String subtitle;
+  final String serverParentKey;
+  final List<Map<String, dynamic>> rows;
+}
+
+class _TrainerSectionFolderBrowser extends StatefulWidget {
+  const _TrainerSectionFolderBrowser({
+    required this.ownerTitle,
+    required this.sectionTitle,
+    required this.sectionIcon,
+    required this.trainerId,
+    required this.clubId,
+    required this.currentUserId,
+    required this.sectionKey,
+    required this.loadRows,
+    required this.folderKeyFor,
+    required this.folderTitleFor,
+    required this.folderSubtitleFor,
+    required this.onOpenFolder,
+    required this.onOpenSectionDocuments,
+  });
+
+  final String ownerTitle;
+  final String sectionTitle;
+  final SportotekaWorkspaceIconKind sectionIcon;
+  final int trainerId;
+  final int clubId;
+  final int currentUserId;
+  final String sectionKey;
+  final Future<List<Map<String, dynamic>>> Function() loadRows;
+  final String Function(Map<String, dynamic> row) folderKeyFor;
+  final String Function(List<Map<String, dynamic>> rows) folderTitleFor;
+  final String Function(List<Map<String, dynamic>> rows) folderSubtitleFor;
+  final Future<void> Function(_TrainerAutoFolder folder) onOpenFolder;
+  final Future<void> Function() onOpenSectionDocuments;
+
+  @override
+  State<_TrainerSectionFolderBrowser> createState() =>
+      _TrainerSectionFolderBrowserState();
+}
+
+class _TrainerSectionFolderBrowserState
+    extends State<_TrainerSectionFolderBrowser> {
+  static const _text = Color(0xFF101814);
+  static const _muted = Color(0xFF758079);
+  static const _line = Color(0xFFE7EAE7);
+  static const _green = Color(0xFF0B8F55);
+
+  bool _loading = true;
+  String _error = '';
+  List<_TrainerAutoFolder> _folders = const <_TrainerAutoFolder>[];
+
+  String get _sectionParentKey =>
+      'trainer:${widget.trainerId}:${widget.sectionKey}';
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  String _safeKey(String value) {
+    final clean = value
+        .toLowerCase()
+        .replaceAll('ё', 'е')
+        .replaceAll(RegExp(r'[^a-z0-9а-я:_-]+', caseSensitive: false), '_')
+        .replaceAll(RegExp(r'_+'), '_')
+        .replaceAll(RegExp(r'^_|_$'), '');
+    return clean.isEmpty ? 'folder' : clean;
+  }
+
+  Future<void> _load() async {
+    if (mounted) {
+      setState(() {
+        _loading = true;
+        _error = '';
+      });
+    }
+    try {
+      final rows = await widget.loadRows();
+      final grouped = <String, List<Map<String, dynamic>>>{};
+      for (final source in rows) {
+        final row = Map<String, dynamic>.from(source);
+        final rawKey = widget.folderKeyFor(row).trim();
+        final key = rawKey.isEmpty ? 'folder' : rawKey;
+        grouped.putIfAbsent(key, () => <Map<String, dynamic>>[]).add(row);
+      }
+
+      final folders = <_TrainerAutoFolder>[];
+      for (final entry in grouped.entries) {
+        final groupRows = entry.value;
+        final safe = _safeKey(entry.key);
+        folders.add(
+          _TrainerAutoFolder(
+            key: safe,
+            title: widget.folderTitleFor(groupRows),
+            subtitle: widget.folderSubtitleFor(groupRows),
+            serverParentKey:
+                'local-folder:trainer-auto:${widget.trainerId}:${widget.sectionKey}:$safe',
+            rows: groupRows,
+          ),
+        );
+      }
+
+      final mergedFolders = await _mergePersistedFolders(folders);
+      mergedFolders.sort((a, b) {
+        final ad = a.key.startsWith('date:');
+        final bd = b.key.startsWith('date:');
+        if (ad && bd) return b.key.compareTo(a.key);
+        if (ad != bd) return ad ? -1 : 1;
+        return a.title.toLowerCase().compareTo(b.title.toLowerCase());
+      });
+
+      // Данные раздела уже загружены — показываем папки сразу.
+      // Серверная синхронизация не должна держать экран на спиннере.
+      if (!mounted) return;
+      setState(() {
+        _folders = mergedFolders;
+        _loading = false;
+      });
+      unawaited(_syncFolders(mergedFolders));
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = '$e';
+      });
+    }
+  }
+
+  Future<List<_TrainerAutoFolder>> _mergePersistedFolders(
+    List<_TrainerAutoFolder> current,
+  ) async {
+    if (widget.clubId <= 0 || widget.trainerId <= 0) return current;
+    try {
+      final storage = WorkspaceServerStorage(
+        clubId: widget.clubId,
+        userId: widget.currentUserId,
+      );
+      final snapshot = await storage.load();
+      final persisted = <String, WorkspaceFinderNode>{
+        for (final node in snapshot.nodes)
+          if (node.parentId == _sectionParentKey &&
+              node.payload?['_trainer_auto_folder'] == true)
+            node.id: node,
+      };
+
+      final out = <_TrainerAutoFolder>[];
+      final known = <String>{};
+      for (final folder in current) {
+        known.add(folder.serverParentKey);
+        final stored = persisted[folder.serverParentKey];
+        final hasCustomTitle =
+            stored?.payload?['_trainer_custom_title'] == true &&
+            (stored?.title.trim().isNotEmpty ?? false);
+        out.add(
+          _TrainerAutoFolder(
+            key: folder.key,
+            title: hasCustomTitle ? stored!.title.trim() : folder.title,
+            subtitle: folder.subtitle,
+            serverParentKey: folder.serverParentKey,
+            rows: folder.rows,
+          ),
+        );
+      }
+
+      // Папки, в которые пользователь уже добавил документы, не исчезают,
+      // даже если исходная запись временно не пришла с сервера.
+      for (final node in persisted.values) {
+        if (known.contains(node.id)) continue;
+        final storedKey = '${node.payload?['folder_key'] ?? node.id}'.trim();
+        out.add(
+          _TrainerAutoFolder(
+            key: _safeKey(storedKey),
+            title: node.title,
+            subtitle: node.subtitle.trim().isEmpty
+                ? 'Сохранённая папка тренера'
+                : node.subtitle,
+            serverParentKey: node.id,
+            rows: const <Map<String, dynamic>>[],
+          ),
+        );
+      }
+      return out;
+    } catch (_) {
+      return current;
+    }
+  }
+
+  Future<void> _syncFolders(List<_TrainerAutoFolder> folders) async {
+    if (widget.clubId <= 0 || widget.trainerId <= 0) return;
+    try {
+      final storage = WorkspaceServerStorage(
+        clubId: widget.clubId,
+        userId: widget.currentUserId,
+      );
+      final snapshot = await storage.load();
+      final existing = <String, WorkspaceFinderNode>{
+        for (final node in snapshot.nodes)
+          if (node.parentId == _sectionParentKey &&
+              node.payload?['_trainer_auto_folder'] == true)
+            node.id: node,
+      };
+
+      for (final folder in folders) {
+        final old = existing[folder.serverParentKey];
+        final oldPayload = old?.payload ?? const <String, dynamic>{};
+        final payload = <String, dynamic>{
+          ...oldPayload,
+          '_trainer_auto_folder': true,
+          'trainer_id': widget.trainerId,
+          'section_key': widget.sectionKey,
+          'folder_key': folder.key,
+          'record_count': folder.rows.length,
+        };
+        final node = WorkspaceFinderNode(
+          id: folder.serverParentKey,
+          title: folder.title,
+          subtitle: folder.subtitle,
+          kind: WorkspaceFinderNodeKind.folder,
+          parentId: _sectionParentKey,
+          payload: payload,
+          createdAt: old?.createdAt,
+          updatedAt: DateTime.now(),
+        );
+
+        if (old == null) {
+          await storage.createNode(node);
+          continue;
+        }
+
+        final changed =
+            old.title != node.title ||
+            old.subtitle != node.subtitle ||
+            old.parentId != node.parentId ||
+            old.payload?['record_count'] != folder.rows.length ||
+            old.payload?['folder_key'] != folder.key ||
+            old.payload?['section_key'] != widget.sectionKey;
+        if (changed) {
+          await storage.updateNode(node);
+        }
+      }
+    } catch (_) {
+      // Автопапки остаются доступны в UI даже при временной недоступности sync.
+    }
+  }
+
+  Future<void> _renameFolder(_TrainerAutoFolder folder) async {
+    final controller = TextEditingController(text: folder.title);
+    final value = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Переименовать папку'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLength: 80,
+          decoration: const InputDecoration(
+            labelText: 'Название папки',
+            border: OutlineInputBorder(),
+          ),
+          onSubmitted: (text) {
+            final clean = text.trim();
+            if (clean.isNotEmpty) Navigator.of(dialogContext).pop(clean);
+          },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final clean = controller.text.trim();
+              if (clean.isNotEmpty) Navigator.of(dialogContext).pop(clean);
+            },
+            child: const Text('Сохранить'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    final clean = value?.trim() ?? '';
+    if (clean.isEmpty || clean == folder.title) return;
+
+    final renamed = _TrainerAutoFolder(
+      key: folder.key,
+      title: clean,
+      subtitle: folder.subtitle,
+      serverParentKey: folder.serverParentKey,
+      rows: folder.rows,
+    );
+    if (mounted) {
+      setState(() {
+        _folders = _folders
+            .map((item) => item.serverParentKey == folder.serverParentKey
+                ? renamed
+                : item)
+            .toList(growable: false);
+      });
+    }
+
+    try {
+      final storage = WorkspaceServerStorage(
+        clubId: widget.clubId,
+        userId: widget.currentUserId,
+      );
+      final snapshot = await storage.load();
+      WorkspaceFinderNode? existing;
+      for (final node in snapshot.nodes) {
+        if (node.id == folder.serverParentKey) {
+          existing = node;
+          break;
+        }
+      }
+      final payload = <String, dynamic>{
+        ...?existing?.payload,
+        '_trainer_auto_folder': true,
+        '_trainer_custom_title': true,
+        'trainer_id': widget.trainerId,
+        'section_key': widget.sectionKey,
+        'folder_key': folder.key,
+        'record_count': folder.rows.length,
+      };
+      final node = WorkspaceFinderNode(
+        id: folder.serverParentKey,
+        title: clean,
+        subtitle: folder.subtitle,
+        kind: WorkspaceFinderNodeKind.folder,
+        parentId: _sectionParentKey,
+        payload: payload,
+        createdAt: existing?.createdAt,
+        updatedAt: DateTime.now(),
+      );
+      if (existing == null) {
+        await storage.createNode(node);
+      } else {
+        await storage.updateNode(node);
+      }
+    } catch (_) {
+      // Локально название уже изменено; повторная загрузка попробует синхронизацию снова.
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final mobile = constraints.maxWidth < 620;
+        return ColoredBox(
+          color: Colors.white,
+          child: Column(
+            children: [
+              Container(
+                height: mobile ? 62 : 70,
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                child: Row(
+                  children: [
+                    IconButton(
+                      onPressed: () => Navigator.of(context).maybePop(),
+                      icon: const SportotekaWorkspaceIcon(
+                        kind: SportotekaWorkspaceIconKind.back,
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    const _TrainerFolderIcon(size: 38),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            widget.sectionTitle,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTypography.screenTitle(color: _text),
+                          ),
+                          Text(
+                            widget.ownerTitle,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTypography.secondary(color: _muted),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (!mobile)
+                      TextButton.icon(
+                        onPressed: widget.onOpenSectionDocuments,
+                        icon: const Icon(Icons.note_add_outlined, size: 17),
+                        label: Text(
+                          'Документ',
+                          style: AppTypography.actionStrong(color: _green),
+                        ),
+                      ),
+                    IconButton(
+                      tooltip: 'Обновить',
+                      onPressed: _loading ? null : _load,
+                      icon: const Icon(Icons.refresh_rounded, size: 19),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1, color: _line),
+              if (mobile)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 2),
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      onPressed: widget.onOpenSectionDocuments,
+                      icon: const Icon(Icons.note_add_outlined, size: 17),
+                      label: Text(
+                        'Добавить документ',
+                        style: AppTypography.actionStrong(color: _green),
+                      ),
+                    ),
+                  ),
+                ),
+              Expanded(
+                child: _loading
+                    ? const Center(
+                        child: SizedBox(
+                          width: 26,
+                          height: 26,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      )
+                    : _error.isNotEmpty
+                        ? Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(24),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    'Не удалось загрузить данные раздела',
+                                    style: AppTypography.itemTitle(color: _text),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    _error,
+                                    textAlign: TextAlign.center,
+                                    style: AppTypography.caption(color: _muted),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  TextButton(
+                                    onPressed: _load,
+                                    child: const Text('Повторить'),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          )
+                        : _folders.isEmpty
+                            ? Center(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(24),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const _TrainerFolderIcon(size: 52),
+                                      const SizedBox(height: 12),
+                                      Text(
+                                        'Автоматических папок пока нет.',
+                                        style: AppTypography.secondary(color: _muted),
+                                      ),
+                                      const SizedBox(height: 10),
+                                      FilledButton.icon(
+                                        onPressed: widget.onOpenSectionDocuments,
+                                        style: FilledButton.styleFrom(
+                                          backgroundColor: _green,
+                                          elevation: 0,
+                                        ),
+                                        icon: const Icon(Icons.note_add_outlined, size: 17),
+                                        label: Text(
+                                          'Создать документ',
+                                          style: AppTypography.actionStrong(color: Colors.white),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              )
+                            : ListView.separated(
+                                padding: EdgeInsets.fromLTRB(
+                                  mobile ? 8 : 14,
+                                  8,
+                                  mobile ? 8 : 14,
+                                  20,
+                                ),
+                                itemCount: _folders.length,
+                                separatorBuilder: (_, __) =>
+                                    const Divider(height: 1, indent: 54, color: _line),
+                                itemBuilder: (_, index) {
+                                  final folder = _folders[index];
+                                  return _TrainerAutoFolderTile(
+                                    folder: folder,
+                                    onTap: () => widget.onOpenFolder(folder),
+                                    onRename: () => _renameFolder(folder),
+                                  );
+                                },
+                              ),
+              ),
+              Container(
+                height: 30,
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  border: Border(top: BorderSide(color: _line)),
+                ),
+                child: Row(
+                  children: [
+                    Text(
+                      '${_folders.length} папок',
+                      style: AppTypography.caption(color: _muted),
+                    ),
+                    const Spacer(),
+                    Text(
+                      'SPORTOTEKA OS · FOLDER',
+                      style: AppTypography.menuGroup(color: _muted),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _TrainerAutoFolderTile extends StatelessWidget {
+  const _TrainerAutoFolderTile({
+    required this.folder,
+    required this.onTap,
+    required this.onRename,
+  });
+
+  final _TrainerAutoFolder folder;
+  final VoidCallback onTap;
+  final VoidCallback onRename;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(9),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+          child: Row(
+            children: [
+              const _TrainerFolderIcon(size: 38),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      folder.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.itemTitle(color: _trainerProjectText),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      folder.subtitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.caption(color: _trainerProjectMuted),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 4),
+              PopupMenuButton<String>(
+                tooltip: 'Действия с папкой',
+                padding: EdgeInsets.zero,
+                icon: const Icon(
+                  Icons.more_horiz_rounded,
+                  size: 22,
+                  color: _trainerProjectMuted,
+                ),
+                onSelected: (value) {
+                  if (value == 'rename') onRename();
+                },
+                itemBuilder: (_) => const [
+                  PopupMenuItem<String>(
+                    value: 'rename',
+                    child: Row(
+                      children: [
+                        Icon(Icons.edit_outlined, size: 18),
+                        SizedBox(width: 10),
+                        Text('Переименовать'),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const Icon(
+                Icons.chevron_right_rounded,
+                size: 17,
+                color: _trainerProjectMuted,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+
 const _trainerProjectGreen = Color(0xFF0B8F55);
 const _trainerProjectText = Color(0xFF101814);
 const _trainerProjectMuted = Color(0xFF758079);
@@ -1011,26 +1934,12 @@ class _TrainerFolderIcon extends StatelessWidget {
   final double size;
 
   @override
-  Widget build(BuildContext context) => Container(
-        width: size,
-        height: size,
-        padding: EdgeInsets.all(size * .25),
-        decoration: const BoxDecoration(color: Color(0xFFF1F4F2), shape: BoxShape.circle),
-        child: GridView.count(
-          crossAxisCount: 3,
-          physics: const NeverScrollableScrollPhysics(),
-          mainAxisSpacing: 2.4,
-          crossAxisSpacing: 2.4,
-          children: List.generate(
-            9,
-            (index) => DecoratedBox(
-              decoration: BoxDecoration(
-                color: index == 0 || index == 4 || index == 7 ? const Color(0xFF0B8F55) : const Color(0xFFC7D2CC),
-                shape: BoxShape.circle,
-              ),
-            ),
-          ),
-        ),
+  Widget build(BuildContext context) => SportotekaWorkspaceFolderIcon(
+        size: size,
+        color: const Color(0xFF8D9490),
+        fillColor: const Color(0xFFF2F3F2),
+        accentColor: _trainerProjectGreen,
+        showBrandDots: true,
       );
 }
 

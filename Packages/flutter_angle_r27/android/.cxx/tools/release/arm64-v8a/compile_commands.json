@@ -1,0 +1,8 @@
+[
+{
+  "directory": "/Users/dmitrij/Documents/sportoteka2.0/packages/flutter_angle_r27/android/.cxx/RelWithDebInfo/676o5l2m/arm64-v8a",
+  "command": "/Users/dmitrij/Library/Android/sdk/ndk/27.3.13750724/toolchains/llvm/prebuilt/darwin-x86_64/bin/clang++ --target=aarch64-none-linux-android21 --sysroot=/Users/dmitrij/Library/Android/sdk/ndk/27.3.13750724/toolchains/llvm/prebuilt/darwin-x86_64/sysroot -Dangle_android_graphic_jni_EXPORTS -I/Users/dmitrij/Documents/sportoteka2.0/packages/flutter_angle_r27/android/src/main/cpp -I/Users/dmitrij/Library/Android/sdk/ndk/27.3.13750724/sources/android/native_app_glue -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D__BIONIC_NO_PAGE_SIZE_MACRO -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security  -std=c++14 -O2 -g -DNDEBUG -std=c++14 -fPIC -o CMakeFiles/angle_android_graphic_jni.dir/angle_android_graphic_jni.cpp.o -c /Users/dmitrij/Documents/sportoteka2.0/packages/flutter_angle_r27/android/src/main/cpp/angle_android_graphic_jni.cpp",
+  "file": "/Users/dmitrij/Documents/sportoteka2.0/packages/flutter_angle_r27/android/src/main/cpp/angle_android_graphic_jni.cpp",
+  "output": "CMakeFiles/angle_android_graphic_jni.dir/angle_android_graphic_jni.cpp.o"
+}
+]

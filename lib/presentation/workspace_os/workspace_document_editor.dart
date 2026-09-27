@@ -100,6 +100,7 @@ class _WorkspaceDocumentEditorState extends State<WorkspaceDocumentEditor> {
   late final TextEditingController _titleController;
   late final TextEditingController _bodyController;
   final FocusNode _bodyFocus = FocusNode();
+  final ScrollController _editorScrollController = ScrollController();
 
   Timer? _autoSaveTimer;
   bool _saving = false;
@@ -219,6 +220,7 @@ class _WorkspaceDocumentEditorState extends State<WorkspaceDocumentEditor> {
     _titleController.dispose();
     _bodyController.dispose();
     _bodyFocus.dispose();
+    _editorScrollController.dispose();
     _visualBlockController?.dispose();
     _visualBlockFocus?.dispose();
     super.dispose();
@@ -5263,6 +5265,9 @@ ${_trainingPlanExerciseTemplate(1)}
     );
   }
 
+  bool get _desktopPointerUi =>
+      Platform.isMacOS || Platform.isWindows || Platform.isLinux;
+
   Widget _buildEditor({required bool compact}) {
     return Column(
       children: [
@@ -5382,8 +5387,16 @@ ${_trainingPlanExerciseTemplate(1)}
         Expanded(
           child: ColoredBox(
             color: const Color(0xFFF1F3F2),
-            child: SingleChildScrollView(
-            padding: EdgeInsets.fromLTRB(
+            child: Scrollbar(
+              controller: _editorScrollController,
+              thumbVisibility: _desktopPointerUi,
+              trackVisibility: _desktopPointerUi,
+              interactive: true,
+              thickness: _desktopPointerUi ? 10 : null,
+              radius: const Radius.circular(999),
+              child: SingleChildScrollView(
+                controller: _editorScrollController,
+                padding: EdgeInsets.fromLTRB(
               compact ? 10 : 26,
               compact ? 12 : 22,
               compact ? 10 : 26,
@@ -5630,6 +5643,7 @@ ${_trainingPlanExerciseTemplate(1)}
                 ),
               ),
             ),
+              ),
             ),
           ),
         ),
@@ -6475,12 +6489,10 @@ class _EditorToolbar extends StatelessWidget {
                 const SizedBox(width: 12),
               ],
               Expanded(
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  padding: EdgeInsets.symmetric(
-                      horizontal: compact || wordCompact ? 6 : 0,
-                      vertical: wordCompact ? 2 : 5),
-                  children: actions,
+                child: _EditorToolbarActionsStrip(
+                  actions: actions,
+                  compact: compact,
+                  wordCompact: wordCompact,
                 ),
               ),
               if (wordCompact) ...[
@@ -6520,6 +6532,122 @@ class _EditorToolbar extends StatelessWidget {
   }
 }
 
+
+
+class _EditorToolbarActionsStrip extends StatefulWidget {
+  const _EditorToolbarActionsStrip({
+    required this.actions,
+    required this.compact,
+    required this.wordCompact,
+  });
+
+  final List<Widget> actions;
+  final bool compact;
+  final bool wordCompact;
+
+  @override
+  State<_EditorToolbarActionsStrip> createState() =>
+      _EditorToolbarActionsStripState();
+}
+
+class _EditorToolbarActionsStripState
+    extends State<_EditorToolbarActionsStrip> {
+  final ScrollController _controller = ScrollController();
+  bool _canScrollBack = false;
+  bool _canScrollForward = false;
+
+  bool get _desktop =>
+      Platform.isMacOS || Platform.isWindows || Platform.isLinux;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller.addListener(_updateArrowState);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _updateArrowState());
+  }
+
+  @override
+  void didUpdateWidget(covariant _EditorToolbarActionsStrip oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _updateArrowState());
+  }
+
+  void _updateArrowState() {
+    if (!mounted || !_controller.hasClients) return;
+    final p = _controller.position;
+    final back = p.pixels > p.minScrollExtent + 1;
+    final forward = p.maxScrollExtent > p.minScrollExtent + 1 &&
+        p.pixels < p.maxScrollExtent - 1;
+    if (back == _canScrollBack && forward == _canScrollForward) return;
+    setState(() {
+      _canScrollBack = back;
+      _canScrollForward = forward;
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.removeListener(_updateArrowState);
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _move(double delta) async {
+    if (!_controller.hasClients) return;
+    final position = _controller.position;
+    final target = (_controller.offset + delta)
+        .clamp(position.minScrollExtent, position.maxScrollExtent)
+        .toDouble();
+    await _controller.animateTo(
+      target,
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  Widget _arrow({required bool forward}) {
+    return Tooltip(
+      message: forward
+          ? 'Прокрутить панель инструментов вправо'
+          : 'Прокрутить панель инструментов влево',
+      child: InkWell(
+        onTap: () => _move(forward ? 260 : -260),
+        borderRadius: BorderRadius.circular(8),
+        child: SizedBox(
+          width: 26,
+          height: 34,
+          child: Icon(
+            forward ? Icons.chevron_right_rounded : Icons.chevron_left_rounded,
+            size: 19,
+            color: const Color(0xFF758079),
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    WidgetsBinding.instance.addPostFrameCallback((_) => _updateArrowState());
+    return Row(
+      children: [
+        if (_desktop && _canScrollBack) _arrow(forward: false),
+        Expanded(
+          child: ListView(
+            controller: _controller,
+            scrollDirection: Axis.horizontal,
+            padding: EdgeInsets.symmetric(
+              horizontal: widget.compact || widget.wordCompact ? 6 : 0,
+              vertical: widget.wordCompact ? 2 : 5,
+            ),
+            children: widget.actions,
+          ),
+        ),
+        if (_desktop && _canScrollForward) _arrow(forward: true),
+      ],
+    );
+  }
+}
 
 
 class _EditorFileMenuButton extends StatelessWidget {

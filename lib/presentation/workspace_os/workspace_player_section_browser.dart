@@ -7,12 +7,12 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sportoteka/core/theme/app_typography.dart';
+import 'package:sportoteka/presentation/workspace_os/workspace_attachment_preview.dart';
 import 'package:sportoteka/presentation/workspace_os/workspace_document_editor.dart';
 import 'package:sportoteka/presentation/workspace_os/workspace_player_data_bridge.dart';
 import 'package:sportoteka/presentation/workspace_os/workspace_player_section_document.dart';
 import 'package:sportoteka/presentation/workspace_os/workspace_finder_models.dart';
 import 'package:sportoteka/presentation/workspace_os/workspace_server_storage.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 class WorkspacePlayerSectionBrowser extends StatefulWidget {
   const WorkspacePlayerSectionBrowser({
@@ -1094,7 +1094,13 @@ class _WorkspacePlayerSectionBrowserState
       final url = raw.startsWith('http://') || raw.startsWith('https://')
           ? raw
           : 'https://sportotekaapp.ru/${raw.replaceFirst(RegExp(r'^/+'), '')}';
-      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+      final title = '${record['title'] ?? record['original_name'] ?? record['file_name'] ?? record['name'] ?? 'Документ'}'.trim();
+      await openWorkspaceAttachmentPreview(
+        context,
+        title: title.isEmpty ? 'Документ' : title,
+        fileUrl: url,
+        mimeType: '${record['mime_type'] ?? record['mime'] ?? record['content_type'] ?? ''}',
+      );
       return;
     }
     var openRecord = Map<String, dynamic>.from(record);

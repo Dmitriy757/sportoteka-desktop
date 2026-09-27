@@ -52,7 +52,9 @@ class WorkspaceFinderNode {
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
-  bool get isFolder => kind == WorkspaceFinderNodeKind.folder;
+  bool get isFolder =>
+      kind == WorkspaceFinderNodeKind.folder ||
+      payload?['_workspace_entity_folder'] == true;
 
   WorkspaceFinderNode copyWith({
     String? id,

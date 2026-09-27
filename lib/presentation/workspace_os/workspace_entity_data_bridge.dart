@@ -149,19 +149,56 @@ class WorkspaceEntityDataBridge {
     required List<Map<String, dynamic>> allTeams,
   }) async {
     final teams = trainerTeams(trainer, allTeams);
-    final rows = <Map<String, dynamic>>[];
-    for (final team in teams) {
-      final id = teamId(team);
-      if (id <= 0) continue;
-      try {
-        final uri = Uri.parse('$apiBase/get_team_events.php').replace(queryParameters: <String, String>{'team_id': '$id'});
-        final response = await http.get(uri).timeout(const Duration(seconds: 12));
-        final events = list(decode(response.body), const <String>['events', 'items', 'rows', 'data']);
-        for (final event in events) {
-          rows.add(<String, dynamic>{...event, 'team_id': id, 'team_name': teamName(team)});
+
+    // Расписание тренера — это те же события команд, что показываются
+    // в календаре команды. Загружаем команды параллельно, иначе при
+    // нескольких назначениях экран ждёт каждый HTTP-запрос по очереди.
+    final groups = await Future.wait(
+      teams.map((team) async {
+        final id = teamId(team);
+        if (id <= 0) return <Map<String, dynamic>>[];
+        try {
+          final uri = Uri.parse('$apiBase/get_team_events.php').replace(
+            queryParameters: <String, String>{'team_id': '$id'},
+          );
+          final response =
+              await http.get(uri).timeout(const Duration(seconds: 12));
+          final events = list(
+            decode(response.body),
+            const <String>['events', 'items', 'rows', 'data'],
+          );
+          return events
+              .map(
+                (event) => <String, dynamic>{
+                  ...event,
+                  'team_id': id,
+                  'team_name': teamName(team),
+                },
+              )
+              .toList(growable: false);
+        } catch (_) {
+          return <Map<String, dynamic>>[];
         }
-      } catch (_) {}
-    }
+      }),
+    );
+
+    final rows = <Map<String, dynamic>>[
+      for (final group in groups) ...group,
+    ];
+    rows.sort((a, b) {
+      String dateOf(Map<String, dynamic> row) => asString(
+            row['start_at'] ??
+                row['event_date'] ??
+                row['date'] ??
+                row['created_at'],
+          );
+      final ad = DateTime.tryParse(dateOf(a).replaceFirst(' ', 'T'));
+      final bd = DateTime.tryParse(dateOf(b).replaceFirst(' ', 'T'));
+      if (ad == null && bd == null) return 0;
+      if (ad == null) return 1;
+      if (bd == null) return -1;
+      return bd.compareTo(ad);
+    });
     return rows;
   }
 

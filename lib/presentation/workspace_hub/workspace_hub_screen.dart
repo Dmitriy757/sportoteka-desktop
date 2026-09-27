@@ -8,6 +8,8 @@ import 'package:sportoteka/core/theme/app_typography.dart';
 import 'package:sportoteka/core/utils/pref_utils.dart';
 import 'package:sportoteka/presentation/club_workspace/club_workspace_screen.dart';
 import 'package:sportoteka/presentation/club_workspace/cmr_press_assistant_screen.dart';
+import 'package:sportoteka/presentation/esports_workspace/esports_workspace_screen.dart';
+import 'package:sportoteka/presentation/esports_workspace/esports_direction_service.dart';
 import 'package:sportoteka/presentation/my_profile_screen/my_profile_screen.dart';
 import 'package:sportoteka/presentation/player_screen/player_dashboard_screen.dart';
 import 'package:sportoteka/presentation/workspace_hub/workspace_parent_access_card.dart';
@@ -81,6 +83,8 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
   final List<Map<String, dynamic>> _pressAssignments = <Map<String, dynamic>>[];
 
   Map<String, dynamic> _clubAccessState = <String, dynamic>{};
+  bool _esportsDirectionActive = false;
+  bool _esportsDirectionLoaded = false;
   String _email = '';
 
   bool get _hasPressAccess => _pressAssignments.isNotEmpty;
@@ -101,11 +105,19 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
       _normalizedRole.contains('trainer') ||
       _normalizedRole.contains('тренер');
 
+  bool get _isEsportsPlayer =>
+      _normalizedRole == 'esports_player' ||
+      _normalizedRole == 'cyber_player' ||
+      _normalizedRole == 'киберспортсмен' ||
+      _normalizedRole.contains('esports') ||
+      _normalizedRole.contains('киберспорт');
+
   bool get _isPlayer =>
       _normalizedRole == 'player' ||
       _normalizedRole == 'игрок' ||
       _normalizedRole.contains('player') ||
-      _normalizedRole.contains('игрок');
+      _normalizedRole.contains('игрок') ||
+      _isEsportsPlayer;
 
   bool get _isParent =>
       _normalizedRole == 'parent' ||
@@ -150,6 +162,10 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
 
         if (_isClub) {
           await _loadClubAccess(userId);
+          await _loadEsportsDirection(userId);
+        } else if (_isEsportsPlayer) {
+          _esportsDirectionActive = true;
+          _esportsDirectionLoaded = true;
         }
       }
     } catch (e) {
@@ -487,6 +503,47 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
       // Существующий/legacy клуб не блокируем из-за сетевой ошибки.
       _clubAccessState = <String, dynamic>{};
     }
+  }
+
+
+  int _resolvedEsportsClubId(int userId) {
+    final fromAccess = _asInt(
+      _clubAccessState['club_id'] ?? _clubAccessState['clubId'],
+    );
+    if (fromAccess > 0) return fromAccess;
+
+    final fromPlayer = _asInt(
+      _player?['club_id'] ?? _player?['clubId'],
+    );
+    if (fromPlayer > 0) return fromPlayer;
+
+    return _isClub ? userId : 0;
+  }
+
+  Future<void> _loadEsportsDirection(int userId) async {
+    final clubId = _resolvedEsportsClubId(userId);
+    if (clubId <= 0) {
+      _esportsDirectionActive = false;
+      _esportsDirectionLoaded = true;
+      return;
+    }
+
+    final state = await EsportsDirectionService.load(
+      clubId: clubId,
+      userId: userId,
+    );
+
+    _esportsDirectionActive = state.active;
+    _esportsDirectionLoaded = true;
+  }
+
+  Future<void> _refreshEsportsDirection() async {
+    final userId = await PrefUtils.getUserId() ?? 0;
+    if (userId <= 0 || !_isClub) return;
+
+    await _loadEsportsDirection(userId);
+    if (!mounted) return;
+    setState(() {});
   }
 
   bool get _clubRequiresKey {
@@ -1083,7 +1140,7 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
     }
 
     if (_isClub) {
-      Get.to<void>(
+      await Get.to<void>(
         () => const ClubWorkspaceScreen(),
         arguments: <String, dynamic>{
           'mode': 'club_workspace',
@@ -1091,6 +1148,7 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
           if ((_teamId ?? 0) > 0) 'initial_team_id': _teamId,
         },
       );
+      await _refreshEsportsDirection();
       return;
     }
 
@@ -1177,6 +1235,49 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
     );
   }
 
+
+  Future<void> _openEsportsWorkspace() async {
+    final userId = await PrefUtils.getUserId() ?? 0;
+    if (!mounted || userId <= 0) return;
+
+    if (_isClub && !_esportsDirectionActive) {
+      Get.snackbar(
+        'Sportoteka Esports',
+        'Сначала подключите киберспортивное направление в клубном кабинете: Настройки → Направления клуба.',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      return;
+    }
+
+    final playerClubId = _asInt(
+      _player?['club_id'] ?? _player?['clubId'],
+    );
+    final accessClubId = _asInt(
+      _clubAccessState['club_id'] ?? _clubAccessState['clubId'],
+    );
+    final clubId = _isClub
+        ? (accessClubId > 0 ? accessClubId : userId)
+        : playerClubId;
+
+    if (clubId <= 0 && !_isClub) {
+      Get.snackbar(
+        'Киберспорт',
+        'Для аккаунта пока не определён киберспортивный клуб.',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      return;
+    }
+
+    Get.to<void>(
+      () => EsportsWorkspaceScreen(
+        clubId: clubId > 0 ? clubId : userId,
+        userId: userId,
+        clubName: (_clubName ?? '').trim(),
+        clubLogoUrl: _clubLogoUrl,
+      ),
+    );
+  }
+
   Future<void> _logoutFromProfile() async {
     await _clearLocalProfileSession();
     if (!mounted) return;
@@ -1215,6 +1316,8 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
 
   _HubCardData? get _workspaceCard {
     if (_staffHasRows) return null;
+
+    if (_isEsportsPlayer) return null;
 
     if (_isPlayer) {
       return _HubCardData(
@@ -1288,6 +1391,26 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
     );
   }
 
+  _HubCardData? get _esportsCard {
+    if (_staffHasRows) return null;
+    if (!_isClub && !_isEsportsPlayer) return null;
+    if (_isClub && (_clubRequiresKey || _clubBlocked)) return null;
+    if (_isClub && (!_esportsDirectionLoaded || !_esportsDirectionActive)) {
+      return null;
+    }
+
+    final club = (_clubName ?? '').trim();
+    return _HubCardData(
+      title: 'Sportoteka Esports',
+      subtitle: club.isNotEmpty
+          ? '$club · команды, киберспортсмены, турниры и аналитика'
+          : 'Команды, киберспортсмены, матчи, турниры и аналитика',
+      imageUrl: _clubLogoUrl ?? (_isEsportsPlayer ? _userAvatarUrl : null),
+      circularImage: false,
+      onTap: _openEsportsWorkspace,
+    );
+  }
+
   _HubCardData get _profileCard {
     return _HubCardData(
       title: 'Мой профиль',
@@ -1315,7 +1438,7 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
   }
 
   _HubCardData get _secondaryCard {
-    return _isPlayer ? _playerTeamCard : _profileCard;
+    return _isPlayer && !_isEsportsPlayer ? _playerTeamCard : _profileCard;
   }
 
   String get _choiceSubtitle {
@@ -1326,9 +1449,12 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
       return 'Откройте родительский кабинет или добавьте доступ по Parent Key.';
     }
     if (_isClub) {
-      return _clubRequiresKey
-          ? 'Введите Club Key прямо в карточке клубного кабинета.'
-          : 'Выберите клубный кабинет или личный профиль.';
+      if (_clubRequiresKey) {
+        return 'Введите Club Key прямо в карточке клубного кабинета.';
+      }
+      return _esportsDirectionActive
+          ? 'Выберите клубный кабинет, Sportoteka Esports или личный профиль.'
+          : 'Выберите клубный кабинет или личный профиль. Киберспорт можно подключить в настройках клуба.';
     }
     if (_hasPressAccess) {
       return 'Выберите пресс-службу или личный профиль.';
@@ -1338,6 +1464,9 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
     }
     if (_isCoach) {
       return 'Личный профиль доступен. Кабинет тренера появится после назначения команды.';
+    }
+    if (_isEsportsPlayer) {
+      return 'Откройте Sportoteka Esports или личный профиль.';
     }
     if (_isPlayer) {
       return 'Выберите свой профиль или команду.';
@@ -1355,11 +1484,19 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
     if (_isClub && _clubRequiresKey) {
       return 'Club Key активирует клубный кабинет. После активации поле ключа исчезнет и останется обычный рабочий баннер.';
     }
+    if (_isClub && !_clubRequiresKey) {
+      return _esportsDirectionActive
+          ? 'Киберспорт подключён как отдельное направление клуба. Команды создаются уже внутри Sportoteka Esports.'
+          : 'Sportoteka Esports не показывается в HUB, пока клуб явно не подключит киберспортивное направление.';
+    }
     if (_hasPressAccess) {
       return 'Legacy пресс-доступ используется только для аккаунтов, ещё не переведённых на Staff Access.';
     }
     if (_isCoach && _coachHasAssignedTeam) {
       return 'Тренеру доступна назначенная рабочая зона и личный профиль.';
+    }
+    if (_isEsportsPlayer) {
+      return 'Sportoteka Esports — отдельная рабочая зона. Футбольный состав, GPS и футбольные метрики здесь не используются.';
     }
     if (_isPlayer) {
       return 'Центр игрока открывает личную социальную зону, а «Моя команда» — привязанную команду.';
@@ -1386,6 +1523,9 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
     }
     if (_isCoach) return 'Тренер';
     if (_isClub) return 'Клуб';
+    if (_isEsportsPlayer) {
+      return 'Киберспортсмен';
+    }
     if (_isPlayer) {
       final team = (_teamName ?? '').trim();
       return team.isNotEmpty ? 'Игрок · $team' : 'Игрок';
@@ -1648,6 +1788,7 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
   }) {
     final workspace = _workspaceCard;
     final press = _pressCard;
+    final esports = _esportsCard;
 
     return SingleChildScrollView(
       padding: EdgeInsets.fromLTRB(
@@ -1696,6 +1837,11 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
                 ],
               ],
 
+              if (esports != null) ...[
+                _WorkspaceChoiceCard(data: esports, compact: false),
+                const SizedBox(height: 12),
+              ],
+
               if (_isParent) ...[
                 const WorkspaceParentAccessCard(compact: false),
                 const SizedBox(height: 12),
@@ -1733,6 +1879,7 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
   Widget _buildMobile() {
     final workspace = _workspaceCard;
     final press = _pressCard;
+    final esports = _esportsCard;
 
     return ColoredBox(
       color: _panel,
@@ -1781,6 +1928,11 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
                           _WorkspaceChoiceCard(data: press, compact: true),
                           const SizedBox(height: 10),
                         ],
+                      ],
+
+                      if (esports != null) ...[
+                        _WorkspaceChoiceCard(data: esports, compact: true),
+                        const SizedBox(height: 10),
                       ],
 
                       if (_isParent) ...[

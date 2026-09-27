@@ -335,6 +335,7 @@ class TrainingRatingSheet extends StatefulWidget {
   final bool embedded;
   final VoidCallback? onSaved;
   final ValueChanged<bool>? onChromeExpandedChanged;
+  final bool parentScroll;
 
   const TrainingRatingSheet({
     super.key,
@@ -348,6 +349,7 @@ class TrainingRatingSheet extends StatefulWidget {
     this.embedded = false,
     this.onSaved,
     this.onChromeExpandedChanged,
+    this.parentScroll = false,
   });
 
   @override
@@ -365,6 +367,7 @@ class _TrainingRatingSheetState extends State<TrainingRatingSheet> {
 
   List<_Player> players = [];
   final Map<int, int> ratingByPlayerId = {};
+  final Map<int, String> attendanceByPlayerId = {};
   final TextEditingController _noteC = TextEditingController();
   TrainingLifecycleState lifecycle = const TrainingLifecycleState();
   bool lifecycleSaving = false;
@@ -417,11 +420,22 @@ class _TrainingRatingSheetState extends State<TrainingRatingSheet> {
       players = await _fetchPlayers(widget.teamId);
       final existing = await _fetchRatings(widget.eventId);
 
+      attendanceByPlayerId.clear();
+      try {
+        attendanceByPlayerId.addAll(await _fetchAttendance(widget.eventId));
+      } catch (_) {
+        // Если журнал временно недоступен, не ломаем окно оценок:
+        // ниже сохраняется прежнее поведение с оценкой всего состава.
+      }
+
       ratingByPlayerId.clear();
       ratingByPlayerId.addAll(existing);
 
       for (final p in players) {
         ratingByPlayerId.putIfAbsent(p.id, () => 0);
+        if (!_requiresRating(p.id)) {
+          ratingByPlayerId[p.id] = 0;
+        }
       }
 
       lifecycle = await TrainingLifecycleApi(
@@ -431,10 +445,7 @@ class _TrainingRatingSheetState extends State<TrainingRatingSheet> {
         eventId: widget.eventId,
       ).load();
       _noteC.text = lifecycle.coachNote;
-      final ratedCount = existing.values.where((value) => value > 0).length;
-      _ratingsSaved = lifecycle.attendancePresent > 0
-          ? ratedCount >= lifecycle.attendancePresent
-          : ratedCount > 0;
+      _ratingsSaved = _ratingsAreComplete;
     } catch (e) {
       error = e.toString();
     }
@@ -461,6 +472,95 @@ class _TrainingRatingSheetState extends State<TrainingRatingSheet> {
       );
     }).where((p) => p.id > 0).toList();
   }
+
+  Future<Map<int, String>> _fetchAttendance(int eventId) async {
+    final url = Uri.parse('${widget.apiBase}/get_team_attendance.php?event_id=$eventId');
+    final r = await http.get(url);
+    if (r.statusCode != 200) throw 'attendance http ${r.statusCode}';
+
+    final data = jsonDecode(r.body);
+    dynamic raw = data;
+    if (data is Map) {
+      raw = data['items'] ??
+          data['attendance'] ??
+          data['rows'] ??
+          data['records'] ??
+          data['data'] ??
+          const <dynamic>[];
+    }
+
+    final out = <int, String>{};
+    if (raw is Map) {
+      raw.forEach((key, value) {
+        if (value is Map) {
+          final m = value.map((k, v) => MapEntry(k.toString(), v));
+          final playerId = _asInt(
+            m['player_id'] ?? m['playerId'] ?? m['athlete_id'] ?? m['user_id'] ?? m['id'] ?? key,
+          );
+          final status = '${m['status'] ?? ''}'.trim();
+          if (playerId > 0) out[playerId] = status.isEmpty || status == 'null' ? 'unset' : status;
+        } else {
+          final playerId = _asInt(key);
+          final status = '${value ?? ''}'.trim();
+          if (playerId > 0) out[playerId] = status.isEmpty || status == 'null' ? 'unset' : status;
+        }
+      });
+      return out;
+    }
+
+    if (raw is List) {
+      for (final item in raw) {
+        if (item is! Map) continue;
+        final m = item.map((k, v) => MapEntry(k.toString(), v));
+        final playerId = _asInt(
+          m['player_id'] ?? m['playerId'] ?? m['athlete_id'] ?? m['user_id'] ?? m['id'],
+        );
+        final status = '${m['status'] ?? ''}'.trim();
+        if (playerId > 0) out[playerId] = status.isEmpty || status == 'null' ? 'unset' : status;
+      }
+    }
+    return out;
+  }
+
+  bool _requiresRating(int playerId) {
+    // Пустая карта означает, что журнал не удалось прочитать. В таком случае
+    // оставляем безопасное старое поведение и считаем оценку обязательной.
+    if (attendanceByPlayerId.isEmpty) return true;
+    return attendanceByPlayerId[playerId] == 'present';
+  }
+
+  String _attendanceLabel(int playerId) {
+    switch (attendanceByPlayerId[playerId]) {
+      case 'present':
+        return 'Присутствовал';
+      case 'absent':
+        return 'Отсутствовал';
+      case 'late':
+        return 'Болен';
+      case 'injured':
+        return 'Травма';
+      case 'individual':
+        return 'Индивидуально';
+      case 'dayoff':
+        return 'Выходной';
+      case 'unset':
+        return 'Не отмечен';
+      default:
+        return attendanceByPlayerId.isEmpty ? '' : 'Не участвовал';
+    }
+  }
+
+  List<_Player> get _playersRequiringRating =>
+      players.where((p) => _requiresRating(p.id)).toList(growable: false);
+
+  int get _requiredRatingsCount => _playersRequiringRating.length;
+
+  int get _ratedRequiredCount => _playersRequiringRating
+      .where((p) => (ratingByPlayerId[p.id] ?? 0) > 0)
+      .length;
+
+  bool get _ratingsAreComplete =>
+      _requiredRatingsCount == 0 || _ratedRequiredCount >= _requiredRatingsCount;
 
   Future<Map<int, int>> _fetchRatings(int eventId) async {
     final url = Uri.parse('${widget.apiBase}/get_training_ratings.php?event_id=$eventId');
@@ -495,31 +595,45 @@ class _TrainingRatingSheetState extends State<TrainingRatingSheet> {
       );
       return;
     }
+
+    final missing = _requiredRatingsCount - _ratedRequiredCount;
+    if (missing > 0) {
+      Get.snackbar(
+        'Оценки',
+        'Оцените только присутствующих игроков. Не оценено: $missing',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      return;
+    }
+
     setState(() => saving = true);
 
     try {
-      final payload = {
-        'team_id': widget.teamId,
-        'event_id': widget.eventId,
-        'coach_id': widget.coachId,
-        'ratings': players.map((p) => {
-          'player_id': p.id,
-          'rating': (ratingByPlayerId[p.id] ?? 0).clamp(0, 5),
-        }).toList(),
-      };
+      final requiredPlayers = _playersRequiringRating;
+      if (requiredPlayers.isNotEmpty) {
+        final payload = {
+          'team_id': widget.teamId,
+          'event_id': widget.eventId,
+          'coach_id': widget.coachId,
+          'ratings': requiredPlayers.map((p) => {
+            'player_id': p.id,
+            'rating': (ratingByPlayerId[p.id] ?? 0).clamp(1, 5),
+          }).toList(),
+        };
 
-      final url = Uri.parse('${widget.apiBase}/save_training_ratings.php');
-      final r = await http.post(
-        url,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(payload),
-      );
+        final url = Uri.parse('${widget.apiBase}/save_training_ratings.php');
+        final r = await http.post(
+          url,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode(payload),
+        );
 
-      if (r.statusCode != 200) throw 'save http ${r.statusCode}';
+        if (r.statusCode != 200) throw 'save http ${r.statusCode}';
 
-      final data = jsonDecode(r.body);
-      if (data is Map && data['success'] != true) {
-        throw (data['message'] ?? 'save error').toString();
+        final data = jsonDecode(r.body);
+        if (data is Map && data['success'] != true) {
+          throw (data['message'] ?? 'save error').toString();
+        }
       }
 
       final nextLifecycle = await TrainingLifecycleApi(
@@ -529,10 +643,7 @@ class _TrainingRatingSheetState extends State<TrainingRatingSheet> {
         eventId: widget.eventId,
       ).markRatingsSaved(userId: widget.coachId);
 
-      final required = nextLifecycle.attendancePresent;
-      final complete = required > 0
-          ? nextLifecycle.ratingsCount >= required
-          : nextLifecycle.ratingsCount > 0;
+      final complete = _ratingsAreComplete;
       if (mounted) {
         setState(() {
           lifecycle = nextLifecycle;
@@ -541,9 +652,9 @@ class _TrainingRatingSheetState extends State<TrainingRatingSheet> {
       }
       Get.snackbar(
         'Оценка',
-        complete
-            ? 'Оценки сохранены. Теперь можно завершить тренировку.'
-            : 'Оценки сохранены: ${nextLifecycle.ratingsCount}/${nextLifecycle.attendancePresent}. Оцените всех присутствующих.',
+        _requiredRatingsCount == 0
+            ? 'На тренировке нет присутствующих игроков — оценки не требуются. Тренировку можно завершить.'
+            : 'Оценки присутствующих игроков сохранены. Теперь можно завершить тренировку.',
         snackPosition: SnackPosition.BOTTOM,
       );
       widget.onSaved?.call();
@@ -618,7 +729,7 @@ class _TrainingRatingSheetState extends State<TrainingRatingSheet> {
     final finishText = lifecycle.finished
         ? 'Тренировка окончена'
         : !_ratingsSaved
-            ? 'Сохраните оценки — затем окончите тренировку'
+            ? 'Оцените присутствующих — затем окончите тренировку'
             : 'Окончить тренировку';
 
     return _CmrBottomBar(
@@ -637,9 +748,11 @@ class _TrainingRatingSheetState extends State<TrainingRatingSheet> {
               const SizedBox(width: 10),
               Expanded(
                 child: _PrimaryButton(
-                  text: _ratingsSaved ? 'Оценки сохранены' : 'Сохранить оценки',
+                  text: _requiredRatingsCount == 0
+                      ? 'Оценки не требуются'
+                      : (_ratingsSaved ? 'Оценки сохранены' : 'Сохранить оценки'),
                   saving: saving,
-                  onTap: saving || lifecycle.finished ? null : _save,
+                  onTap: saving || lifecycle.finished || _requiredRatingsCount == 0 ? null : _save,
                 ),
               ),
             ],
@@ -692,6 +805,15 @@ class _TrainingRatingSheetState extends State<TrainingRatingSheet> {
   @override
   Widget build(BuildContext context) {
     if (widget.embedded) {
+      if (widget.parentScroll) {
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildRatingsBody(parentScroll: true),
+            _bottomActions(),
+          ],
+        );
+      }
       return Column(
         children: [
           Expanded(child: _buildRatingsBody()),
@@ -852,7 +974,8 @@ class _TrainingRatingSheetState extends State<TrainingRatingSheet> {
   }
 
   Widget _ratingsExpandedChrome() {
-    final rated = ratingByPlayerId.values.where((v) => v > 0).length;
+    final rated = _ratedRequiredCount;
+    final required = _requiredRatingsCount;
     final avg = _averageRating();
 
     return Padding(
@@ -882,7 +1005,7 @@ class _TrainingRatingSheetState extends State<TrainingRatingSheet> {
                       ),
                     ),
                     Text(
-                      '$rated/${players.length}',
+                      '$rated/$required',
                       style: AppTypography.captionMedium(
                         color: const Color(0xFF667085),
                       ),
@@ -894,8 +1017,8 @@ class _TrainingRatingSheetState extends State<TrainingRatingSheet> {
                   children: [
                     Expanded(
                       child: _RatingSummaryItem(
-                        title: 'Игроков',
-                        value: '${players.length}',
+                        title: 'Нужно оценить',
+                        value: '$required',
                       ),
                     ),
                     Container(
@@ -959,8 +1082,10 @@ class _TrainingRatingSheetState extends State<TrainingRatingSheet> {
         ? 'Итоги сохранены · ${lifecycle.finishedByLabel}'
         : lifecycle.started
             ? (_ratingsSaved
-                ? 'Все оценки сохранены. Теперь тренировку можно окончить.'
-                : 'Поставьте оценки игрокам и нажмите «Сохранить оценки».')
+                ? (_requiredRatingsCount == 0
+                    ? 'Присутствующих игроков нет — оценки не требуются.'
+                    : 'Все оценки присутствующих сохранены. Теперь тренировку можно окончить.')
+                : 'Поставьте оценки только присутствующим игрокам и нажмите «Сохранить оценки».')
             : 'Сначала заполните «Журнал», затем начните тренировку во вкладке «Обзор».';
     final statusPill = lifecycle.finished
         ? 'ОКОНЧЕНА'
@@ -1159,7 +1284,8 @@ class _TrainingRatingSheetState extends State<TrainingRatingSheet> {
   }
 
   Widget _ratingsCollapsedChrome() {
-    final rated = ratingByPlayerId.values.where((v) => v > 0).length;
+    final rated = _ratedRequiredCount;
+    final required = _requiredRatingsCount;
     final avg = _averageRating();
     final stateLabel = lifecycle.finished
         ? 'Окончена'
@@ -1181,7 +1307,7 @@ class _TrainingRatingSheetState extends State<TrainingRatingSheet> {
                 const SizedBox(width: 9),
                 Expanded(
                   child: Text(
-                    'Оценено $rated/${players.length}',
+                    'Оценено $rated/$required',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: AppTypography.formLabel(
@@ -1236,7 +1362,7 @@ class _TrainingRatingSheetState extends State<TrainingRatingSheet> {
     );
   }
 
-  Widget _buildRatingsBody() {
+  Widget _buildRatingsBody({bool parentScroll = false}) {
     if (loading) {
       return const Center(child: CircularProgressIndicator(color: _WinColors.green, strokeWidth: 2.4));
     }
@@ -1254,7 +1380,53 @@ class _TrainingRatingSheetState extends State<TrainingRatingSheet> {
       );
     }
 
+    final playerList = Container(
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: NotificationListener<ScrollNotification>(
+        onNotification:
+            parentScroll ? (_) => false : _handleRatingsScrollNotification,
+        child: ListView.builder(
+          primary: false,
+          shrinkWrap: parentScroll,
+          physics: parentScroll ? const NeverScrollableScrollPhysics() : null,
+          padding: EdgeInsets.fromLTRB(
+            12,
+            _ratingsChromeExpanded ? 0 : 2,
+            12,
+            18,
+          ),
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+          itemCount: players.length + 1,
+          itemBuilder: (_, i) {
+            if (i == players.length) {
+              return _buildCoachNoteCard();
+            }
+
+            final p = players[i];
+            final r = ratingByPlayerId[p.id] ?? 0;
+
+            return _PlayerRow(
+              primary: primary,
+              p: p,
+              rating: r,
+              requiresRating: _requiresRating(p.id),
+              attendanceLabel: _attendanceLabel(p.id),
+              onChanged: (v) => setState(() {
+                ratingByPlayerId[p.id] = v;
+                _ratingsSaved = false;
+              }),
+            );
+          },
+        ),
+      ),
+    );
+
     return Column(
+      mainAxisSize: parentScroll ? MainAxisSize.min : MainAxisSize.max,
       children: [
         AnimatedSize(
           duration: const Duration(milliseconds: 210),
@@ -1264,53 +1436,16 @@ class _TrainingRatingSheetState extends State<TrainingRatingSheet> {
               ? _ratingsExpandedChrome()
               : _ratingsCollapsedChrome(),
         ),
-        Expanded(
-          child: Container(
-            clipBehavior: Clip.antiAlias,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: NotificationListener<ScrollNotification>(
-              onNotification: _handleRatingsScrollNotification,
-              child: ListView.builder(
-                padding: EdgeInsets.fromLTRB(
-                  12,
-                  _ratingsChromeExpanded ? 0 : 2,
-                  12,
-                  18,
-                ),
-                keyboardDismissBehavior:
-                    ScrollViewKeyboardDismissBehavior.onDrag,
-                itemCount: players.length + 1,
-                itemBuilder: (_, i) {
-                  if (i == players.length) {
-                    return _buildCoachNoteCard();
-                  }
-
-                  final p = players[i];
-                  final r = ratingByPlayerId[p.id] ?? 0;
-
-                  return _PlayerRow(
-                    primary: primary,
-                    p: p,
-                    rating: r,
-                    onChanged: (v) => setState(() {
-                      ratingByPlayerId[p.id] = v;
-                      _ratingsSaved = false;
-                    }),
-                  );
-                },
-              ),
-            ),
-          ),
-        ),
+        if (parentScroll) playerList else Expanded(child: playerList),
       ],
     );
   }
 
   double _averageRating() {
-    final values = ratingByPlayerId.values.where((v) => v > 0).toList();
+    final values = _playersRequiringRating
+        .map((p) => ratingByPlayerId[p.id] ?? 0)
+        .where((v) => v > 0)
+        .toList();
     if (values.isEmpty) return 0;
     return values.reduce((a, b) => a + b) / values.length;
   }
@@ -1610,12 +1745,16 @@ class _PlayerRow extends StatelessWidget {
   final Color primary;
   final _Player p;
   final int rating;
+  final bool requiresRating;
+  final String attendanceLabel;
   final ValueChanged<int> onChanged;
 
   const _PlayerRow({
     required this.primary,
     required this.p,
     required this.rating,
+    required this.requiresRating,
+    required this.attendanceLabel,
     required this.onChanged,
   });
 
@@ -1627,7 +1766,7 @@ class _PlayerRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final initials = fio().substring(0, 1).toUpperCase();
-    final rated = rating > 0;
+    final rated = requiresRating && rating > 0;
 
     return Container(
       constraints: const BoxConstraints(minHeight: 68),
@@ -1673,7 +1812,15 @@ class _PlayerRow extends StatelessWidget {
                 Text(fio(), maxLines: 1, overflow: TextOverflow.ellipsis, style: _WinText.title(11.8)),
                 const SizedBox(height: 2),
                 Text(
-                  p.position.trim().isEmpty ? 'позиция не указана' : p.position,
+                  [
+                    if (p.position.trim().isNotEmpty) p.position.trim(),
+                    if (attendanceLabel.trim().isNotEmpty) attendanceLabel.trim(),
+                  ].isEmpty
+                      ? 'позиция не указана'
+                      : [
+                          if (p.position.trim().isNotEmpty) p.position.trim(),
+                          if (attendanceLabel.trim().isNotEmpty) attendanceLabel.trim(),
+                        ].join(' · '),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: _WinText.muted(10.0),
@@ -1682,7 +1829,20 @@ class _PlayerRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          _Stars(activeColor: primary, value: rating, onChanged: onChanged),
+          if (requiresRating)
+            _Stars(activeColor: primary, value: rating, onChanged: onChanged)
+          else
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF5F7F6),
+                borderRadius: BorderRadius.circular(9),
+              ),
+              child: Text(
+                'Оценка не требуется',
+                style: _WinText.muted(9.5),
+              ),
+            ),
           const SizedBox(width: 12),
         ],
       ),

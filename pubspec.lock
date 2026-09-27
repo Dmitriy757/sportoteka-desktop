@@ -393,6 +393,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.2.2"
+  dylib:
+    dependency: transitive
+    description:
+      name: dylib
+      sha256: bf609b3eb6492a3309b3d1dbe8f83a4031de5535dd7686be33487051cc760bb0
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.3.3"
   emoji_picker_flutter:
     dependency: "direct main"
     description:
@@ -565,6 +573,13 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
+  flutter_angle:
+    dependency: "direct overridden"
+    description:
+      path: "packages/flutter_angle_r27"
+      relative: true
+    source: path
+    version: "0.4.2"
   flutter_blue_plus:
     dependency: "direct main"
     description:
@@ -1299,6 +1314,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "4.7.0"
+  opentype_dart:
+    dependency: transitive
+    description:
+      name: opentype_dart
+      sha256: "4bd96aeed494289a87e92bde20afe60f59648dcef253c0a7159b65ffa23899dc"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.0.1"
   package_config:
     dependency: transitive
     description:
@@ -1594,6 +1617,54 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "5.5.0"
+  record:
+    dependency: "direct main"
+    description:
+      name: record
+      sha256: "10911465138fafacef459a780564e883e01bd48eabf87ab20543684884492870"
+      url: "https://pub.dev"
+    source: hosted
+    version: "6.2.1"
+  record_android:
+    dependency: transitive
+    description:
+      name: record_android
+      sha256: eb1732e42d0d2a1895b8db86e4fc917287e6d8491b6ed59918aea8bed6c69de4
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.5.2"
+  record_ios:
+    dependency: transitive
+    description:
+      name: record_ios
+      sha256: c051fb48edd7a0e265daafb9108730dc827c27b551728a3fdfb3ef69efd89c73
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.2.1"
+  record_linux:
+    dependency: transitive
+    description:
+      name: record_linux
+      sha256: "31181787bf7eccb0e298835836b69b3cd0a903863b75d70e937de3dec71cd8f3"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.3.1"
+  record_macos:
+    dependency: transitive
+    description:
+      name: record_macos
+      sha256: cfe1b61435e27db418bf513dc36820d10c9f7eb1843786c2c9a52e07e2f4f627
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.2.2"
+  record_platform_interface:
+    dependency: transitive
+    description:
+      name: record_platform_interface
+      sha256: "8e56cbe06c6984137fb86132ff03459f29938d927496d9b2d0962e2d6345d488"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.6.0"
   record_use:
     dependency: transitive
     description:
@@ -1602,6 +1673,22 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.6.0"
+  record_web:
+    dependency: transitive
+    description:
+      name: record_web
+      sha256: "7e9846981c1f2d111d86f0ae3309071f5bba8b624d1c977316706f08fc31d16d"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.3.0"
+  record_windows:
+    dependency: transitive
+    description:
+      name: record_windows
+      sha256: "223258060a1d25c62bae18282c16783f28581ec19401d17e56b5205b9f039d78"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.0.7"
   rxdart:
     dependency: transitive
     description:
@@ -1981,6 +2068,108 @@ packages:
       relative: true
     source: path
     version: "0.5.0"
+  three_js:
+    dependency: "direct main"
+    description:
+      name: three_js
+      sha256: eb0ac22a092188f00220e9b505b25287d3fb4a835bca47f0b8787e1651197b4c
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.3.0"
+  three_js_advanced_loaders:
+    dependency: "direct overridden"
+    description:
+      path: "packages/three_js_advanced_loaders_xml7"
+      relative: true
+    source: path
+    version: "0.3.0"
+  three_js_angle_renderer:
+    dependency: transitive
+    description:
+      name: three_js_angle_renderer
+      sha256: "2f2334f2289c939888db7229eb8698a3e3c307493413735de11703dd97dce3f3"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.0.1"
+  three_js_animations:
+    dependency: transitive
+    description:
+      name: three_js_animations
+      sha256: "7a0763b1531e2e7321b46b529e33310e258f08d2124de0b6b6d6688daffe08f3"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.3.0"
+  three_js_controls:
+    dependency: transitive
+    description:
+      name: three_js_controls
+      sha256: c2c7beeb8dd4faab8a2a85134f5b9cab0fb6a088dc69e8ec6dd6e0953340ffd1
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.3.0"
+  three_js_core:
+    dependency: transitive
+    description:
+      name: three_js_core
+      sha256: "550a9a9c3c61c51b62805830d0dca79392e7592a3b1652334f6b8da322100ca1"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.3.0"
+  three_js_core_loaders:
+    dependency: transitive
+    description:
+      name: three_js_core_loaders
+      sha256: "53a5df2c44fe721b0a791a3ddad02774c20174bd50f9b9c94cf620b2369a8f61"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.3.0"
+  three_js_curves:
+    dependency: transitive
+    description:
+      name: three_js_curves
+      sha256: a1510a58b5e80b2a4f5d6402669d467ac3dc85294151ad9f4880d610594c07a5
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.3.0"
+  three_js_geometry:
+    dependency: transitive
+    description:
+      name: three_js_geometry
+      sha256: "1572a040d7037531057ea02bfa6df7ac93ead8f718f5d31d8727df4e7f878f0a"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.3.0"
+  three_js_math:
+    dependency: transitive
+    description:
+      name: three_js_math
+      sha256: "8b037cc90638971aec148d33b5fa7d59d33b778b6e0563a4203282a0e12a90d0"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.3.0"
+  three_js_sensors:
+    dependency: transitive
+    description:
+      name: three_js_sensors
+      sha256: "07f8fa9866cafdea3b8e7ccf03f0383226fc950426db59f0a68c617c8cdf5bb8"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.2.0"
+  three_js_simple_loaders:
+    dependency: transitive
+    description:
+      name: three_js_simple_loaders
+      sha256: "57d7496f8c5ac51cf885243d6b6b8f063eacc8c35041a88ffb846b9927f10dab"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.3.0"
+  three_js_text:
+    dependency: "direct overridden"
+    description:
+      path: "packages/three_js_text_xml7"
+      relative: true
+    source: path
+    version: "0.3.0"
   timezone:
     dependency: transitive
     description:

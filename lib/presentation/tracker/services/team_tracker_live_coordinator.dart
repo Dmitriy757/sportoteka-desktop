@@ -198,6 +198,18 @@ class TeamTrackerLiveCoordinator {
 
   bool get running => _running || _starting;
   bool get localOnly => _localOnly;
+  /// Итоговые Tracker session_id всех игроков завершённой командной тренировки.
+  /// Список обновляется и после offline recovery, поэтому экран может дождаться
+  /// финализации и только затем запускать автоматический анализ ИИ.
+  List<int> get finalSessionIds {
+    final ids = _runtime.values
+        .map((runtime) => runtime.finalSessionId ?? 0)
+        .where((id) => id > 0)
+        .toSet()
+        .toList(growable: false);
+    return ids..sort();
+  }
+
   bool get offlineRecoveryBusy =>
       _offlineRecoveryTasks > 0 ||
       _pendingRecoveryKeys.isNotEmpty ||

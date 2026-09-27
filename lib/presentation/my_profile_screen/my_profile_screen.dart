@@ -864,6 +864,10 @@ class _MyProfileScreenState extends State<MyProfileScreen>
   // Детали публикации профиля: на планшете открываются в правой CMR-панели.
   Map<String, dynamic>? _openedProfilePost;
 
+  // Планшетный composer: создаём пост/Reels во второй панели справа,
+  // не покидая профиль и не теряя список публикаций слева.
+  bool _tabletCreateOpen = false;
+
   // Правая рабочая область главной страницы на ПК.
   Widget? _desktopRightPaneChild;
   String _desktopRightPaneTitle = '';
@@ -1037,13 +1041,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
   bool get _isPublicProfileView =>
       !isOwnProfile && (widget.publicView || widget.userId != null);
 
-  String get _publicProfileTitle {
-    if (isPlayer) return 'Публичный профиль игрока';
-    if (isCoachRole) return 'Публичный профиль тренера';
-    if (isClubRole) return 'Публичная страница клуба';
-    if (isParentRole) return 'Профиль родителя';
-    return 'Публичный профиль';
-  }
+  String get _publicProfileTitle => 'Публичный профиль';
 
   String get _publicProfileSubtitle {
     final parts = <String>[];
@@ -1057,44 +1055,14 @@ class _MyProfileScreenState extends State<MyProfileScreen>
 
   String get _profileContextLine {
     if (_isPublicProfileView) return _publicProfileSubtitle;
-    return '${_enteredAsText} • ${_activeWorkspaceName.isEmpty ? 'Sportoteka' : _activeWorkspaceName}';
-  }
-
-  String get _roleLabel {
-    // Для подписи в профиле важнее фактически назначенная клубом должность,
-    // чем общий users.role=trainer. Логика доступа при этом не меняется.
-    final assigned = _assignedStaffRoleLabel;
-    if (assigned.isNotEmpty) return assigned;
-
-    if (isPressAssistantRole) return 'пресс-служба';
-    if (isClubRole) return 'клуб';
-    if (isCoachRole) return 'тренер';
-    if (isPlayer) return 'игрок';
-    if (isParentRole) return 'родитель';
-    final r = role.trim();
-    return r.isEmpty ? 'пользователь' : r;
+    final workspace = _activeWorkspaceName.trim();
+    return workspace.isEmpty ? 'Sportoteka' : workspace;
   }
 
   String get _enteredAsText {
     if (_isPublicProfileView) return _publicProfileTitle;
-    final team = (playerTeamName ?? '').trim();
-    final club = (playerClubName ?? '').trim();
-
-    final assigned = _assignedStaffRoleLabel;
-    if (assigned.isNotEmpty) return 'Вы вошли как $assigned';
-
-    if (isPressAssistantRole) return 'Вы вошли как пресс-служба';
-    if (isClubRole) return 'Вы вошли как клуб';
-    if (isCoachRole)
-      return team.isNotEmpty
-          ? 'Вы вошли как тренер команды'
-          : 'Вы вошли как тренер';
-    if (isPlayer)
-      return team.isNotEmpty
-          ? 'Вы вошли как игрок команды'
-          : 'Вы вошли как игрок';
-    if (isParentRole) return 'Вы вошли как родитель';
-    return 'Вы вошли как $_roleLabel';
+    final workspace = _activeWorkspaceName.trim();
+    return workspace.isEmpty ? 'Sportoteka' : workspace;
   }
 
   String get _activeWorkspaceName {
@@ -1631,7 +1599,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
     final myUserId = await PrefUtils.getUserId() ?? 0;
     if (!mounted) return;
     _openCmrWindow(
-      title: 'Поиск людей',
+      title: 'Поиск',
       icon: Icons.search_rounded,
       maxWidth: 860,
       maxHeight: 800,
@@ -3123,7 +3091,11 @@ class _MyProfileScreenState extends State<MyProfileScreen>
       );
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
+        final responseText = utf8.decode(
+          response.bodyBytes,
+          allowMalformed: false,
+        );
+        final data = jsonDecode(responseText);
         if (data is Map && data['status'] == 'success') {
           if (mounted) {
             setState(
@@ -3136,6 +3108,24 @@ class _MyProfileScreenState extends State<MyProfileScreen>
     } finally {
       if (mounted) setState(() => isLoadingPosts = false);
     }
+  }
+
+  String _normalizeProfileMediaUrl(String raw) {
+    final value = raw.trim();
+    if (value.isEmpty) return '';
+    if (value.startsWith('http://') || value.startsWith('https://')) {
+      return value;
+    }
+    if (value.startsWith('/')) {
+      return 'https://sportotekaapp.ru$value';
+    }
+    return 'https://sportotekaapp.ru/$value';
+  }
+
+  double _profileToDouble(dynamic value, [double fallback = 0.0]) {
+    if (value == null) return fallback;
+    if (value is num) return value.toDouble();
+    return double.tryParse(value.toString().replaceAll(',', '.')) ?? fallback;
   }
 
   Future<void> _fetchUserReels() async {
@@ -3198,8 +3188,8 @@ class _MyProfileScreenState extends State<MyProfileScreen>
           return {
             'id': _toInt(m['id'] ?? m['reel_id'] ?? 0),
             'user_id': _toInt(m['user_id'] ?? m['author_id'] ?? 0),
-            'video_url': video,
-            'thumbnail': thumb,
+            'video_url': _normalizeProfileMediaUrl(video),
+            'thumbnail': _normalizeProfileMediaUrl(thumb),
             'description': (m['description'] ?? m['caption'] ?? '').toString(),
             'likes': _toInt(m['likes'] ?? m['like_count'] ?? 0),
             'comments': _toInt(m['comments_count'] ??
@@ -3207,11 +3197,11 @@ class _MyProfileScreenState extends State<MyProfileScreen>
                 m['comment_count'] ??
                 0),
             'views': _toInt(m['views'] ?? m['view_count'] ?? 0),
-            'rotation': m['rotation'],
-            'crop_mode': m['crop_mode'],
-            'crop_scale': m['crop_scale'],
-            'crop_dx': m['crop_dx'],
-            'crop_dy': m['crop_dy'],
+            'rotation': _toInt(m['rotation'] ?? 0),
+            'crop_mode': (m['crop_mode'] ?? 'fit').toString(),
+            'crop_scale': _profileToDouble(m['crop_scale'], 1.0),
+            'crop_dx': _profileToDouble(m['crop_dx'], 0.0),
+            'crop_dy': _profileToDouble(m['crop_dy'], 0.0),
           };
         })
         .where((e) => (e['video_url'] as String).isNotEmpty)
@@ -3233,7 +3223,13 @@ class _MyProfileScreenState extends State<MyProfileScreen>
       );
 
       if (response.statusCode != 200) return;
-      final decoded = jsonDecode(response.body);
+
+      final responseText = utf8.decode(
+        response.bodyBytes,
+        allowMalformed: false,
+      );
+      final decoded = jsonDecode(responseText);
+
       final List<dynamic> data = decoded is Map
           ? ((decoded['posts'] ?? decoded['data'] ?? decoded['items'] ?? [])
                   as List? ??
@@ -3301,6 +3297,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
         // в отдельный экран публикаций с двумя колонками.
         _profileWorkspaceSection = 'posts';
         _mode = _ProfileFeedMode.posts;
+        _tabletCreateOpen = false;
         _openedProfilePost = Map<String, dynamic>.from(post);
         _desktopRightPaneChild = null;
         _desktopRightPaneTitle = '';
@@ -3327,6 +3324,35 @@ class _MyProfileScreenState extends State<MyProfileScreen>
     if (!mounted) return;
     setState(() => _openedProfilePost = null);
     _fetchAuthorFeedPosts();
+  }
+
+  void _openTabletCreatePanel() {
+    if (!mounted || !isOwnProfile) return;
+    setState(() {
+      _profileWorkspaceSection = 'posts';
+      _openedProfilePost = null;
+      _tabletCreateOpen = true;
+    });
+  }
+
+  void _closeTabletCreatePanel() {
+    if (!mounted) return;
+    setState(() => _tabletCreateOpen = false);
+  }
+
+  Future<void> _onTabletPostSaved() async {
+    await Future.wait([
+      _fetchUserPosts(),
+      _fetchAuthorFeedPosts(),
+    ]);
+    if (!mounted) return;
+    setState(() => _mode = _ProfileFeedMode.posts);
+  }
+
+  Future<void> _onTabletReelSaved() async {
+    await _fetchUserReels();
+    if (!mounted) return;
+    setState(() => _mode = _ProfileFeedMode.reels);
   }
 
   Future<void> _submitProfilePost() async {
@@ -3388,6 +3414,15 @@ class _MyProfileScreenState extends State<MyProfileScreen>
 
   Future<void> _openContextualProfileCreate() async {
     if (!isOwnProfile) return;
+
+    final width = MediaQuery.sizeOf(context).width;
+
+    // Планшет: редактор открывается второй панелью справа.
+    // Профиль и список публикаций остаются на месте.
+    if (width >= 720 && !_isDesktopProfileLayout) {
+      _openTabletCreatePanel();
+      return;
+    }
 
     final initialType = _mode == _ProfileFeedMode.reels
         ? CreateContentType.reel
@@ -3944,18 +3979,41 @@ class _MyProfileScreenState extends State<MyProfileScreen>
                     ? Image.network(
                         user.photoUrl!,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Center(
-                          child: Text(
-                            user.initials,
-                            style: AppTypography.custom(
-                              size: 12,
-                              weight: FontWeight.w600,
-                              color: const Color(0xFF067A46),
-                              height: 1,
-                              letterSpacing: 0,
+                        errorBuilder: (_, __, ___) {
+                          final fallback =
+                              (user.photoFallbackUrl ?? '').trim();
+                          if (fallback.isNotEmpty &&
+                              fallback != user.photoUrl) {
+                            return Image.network(
+                              fallback,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Center(
+                                child: Text(
+                                  user.initials,
+                                  style: AppTypography.custom(
+                                    size: 12,
+                                    weight: FontWeight.w600,
+                                    color: const Color(0xFF067A46),
+                                    height: 1,
+                                    letterSpacing: 0,
+                                  ),
+                                ),
+                              ),
+                            );
+                          }
+                          return Center(
+                            child: Text(
+                              user.initials,
+                              style: AppTypography.custom(
+                                size: 12,
+                                weight: FontWeight.w600,
+                                color: const Color(0xFF067A46),
+                                height: 1,
+                                letterSpacing: 0,
+                              ),
                             ),
-                          ),
-                        ),
+                          );
+                        },
                       )
                     : Center(
                         child: Text(
@@ -3980,11 +4038,8 @@ class _MyProfileScreenState extends State<MyProfileScreen>
                 parts.add(username.startsWith('@') ? username : '@$username');
               }
 
-              final roleLabel = _socialRoleLabel(user.role);
-              if (roleLabel.isNotEmpty) {
-                parts.add(roleLabel);
-              }
-
+              // Роль в социальном профиле/списках не показываем:
+              // клубные назначения могут быть устаревшими или неоднозначными.
               final team = (user.teamName ?? '').trim();
               final club = (user.clubName ?? '').trim();
 
@@ -4672,8 +4727,9 @@ class _MyProfileScreenState extends State<MyProfileScreen>
       appBar: isTabletWorkspace || _mobileWindowChild != null
           ? null
           : _buildFlagshipMobileAppBar(isVisitor),
-      bottomNavigationBar:
-          isOwnProfile && width < 720 ? _buildSocialBottomBar() : null,
+      // Нижнее глобальное меню не должно исчезать при открытии
+      // публичного профиля другого пользователя.
+      bottomNavigationBar: width < 720 ? _buildSocialBottomBar() : null,
       body: isLoadingProfile
           ? _buildFlagshipLoading()
           : isDesktopWorkspace
@@ -4820,7 +4876,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
       ),
       button(
         icon: Icons.search_rounded,
-        tooltip: 'Поиск людей',
+        tooltip: 'Поиск',
         active: _mobileDockKey == 'search',
         onTap: _openPeopleSearchWindow,
       ),
@@ -5064,7 +5120,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
   Widget _buildPositionedProfileMainWindow(Size desktopSize, bool isVisitor) {
     final maximized = _profileMainWindowMaximized;
     final frame = _buildProfileFloatingWindow(
-      title: 'Мой профиль',
+      title: isVisitor ? 'Профиль' : 'Мой профиль',
       subtitle: _activeWorkspaceName,
       icon: Icons.person_rounded,
       active: _profileMainWindowZ >= _profileModuleWindowZ ||
@@ -5773,7 +5829,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
                   ),
                   item(
                     id: 'search',
-                    title: 'Поиск людей',
+                    title: 'Поиск',
                     subtitle: 'игроки, тренеры и пользователи',
                     icon: Icons.person_search_outlined,
                     onTap: _openPeopleSearchWindow,
@@ -5833,6 +5889,90 @@ class _MyProfileScreenState extends State<MyProfileScreen>
     );
   }
 
+  Widget _buildWorkspaceSocialStats({
+    required bool compact,
+    required bool ultraCompact,
+  }) {
+    Widget stat({
+      required int value,
+      required String label,
+      VoidCallback? onTap,
+    }) {
+      final child = SizedBox(
+        width: ultraCompact ? 44 : (compact ? 54 : 68),
+        height: 34,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              '$value',
+              maxLines: 1,
+              style: _flagshipText(
+                compact ? 10.2 : 10.8,
+                color: const Color(0xFF111827),
+                weight: FontWeight.w800,
+                height: 1,
+              ),
+            ),
+            const SizedBox(height: 3),
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: _flagshipText(
+                ultraCompact ? 7.0 : (compact ? 7.4 : 8.0),
+                color: const Color(0xFF7A8493),
+                weight: FontWeight.w500,
+                height: 1,
+              ),
+            ),
+          ],
+        ),
+      );
+
+      if (onTap == null) return child;
+      return InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: child,
+      );
+    }
+
+    return Container(
+      height: 40,
+      padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 3),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF7F9F8),
+        borderRadius: BorderRadius.circular(11),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          stat(
+            value: userPosts.length,
+            label: ultraCompact ? 'Посты' : 'Посты',
+            onTap: () => _selectProfileWorkspaceSection('posts'),
+          ),
+          stat(
+            value: userReels.length,
+            label: 'Reels',
+            onTap: () => _selectProfileWorkspaceSection('reels'),
+          ),
+          stat(
+            value: followersCount,
+            label: ultraCompact ? 'Подписч.' : 'Подписчики',
+            onTap: () => _openUsersModal(showFollowers: true),
+          ),
+          stat(
+            value: followingsCount,
+            label: ultraCompact ? 'Подписки' : 'Подписки',
+            onTap: () => _openUsersModal(showFollowers: false),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildProfileWorkspaceTopBar({required bool compact}) {
     String title;
     String subtitle;
@@ -5881,52 +6021,70 @@ class _MyProfileScreenState extends State<MyProfileScreen>
         icon = Icons.grid_on_rounded;
     }
 
-    return Container(
-      height: compact ? 52 : 58,
-      padding: EdgeInsets.symmetric(horizontal: compact ? 12 : 16),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(
-          bottom: BorderSide(color: Color(0xFFE9ECEA), width: .7),
-        ),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              color: const Color(0xFFF1FBF6),
-              borderRadius: BorderRadius.circular(10),
+    final showSocialStats = _profileWorkspaceSection == 'posts' ||
+        _profileWorkspaceSection == 'feed' ||
+        _profileWorkspaceSection == 'reels';
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final ultraCompact = constraints.maxWidth < 560;
+
+        return Container(
+          height: compact ? 52 : 58,
+          padding: EdgeInsets.symmetric(horizontal: compact ? 12 : 16),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            border: Border(
+              bottom: BorderSide(color: Color(0xFFE9ECEA), width: .7),
             ),
-            child: Icon(icon, size: 17, color: const Color(0xFF00A750)),
           ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: _flagshipTitle(14.2, weight: FontWeight.w700),
+          child: Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF1FBF6),
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                if (!compact) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: _flagshipText(10, color: const Color(0xFF8A9099)),
-                  ),
-                ],
+                child: Icon(icon, size: 17, color: const Color(0xFF00A750)),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: _flagshipTitle(14.2, weight: FontWeight.w700),
+                    ),
+                    if (!compact && !ultraCompact) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style:
+                            _flagshipText(10, color: const Color(0xFF8A9099)),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              if (showSocialStats) ...[
+                const SizedBox(width: 10),
+                _buildWorkspaceSocialStats(
+                  compact: compact,
+                  ultraCompact: ultraCompact,
+                ),
               ],
-            ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -5981,11 +6139,16 @@ class _MyProfileScreenState extends State<MyProfileScreen>
     }
 
     if (_profileWorkspaceSection == 'posts') {
+      // На планшете и ПК оставляем исходную двухпанельную композицию:
+      // публикации слева, выбранная публикация справа. Социальные счётчики
+      // показываются компактно в верхней панели, а не отдельной большой карточкой.
       return _buildTabletPublicationsSplit(compact: compact);
     }
 
     if (_profileWorkspaceSection == 'feed' ||
         _profileWorkspaceSection == 'reels') {
+      // Не растягиваем мобильную карточку профиля на большой экран.
+      // Сохраняем прежнюю рабочую область, а счётчики остаются в top bar.
       return SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: EdgeInsets.only(bottom: compact ? 20 : 8),
@@ -6023,16 +6186,65 @@ class _MyProfileScreenState extends State<MyProfileScreen>
 
   Widget _buildTabletPublicationsSplit({required bool compact}) {
     final selected = _openedProfilePost;
-    final leftWidthFactor = compact ? .53 : .57;
+    final showCreate = _tabletCreateOpen && isOwnProfile;
 
     return LayoutBuilder(
       builder: (context, constraints) {
+        // Во время создания отдаём редактору больше ширины.
+        final leftWidthFactor = showCreate
+            ? (compact ? .42 : .46)
+            : (compact ? .53 : .57);
         final leftWidth = constraints.maxWidth * leftWidthFactor;
+
+        Widget rightPane;
+
+        if (showCreate) {
+          rightPane = Container(
+            key: ValueKey(
+              'tablet-profile-create-${_mode.name}',
+            ),
+            color: Colors.white,
+            child: CreateContentScreen(
+              initialType: _mode == _ProfileFeedMode.reels
+                  ? CreateContentType.reel
+                  : CreateContentType.post,
+              sportName: 'Футбол',
+              postDestination: CreatePostDestination.profile,
+              allowReels: true,
+              authorLabel: fullName,
+              embedded: true,
+              onClose: _closeTabletCreatePanel,
+              onPostSaved: _onTabletPostSaved,
+              onReelSaved: _onTabletReelSaved,
+            ),
+          );
+        } else if (selected == null) {
+          rightPane = _buildPublicationSelectionPlaceholder(compact: compact);
+        } else {
+          rightPane = Container(
+            key: ValueKey(
+              'tablet-profile-post-${_safeInt(selected['id'])}',
+            ),
+            color: Colors.white,
+            child: NewsDetailScreen(
+              title: _safeStr(selected['title']).trim().isNotEmpty
+                  ? _safeStr(selected['title']).trim()
+                  : 'Публикация',
+              body: _safeStr(selected['text']),
+              newsId: _safeInt(selected['id']),
+              imageUrl: _safeStr(selected['imageUrl']),
+              embedded: true,
+              onClose: _closeTabletProfilePost,
+            ),
+          );
+        }
 
         return Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            SizedBox(
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 190),
+              curve: Curves.easeOutCubic,
               width: leftWidth,
               child: SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
@@ -6051,23 +6263,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
                 duration: const Duration(milliseconds: 190),
                 switchInCurve: Curves.easeOutCubic,
                 switchOutCurve: Curves.easeInCubic,
-                child: selected == null
-                    ? _buildPublicationSelectionPlaceholder(compact: compact)
-                    : Container(
-                        key: ValueKey(
-                            'tablet-profile-post-${_safeInt(selected['id'])}'),
-                        color: Colors.white,
-                        child: NewsDetailScreen(
-                          title: _safeStr(selected['title']).trim().isNotEmpty
-                              ? _safeStr(selected['title']).trim()
-                              : 'Публикация',
-                          body: _safeStr(selected['text']),
-                          newsId: _safeInt(selected['id']),
-                          imageUrl: _safeStr(selected['imageUrl']),
-                          embedded: true,
-                          onClose: _closeTabletProfilePost,
-                        ),
-                      ),
+                child: rightPane,
               ),
             ),
           ],
@@ -6190,12 +6386,6 @@ class _MyProfileScreenState extends State<MyProfileScreen>
                               overflow: TextOverflow.ellipsis,
                               style:
                                   _flagshipTitle(12.6, weight: FontWeight.w700),
-                            ),
-                            const SizedBox(height: 3),
-                            Text(
-                              _roleLabel,
-                              style: _flagshipText(9.8,
-                                  color: const Color(0xFF8A9099)),
                             ),
                           ],
                         ),
@@ -6419,8 +6609,11 @@ class _MyProfileScreenState extends State<MyProfileScreen>
       automaticallyImplyLeading: false,
       centerTitle: false,
       titleSpacing: 12,
+      // Имя пользователя уже показано в карточке профиля ниже.
+      // В верхней панели оставляем только название экрана, чтобы имя не
+      // дублировалось визуально.
       title: Text(
-        fullName,
+        isVisitor ? 'Профиль' : 'Мой профиль',
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: _flagshipTitle(
@@ -6749,7 +6942,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
       _ProfileFlagshipAction('Лента', 'новости и публикации сообщества',
           Icons.dynamic_feed_rounded, _openCommunityFeedHome,
           group: 'Основное'),
-      _ProfileFlagshipAction('Поиск людей', 'игроки, тренеры и пользователи',
+      _ProfileFlagshipAction('Поиск', 'игроки, тренеры и Reels',
           Icons.person_search_outlined, _openPeopleSearchWindow,
           group: 'Основное'),
       _ProfileFlagshipAction('Чаты', 'личные сообщения и группы',
@@ -7224,17 +7417,6 @@ class _MyProfileScreenState extends State<MyProfileScreen>
                   overflow: TextOverflow.ellipsis,
                   style: _flagshipTitle(12.4, weight: FontWeight.w700),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  _roleLabel.toUpperCase(),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: _flagshipText(
-                    9.3,
-                    color: const Color(0xFF6B7280),
-                    weight: FontWeight.w600,
-                  ),
-                ),
               ],
             ),
           ),
@@ -7289,8 +7471,25 @@ class _MyProfileScreenState extends State<MyProfileScreen>
 
     final avatarSize = compactSocial ? 76.0 : 92.0;
     final workspaceName = _activeWorkspaceName.trim();
-    final showWorkspaceName = workspaceName.isNotEmpty &&
-        workspaceName.toLowerCase() != fullName.trim().toLowerCase();
+
+    String normalizeProfileLine(String value) => value
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-zа-яё0-9]+'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+
+    final normalizedWorkspace = normalizeProfileLine(workspaceName);
+    final normalizedName = normalizeProfileLine(fullName);
+    final normalizedInfo = normalizeProfileLine(infoLine);
+
+    // В публичном профиле клуб/команда уже выводятся строкой infoLine.
+    // В своём профиле рабочее пространство показываем только если оно
+    // действительно добавляет новую информацию, а не повторяет имя, клуб
+    // или команду той же строкой с другим разделителем.
+    final showWorkspaceName = !_isPublicProfileView &&
+        normalizedWorkspace.isNotEmpty &&
+        normalizedWorkspace != normalizedName &&
+        !normalizedInfo.contains(normalizedWorkspace);
 
     return Container(
       color: Colors.white,
@@ -7315,25 +7514,6 @@ class _MyProfileScreenState extends State<MyProfileScreen>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (isClubRole ||
-                        isCoachRole ||
-                        isPlayer ||
-                        isParentRole ||
-                        isPressAssistantRole ||
-                        _assignedStaffRoleLabel.isNotEmpty)
-                      Padding(
-                        padding: EdgeInsets.only(
-                          bottom: compactSocial ? 3 : 6,
-                        ),
-                        child: Text(
-                          _roleLabel.toUpperCase(),
-                          style: _flagshipText(
-                            compactSocial ? 8.0 : 8.8,
-                            color: const Color(0xFF067A46),
-                            weight: FontWeight.w600,
-                          ).copyWith(letterSpacing: .24),
-                        ),
-                      ),
                     Text(
                       fullName,
                       maxLines: 1,
@@ -7515,13 +7695,6 @@ class _MyProfileScreenState extends State<MyProfileScreen>
   }
 
   Widget _buildRoleCapsule() {
-    final icon = isClubRole
-        ? Icons.apartment_rounded
-        : isCoachRole
-            ? Icons.sports_soccer_rounded
-            : isParentRole
-                ? Icons.family_restroom_rounded
-                : Icons.person_rounded;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
       decoration: BoxDecoration(
@@ -7531,9 +7704,10 @@ class _MyProfileScreenState extends State<MyProfileScreen>
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 13, color: const Color(0xFF067A46)),
+          const Icon(Icons.person_rounded,
+              size: 13, color: Color(0xFF067A46)),
           const SizedBox(width: 5),
-          Text(_roleLabel.toUpperCase(),
+          Text('ПРОФИЛЬ',
               style: _flagshipText(9,
                   color: const Color(0xFF067A46), weight: FontWeight.w900)),
         ],
@@ -7664,12 +7838,6 @@ class _MyProfileScreenState extends State<MyProfileScreen>
             ),
           ),
           const SizedBox(height: 12),
-          _buildAccessStripe(
-            icon: Icons.verified_user_outlined,
-            title: _enteredAsText,
-            value: _roleLabel.toUpperCase(),
-            onTap: _openProfileSettingsSheet,
-          ),
           _buildAccessStripe(
             icon: _primaryZoneIcon,
             title: _primaryZoneSubtitle,
@@ -7802,8 +7970,6 @@ class _MyProfileScreenState extends State<MyProfileScreen>
         children: [
           Text('Настройки', style: _flagshipTitle(13.6)),
           const SizedBox(height: 8),
-          _buildSettingsLine(Icons.verified_user_outlined, 'Роль аккаунта',
-              _roleLabel.toUpperCase(), _openProfileSettingsSheet),
           _buildSettingsLine(Icons.image_outlined, 'Фото и профиль',
               'Редактировать', _pickAndUploadPhoto),
           _buildSettingsLine(Icons.notifications_none_rounded, 'Уведомления',
@@ -7865,12 +8031,16 @@ class _MyProfileScreenState extends State<MyProfileScreen>
   }
 
   Widget _buildFlagshipContentWindow() {
+    final width = MediaQuery.sizeOf(context).width;
+    final showTabletCreate =
+        isOwnProfile && width >= 720 && !_isDesktopProfileLayout;
+
     return Container(
       color: Colors.white,
       child: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(14, 13, 14, 7),
+            padding: const EdgeInsets.fromLTRB(14, 11, 12, 7),
             child: Row(
               children: [
                 Expanded(
@@ -7879,6 +8049,50 @@ class _MyProfileScreenState extends State<MyProfileScreen>
                     style: _flagshipTitle(14.2, weight: FontWeight.w700),
                   ),
                 ),
+                if (showTabletCreate)
+                  Tooltip(
+                    message:
+                        _tabletCreateOpen ? 'Редактор открыт' : 'Создать',
+                    child: Material(
+                      color: _tabletCreateOpen
+                          ? const Color(0xFFEAF8F0)
+                          : const Color(0xFF00A750),
+                      borderRadius: BorderRadius.circular(10),
+                      child: InkWell(
+                        onTap: _openContextualProfileCreate,
+                        borderRadius: BorderRadius.circular(10),
+                        child: Container(
+                          height: 34,
+                          padding: const EdgeInsets.symmetric(horizontal: 11),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                _tabletCreateOpen
+                                    ? Icons.edit_rounded
+                                    : Icons.add_rounded,
+                                size: 18,
+                                color: _tabletCreateOpen
+                                    ? const Color(0xFF067A46)
+                                    : Colors.white,
+                              ),
+                              const SizedBox(width: 5),
+                              Text(
+                                _tabletCreateOpen ? 'Создание' : 'Создать',
+                                style: _flagshipText(
+                                  10.4,
+                                  color: _tabletCreateOpen
+                                      ? const Color(0xFF067A46)
+                                      : Colors.white,
+                                  weight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -7978,7 +8192,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
         children: [
           Expanded(
             child: Text(
-              '${_roleLabel.toUpperCase()}  ·  ${_activeWorkspaceName.isEmpty ? 'Sportoteka' : _activeWorkspaceName}',
+              _activeWorkspaceName.isEmpty ? 'Sportoteka' : _activeWorkspaceName,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: _flagshipText(
@@ -8093,6 +8307,31 @@ class _MyProfileScreenState extends State<MyProfileScreen>
         ],
       ),
     );
+  }
+
+  Future<void> _openMyProfileFromBottomBar() async {
+    final myUserId = await PrefUtils.getUserId() ?? 0;
+    if (!mounted) return;
+
+    final viewedUserId = widget.userId ?? myUserId;
+    final viewingAnotherProfile =
+        widget.publicView || !isOwnProfile ||
+        (myUserId > 0 && viewedUserId > 0 && viewedUserId != myUserId);
+
+    // В чужом профиле кнопка «Главная» должна вести именно в МОЙ профиль,
+    // а не просто переключать вкладку публикаций текущего пользователя.
+    if (viewingAnotherProfile) {
+      Navigator.of(context).pushReplacement<void, void>(
+        MaterialPageRoute<void>(
+          builder: (_) => const MyProfileScreen(),
+        ),
+      );
+      return;
+    }
+
+    _closeMobileWindow(dockKey: 'profile');
+    if (!mounted) return;
+    _selectProfileWorkspaceSection('posts');
   }
 
   Widget _buildSocialBottomBar() {
@@ -8236,12 +8475,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
                   dockItem(
                     keyName: 'profile',
                     icon: Icons.home_outlined,
-                    onTap: () {
-                      _closeMobileWindow(dockKey: 'profile');
-                      if (mounted) {
-                        _selectProfileWorkspaceSection('posts');
-                      }
-                    },
+                    onTap: () => unawaited(_openMyProfileFromBottomBar()),
                   ),
                   dockItem(
                     keyName: 'feed',
@@ -8304,7 +8538,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
       _ProfileFlagshipAction('Лента', 'новости и публикации сообщества',
           Icons.dynamic_feed_rounded, _openCommunityFeedHome,
           group: 'Основное'),
-      _ProfileFlagshipAction('Поиск людей', 'игроки, тренеры и пользователи',
+      _ProfileFlagshipAction('Поиск', 'игроки, тренеры и Reels',
           Icons.person_search_outlined, _openPeopleSearchWindow,
           group: 'Основное'),
       _ProfileFlagshipAction('Чаты', 'личные сообщения и группы',
@@ -8676,26 +8910,6 @@ class _MyProfileScreenState extends State<MyProfileScreen>
                     ],
                   ),
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 5,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFECFDF3),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Text(
-                    _roleLabel.toUpperCase(),
-                    style: AppTypography.custom(
-                      size: 8.6,
-                      weight: FontWeight.w600,
-                      color: const Color(0xFF00A750),
-                      height: 1,
-                      letterSpacing: .15,
-                    ),
-                  ),
-                ),
               ],
             ),
           ),
@@ -8944,23 +9158,6 @@ class _MyProfileScreenState extends State<MyProfileScreen>
                         ),
                       ),
                     ],
-                  ),
-                ),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-                  decoration: BoxDecoration(
-                      color: const Color(0xFFECFDF3),
-                      borderRadius: BorderRadius.circular(999)),
-                  child: Text(
-                    _roleLabel.toUpperCase(),
-                    style: AppTypography.custom(
-                      size: 8.6,
-                      weight: FontWeight.w600,
-                      color: const Color(0xFF00A750),
-                      height: 1,
-                      letterSpacing: .15,
-                    ),
                   ),
                 ),
               ],
@@ -9348,24 +9545,6 @@ class _MyProfileScreenState extends State<MyProfileScreen>
                     ],
                   ),
                 ),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF3FAF6),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Text(
-                    _roleLabel.toUpperCase(),
-                    style: AppTypography.custom(
-                      size: 8.5,
-                      weight: FontWeight.w600,
-                      color: const Color(0xFF067A46),
-                      height: 1,
-                      letterSpacing: .1,
-                    ),
-                  ),
-                ),
               ],
             ),
             const SizedBox(height: 20),
@@ -9644,11 +9823,6 @@ class _MyProfileScreenState extends State<MyProfileScreen>
             spacing: 6,
             runSpacing: 6,
             children: [
-              _buildProfileBadge(
-                  _roleLabel,
-                  isClubRole || isCoachRole || isParentRole
-                      ? const Color(0xFF00A750)
-                      : const Color(0xFF111827)),
               if (age != null)
                 _buildProfileBadge('$age лет', const Color(0xFF667085)),
               if ((playerTeamName ?? '').trim().isNotEmpty)
@@ -10580,6 +10754,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
                 builder: (_) => UserReelsScreen(
                   userId: viewedUserId,
                   initialIndex: index,
+                  initialReelId: _toInt(reel['id']),
                   title: "Reels: $fullName",
                 ),
               ),
@@ -11370,9 +11545,18 @@ class _ProfilePeopleSearchPanelState extends State<_ProfilePeopleSearchPanel> {
   final TextEditingController _controller = TextEditingController();
   Timer? _debounce;
   bool _loading = false;
+  bool _recommendationsLoading = false;
   String _filter = 'all';
   String? _error;
   List<Map<String, dynamic>> _results = const [];
+  List<Map<String, dynamic>> _reelResults = const [];
+  List<Map<String, dynamic>> _recommended = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRecommendations();
+  }
 
   @override
   void dispose() {
@@ -11381,9 +11565,131 @@ class _ProfilePeopleSearchPanelState extends State<_ProfilePeopleSearchPanel> {
     super.dispose();
   }
 
+  String get _recommendationRole => _filter == 'coach' ? 'coach' : 'player';
+
   void _onChanged(String value) {
     _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 380), _search);
+    if (mounted) setState(() {});
+
+    if (value.trim().length < 2) {
+      if (mounted) {
+        setState(() {
+          _results = const [];
+          _reelResults = const [];
+          _error = null;
+          _loading = false;
+        });
+      }
+      if (value.trim().isEmpty && _recommended.isEmpty) {
+        _loadRecommendations();
+      }
+      return;
+    }
+
+    _debounce = Timer(const Duration(milliseconds: 320), _search);
+  }
+
+  Future<void> _loadRecommendations() async {
+    if (widget.myUserId <= 0 || _recommendationsLoading) return;
+
+    final requestedRole = _recommendationRole;
+
+    if (mounted) {
+      setState(() {
+        _recommendationsLoading = true;
+        _error = null;
+      });
+    }
+
+    try {
+      final uri = Uri.parse('${widget.apiBase}/search_users.php').replace(
+        queryParameters: <String, String>{
+          'recommended': '1',
+          'viewer_id': widget.myUserId.toString(),
+          'exclude_id': widget.myUserId.toString(),
+          'role': requestedRole,
+          'limit': '6',
+        },
+      );
+      final response = await http.get(uri).timeout(const Duration(seconds: 14));
+      if (response.statusCode != 200) {
+        throw Exception('HTTP ${response.statusCode}');
+      }
+      final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+      final parsed = _extractUsers(decoded)
+          .map(_normalizeUser)
+          .where((e) => (e['id'] as int) > 0)
+          .take(6)
+          .toList();
+
+      if (!mounted || requestedRole != _recommendationRole) return;
+      setState(() => _recommended = parsed);
+    } catch (_) {
+      // Рекомендации не должны ломать сам поиск.
+    } finally {
+      if (mounted) setState(() => _recommendationsLoading = false);
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchPeople(String query) async {
+    final role = _filter == 'player' || _filter == 'coach' ? _filter : 'all';
+    final uri = Uri.parse('${widget.apiBase}/search_users.php').replace(
+      queryParameters: <String, String>{
+        'q': query,
+        'role': role,
+        'limit': '30',
+        if (widget.myUserId > 0) 'viewer_id': widget.myUserId.toString(),
+        if (widget.myUserId > 0) 'exclude_id': widget.myUserId.toString(),
+        if (widget.myUserId > 0) 'exclude': widget.myUserId.toString(),
+      },
+    );
+
+    http.Response response =
+        await http.get(uri).timeout(const Duration(seconds: 14));
+    if (response.statusCode == 405) {
+      response = await http.post(
+        Uri.parse('${widget.apiBase}/search_users.php'),
+        body: <String, String>{
+          'q': query,
+          'role': role,
+          'limit': '30',
+          if (widget.myUserId > 0) 'viewer_id': widget.myUserId.toString(),
+          if (widget.myUserId > 0) 'exclude_id': widget.myUserId.toString(),
+          if (widget.myUserId > 0) 'exclude': widget.myUserId.toString(),
+        },
+      ).timeout(const Duration(seconds: 14));
+    }
+    if (response.statusCode != 200) {
+      throw Exception('HTTP ${response.statusCode}');
+    }
+
+    final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+    return _extractUsers(decoded)
+        .map(_normalizeUser)
+        .where((e) => (e['id'] as int) > 0)
+        .where(_matchesFilter)
+        .toList();
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchReels(String query) async {
+    final uri = Uri.parse('${widget.apiBase}/get_reels.php').replace(
+      queryParameters: <String, String>{
+        'q': query,
+        'limit': '60',
+        'offset': '0',
+        if (widget.myUserId > 0) 'me': widget.myUserId.toString(),
+      },
+    );
+    final response = await http.get(uri).timeout(const Duration(seconds: 16));
+    if (response.statusCode != 200) {
+      throw Exception('HTTP ${response.statusCode}');
+    }
+    final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+    return _extractReels(decoded)
+        .map(_normalizeReel)
+        .where((e) => (e['id'] as int) > 0)
+        .where((e) => '${e['video_url'] ?? ''}'.trim().isNotEmpty)
+        .toList();
   }
 
   Future<void> _search() async {
@@ -11392,6 +11698,7 @@ class _ProfilePeopleSearchPanelState extends State<_ProfilePeopleSearchPanel> {
       if (!mounted) return;
       setState(() {
         _results = const [];
+        _reelResults = const [];
         _error = null;
         _loading = false;
       });
@@ -11404,45 +11711,26 @@ class _ProfilePeopleSearchPanelState extends State<_ProfilePeopleSearchPanel> {
     });
 
     try {
-      final uri = Uri.parse('${widget.apiBase}/search_users.php').replace(
-        queryParameters: <String, String>{
-          'q': query,
-          if (widget.myUserId > 0) 'exclude_id': widget.myUserId.toString(),
-          if (widget.myUserId > 0) 'exclude': widget.myUserId.toString(),
-        },
-      );
+      List<Map<String, dynamic>> people = const [];
+      List<Map<String, dynamic>> reels = const [];
 
-      http.Response response =
-          await http.get(uri).timeout(const Duration(seconds: 12));
-      if (response.statusCode == 405) {
-        response = await http.post(
-          Uri.parse('${widget.apiBase}/search_users.php'),
-          body: <String, String>{
-            'q': query,
-            if (widget.myUserId > 0) 'exclude_id': widget.myUserId.toString(),
-            if (widget.myUserId > 0) 'exclude': widget.myUserId.toString(),
-          },
-        ).timeout(const Duration(seconds: 12));
+      if (_filter != 'reels') {
+        people = await _fetchPeople(query);
+      }
+      if (_filter == 'all' || _filter == 'reels') {
+        reels = await _fetchReels(query);
       }
 
-      if (response.statusCode != 200) {
-        throw Exception('HTTP ${response.statusCode}');
-      }
-
-      final decoded = jsonDecode(utf8.decode(response.bodyBytes));
-      final raw = _extractUsers(decoded);
-      final parsed = raw
-          .map(_normalizeUser)
-          .where((e) => (e['id'] as int) > 0)
-          .where(_matchesFilter)
-          .toList();
-
-      if (!mounted) return;
-      setState(() => _results = parsed);
+      if (!mounted || _controller.text.trim() != query) return;
+      setState(() {
+        _results = people;
+        _reelResults = reels;
+      });
     } catch (_) {
       if (!mounted) return;
       setState(() {
         _results = const [];
+        _reelResults = const [];
         _error = 'Поиск временно недоступен. Попробуйте ещё раз чуть позже.';
       });
     } finally {
@@ -11459,7 +11747,14 @@ class _ProfilePeopleSearchPanelState extends State<_ProfilePeopleSearchPanel> {
     }
     if (data is Map) {
       final map = Map<String, dynamic>.from(data);
-      for (final key in const ['users', 'data', 'results', 'items', 'list']) {
+      for (final key in const [
+        'users',
+        'recommendations',
+        'data',
+        'results',
+        'items',
+        'list'
+      ]) {
         final value = map[key];
         if (value is List) {
           return value
@@ -11471,6 +11766,7 @@ class _ProfilePeopleSearchPanelState extends State<_ProfilePeopleSearchPanel> {
           final nested = Map<String, dynamic>.from(value);
           for (final nestedKey in const [
             'users',
+            'recommendations',
             'data',
             'results',
             'items',
@@ -11484,6 +11780,28 @@ class _ProfilePeopleSearchPanelState extends State<_ProfilePeopleSearchPanel> {
                   .toList();
             }
           }
+        }
+      }
+    }
+    return const [];
+  }
+
+  List<Map<String, dynamic>> _extractReels(dynamic data) {
+    if (data is List) {
+      return data
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+    }
+    if (data is Map) {
+      final map = Map<String, dynamic>.from(data);
+      for (final key in const ['reels', 'data', 'results', 'items', 'list']) {
+        final value = map[key];
+        if (value is List) {
+          return value
+              .whereType<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList();
         }
       }
     }
@@ -11513,8 +11831,10 @@ class _ProfilePeopleSearchPanelState extends State<_ProfilePeopleSearchPanel> {
     if (photo.isNotEmpty &&
         !photo.startsWith('http://') &&
         !photo.startsWith('https://')) {
-      photo =
-          'https://sportotekaapp.ru/uploads/${photo.replaceFirst(RegExp(r'^/+'), '')}';
+      final normalized = photo.replaceFirst(RegExp(r'^/+'), '');
+      photo = normalized.contains('/')
+          ? 'https://sportotekaapp.ru/$normalized'
+          : 'https://sportotekaapp.ru/uploads/$normalized';
     }
 
     return <String, dynamic>{
@@ -11524,15 +11844,48 @@ class _ProfilePeopleSearchPanelState extends State<_ProfilePeopleSearchPanel> {
       'team': clean(raw['team_name'] ?? raw['teamName']),
       'club': clean(raw['club_name'] ?? raw['clubName']),
       'photo': photo,
+      'reason': clean(raw['recommendation_reason'] ?? raw['reason']),
+    };
+  }
+
+  Map<String, dynamic> _normalizeReel(Map<String, dynamic> raw) {
+    int asInt(dynamic value) =>
+        value is num ? value.toInt() : int.tryParse('${value ?? ''}') ?? 0;
+    double asDouble(dynamic value, double fallback) => value is num
+        ? value.toDouble()
+        : double.tryParse('${value ?? ''}'.replaceAll(',', '.')) ?? fallback;
+    String media(dynamic value) {
+      final v = '${value ?? ''}'.trim();
+      if (v.isEmpty || v.toLowerCase() == 'null') return '';
+      if (v.startsWith('http://') || v.startsWith('https://')) return v;
+      return 'https://sportotekaapp.ru/${v.replaceFirst(RegExp(r'^/+'), '')}';
+    }
+
+    return <String, dynamic>{
+      'id': asInt(raw['id'] ?? raw['reel_id']),
+      'user_id': asInt(raw['user_id'] ?? raw['author_id']),
+      'username': '${raw['username'] ?? raw['author'] ?? ''}'.trim(),
+      'description': '${raw['description'] ?? raw['caption'] ?? ''}'.trim(),
+      'video_url': media(raw['video_url'] ?? raw['video'] ?? raw['url']),
+      'thumbnail': media(raw['thumbnail'] ?? raw['thumb'] ?? raw['poster']),
+      'user_avatar': media(raw['user_avatar'] ?? raw['avatar_url']),
+      'likes': asInt(raw['likes'] ?? raw['like_count']),
+      'comments': asInt(raw['comments'] ?? raw['comments_count']),
+      'views': asInt(raw['views'] ?? raw['view_count']),
+      'rotation': asInt(raw['rotation']),
+      'crop_mode': '${raw['crop_mode'] ?? 'fit'}',
+      'crop_scale': asDouble(raw['crop_scale'], 1.0),
+      'crop_dx': asDouble(raw['crop_dx'], 0.0),
+      'crop_dy': asDouble(raw['crop_dy'], 0.0),
     };
   }
 
   bool _matchesFilter(Map<String, dynamic> user) {
     if (_filter == 'all') return true;
     final role = '${user['role'] ?? ''}'.toLowerCase();
-    if (role.trim().isEmpty) return true;
-    if (_filter == 'player')
+    if (_filter == 'player') {
       return role.contains('player') || role.contains('игрок');
+    }
     if (_filter == 'coach') {
       return role.contains('coach') ||
           role.contains('trainer') ||
@@ -11548,9 +11901,33 @@ class _ProfilePeopleSearchPanelState extends State<_ProfilePeopleSearchPanel> {
         value.contains('тренер')) return 'Тренер';
     if (value.contains('player') || value.contains('игрок')) return 'Игрок';
     if (value.contains('club') || value.contains('клуб')) return 'Клуб';
-    if (value.contains('parent') || value.contains('родител'))
+    if (value.contains('parent') || value.contains('родител')) {
       return 'Родитель';
+    }
     return role.trim().isEmpty ? 'Пользователь' : role.trim();
+  }
+
+  List<Map<String, dynamic>> get _visibleRecommendations {
+    if (_filter == 'all') return _recommended;
+    if (_filter == 'reels') return const [];
+    return _recommended.where(_matchesFilter).toList();
+  }
+
+  void _openReel(Map<String, dynamic> reel) {
+    final id = reel['id'] as int? ?? 0;
+    if (id <= 0) return;
+    final query = _controller.text.trim();
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => ReelsScreen(
+          initialReelId: id,
+          searchQuery: query,
+          title: query.isEmpty ? 'Reels' : 'Reels: $query',
+          showBackButton: true,
+          allowUpload: false,
+        ),
+      ),
+    );
   }
 
   @override
@@ -11582,7 +11959,7 @@ class _ProfilePeopleSearchPanelState extends State<_ProfilePeopleSearchPanel> {
                     decoration: const InputDecoration(
                       isDense: true,
                       border: InputBorder.none,
-                      hintText: 'Имя игрока, тренера или пользователя',
+                      hintText: 'Имя, команда или #хештег',
                       hintStyle: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w500,
@@ -11598,25 +11975,35 @@ class _ProfilePeopleSearchPanelState extends State<_ProfilePeopleSearchPanel> {
                   IconButton(
                     icon: const Icon(Icons.close_rounded, size: 18),
                     onPressed: () {
+                      _debounce?.cancel();
                       _controller.clear();
                       setState(() {
                         _results = const [];
+                        _reelResults = const [];
                         _error = null;
+                        _loading = false;
                       });
+                      if (_recommended.isEmpty) _loadRecommendations();
                     },
                   ),
               ],
             ),
           ),
           const SizedBox(height: 10),
-          Row(
-            children: [
-              _filterChip('all', 'Все'),
-              const SizedBox(width: 7),
-              _filterChip('player', 'Игроки'),
-              const SizedBox(width: 7),
-              _filterChip('coach', 'Тренеры'),
-            ],
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            child: Row(
+              children: [
+                _filterChip('all', 'Все'),
+                const SizedBox(width: 7),
+                _filterChip('player', 'Игроки'),
+                const SizedBox(width: 7),
+                _filterChip('coach', 'Тренеры'),
+                const SizedBox(width: 7),
+                _filterChip('reels', 'Reels'),
+              ],
+            ),
           ),
           const SizedBox(height: 12),
           Expanded(child: _buildBody()),
@@ -11630,8 +12017,20 @@ class _ProfilePeopleSearchPanelState extends State<_ProfilePeopleSearchPanel> {
     return InkWell(
       borderRadius: BorderRadius.circular(999),
       onTap: () {
-        setState(() => _filter = value);
-        if (_controller.text.trim().length >= 2) _search();
+        if (value == _filter) return;
+
+        final query = _controller.text.trim();
+        setState(() {
+          _filter = value;
+          _recommended = const [];
+          _error = null;
+        });
+
+        if (query.length >= 2) {
+          _search();
+        } else if (value != 'reels') {
+          _loadRecommendations();
+        }
       },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
@@ -11653,102 +12052,432 @@ class _ProfilePeopleSearchPanelState extends State<_ProfilePeopleSearchPanel> {
   }
 
   Widget _buildBody() {
+    final query = _controller.text.trim();
+
     if (_loading) {
       return const Center(
-          child: CircularProgressIndicator(
-              color: Color(0xFF00A750), strokeWidth: 2.2));
+        child: CircularProgressIndicator(
+          color: Color(0xFF00A750),
+          strokeWidth: 2.2,
+        ),
+      );
     }
     if (_error != null) {
       return _emptyState(
-          Icons.cloud_off_outlined, 'Поиск временно недоступен', _error!);
-    }
-    if (_controller.text.trim().length < 2) {
-      return _emptyState(
-        Icons.person_search_outlined,
-        'Найдите людей в Sportoteka',
-        'Введите минимум 2 символа. Можно отдельно искать игроков и тренеров.',
+        Icons.cloud_off_outlined,
+        'Поиск временно недоступен',
+        _error!,
       );
     }
-    if (_results.isEmpty) {
-      return _emptyState(Icons.search_off_rounded, 'Ничего не найдено',
-          'Попробуйте другое имя или переключите категорию.');
+
+    if (query.length < 2) {
+      if (_filter == 'reels') {
+        return _emptyState(
+          Icons.tag_rounded,
+          'Поиск Reels',
+          'Введите #хештег или слово из описания ролика.',
+        );
+      }
+      if (_recommendationsLoading && _recommended.isEmpty) {
+        return const Center(
+          child: CircularProgressIndicator(
+            color: Color(0xFF00A750),
+            strokeWidth: 2.2,
+          ),
+        );
+      }
+      final recommended = _visibleRecommendations;
+      if (recommended.isEmpty) {
+        final lookingForCoaches = _filter == 'coach';
+        return _emptyState(
+          Icons.people_alt_outlined,
+          lookingForCoaches
+              ? 'Рекомендации тренеров пока не найдены'
+              : 'Рекомендации игроков пока не найдены',
+          'Введите имя или команду — поиск продолжит работать по всей Sportoteka.',
+        );
+      }
+      return _buildRecommendations(recommended);
     }
 
+    if (_filter == 'reels') {
+      if (_reelResults.isEmpty) {
+        return _emptyState(
+          Icons.search_off_rounded,
+          'Reels не найдены',
+          'Попробуйте другой #хештег или слово из описания.',
+        );
+      }
+      return _buildReelsGrid(_reelResults);
+    }
+
+    if (_filter == 'player' || _filter == 'coach') {
+      if (_results.isEmpty) {
+        return _emptyState(
+          Icons.search_off_rounded,
+          'Ничего не найдено',
+          'Попробуйте другое имя или переключите категорию.',
+        );
+      }
+      return _buildPeopleList(_results);
+    }
+
+    if (_results.isEmpty && _reelResults.isEmpty) {
+      return _emptyState(
+        Icons.search_off_rounded,
+        'Ничего не найдено',
+        'Попробуйте другое имя, команду или #хештег.',
+      );
+    }
+
+    return _buildMixedResults();
+  }
+
+  Widget _buildRecommendations(List<Map<String, dynamic>> users) {
+    final coaches = _filter == 'coach';
+
+    return ListView(
+      physics: const BouncingScrollPhysics(),
+      children: [
+        _sectionHeader(
+          coaches ? 'Рекомендованные тренеры' : 'Рекомендованные игроки',
+          coaches
+              ? 'Тренеры вашей команды, клуба и Sportoteka'
+              : 'Игроки вашей команды, клуба и Sportoteka',
+        ),
+        const SizedBox(height: 8),
+        ...users.take(6).map((user) => Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: _personCard(user, recommended: true),
+            )),
+      ],
+    );
+  }
+
+  Widget _buildPeopleList(List<Map<String, dynamic>> users) {
     return ListView.separated(
       physics: const BouncingScrollPhysics(),
-      itemCount: _results.length,
+      itemCount: users.length,
       separatorBuilder: (_, __) => const SizedBox(height: 6),
-      itemBuilder: (context, index) {
-        final user = _results[index];
-        final photo = '${user['photo'] ?? ''}'.trim();
-        final team = '${user['team'] ?? ''}'.trim();
-        final club = '${user['club'] ?? ''}'.trim();
-        final contextLine =
-            [if (club.isNotEmpty) club, if (team.isNotEmpty) team].join(' · ');
-        return Material(
-          color: const Color(0xFFF8F9FA),
-          borderRadius: BorderRadius.circular(14),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(14),
-            onTap: () => widget.onOpenUser(user['id'] as int),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(10, 9, 10, 9),
-              child: Row(
-                children: [
-                  CircleAvatar(
-                    radius: 22,
-                    backgroundColor: const Color(0xFFF1FBF6),
-                    backgroundImage:
-                        photo.isNotEmpty ? NetworkImage(photo) : null,
-                    child: photo.isEmpty
-                        ? Text(
-                            '${user['name'] ?? 'П'}'
-                                .substring(0, 1)
-                                .toUpperCase(),
-                            style: const TextStyle(
-                                fontWeight: FontWeight.w700,
-                                color: Color(0xFF067A46)),
-                          )
-                        : null,
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '${user['name']}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                              fontSize: 12.5,
-                              fontWeight: FontWeight.w700,
-                              color: Color(0xFF111827)),
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          [
-                            _roleLabel('${user['role'] ?? ''}'),
-                            if (contextLine.isNotEmpty) contextLine
-                          ].join(' · '),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                              fontSize: 10.3,
-                              fontWeight: FontWeight.w500,
-                              color: Color(0xFF667085)),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const Icon(Icons.chevron_right_rounded,
-                      color: Color(0xFF98A2B3), size: 20),
-                ],
+      itemBuilder: (_, index) => _personCard(users[index]),
+    );
+  }
+
+  Widget _buildMixedResults() {
+    final people = _results.take(5).toList();
+    final reels = _reelResults.take(6).toList();
+
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (people.isNotEmpty) ...[
+            _sectionHeader(
+              'Люди',
+              '${_results.length} найдено',
+            ),
+            const SizedBox(height: 8),
+            ...people.map((user) => Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: _personCard(user),
+                )),
+            const SizedBox(height: 14),
+          ],
+          if (reels.isNotEmpty) ...[
+            _sectionHeader(
+              'Reels',
+              'По запросу ${_controller.text.trim()}',
+              actionLabel: _reelResults.length > 6 ? 'Все Reels' : null,
+              onAction: _reelResults.length > 6
+                  ? () {
+                      setState(() => _filter = 'reels');
+                    }
+                  : null,
+            ),
+            const SizedBox(height: 8),
+            _reelsGridBody(reels),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _sectionHeader(
+    String title,
+    String subtitle, {
+    String? actionLabel,
+    VoidCallback? onAction,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 14.5,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF111827),
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 10.4,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFF98A2B3),
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (actionLabel != null && onAction != null)
+          TextButton(
+            onPressed: onAction,
+            style: TextButton.styleFrom(
+              foregroundColor: const Color(0xFF067A46),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            ),
+            child: Text(
+              actionLabel,
+              style: const TextStyle(
+                fontSize: 10.5,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ),
+      ],
+    );
+  }
+
+  Widget _personCard(Map<String, dynamic> user, {bool recommended = false}) {
+    final photo = '${user['photo'] ?? ''}'.trim();
+    final team = '${user['team'] ?? ''}'.trim();
+    final club = '${user['club'] ?? ''}'.trim();
+    final reason = '${user['reason'] ?? ''}'.trim();
+    final contextLine =
+        [if (club.isNotEmpty) club, if (team.isNotEmpty) team].join(' · ');
+    final name = '${user['name'] ?? 'Пользователь'}';
+
+    return Material(
+      color: const Color(0xFFF8F9FA),
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: () => widget.onOpenUser(user['id'] as int),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(10, 9, 10, 9),
+          child: Row(
+            children: [
+              CircleAvatar(
+                radius: 22,
+                backgroundColor: const Color(0xFFF1FBF6),
+                backgroundImage: photo.isNotEmpty ? NetworkImage(photo) : null,
+                child: photo.isEmpty
+                    ? Text(
+                        name.isEmpty ? 'П' : name.substring(0, 1).toUpperCase(),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF067A46),
+                        ),
+                      )
+                    : null,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF111827),
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      contextLine.isNotEmpty ? contextLine : 'Sportoteka',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 10.3,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF667085),
+                      ),
+                    ),
+                    if (recommended && reason.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        reason,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 10.2,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF00A750),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const Icon(
+                Icons.chevron_right_rounded,
+                color: Color(0xFF98A2B3),
+                size: 20,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildReelsGrid(List<Map<String, dynamic>> reels) {
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
+      child: _reelsGridBody(reels),
+    );
+  }
+
+  Widget _reelsGridBody(List<Map<String, dynamic>> reels) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : MediaQuery.sizeOf(context).width;
+        final columns = width >= 720 ? 4 : (width >= 470 ? 3 : 2);
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: columns,
+            crossAxisSpacing: 6,
+            mainAxisSpacing: 6,
+            childAspectRatio: 9 / 14,
+          ),
+          itemCount: reels.length,
+          itemBuilder: (_, index) => _reelCard(reels[index]),
         );
       },
+    );
+  }
+
+  Widget _reelCard(Map<String, dynamic> reel) {
+    final thumb = '${reel['thumbnail'] ?? ''}'.trim();
+    final avatar = '${reel['user_avatar'] ?? ''}'.trim();
+    final username = '${reel['username'] ?? ''}'.trim();
+    final description = '${reel['description'] ?? ''}'.trim();
+    final views = reel['views'] as int? ?? 0;
+
+    return Material(
+      color: Colors.black,
+      borderRadius: BorderRadius.circular(14),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => _openReel(reel),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            if (thumb.isNotEmpty)
+              Image.network(
+                thumb,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+              )
+            else
+              const ColoredBox(color: Color(0xFF101214)),
+            const DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Colors.transparent, Color(0xC9000000)],
+                  stops: [0.45, 1],
+                ),
+              ),
+            ),
+            const Positioned(
+              top: 8,
+              right: 8,
+              child: Icon(Icons.play_arrow_rounded, color: Colors.white, size: 22),
+            ),
+            Positioned(
+              left: 8,
+              right: 8,
+              bottom: 8,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 10,
+                        backgroundColor: Colors.white24,
+                        backgroundImage:
+                            avatar.isNotEmpty ? NetworkImage(avatar) : null,
+                        child: avatar.isEmpty
+                            ? const Icon(Icons.person, size: 12, color: Colors.white)
+                            : null,
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          username.isEmpty ? 'Sportoteka' : username,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                      const Icon(Icons.visibility_outlined,
+                          size: 12, color: Colors.white70),
+                      const SizedBox(width: 3),
+                      Text(
+                        '$views',
+                        style: const TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white70,
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (description.isNotEmpty) ...[
+                    const SizedBox(height: 5),
+                    Text(
+                      description,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 9.3,
+                        height: 1.2,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -11769,20 +12498,26 @@ class _ProfilePeopleSearchPanelState extends State<_ProfilePeopleSearchPanel> {
               child: Icon(icon, color: const Color(0xFF067A46), size: 29),
             ),
             const SizedBox(height: 14),
-            Text(title,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF111827))),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF111827),
+              ),
+            ),
             const SizedBox(height: 6),
-            Text(subtitle,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                    fontSize: 11.3,
-                    height: 1.4,
-                    fontWeight: FontWeight.w500,
-                    color: Color(0xFF667085))),
+            Text(
+              subtitle,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 11.3,
+                height: 1.4,
+                fontWeight: FontWeight.w500,
+                color: Color(0xFF667085),
+              ),
+            ),
           ],
         ),
       ),
@@ -11998,6 +12733,7 @@ class _UserShort {
   final String? username;
   final String? role;
   final String? photoUrl;
+  final String? photoFallbackUrl;
   final String? teamName;
   final String? clubName;
 
@@ -12007,6 +12743,7 @@ class _UserShort {
     this.username,
     this.role,
     this.photoUrl,
+    this.photoFallbackUrl,
     this.teamName,
     this.clubName,
   });
@@ -12033,14 +12770,64 @@ class _UserShort {
     final first = (m['first_name'] ?? m['firstName'] ?? '').toString().trim();
     final last = (m['last_name'] ?? m['lastName'] ?? '').toString().trim();
 
-    String? normalize(dynamic raw) {
-      if (raw == null) return null;
-      final s = raw.toString().trim();
-      if (s.isEmpty || s.toLowerCase() == 'null') return null;
-      if (s.startsWith('http://') || s.startsWith('https://')) {
-        return s;
+    List<String> normalizePhotoCandidates(dynamic raw) {
+      if (raw == null) return const <String>[];
+
+      var value = raw.toString().trim().replaceAll('\\', '/');
+      if (value.isEmpty || value.toLowerCase() == 'null') {
+        return const <String>[];
       }
-      return 'https://sportotekaapp.ru/uploads/$s';
+
+      final result = <String>[];
+      void add(String url) {
+        final clean = url.trim();
+        if (clean.isNotEmpty && !result.contains(clean)) result.add(clean);
+      }
+
+      if (value.startsWith('http://') || value.startsWith('https://')) {
+        add(value);
+
+        // Старые записи встречаются и в /uploads/, и в /api/uploads/.
+        // Если один путь уже не существует, Image.network попробует второй.
+        if (value.contains('/api/uploads/')) {
+          add(value.replaceFirst('/api/uploads/', '/uploads/'));
+        } else if (value.contains('/uploads/')) {
+          add(value.replaceFirst('/uploads/', '/api/uploads/'));
+        }
+        return result;
+      }
+
+      while (value.startsWith('./')) {
+        value = value.substring(2);
+      }
+      while (value.startsWith('../')) {
+        value = value.substring(3);
+      }
+      while (value.startsWith('/')) {
+        value = value.substring(1);
+      }
+
+      const host = 'https://sportotekaapp.ru';
+
+      if (value.startsWith('api/uploads/')) {
+        add('$host/$value');
+        add('$host/${value.substring(4)}');
+      } else if (value.startsWith('uploads/')) {
+        add('$host/$value');
+        add('$host/api/$value');
+      } else if (value.startsWith('api/')) {
+        add('$host/$value');
+        final fileName = value.split('/').last;
+        if (fileName.isNotEmpty) {
+          add('$host/uploads/$fileName');
+          add('$host/api/uploads/$fileName');
+        }
+      } else {
+        add('$host/uploads/$value');
+        add('$host/api/uploads/$value');
+      }
+
+      return result;
     }
 
     String? optional(dynamic raw) {
@@ -12051,9 +12838,17 @@ class _UserShort {
       return value;
     }
 
-    final photo = normalize(m['photo_url']) ??
-        normalize(m['photo_urls']) ??
-        normalize(m['photo']);
+    final rawPhoto = m['photo_url'] ??
+        m['photo_urls'] ??
+        m['photo'] ??
+        m['avatar_url'] ??
+        m['avatar'] ??
+        m['profile_photo_url'] ??
+        m['profile_photo'];
+    final photoCandidates = normalizePhotoCandidates(rawPhoto);
+    final photo = photoCandidates.isNotEmpty ? photoCandidates.first : null;
+    final photoFallback =
+        photoCandidates.length > 1 ? photoCandidates[1] : null;
 
     final name = '$first $last'.trim();
 
@@ -12070,6 +12865,7 @@ class _UserShort {
       ),
       role: optional(m['role']),
       photoUrl: photo,
+      photoFallbackUrl: photoFallback,
       teamName: optional(
         m['team_name'] ?? m['player_team_name'] ?? m['team'],
       ),

@@ -8,6 +8,18 @@ import 'package:sportoteka/presentation/workspace_os/sportoteka_workspace_icons.
 
 enum WorkspaceWindowSnap { none, left, right, maximized }
 
+class WorkspaceWindowAction {
+  const WorkspaceWindowAction({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+}
+
 class WorkspaceWindowEntry {
   WorkspaceWindowEntry({
     required this.id,
@@ -16,6 +28,7 @@ class WorkspaceWindowEntry {
     required this.rect,
     this.subtitle = '',
     this.iconKind = SportotekaWorkspaceIconKind.document,
+    this.actions = const <WorkspaceWindowAction>[],
     this.minimized = false,
     this.snap = WorkspaceWindowSnap.none,
   });
@@ -24,6 +37,7 @@ class WorkspaceWindowEntry {
   final String title;
   final String subtitle;
   final SportotekaWorkspaceIconKind iconKind;
+  final List<WorkspaceWindowAction> actions;
   final Widget child;
   final Rect rect;
   final bool minimized;
@@ -33,6 +47,7 @@ class WorkspaceWindowEntry {
     String? title,
     String? subtitle,
     SportotekaWorkspaceIconKind? iconKind,
+    List<WorkspaceWindowAction>? actions,
     Widget? child,
     Rect? rect,
     bool? minimized,
@@ -43,6 +58,7 @@ class WorkspaceWindowEntry {
       title: title ?? this.title,
       subtitle: subtitle ?? this.subtitle,
       iconKind: iconKind ?? this.iconKind,
+      actions: actions ?? this.actions,
       child: child ?? this.child,
       rect: rect ?? this.rect,
       minimized: minimized ?? this.minimized,
@@ -378,6 +394,10 @@ class _WorkspaceFloatingWindow extends StatelessWidget {
                           ],
                         ),
                       ),
+                      for (final action in entry.actions) ...[
+                        _WindowHeaderAction(action: action),
+                        const SizedBox(width: 2),
+                      ],
                       PopupMenuButton<WorkspaceWindowSnap>(
                         tooltip: 'Размещение окна',
                         color: Colors.white,
@@ -442,6 +462,35 @@ class _WorkspaceFloatingWindow extends StatelessWidget {
   }
 }
 
+class _WindowHeaderAction extends StatelessWidget {
+  const _WindowHeaderAction({required this.action});
+
+  final WorkspaceWindowAction action;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: action.tooltip,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: action.onTap,
+          borderRadius: BorderRadius.circular(9),
+          child: SizedBox(
+            width: 34,
+            height: 32,
+            child: Icon(
+              action.icon,
+              size: 18,
+              color: const Color(0xFF0B8F55),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _WindowControl extends StatelessWidget {
   const _WindowControl({
     required this.icon,
@@ -489,6 +538,7 @@ Future<void> showWorkspaceManagedWindow(
   String subtitle = '',
   SportotekaWorkspaceIconKind iconKind = SportotekaWorkspaceIconKind.document,
   Size preferredSize = const Size(920, 680),
+  List<WorkspaceWindowAction> headerActions = const <WorkspaceWindowAction>[],
   required Widget Function(VoidCallback closeWindow) builder,
 }) async {
   final media = MediaQuery.of(context);
@@ -498,7 +548,30 @@ Future<void> showWorkspaceManagedWindow(
         builder: (routeContext) => Scaffold(
           backgroundColor: Colors.white,
           body: SafeArea(
-            child: builder(() => Navigator.of(routeContext).maybePop()),
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: builder(() => Navigator.of(routeContext).maybePop()),
+                ),
+                if (headerActions.isNotEmpty)
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: Material(
+                      color: Colors.white.withOpacity(.94),
+                      borderRadius: BorderRadius.circular(12),
+                      elevation: 2,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          for (final action in headerActions)
+                            _WindowHeaderAction(action: action),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
       ),
@@ -525,6 +598,7 @@ Future<void> showWorkspaceManagedWindow(
       subtitle: subtitle,
       iconKind: iconKind,
       preferredSize: preferredSize,
+      headerActions: headerActions,
       onClose: closeWindow,
       builder: builder,
     ),
@@ -540,6 +614,7 @@ class _WorkspaceStandaloneWindowHost extends StatefulWidget {
     required this.subtitle,
     required this.iconKind,
     required this.preferredSize,
+    required this.headerActions,
     required this.onClose,
     required this.builder,
   });
@@ -549,6 +624,7 @@ class _WorkspaceStandaloneWindowHost extends StatefulWidget {
   final String subtitle;
   final SportotekaWorkspaceIconKind iconKind;
   final Size preferredSize;
+  final List<WorkspaceWindowAction> headerActions;
   final VoidCallback onClose;
   final Widget Function(VoidCallback closeWindow) builder;
 
@@ -693,6 +769,7 @@ class _WorkspaceStandaloneWindowHostState
             title: widget.title,
             subtitle: widget.subtitle,
             iconKind: widget.iconKind,
+            actions: widget.headerActions,
             child: _child,
             rect: _rect,
             snap: _snap,

@@ -7,9 +7,11 @@ list(APPEND FLUTTER_PLUGIN_LIST
   desktop_drop
   emoji_picker_flutter
   file_selector_linux
+  flutter_angle
   flutter_webrtc
   livekit_client
   printing
+  record_linux
   syncfusion_pdfviewer_linux
   thermion_flutter
   url_launcher_linux

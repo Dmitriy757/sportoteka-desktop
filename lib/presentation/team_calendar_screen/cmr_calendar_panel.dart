@@ -19,6 +19,7 @@ import 'package:sportoteka/presentation/team_calendar_screen/training_attendance
 import 'package:sportoteka/presentation/team_calendar_screen/training_materials_panel.dart';
 import 'package:sportoteka/presentation/team_calendar_screen/training_activity_panel.dart';
 import 'package:sportoteka/presentation/team_calendar_screen/training_lifecycle_api.dart';
+import 'package:sportoteka/presentation/workspace_os/workspace_sync_signal.dart';
 
 enum CmrCalendarMode { month, week }
 
@@ -396,6 +397,7 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
         await api.update(event: event);
         Get.snackbar('Готово', 'Событие обновлено', snackPosition: SnackPosition.BOTTOM);
       }
+      WorkspaceSyncSignal.calendarChanged(teamId: widget.teamId);
       await _fetch();
       if (!mounted) return;
       setState(() {
@@ -414,6 +416,7 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
     if (!canEdit) return;
     try {
       await api.add(event: event, createdBy: _editorCreatedBy);
+      WorkspaceSyncSignal.calendarChanged(teamId: widget.teamId);
       await _fetch();
       if (!mounted) return;
       setState(() {
@@ -446,6 +449,7 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
 
     try {
       await api.remove(eventId: event.id, teamId: widget.teamId);
+      WorkspaceSyncSignal.calendarChanged(teamId: widget.teamId);
       await _fetch();
       if (mounted && _selectedEventForPanel?.id == event.id) {
         _closeWorkPanel();
@@ -586,7 +590,11 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
                     child: KeyedSubtree(
                       key: ValueKey<String>('calendar-pane-${_workPanel.name}-${selectedForDetails?.id ?? 0}'),
                       child: showWorkPane
-                          ? _buildCalendarDetailsPane(selectedForDetails, selectedList, compact: true)
+                          ? _buildCalendarDetailsPane(
+                              selectedForDetails,
+                              selectedList,
+                              compact: false,
+                            )
                           : _buildCalendarRightOverviewPanel(selectedList),
                     ),
                   ),
@@ -1431,6 +1439,7 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
         onDelete: () => _delete(event),
         onOpenRating: () => _openTrainingRatings(event),
         onRatingsSaved: () => _fetch(),
+        mobilePageScroll: compact,
       );
     }
 
@@ -1470,14 +1479,21 @@ class _CmrCalendarPanelState extends State<CmrCalendarPanel> {
                   _workPanel == _CalendarWorkPanel.details ||
                   _workPanel == _CalendarWorkPanel.ratings) ...[
                 const SizedBox(height: 8),
-                SizedBox(
-                  height: _workPanel == _CalendarWorkPanel.editor
-                      ? 560
-                      : _workPanel == _CalendarWorkPanel.ratings
-                          ? 520
-                          : 360,
-                  child: _buildCalendarDetailsPane(_eventForRightPane(selectedList), selectedList, compact: true),
-                ),
+                if (_workPanel == _CalendarWorkPanel.editor)
+                  SizedBox(
+                    height: 560,
+                    child: _buildCalendarDetailsPane(
+                      _eventForRightPane(selectedList),
+                      selectedList,
+                      compact: true,
+                    ),
+                  )
+                else
+                  _buildCalendarDetailsPane(
+                    _eventForRightPane(selectedList),
+                    selectedList,
+                    compact: true,
+                  ),
               ],
             ],
           ),
@@ -2266,6 +2282,7 @@ class _StrictWorkspaceCard extends StatelessWidget {
   final Widget? trailing;
   final bool dense;
   final bool whiteSurface;
+  final bool shrinkToChild;
 
   const _StrictWorkspaceCard({
     required this.icon,
@@ -2275,6 +2292,7 @@ class _StrictWorkspaceCard extends StatelessWidget {
     this.trailing,
     this.dense = false,
     this.whiteSurface = false,
+    this.shrinkToChild = false,
   });
 
   @override
@@ -2321,7 +2339,7 @@ class _StrictWorkspaceCard extends StatelessWidget {
             ],
           ),
           SizedBox(height: dense ? 8 : 10),
-          if (dense) child else Expanded(child: child),
+          if (dense || shrinkToChild) child else Expanded(child: child),
         ],
       ),
     );
@@ -2814,6 +2832,7 @@ class _InlineEventDetailsPanel extends StatefulWidget {
   final VoidCallback onOpenRating;
   final VoidCallback onRatingsSaved;
   final int initialTab;
+  final bool mobilePageScroll;
 
   const _InlineEventDetailsPanel({
     super.key,
@@ -2828,6 +2847,7 @@ class _InlineEventDetailsPanel extends StatefulWidget {
     required this.onOpenRating,
     required this.onRatingsSaved,
     this.initialTab = 0,
+    this.mobilePageScroll = false,
   });
   @override State<_InlineEventDetailsPanel> createState() => _InlineEventDetailsPanelState();
 }
@@ -2844,6 +2864,14 @@ class _InlineEventDetailsPanelState extends State<_InlineEventDetailsPanel> {
   int attendanceUnset = 0;
   bool _trainingChromeExpanded = true;
 
+  final GlobalKey _mobilePanelKey = GlobalKey();
+  final GlobalKey _mobileTabsAnchorKey = GlobalKey();
+  ScrollPosition? _mobileParentScrollPosition;
+  OverlayEntry? _mobileStickyTabsEntry;
+  double _mobileStickyLeft = 0;
+  double _mobileStickyTop = 0;
+  double _mobileStickyWidth = 0;
+
   @override
   void initState() {
     super.initState();
@@ -2854,9 +2882,18 @@ class _InlineEventDetailsPanelState extends State<_InlineEventDetailsPanel> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _attachMobileParentScroll();
+    });
+  }
+
+  @override
   void didUpdateWidget(covariant _InlineEventDetailsPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.event.id != widget.event.id || oldWidget.initialTab != widget.initialTab) {
+    if (oldWidget.event.id != widget.event.id ||
+        oldWidget.initialTab != widget.initialTab) {
       tab = widget.initialTab.clamp(0, 3);
       lifecycle = const TrainingLifecycleState();
       attendancePlayersTotal = 0;
@@ -2866,6 +2903,133 @@ class _InlineEventDetailsPanelState extends State<_InlineEventDetailsPanel> {
       _refreshLifecycle();
       _refreshAttendanceReadiness();
     }
+    if (oldWidget.mobilePageScroll != widget.mobilePageScroll ||
+        oldWidget.event.id != widget.event.id) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _attachMobileParentScroll();
+        _syncMobileStickyTabs();
+      });
+    }
+  }
+
+  void _attachMobileParentScroll() {
+    if (!mounted) return;
+
+    if (!widget.mobilePageScroll) {
+      _mobileParentScrollPosition?.removeListener(_syncMobileStickyTabs);
+      _mobileParentScrollPosition = null;
+      _hideMobileStickyTabs();
+      return;
+    }
+
+    final scrollable = Scrollable.maybeOf(context);
+    final nextPosition = scrollable?.position;
+    if (identical(_mobileParentScrollPosition, nextPosition)) {
+      _syncMobileStickyTabs();
+      return;
+    }
+
+    _mobileParentScrollPosition?.removeListener(_syncMobileStickyTabs);
+    _mobileParentScrollPosition = nextPosition;
+    _mobileParentScrollPosition?.addListener(_syncMobileStickyTabs);
+    _syncMobileStickyTabs();
+  }
+
+  void _hideMobileStickyTabs() {
+    final entry = _mobileStickyTabsEntry;
+    _mobileStickyTabsEntry = null;
+    entry?.remove();
+  }
+
+  void _syncMobileStickyTabs() {
+    if (!mounted || !widget.mobilePageScroll || !_trainingChromeExpanded) {
+      _hideMobileStickyTabs();
+      return;
+    }
+
+    final event = widget.event;
+    final isTrainingLike =
+        event.type == TeamEventType.training || event.type == TeamEventType.gym;
+    if (!isTrainingLike) {
+      _hideMobileStickyTabs();
+      return;
+    }
+
+    final anchorContext = _mobileTabsAnchorKey.currentContext;
+    final panelContext = _mobilePanelKey.currentContext;
+    final scrollable = Scrollable.maybeOf(context);
+    final overlay = Overlay.maybeOf(context);
+    if (anchorContext == null ||
+        panelContext == null ||
+        scrollable == null ||
+        overlay == null) {
+      _hideMobileStickyTabs();
+      return;
+    }
+
+    final anchorBox = anchorContext.findRenderObject();
+    final panelBox = panelContext.findRenderObject();
+    final viewportBox = scrollable.context.findRenderObject();
+    final overlayBox = overlay.context.findRenderObject();
+    if (anchorBox is! RenderBox ||
+        panelBox is! RenderBox ||
+        viewportBox is! RenderBox ||
+        overlayBox is! RenderBox ||
+        !anchorBox.hasSize ||
+        !panelBox.hasSize ||
+        !viewportBox.hasSize ||
+        !overlayBox.hasSize) {
+      _hideMobileStickyTabs();
+      return;
+    }
+
+    final anchorGlobal = anchorBox.localToGlobal(Offset.zero);
+    final panelGlobal = panelBox.localToGlobal(Offset.zero);
+    final viewportGlobal = viewportBox.localToGlobal(Offset.zero);
+    // On mobile the pinned tabs should feel like a floating pill, not a
+    // full-width white strip. Keep a little air from the viewport edge.
+    final stickyTopGlobal = viewportGlobal.dy + 8;
+    final panelBottomGlobal = panelGlobal.dy + panelBox.size.height;
+    final shouldStick = anchorGlobal.dy <= stickyTopGlobal &&
+        panelBottomGlobal > stickyTopGlobal + anchorBox.size.height + 12;
+
+    if (!shouldStick) {
+      _hideMobileStickyTabs();
+      return;
+    }
+
+    final stickyLocal = overlayBox.globalToLocal(
+      Offset(anchorGlobal.dx, stickyTopGlobal),
+    );
+    const stickySideInset = 6.0;
+    _mobileStickyLeft = stickyLocal.dx + stickySideInset;
+    _mobileStickyTop = stickyLocal.dy;
+    _mobileStickyWidth = math.max(0.0, anchorBox.size.width - stickySideInset * 2);
+
+    if (_mobileStickyTabsEntry == null) {
+      _mobileStickyTabsEntry = OverlayEntry(
+        builder: (overlayContext) => Positioned(
+          left: _mobileStickyLeft,
+          top: _mobileStickyTop,
+          width: _mobileStickyWidth,
+          child: Material(
+            color: Colors.transparent,
+            child: _trainingTabsBar(sticky: true),
+          ),
+        ),
+      );
+      overlay.insert(_mobileStickyTabsEntry!);
+    } else {
+      _mobileStickyTabsEntry!.markNeedsBuild();
+    }
+  }
+
+  @override
+  void dispose() {
+    _mobileParentScrollPosition?.removeListener(_syncMobileStickyTabs);
+    _mobileParentScrollPosition = null;
+    _hideMobileStickyTabs();
+    super.dispose();
   }
 
   Future<void> _loadCoach() async {
@@ -3078,6 +3242,10 @@ class _InlineEventDetailsPanelState extends State<_InlineEventDetailsPanel> {
   void _setTrainingChromeExpanded(bool expanded) {
     if (!mounted || _trainingChromeExpanded == expanded) return;
     setState(() => _trainingChromeExpanded = expanded);
+    _mobileStickyTabsEntry?.markNeedsBuild();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _syncMobileStickyTabs();
+    });
   }
 
   void _setTrainingTab(int nextTab) {
@@ -3086,6 +3254,10 @@ class _InlineEventDetailsPanelState extends State<_InlineEventDetailsPanel> {
     setState(() {
       tab = resolved;
       _trainingChromeExpanded = true;
+    });
+    _mobileStickyTabsEntry?.markNeedsBuild();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _syncMobileStickyTabs();
     });
     if (resolved == 0) {
       _refreshLifecycle();
@@ -3152,6 +3324,96 @@ class _InlineEventDetailsPanelState extends State<_InlineEventDetailsPanel> {
     );
   }
 
+  Widget _trainingTabsBar({Key? key, bool sticky = false}) {
+    final radius = BorderRadius.circular(sticky ? 18 : 12);
+
+    final bar = Container(
+      key: key,
+      height: sticky ? 48 : 42,
+      padding: EdgeInsets.all(sticky ? 5 : 4),
+      decoration: BoxDecoration(
+        color: sticky
+            ? const Color(0xFFF9FBFA).withOpacity(.97)
+            : const Color(0xFFF8FAF9),
+        borderRadius: radius,
+        border: sticky
+            ? Border.all(
+                color: const Color(0xFFE4ECE8).withOpacity(.92),
+                width: 1,
+              )
+            : null,
+        boxShadow: sticky
+            ? [
+                BoxShadow(
+                  color: Colors.black.withOpacity(.055),
+                  blurRadius: 18,
+                  spreadRadius: 0,
+                  offset: const Offset(0, 7),
+                ),
+                BoxShadow(
+                  color: Colors.white.withOpacity(.85),
+                  blurRadius: 1,
+                  offset: const Offset(0, -1),
+                ),
+              ]
+            : null,
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _InlineTabButton(
+              text: 'Обзор',
+              icon: Icons.info_outline_rounded,
+              active: tab == 0,
+              floating: sticky,
+              onTap: () => _setTrainingTab(0),
+            ),
+          ),
+          const SizedBox(width: 4),
+          Expanded(
+            child: _InlineTabButton(
+              text: 'План и файлы',
+              icon: Icons.folder_copy_outlined,
+              active: tab == 1,
+              floating: sticky,
+              onTap: () => _setTrainingTab(1),
+            ),
+          ),
+          const SizedBox(width: 4),
+          Expanded(
+            child: _InlineTabButton(
+              text: 'Журнал',
+              icon: Icons.fact_check_rounded,
+              active: tab == 2,
+              floating: sticky,
+              onTap: () => _setTrainingTab(2),
+            ),
+          ),
+          const SizedBox(width: 4),
+          Expanded(
+            child: _InlineTabButton(
+              text: 'Оценки',
+              icon: Icons.star_rate_rounded,
+              active: tab == 3,
+              floating: sticky,
+              onTap: () => _setTrainingTab(3),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (!sticky) return bar;
+
+    // Only the rounded panel itself floats above the content. There is no
+    // opaque rectangular wrapper, so player rows stay visually continuous
+    // around the pinned navigation.
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: bar,
+    );
+  }
+
   String _lifecycleTime(DateTime? value) {
     if (value == null) return '—';
     return '${value.hour.toString().padLeft(2, '0')}:${value.minute.toString().padLeft(2, '0')}';
@@ -3164,89 +3426,112 @@ class _InlineEventDetailsPanelState extends State<_InlineEventDetailsPanel> {
     final effectiveClubId = event.clubId > 0 ? event.clubId : widget.clubId;
     final c=eventTypeColor(event.type);
     final isTrainingLike=event.type==TeamEventType.training||event.type==TeamEventType.gym;
-    return _StrictWorkspaceCard(
-      icon: Icons.event_note_rounded,
-      title: event.title.trim().isEmpty?'Событие календаря':event.title,
-      subtitle: '${eventTypeLabel(event.type)} · $_dateText · $_timeText',
-      trailing: _ProfileRoundButton(icon:Icons.close_rounded,onTap:widget.onClose),
-      child: Column(children:[
-        if(isTrainingLike)
-          AnimatedSize(
-            duration: const Duration(milliseconds: 200),
-            curve: Curves.easeOutCubic,
-            alignment: Alignment.topCenter,
-            child: _trainingChromeExpanded
-                ? Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _trainingStatusStrip(),
-                      const SizedBox(height:8),
-                      Container(
-                        height: 42,
-                        padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF8FAF9),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Row(children:[
-                          Expanded(child:_InlineTabButton(text:'Обзор',icon:Icons.info_outline_rounded,active:tab==0,onTap:()=>_setTrainingTab(0))),
-                          const SizedBox(width:4),
-                          Expanded(child:_InlineTabButton(text:'План и файлы',icon:Icons.folder_copy_outlined,active:tab==1,onTap:()=>_setTrainingTab(1))),
-                          const SizedBox(width:4),
-                          Expanded(child:_InlineTabButton(text:'Журнал',icon:Icons.fact_check_rounded,active:tab==2,onTap:()=>_setTrainingTab(2))),
-                          const SizedBox(width:4),
-                          Expanded(child:_InlineTabButton(text:'Оценки',icon:Icons.star_rate_rounded,active:tab==3,onTap:()=>_setTrainingTab(3))),
-                        ]),
-                      ),
-                      const SizedBox(height:8),
-                    ],
-                  )
-                : Padding(
-                    padding: const EdgeInsets.only(bottom: 4),
-                    child: _collapsedTrainingChrome(),
-                  ),
-          ),
-        Expanded(child: !isTrainingLike||tab==0
-            ? _eventInfo(c)
-            : tab==1
-                ? TrainingMaterialsPanel(
-                    key: ValueKey('materials-${event.id}'),
+    final tabBody = !isTrainingLike || tab == 0
+        ? _eventInfo(c, parentScroll: widget.mobilePageScroll)
+        : tab == 1
+            ? TrainingMaterialsPanel(
+                key: ValueKey('materials-${event.id}'),
+                apiBase: _CmrCalendarPanelState.apiBase,
+                clubId: effectiveClubId,
+                teamId: event.teamId,
+                eventId: event.id,
+                currentUserId: coachId,
+                parentScroll: widget.mobilePageScroll,
+              )
+            : tab == 2
+                ? TrainingAttendancePanel(
+                    key: ValueKey('attendance-${event.id}'),
                     apiBase: _CmrCalendarPanelState.apiBase,
-                    clubId: effectiveClubId,
                     teamId: event.teamId,
                     eventId: event.id,
-                    currentUserId: coachId,
+                    clubId: effectiveClubId,
+                    eventTitle: event.title,
+                    onOpenRatings: () => _setTrainingTab(3),
+                    onLifecycleChanged: _applyLifecycle,
+                    onChromeExpandedChanged: _setTrainingChromeExpanded,
+                    parentScroll: widget.mobilePageScroll,
                   )
-                : tab==2
-                    ? TrainingAttendancePanel(
-                        key:ValueKey('attendance-${event.id}'),
-                        apiBase:_CmrCalendarPanelState.apiBase,
-                        teamId:event.teamId,
-                        eventId:event.id,
-                        clubId:effectiveClubId,
-                        eventTitle:event.title,
-                        onOpenRatings: () => _setTrainingTab(3),
-                        onLifecycleChanged: _applyLifecycle,
-                        onChromeExpandedChanged: _setTrainingChromeExpanded,
+                : (coachId <= 0
+                    ? const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 28),
+                        child: Center(
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
                       )
-                    : (coachId<=0
-                        ? const Center(child:CircularProgressIndicator(strokeWidth:2))
-                        : TrainingRatingSheet(
-                            key:ValueKey('rating-${event.id}'),
-                            apiBase:_CmrCalendarPanelState.apiBase,
-                            teamId:event.teamId,
-                            eventId:event.id,
-                            coachId:coachId,
-                            clubId:effectiveClubId,
-                            title:event.title,
-                            embedded:true,
-                            onChromeExpandedChanged: _setTrainingChromeExpanded,
-                            onSaved: () {
-                              widget.onRatingsSaved();
-                              _refreshLifecycle();
-                            },
-                          ))),
-      ]),
+                    : TrainingRatingSheet(
+                        key: ValueKey('rating-${event.id}'),
+                        apiBase: _CmrCalendarPanelState.apiBase,
+                        teamId: event.teamId,
+                        eventId: event.id,
+                        coachId: coachId,
+                        clubId: effectiveClubId,
+                        title: event.title,
+                        embedded: true,
+                        parentScroll: widget.mobilePageScroll,
+                        onChromeExpandedChanged: _setTrainingChromeExpanded,
+                        onSaved: () {
+                          widget.onRatingsSaved();
+                          _refreshLifecycle();
+                        },
+                      ));
+
+    if (widget.mobilePageScroll) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _attachMobileParentScroll();
+        _syncMobileStickyTabs();
+      });
+    }
+
+    return KeyedSubtree(
+      key: _mobilePanelKey,
+      child: _StrictWorkspaceCard(
+      icon: Icons.event_note_rounded,
+      title: event.title.trim().isEmpty ? 'Событие календаря' : event.title,
+      subtitle: '${eventTypeLabel(event.type)} · $_dateText · $_timeText',
+      trailing: _ProfileRoundButton(
+        icon: Icons.close_rounded,
+        onTap: widget.onClose,
+      ),
+      shrinkToChild: widget.mobilePageScroll,
+      child: Column(
+        mainAxisSize:
+            widget.mobilePageScroll ? MainAxisSize.min : MainAxisSize.max,
+        children: [
+          if (isTrainingLike)
+            AnimatedSize(
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeOutCubic,
+              alignment: Alignment.topCenter,
+              child: _trainingChromeExpanded
+                  ? Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _trainingStatusStrip(),
+                        const SizedBox(height: 8),
+                        _trainingTabsBar(
+                          key: widget.mobilePageScroll
+                              ? _mobileTabsAnchorKey
+                              : null,
+                        ),
+                        const SizedBox(height: 8),
+                      ],
+                    )
+                  : Padding(
+                      padding: EdgeInsets.fromLTRB(
+                        widget.mobilePageScroll ? 0 : 6,
+                        0,
+                        widget.mobilePageScroll ? 0 : 6,
+                        4,
+                      ),
+                      child: widget.mobilePageScroll
+                          ? _collapsedTrainingChrome()
+                          : _trainingTabsBar(sticky: true),
+                    ),
+            ),
+          if (widget.mobilePageScroll) tabBody else Expanded(child: tabBody),
+        ],
+      ),
+      ),
     );
   }
 
@@ -3563,14 +3848,14 @@ class _InlineEventDetailsPanelState extends State<_InlineEventDetailsPanel> {
     );
   }
 
-  Widget _eventInfo(Color c){
+  Widget _eventInfo(Color c, {bool parentScroll = false}){
     final event=widget.event;
     final notes=event.notes.trim();
     final location=event.location.trim();
     final coachRating=_eventCoachRatingText(event);
     final isTrainingLike=event.type==TeamEventType.training||event.type==TeamEventType.gym;
     final effectiveClubId=event.clubId>0?event.clubId:widget.clubId;
-    return SingleChildScrollView(child:Column(children:[
+    final content = Column(children:[
       if(isTrainingLike)...[
         _overviewTrainingStartCard(),
         const SizedBox(height:8),
@@ -3589,7 +3874,8 @@ class _InlineEventDetailsPanelState extends State<_InlineEventDetailsPanel> {
       if(coachRating!=null)...[const SizedBox(height:8),_DetailMetric(icon:Icons.workspace_premium_rounded,title:'Оценка тренера',value:coachRating,accent:_C.greenDark)],
       const SizedBox(height:8),_InfoBox(icon:Icons.notes_rounded,title:'Заметки',text:notes.isEmpty?'Заметки не добавлены.':notes),const SizedBox(height:8),
       if(widget.canEdit) Row(children:[Expanded(child:_SheetActionButton(icon:Icons.edit_rounded,text:'Редактировать',onTap:widget.onEdit)),const SizedBox(width:6),Expanded(child:_SheetActionButton(icon:Icons.delete_outline_rounded,text:'Удалить',onTap:widget.onDelete,danger:true))]),
-    ]));
+    ]);
+    return parentScroll ? content : SingleChildScrollView(child: content);
   }
 }
 
@@ -3597,12 +3883,14 @@ class _InlineTabButton extends StatelessWidget {
   final String text;
   final IconData icon;
   final bool active;
+  final bool floating;
   final VoidCallback onTap;
 
   const _InlineTabButton({
     required this.text,
     required this.icon,
     required this.active,
+    this.floating = false,
     required this.onTap,
   });
 
@@ -3611,14 +3899,20 @@ class _InlineTabButton extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(floating ? 13 : 8),
         onTap: onTap,
-        child: Container(
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          curve: Curves.easeOutCubic,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: active ? const Color(0xFFF4F6F5) : Colors.transparent,
-            borderRadius: BorderRadius.circular(8),
-                      ),
+            color: active
+                ? (floating
+                    ? const Color(0xFFE7F5ED)
+                    : const Color(0xFFF4F6F5))
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(floating ? 13 : 8),
+          ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [

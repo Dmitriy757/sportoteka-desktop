@@ -61,7 +61,7 @@
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Геолокация нужна для записи GPS-точек тренировки, построения маршрута игрока и отображения ближайших спортивных площадок.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Разрешите доступ к микрофону для записи звука в видео и звонках.</string>
+	<string>Разрешите доступ к микрофону для записи голосовых сообщений, звука в видео и звонках.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Разрешите доступ к галерее для загрузки фото и видео тренировок.</string>
 	<key>UIApplicationSceneManifest</key>

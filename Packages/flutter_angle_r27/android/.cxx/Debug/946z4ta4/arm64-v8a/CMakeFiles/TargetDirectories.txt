@@ -1,0 +1,3 @@
+/Users/dmitrij/Documents/sportoteka2.0/packages/flutter_angle_r27/android/.cxx/Debug/946z4ta4/arm64-v8a/CMakeFiles/angle_android_graphic_jni.dir
+/Users/dmitrij/Documents/sportoteka2.0/packages/flutter_angle_r27/android/.cxx/Debug/946z4ta4/arm64-v8a/CMakeFiles/edit_cache.dir
+/Users/dmitrij/Documents/sportoteka2.0/packages/flutter_angle_r27/android/.cxx/Debug/946z4ta4/arm64-v8a/CMakeFiles/rebuild_cache.dir

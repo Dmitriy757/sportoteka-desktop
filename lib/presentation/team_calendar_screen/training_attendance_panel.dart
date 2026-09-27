@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'dart:ui' show FontFeature;
+import 'dart:ui' show FontFeature, PointerDeviceKind;
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -17,6 +17,7 @@ class TrainingAttendancePanel extends StatefulWidget {
   final VoidCallback? onOpenRatings;
   final ValueChanged<TrainingLifecycleState>? onLifecycleChanged;
   final ValueChanged<bool>? onChromeExpandedChanged;
+  final bool parentScroll;
 
   const TrainingAttendancePanel({
     super.key,
@@ -28,6 +29,7 @@ class TrainingAttendancePanel extends StatefulWidget {
     this.onOpenRatings,
     this.onLifecycleChanged,
     this.onChromeExpandedChanged,
+    this.parentScroll = false,
   });
 
   @override
@@ -58,12 +60,12 @@ class _TrainingAttendancePanelState extends State<TrainingAttendancePanel> {
   double _lastScrollPixels = 0;
 
   static const _statuses = <_AttendanceStatus>[
-    _AttendanceStatus('present', 'Присутствует', 'П', Color(0xFF2F8F62)),
-    _AttendanceStatus('absent', 'Отсутствует', 'Н', Color(0xFFB96D6D)),
-    _AttendanceStatus('late', 'Болен', 'Б', Color(0xFFB78B42)),
-    _AttendanceStatus('injured', 'Травма', 'Т', Color(0xFF7B73A8)),
-    _AttendanceStatus('individual', 'Индивидуально', 'И', Color(0xFF5D8FA7)),
-    _AttendanceStatus('dayoff', 'Выходной', 'В', Color(0xFF87939E)),
+    _AttendanceStatus('present', 'Присутствует', 'П', Color(0xFF168A57)),
+    _AttendanceStatus('absent', 'Отсутствует', 'Н', Color(0xFFD15353)),
+    _AttendanceStatus('late', 'Болен', 'Б', Color(0xFFC8871D)),
+    _AttendanceStatus('injured', 'Травма', 'Т', Color(0xFF7464B8)),
+    _AttendanceStatus('individual', 'Индивидуально', 'И', Color(0xFF3689AE)),
+    _AttendanceStatus('dayoff', 'Выходной', 'В', Color(0xFF687786)),
   ];
 
   TextStyle _style(double size, {FontWeight weight = FontWeight.w400, Color color = _text}) {
@@ -430,7 +432,33 @@ class _TrainingAttendancePanelState extends State<TrainingAttendancePanel> {
       );
     }
 
+    final playerList = Container(
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: NotificationListener<ScrollNotification>(
+        onNotification:
+            widget.parentScroll ? (_) => false : _handleScrollNotification,
+        child: ListView.builder(
+          primary: false,
+          shrinkWrap: widget.parentScroll,
+          physics:
+              widget.parentScroll ? const NeverScrollableScrollPhysics() : null,
+          padding: EdgeInsets.only(
+            top: _chromeExpanded ? 0 : 2,
+            bottom: 18,
+          ),
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+          itemCount: players.length,
+          itemBuilder: (_, index) => _buildPlayerRow(players[index], index),
+        ),
+      ),
+    );
+
     return Column(
+      mainAxisSize: widget.parentScroll ? MainAxisSize.min : MainAxisSize.max,
       children: [
         AnimatedSize(
           duration: const Duration(milliseconds: 210),
@@ -448,24 +476,7 @@ class _TrainingAttendancePanelState extends State<TrainingAttendancePanel> {
                 )
               : _buildCollapsedChrome(),
         ),
-        Expanded(
-          child: Container(
-            clipBehavior: Clip.antiAlias,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: NotificationListener<ScrollNotification>(
-              onNotification: _handleScrollNotification,
-              child: ListView.builder(
-                padding: EdgeInsets.only(top: _chromeExpanded ? 0 : 2, bottom: 18),
-                keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-                itemCount: players.length,
-                itemBuilder: (_, index) => _buildPlayerRow(players[index], index),
-              ),
-            ),
-          ),
-        ),
+        if (widget.parentScroll) playerList else Expanded(child: playerList),
       ],
     );
   }
@@ -618,27 +629,42 @@ class _TrainingAttendancePanelState extends State<TrainingAttendancePanel> {
   Widget _buildLegend() {
     return SizedBox(
       height: 34,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: _statuses.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 6),
-        itemBuilder: (_, index) {
-          final item = _statuses[index];
-          return Container(
-            padding: const EdgeInsets.only(left: 4, right: 8),
-            decoration: BoxDecoration(
-              color: Color.alphaBlend(item.color.withOpacity(.045), Colors.white),
-              borderRadius: BorderRadius.circular(10),
-                          ),
-            child: Row(
-              children: [
-                _StatusCircle(item: item, active: true, size: 25),
-                const SizedBox(width: 5),
-                Text(item.label, style: AppTypography.captionMedium(color: _muted)),
-              ],
-            ),
-          );
-        },
+      child: ScrollConfiguration(
+        behavior: const _AttendanceHorizontalScrollBehavior(),
+        child: ListView.separated(
+          key: const PageStorageKey<String>('training-attendance-legend'),
+          primary: false,
+          physics: const BouncingScrollPhysics(
+            parent: AlwaysScrollableScrollPhysics(),
+          ),
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.only(right: 8),
+          itemCount: _statuses.length,
+          separatorBuilder: (_, __) => const SizedBox(width: 6),
+          itemBuilder: (_, index) {
+            final item = _statuses[index];
+            return Container(
+              padding: const EdgeInsets.only(left: 4, right: 8),
+              decoration: BoxDecoration(
+                color: Color.alphaBlend(
+                  item.color.withOpacity(.045),
+                  Colors.white,
+                ),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                children: [
+                  _StatusCircle(item: item, active: true, size: 25),
+                  const SizedBox(width: 5),
+                  Text(
+                    item.label,
+                    style: AppTypography.captionMedium(color: _muted),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
       ),
     );
   }
@@ -779,6 +805,18 @@ class _TrainingAttendancePanelState extends State<TrainingAttendancePanel> {
   }
 }
 
+class _AttendanceHorizontalScrollBehavior extends MaterialScrollBehavior {
+  const _AttendanceHorizontalScrollBehavior();
+
+  @override
+  Set<PointerDeviceKind> get dragDevices => const <PointerDeviceKind>{
+        PointerDeviceKind.touch,
+        PointerDeviceKind.mouse,
+        PointerDeviceKind.stylus,
+        PointerDeviceKind.invertedStylus,
+      };
+}
+
 class _AttendanceBrandDot extends StatelessWidget {
   final double size;
   final double opacity;
@@ -835,20 +873,47 @@ class _StatusCircle extends StatelessWidget {
   final double size;
   const _StatusCircle({required this.item, required this.active, required this.size});
 
+  static const Color _inactiveFill = Color(0xFFEFF1F2);
+  static const Color _inactiveText = Color(0xFF858D93);
+
   @override
   Widget build(BuildContext context) {
     return AnimatedContainer(
-      duration: const Duration(milliseconds: 150),
+      duration: const Duration(milliseconds: 140),
+      curve: Curves.easeOutCubic,
       width: size,
       height: size,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: active ? item.color.withOpacity(.105) : const Color(0xFFF2F5F3),
+        // Only the selected status keeps its semantic colour.
+        // Every inactive status is intentionally neutral grey with NO border,
+        // so the current attendance state is visible at a glance.
+        color: active ? item.color.withOpacity(.28) : _inactiveFill,
         shape: BoxShape.circle,
+        border: active
+            ? Border.all(
+                color: item.color,
+                width: 1.8,
+              )
+            : null,
+        boxShadow: active
+            ? <BoxShadow>[
+                BoxShadow(
+                  color: item.color.withOpacity(.18),
+                  blurRadius: 6,
+                  spreadRadius: .3,
+                ),
+              ]
+            : null,
       ),
       child: Text(
         item.symbol,
-        style: TextStyle(fontSize: size * .37, fontWeight: FontWeight.w600, color: active ? item.color : const Color(0xFF8A9099), height: 1),
+        style: TextStyle(
+          fontSize: size * .39,
+          fontWeight: active ? FontWeight.w800 : FontWeight.w700,
+          color: active ? item.color : _inactiveText,
+          height: 1,
+        ),
       ),
     );
   }

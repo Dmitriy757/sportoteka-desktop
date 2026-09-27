@@ -161,6 +161,10 @@ class _CmrTrainerProfileScreenState
   int _workspaceUserId = 0;
   bool _workspaceFolderEnsuring = false;
 
+  // На мобильном большая шапка уходит при прокрутке, а вместо неё
+  // появляется компактная плавающая навигация как в календаре.
+  bool _mobileChromeCollapsed = false;
+
   @override
   void initState() {
     super.initState();
@@ -2469,6 +2473,7 @@ class _CmrTrainerProfileScreenState
       _editorOpen = false;
       _assignTeamOpen = false;
       _aiOpen = false;
+      _mobileChromeCollapsed = false;
     });
 
     if (section == TrainerProfileSection.testing &&
@@ -3026,15 +3031,54 @@ class _CmrTrainerProfileScreenState
 
           return ColoredBox(
             color: Colors.white,
-            child: Column(
+            child: Stack(
               children: <Widget>[
-                _profileHeader(
-                  compactShell: true,
+                Column(
+                  children: <Widget>[
+                    AnimatedSize(
+                      duration: const Duration(milliseconds: 210),
+                      curve: Curves.easeOutCubic,
+                      alignment: Alignment.topCenter,
+                      child: _mobileChromeCollapsed
+                          ? const SizedBox.shrink()
+                          : Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: <Widget>[
+                                _profileHeader(
+                                  compactShell: true,
+                                ),
+                                _mobileSectionBar(),
+                              ],
+                            ),
+                    ),
+                    Expanded(
+                      child: NotificationListener<ScrollNotification>(
+                        onNotification: _handleMobileContentScroll,
+                        child: _mainContent(
+                          showHeader: false,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-                _mobileSectionBar(),
-                Expanded(
-                  child: _mainContent(
-                    showHeader: false,
+                Positioned(
+                  left: 8,
+                  right: 8,
+                  top: 8,
+                  child: IgnorePointer(
+                    ignoring: !_mobileChromeCollapsed,
+                    child: AnimatedSlide(
+                      duration: const Duration(milliseconds: 180),
+                      curve: Curves.easeOutCubic,
+                      offset: _mobileChromeCollapsed
+                          ? Offset.zero
+                          : const Offset(0, -.22),
+                      child: AnimatedOpacity(
+                        duration: const Duration(milliseconds: 150),
+                        opacity: _mobileChromeCollapsed ? 1 : 0,
+                        child: _mobileFloatingSectionBar(),
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -3135,6 +3179,8 @@ class _CmrTrainerProfileScreenState
 
         final veryCompact =
             constraints.maxWidth < 520;
+        final mobileHeader =
+            constraints.maxWidth < 760;
 
         final avatarSize =
             compact ? 40.0 : 46.0;
@@ -3147,20 +3193,39 @@ class _CmrTrainerProfileScreenState
                 .where((name) => name.trim().isNotEmpty)
                 .join(' / ');
 
-        final subtitle = <String>[
-          _role,
-          if (_specialization.isNotEmpty)
-            _specialization,
-          if (teamName.isNotEmpty)
-            teamName
-          else if (widget.clubName.isNotEmpty)
-            widget.clubName,
-        ].where((item) => item.trim().isNotEmpty).join(
-              ' · ',
-            );
+        // На узком экране не дублируем «Главный тренер · Главный тренер…».
+        // Если специализация уже начинается с названия роли — показываем её целиком.
+        final roleText = _role.trim();
+        final specializationText = _specialization.trim();
+        final roleLower = roleText.toLowerCase();
+        final specializationLower = specializationText.toLowerCase();
+        final subtitleParts = <String>[];
+
+        if (specializationText.isNotEmpty &&
+            roleText.isNotEmpty &&
+            specializationLower.startsWith(roleLower)) {
+          subtitleParts.add(specializationText);
+        } else {
+          if (roleText.isNotEmpty) subtitleParts.add(roleText);
+          if (specializationText.isNotEmpty) {
+            subtitleParts.add(specializationText);
+          }
+        }
+
+        final contextText = teamName.isNotEmpty
+            ? teamName.trim()
+            : widget.clubName.trim();
+        if (contextText.isNotEmpty &&
+            !subtitleParts.any(
+              (item) => item.trim().toLowerCase() == contextText.toLowerCase(),
+            )) {
+          subtitleParts.add(contextText);
+        }
+
+        final subtitle = subtitleParts.join(' · ');
 
         return Container(
-          height: compact ? 62 : 68,
+          height: mobileHeader ? 78 : (compact ? 66 : 68),
           padding: EdgeInsets.fromLTRB(
             compact ? 12 : 14,
             8,
@@ -3222,17 +3287,21 @@ class _CmrTrainerProfileScreenState
                         ),
                       ],
                     ),
-                    if (subtitle.isNotEmpty) ...<
-                        Widget>[
-                      const SizedBox(height: 5),
-                      Text(
-                        subtitle,
-                        maxLines: 1,
-                        overflow:
-                            TextOverflow.ellipsis,
-                        style: AppTypography.secondary(
-                          color: _TpColors.muted,
-                        ).copyWith(fontWeight: FontWeight.w500),
+                    if (subtitle.isNotEmpty) ...<Widget>[
+                      const SizedBox(height: 4),
+                      Tooltip(
+                        message: subtitle,
+                        child: Text(
+                          subtitle,
+                          maxLines: mobileHeader ? 2 : 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTypography.secondary(
+                            color: _TpColors.muted,
+                          ).copyWith(
+                            fontWeight: FontWeight.w500,
+                            height: 1.18,
+                          ),
+                        ),
                       ),
                     ],
                   ],
@@ -3275,17 +3344,12 @@ class _CmrTrainerProfileScreenState
                   emphasized: true,
                   active: _aiOpen,
                 ),
-                if (widget.onMessage != null) ...<
-                    Widget>[
-                  const SizedBox(width: 5),
-                  _TpHeaderAction(
-                    label: 'Чат',
-                    dotColor:
-                        _TpColors.green,
-                    onTap:
-                        widget.onMessage!,
-                  ),
-                ],
+                // На совсем узком экране чат не должен отнимать ширину у ФИО
+                // и рабочего описания. Он остаётся доступен на более широких экранах.
+              ],
+              if (mobileHeader && widget.onClose != null) ...<Widget>[
+                const SizedBox(width: 5),
+                _mobileTrainerCloseButton(topHeader: true),
               ],
             ],
           ),
@@ -3542,6 +3606,107 @@ class _CmrTrainerProfileScreenState
     );
   }
 
+  bool _handleMobileContentScroll(ScrollNotification notification) {
+    if (notification.metrics.axis != Axis.vertical) return false;
+
+    final pixels = notification.metrics.pixels;
+
+    // Небольшой гистерезис не даёт шапке дрожать около одной точки.
+    if (!_mobileChromeCollapsed && pixels > 96 && mounted) {
+      setState(() => _mobileChromeCollapsed = true);
+    } else if (_mobileChromeCollapsed && pixels < 24 && mounted) {
+      setState(() => _mobileChromeCollapsed = false);
+    }
+
+    return false;
+  }
+
+  Widget _mobileFloatingSectionBar() {
+    return Container(
+      height: 48,
+      padding: const EdgeInsets.all(5),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF9FBFA).withOpacity(.97),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: const Color(0xFFE4ECE8).withOpacity(.92),
+          width: 1,
+        ),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: Colors.black.withOpacity(.055),
+            blurRadius: 18,
+            offset: const Offset(0, 7),
+          ),
+          BoxShadow(
+            color: Colors.white.withOpacity(.85),
+            blurRadius: 1,
+            offset: const Offset(0, -1),
+          ),
+        ],
+      ),
+      child: Row(
+        children: <Widget>[
+          Expanded(
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              itemCount: TrainerProfileSection.values.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 4),
+              itemBuilder: (_, index) {
+                final item = TrainerProfileSection.values[index];
+                final active = _section == item;
+                final color = _sectionColor(item);
+
+                return Material(
+                  color: active
+                      ? const Color(0xFFEAF8F1)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(16),
+                  child: InkWell(
+                    onTap: () => _selectSection(item),
+                    borderRadius: BorderRadius.circular(16),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: <Widget>[
+                          _TpDot(
+                            color: active ? color : _TpColors.muted2,
+                            size: active ? 5.5 : 4,
+                            opacity: active ? 1 : .62,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            _sectionTitle(item),
+                            maxLines: 1,
+                            style: AppTypography.custom(
+                              size: 9.8,
+                              weight:
+                                  active ? FontWeight.w700 : FontWeight.w500,
+                              color: active
+                                  ? _TpColors.greenDark
+                                  : const Color(0xFF7A8492),
+                              height: 1,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          if (widget.onClose != null) ...<Widget>[
+            const SizedBox(width: 4),
+            _mobileTrainerCloseButton(floating: true),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _mobileSectionBar() {
     return Container(
       height: 52,
@@ -3561,29 +3726,6 @@ class _CmrTrainerProfileScreenState
       ),
       child: Row(
         children: <Widget>[
-          if (!widget.embeddedInWorkspace &&
-              widget.onClose != null) ...<Widget>[
-            Material(
-              color: _TpColors.soft,
-              borderRadius:
-                  BorderRadius.circular(8),
-              child: InkWell(
-                onTap: widget.onClose,
-                borderRadius:
-                    BorderRadius.circular(8),
-                child: const SizedBox(
-                  width: 34,
-                  height: 34,
-                  child: Icon(
-                    Icons.arrow_back_ios_new_rounded,
-                    size: 13,
-                    color: _TpColors.text,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 6),
-          ],
           Expanded(
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
@@ -3644,6 +3786,47 @@ class _CmrTrainerProfileScreenState
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _mobileTrainerCloseButton({
+    bool floating = false,
+    bool topHeader = false,
+  }) {
+    final onClose = widget.onClose;
+    if (onClose == null) {
+      return const SizedBox.shrink();
+    }
+
+    return Tooltip(
+      message: 'Закрыть профиль тренера',
+      child: Semantics(
+        button: true,
+        label: 'Закрыть профиль тренера',
+        child: Material(
+          color: floating
+              ? Colors.white.withOpacity(.92)
+              : topHeader
+                  ? const Color(0xFFF4F6F5)
+                  : _TpColors.soft,
+          borderRadius: BorderRadius.circular(topHeader ? 11 : 12),
+          child: InkWell(
+            onTap: onClose,
+            borderRadius: BorderRadius.circular(topHeader ? 11 : 12),
+            child: SizedBox(
+              width: topHeader ? 34 : 36,
+              height: topHeader ? 34 : 36,
+              child: Icon(
+                Icons.close_rounded,
+                size: topHeader ? 18 : 19,
+                color: floating
+                    ? const Color(0xFF505963)
+                    : _TpColors.text,
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -4346,16 +4529,6 @@ class _CmrTrainerProfileScreenState
           final calendarHeight =
               rowsCount >= 6 ? 430.0 : 398.0;
 
-          final infoHeight = selectedRows.isEmpty
-              ? 230.0
-              : math.max(
-                  270.0,
-                  math.min(
-                    420.0,
-                    150.0 + selectedRows.length * 92.0,
-                  ),
-                ).toDouble();
-
           return ListView(
             padding: const EdgeInsets.fromLTRB(
               8,
@@ -4369,10 +4542,9 @@ class _CmrTrainerProfileScreenState
                 child: calendarWindow(phone: true),
               ),
               const SizedBox(height: 9),
-              SizedBox(
-                height: infoHeight,
-                child: selectedWindow(phone: true),
-              ),
+              // На телефоне блок дня растёт по содержимому и больше не создаёт
+              // отдельное маленькое окно со своей вертикальной прокруткой.
+              selectedWindow(phone: true),
             ],
           );
         }
@@ -4918,25 +5090,6 @@ class _CmrTrainerProfileScreenState
                       ? 424.0
                       : 390.0);
 
-          final infoHeight =
-              selectedPlans.isEmpty
-                  ? 230.0
-                  : math
-                      .max(
-                        330.0,
-                        math.min(
-                          570.0,
-                          210.0 +
-                              selectedPlans
-                                      .length *
-                                  76.0 +
-                              (previewStillVisible
-                                  ? 170.0
-                                  : 0.0),
-                        ),
-                      )
-                      .toDouble();
-
           return ListView(
             padding:
                 const EdgeInsets.fromLTRB(
@@ -4954,11 +5107,10 @@ class _CmrTrainerProfileScreenState
                 ),
               ),
               const SizedBox(height: 9),
-              SizedBox(
-                height: infoHeight,
-                child: infoWindow(
-                  phone: true,
-                ),
+              // Список планов растёт по содержимому: прокручивается вся страница,
+              // а не отдельное внутреннее окно.
+              infoWindow(
+                phone: true,
               ),
             ],
           );
@@ -6338,7 +6490,8 @@ class _CmrTrainerProfileScreenState
               height: 1,
               color: _TpColors.line,
             ),
-            Expanded(
+            _TpAdaptiveExpanded(
+              expand: !phone,
               child: _selectedTestingSession != null
                   ? _TpTestingSessionDetail(
                       session:
@@ -6351,6 +6504,7 @@ class _CmrTrainerProfileScreenState
                           _testingDetailError,
                       teamName:
                           _teamName(team),
+                      shrinkWrap: phone,
                       onBack:
                           _closeTestingSessionDetail,
                       onOpenTesting: () =>
@@ -6372,6 +6526,7 @@ class _CmrTrainerProfileScreenState
                                     _testingSelected,
                                   )
                               : 'Все даты',
+                      shrinkWrap: phone,
                       onOpenSession: (session) =>
                           _openTestingSessionDetail(
                         session,
@@ -6417,18 +6572,6 @@ class _CmrTrainerProfileScreenState
                   ? 455.0
                   : 420.0;
 
-          final listHeight = math
-              .max(
-                260.0,
-                math.min(
-                  620.0,
-                  180.0 +
-                      visibleRows.length *
-                          65.0,
-                ),
-              )
-              .toDouble();
-
           return ListView(
             padding:
                 const EdgeInsets.fromLTRB(
@@ -6445,11 +6588,10 @@ class _CmrTrainerProfileScreenState
                 ),
               ),
               const SizedBox(height: 9),
-              SizedBox(
-                height: listHeight,
-                child: listWindow(
-                  phone: true,
-                ),
+              // На телефоне список тестирований не зажат фиксированной высотой:
+              // вся информация листается вместе с экраном.
+              listWindow(
+                phone: true,
               ),
             ],
           );
@@ -7593,6 +7735,21 @@ class _TpTrainerCalendarDayCell extends StatelessWidget {
   }
 }
 
+class _TpAdaptiveExpanded extends StatelessWidget {
+  final bool expand;
+  final Widget child;
+
+  const _TpAdaptiveExpanded({
+    required this.expand,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return expand ? Expanded(child: child) : child;
+  }
+}
+
 class _TpTrainerSelectedDayPanel extends StatelessWidget {
   final DateTime selected;
   final List<Map<String, dynamic>> events;
@@ -7801,9 +7958,12 @@ class _TpTrainerSelectedDayPanel extends StatelessWidget {
                 ],
               ),
             ),
-          Expanded(
+          _TpAdaptiveExpanded(
+            expand: !compact,
             child: events.isEmpty
-                ? Center(
+                ? SizedBox(
+                    height: compact ? 150 : null,
+                    child: Center(
                     child: Padding(
                       padding:
                           const EdgeInsets.symmetric(
@@ -7833,8 +7993,13 @@ class _TpTrainerSelectedDayPanel extends StatelessWidget {
                         ],
                       ),
                     ),
-                  )
+                  ),
+                )
                 : ListView.separated(
+                    shrinkWrap: compact,
+                    physics: compact
+                        ? const NeverScrollableScrollPhysics()
+                        : null,
                     padding:
                         const EdgeInsets.fromLTRB(
                       10,
@@ -8311,9 +8476,12 @@ class _TpTrainerPlansDayPanel extends StatelessWidget {
                 ],
               ),
             ),
-          Expanded(
+          _TpAdaptiveExpanded(
+            expand: !compact,
             child: plans.isEmpty
-                ? Center(
+                ? SizedBox(
+                    height: compact ? 150 : null,
+                    child: Center(
                     child: Padding(
                       padding:
                           const EdgeInsets
@@ -8346,8 +8514,13 @@ class _TpTrainerPlansDayPanel extends StatelessWidget {
                         ],
                       ),
                     ),
-                  )
+                  ),
+                )
                 : ListView.separated(
+                    shrinkWrap: compact,
+                    physics: compact
+                        ? const NeverScrollableScrollPhysics()
+                        : null,
                     padding:
                         const EdgeInsets.fromLTRB(
                       10,
@@ -8718,6 +8891,7 @@ class _TpTestingList extends StatelessWidget {
   final String scopeLabel;
   final ValueChanged<Map<String, dynamic>>
       onOpenSession;
+  final bool shrinkWrap;
 
   const _TpTestingList({
     required this.teamName,
@@ -8725,6 +8899,7 @@ class _TpTestingList extends StatelessWidget {
     required this.rows,
     required this.scopeLabel,
     required this.onOpenSession,
+    this.shrinkWrap = false,
   });
 
   String _s(dynamic value) =>
@@ -8784,6 +8959,10 @@ class _TpTestingList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListView(
+      shrinkWrap: shrinkWrap,
+      physics: shrinkWrap
+          ? const NeverScrollableScrollPhysics()
+          : null,
       padding:
           const EdgeInsets.fromLTRB(
         12,
@@ -8946,6 +9125,7 @@ class _TpTestingSessionDetail
   final String teamName;
   final VoidCallback onBack;
   final VoidCallback onOpenTesting;
+  final bool shrinkWrap;
 
   const _TpTestingSessionDetail({
     required this.session,
@@ -8955,6 +9135,7 @@ class _TpTestingSessionDetail
     required this.teamName,
     required this.onBack,
     required this.onOpenTesting,
+    this.shrinkWrap = false,
   });
 
   @override
@@ -9496,16 +9677,20 @@ class _TpTestingSessionDetailState
             height: 1,
             color: _TpColors.line,
           ),
-          Expanded(
+          _TpAdaptiveExpanded(
+            expand: !widget.shrinkWrap,
             child: widget.loading
-                ? const Center(
+                ? SizedBox(
+                    height: widget.shrinkWrap ? 180 : null,
+                    child: const Center(
                     child:
                         CircularProgressIndicator(
                       strokeWidth: 2,
                       color:
                           _TpColors.green,
                     ),
-                  )
+                  ),
+                )
                 : widget.error != null
                     ? _TpEmpty(
                         title:
@@ -9521,6 +9706,10 @@ class _TpTestingSessionDetailState
                                 'В матрице тестирования пока нет результатов игроков.',
                           )
                         : ListView.separated(
+                            shrinkWrap: widget.shrinkWrap,
+                            physics: widget.shrinkWrap
+                                ? const NeverScrollableScrollPhysics()
+                                : null,
                             padding:
                                 const EdgeInsets
                                     .fromLTRB(
@@ -9802,7 +9991,8 @@ class _TpTestingSessionDetailState
             height: 1,
             color: _TpColors.line,
           ),
-          Expanded(
+          _TpAdaptiveExpanded(
+            expand: !widget.shrinkWrap,
             child: results.isEmpty
                 ? const _TpEmpty(
                     title:
@@ -9811,6 +10001,10 @@ class _TpTestingSessionDetailState
                         'Для этого игрока в выбранной сессии значения тестов не сохранены.',
                   )
                 : ListView(
+                    shrinkWrap: widget.shrinkWrap,
+                    physics: widget.shrinkWrap
+                        ? const NeverScrollableScrollPhysics()
+                        : null,
                     padding:
                         const EdgeInsets.fromLTRB(
                       11,

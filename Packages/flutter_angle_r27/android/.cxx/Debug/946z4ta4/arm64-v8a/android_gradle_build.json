@@ -1,0 +1,41 @@
+{
+  "buildFiles": [
+    "/Users/dmitrij/Documents/sportoteka2.0/packages/flutter_angle_r27/android/src/main/cpp/CMakeLists.txt"
+  ],
+  "cleanCommandsComponents": [
+    [
+      "/Users/dmitrij/Library/Android/sdk/cmake/3.31.4/bin/ninja",
+      "-C",
+      "/Users/dmitrij/Documents/sportoteka2.0/packages/flutter_angle_r27/android/.cxx/Debug/946z4ta4/arm64-v8a",
+      "clean"
+    ]
+  ],
+  "buildTargetsCommandComponents": [
+    "/Users/dmitrij/Library/Android/sdk/cmake/3.31.4/bin/ninja",
+    "-C",
+    "/Users/dmitrij/Documents/sportoteka2.0/packages/flutter_angle_r27/android/.cxx/Debug/946z4ta4/arm64-v8a",
+    "{LIST_OF_TARGETS_TO_BUILD}"
+  ],
+  "libraries": {
+    "angle_android_graphic_jni::@6890427a1f51a3e7e1df": {
+      "toolchain": "toolchain",
+      "abi": "arm64-v8a",
+      "artifactName": "angle_android_graphic_jni",
+      "output": "/Users/dmitrij/Documents/sportoteka2.0/packages/flutter_angle_r27/android/src/release/jniLibs/arm64-v8a/libangle_android_graphic_jni.so",
+      "runtimeFiles": [
+        "/Users/dmitrij/Documents/sportoteka2.0/packages/flutter_angle_r27/android/src/release/jniLibs/arm64-v8a/libEGL_angle.so",
+        "/Users/dmitrij/Documents/sportoteka2.0/packages/flutter_angle_r27/android/src/release/jniLibs/arm64-v8a/libGLESv2_angle.so"
+      ]
+    }
+  },
+  "toolchains": {
+    "toolchain": {
+      "cCompilerExecutable": "/Users/dmitrij/Library/Android/sdk/ndk/27.3.13750724/toolchains/llvm/prebuilt/darwin-x86_64/bin/clang.lld",
+      "cppCompilerExecutable": "/Users/dmitrij/Library/Android/sdk/ndk/27.3.13750724/toolchains/llvm/prebuilt/darwin-x86_64/bin/clang++.lld"
+    }
+  },
+  "cFileExtensions": [],
+  "cppFileExtensions": [
+    "cpp"
+  ]
+}

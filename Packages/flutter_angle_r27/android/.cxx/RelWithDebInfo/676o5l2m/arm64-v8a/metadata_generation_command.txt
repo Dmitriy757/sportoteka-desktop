@@ -1,0 +1,21 @@
+                        -H/Users/dmitrij/Documents/sportoteka2.0/packages/flutter_angle_r27/android/src/main/cpp
+-DCMAKE_SYSTEM_NAME=Android
+-DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+-DCMAKE_SYSTEM_VERSION=21
+-DANDROID_PLATFORM=android-21
+-DANDROID_ABI=arm64-v8a
+-DCMAKE_ANDROID_ARCH_ABI=arm64-v8a
+-DANDROID_NDK=/Users/dmitrij/Library/Android/sdk/ndk/27.3.13750724
+-DCMAKE_ANDROID_NDK=/Users/dmitrij/Library/Android/sdk/ndk/27.3.13750724
+-DCMAKE_TOOLCHAIN_FILE=/Users/dmitrij/Library/Android/sdk/ndk/27.3.13750724/build/cmake/android.toolchain.cmake
+-DCMAKE_MAKE_PROGRAM=/Users/dmitrij/Library/Android/sdk/cmake/3.31.4/bin/ninja
+-DCMAKE_CXX_FLAGS=-std=c++14
+-DCMAKE_LIBRARY_OUTPUT_DIRECTORY=/Users/dmitrij/Documents/sportoteka2.0/build/flutter_angle/intermediates/cxx/RelWithDebInfo/676o5l2m/obj/arm64-v8a
+-DCMAKE_RUNTIME_OUTPUT_DIRECTORY=/Users/dmitrij/Documents/sportoteka2.0/build/flutter_angle/intermediates/cxx/RelWithDebInfo/676o5l2m/obj/arm64-v8a
+-DCMAKE_BUILD_TYPE=RelWithDebInfo
+-B/Users/dmitrij/Documents/sportoteka2.0/packages/flutter_angle_r27/android/.cxx/RelWithDebInfo/676o5l2m/arm64-v8a
+-GNinja
+-DANDROID_STL=c++_shared
+-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON
+                        Build command args: []
+                        Version: 2

@@ -52,6 +52,7 @@ import 'package:sportoteka/presentation/club_workspace/cmr_club_roster_panel.dar
 import 'package:sportoteka/presentation/club_workspace/cmr_chats_panel.dart';
 import 'package:sportoteka/presentation/club_workspace/cmr_game_zone_panel.dart';
 import 'package:sportoteka/presentation/club_workspace/cmr_club_overview_panel.dart';
+import 'package:sportoteka/presentation/club_workspace/cmr_club_directions_panel.dart';
 import 'package:sportoteka/presentation/club_workspace/cmr_club_parents_panel.dart';
 import 'package:sportoteka/presentation/club_workspace/cmr_medical_cabinet_panel.dart';
 import 'package:sportoteka/presentation/club_workspace/cmr_context_ai_layer.dart';
@@ -6382,7 +6383,7 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
       case ClubSection.parents:
         return 'Доступы родителей и коммуникация';
       case ClubSection.settings:
-        return 'Настройка модулей и прав доступа';
+        return 'Направления клуба, модули и права доступа';
     }
   }
 
@@ -7133,12 +7134,11 @@ class _ClubWorkspaceScreenState extends State<ClubWorkspaceScreen>
           );
         }
       case ClubSection.settings:
-        return const _SolidPlaceholder(
-            icon: Icons.tune_rounded,
-            title: 'Настройки рабочего кабинета',
-            subtitle:
-                'Следующим шагом сюда можно добавить порядок модулей, видимость разделов и права ролей.',
-            chips: ['Меню', 'Роли', 'Виджеты', 'Оформление']);
+        return CmrClubDirectionsPanel(
+          clubId: clubId,
+          userId: currentUserId,
+          clubName: clubName,
+        );
     }
   }
 }
@@ -7754,7 +7754,7 @@ const List<_NavGroup> _clubWorkspaceNavGroups = [
       ClubSection.settings,
       Icons.tune_rounded,
       'Настройки',
-      subtitle: 'Права и модули',
+      subtitle: 'Направления и модули',
     ),
   ]),
 ];

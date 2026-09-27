@@ -53,6 +53,8 @@ class SportCommunityScreen extends StatefulWidget {
   State<SportCommunityScreen> createState() => _SportCommunityScreenState();
 }
 
+enum _CommunityFeedScope { all, following, mine }
+
 class _SportCommunityScreenState extends State<SportCommunityScreen> {
   static const _apiBase = "https://sportotekaapp.ru/api";
 
@@ -66,9 +68,12 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
 
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
-  bool _onlyMine = false;
+  _CommunityFeedScope _feedScope = _CommunityFeedScope.all;
 
   int _currentUserId = 0;
+  Set<int> _followingUserIds = <int>{};
+  List<Map<String, dynamic>> _followingProfiles = <Map<String, dynamic>>[];
+  bool _followingLoading = false;
 
   // Аватар автора поста всегда сверяем с профилем пользователя.
   // get_posts.php у старых/части публикаций может не возвращать photo.
@@ -91,7 +96,170 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
     final uid = await PrefUtils.getUserId() ?? 0;
     if (!mounted) return;
     setState(() => _currentUserId = uid);
-    await _fetchPosts();
+
+    await Future.wait<void>([
+      _fetchFollowingUserIds(),
+      _fetchPosts(),
+    ]);
+  }
+
+  Future<void> _refreshCommunityFeed() async {
+    await Future.wait<void>([
+      _fetchFollowingUserIds(),
+      _fetchPosts(),
+    ]);
+  }
+
+  Future<void> _fetchFollowingUserIds() async {
+    if (_currentUserId <= 0) {
+      if (!mounted) return;
+      setState(() {
+        _followingUserIds = <int>{};
+        _followingProfiles = <Map<String, dynamic>>[];
+        _followingLoading = false;
+      });
+      return;
+    }
+
+    if (mounted) setState(() => _followingLoading = true);
+
+    try {
+      final res = await http
+          .post(
+            Uri.parse('$_apiBase/get_followings.php'),
+            body: <String, String>{
+              'user_id': _currentUserId.toString(),
+            },
+          )
+          .timeout(const Duration(seconds: 12));
+
+      if (res.statusCode != 200) return;
+
+      final decoded = jsonDecode(utf8.decode(res.bodyBytes));
+
+      List<dynamic> rows = const <dynamic>[];
+      if (decoded is List) {
+        rows = decoded;
+      } else if (decoded is Map) {
+        final raw = decoded['users'] ??
+            decoded['followings'] ??
+            decoded['data'] ??
+            decoded['items'] ??
+            decoded['results'];
+        if (raw is List) rows = raw;
+      }
+
+      final ids = <int>{};
+      final profiles = <Map<String, dynamic>>[];
+      for (final row in rows) {
+        if (row is! Map) continue;
+        final map = Map<String, dynamic>.from(row);
+        final id = _safeInt(
+          map['id'] ??
+              map['user_id'] ??
+              map['following_id'] ??
+              map['followingId'] ??
+              map['target_user_id'],
+        );
+        if (id <= 0 || id == _currentUserId) continue;
+
+        if (!ids.add(id)) continue;
+
+        final first = _safeStr(
+          map['first_name'] ?? map['firstName'] ?? map['firstname'],
+        ).trim();
+        final last = _safeStr(
+          map['last_name'] ?? map['lastName'] ?? map['lastname'],
+        ).trim();
+        final explicitName = _safeStr(
+          map['full_name'] ?? map['fullName'] ?? map['name'] ?? map['username'],
+        ).trim();
+        final fullName = ('$first $last').trim();
+
+        profiles.add(<String, dynamic>{
+          'id': id,
+          'name': fullName.isNotEmpty
+              ? fullName
+              : (explicitName.isNotEmpty ? explicitName : 'Пользователь'),
+          'avatar': _avatarFromMap(map),
+        });
+      }
+
+      profiles.sort((a, b) =>
+          _safeStr(a['name']).toLowerCase().compareTo(_safeStr(b['name']).toLowerCase()));
+
+      if (!mounted) return;
+      setState(() {
+        _followingUserIds = ids;
+        _followingProfiles = profiles;
+      });
+
+      await _hydrateFollowingProfiles();
+    } catch (_) {
+      // Не очищаем уже загруженные подписки из-за временной сетевой ошибки.
+    } finally {
+      if (mounted) setState(() => _followingLoading = false);
+    }
+  }
+
+  Future<void> _hydrateFollowingProfiles() async {
+    final missing = _followingProfiles
+        .where((p) => _safeInt(p['id']) > 0 && _safeStr(p['avatar']).isEmpty)
+        .map((p) => _safeInt(p['id']))
+        .toSet();
+
+    if (missing.isEmpty) return;
+
+    await Future.wait(missing.map((id) async {
+      try {
+        final response = await http
+            .get(Uri.parse('$_apiBase/get_user.php?user_id=$id'))
+            .timeout(const Duration(seconds: 10));
+        if (response.statusCode != 200) return;
+
+        final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+        final avatar = _avatarFromAny(decoded);
+
+        String resolvedName = '';
+        if (decoded is Map) {
+          final root = Map<String, dynamic>.from(decoded);
+          final user = root['user'] is Map
+              ? Map<String, dynamic>.from(root['user'] as Map)
+              : root;
+          final first = _safeStr(user['first_name'] ?? user['firstName']).trim();
+          final last = _safeStr(user['last_name'] ?? user['lastName']).trim();
+          resolvedName = ('$first $last').trim();
+        }
+
+        if (!mounted) return;
+        var changed = false;
+        for (final profile in _followingProfiles) {
+          if (_safeInt(profile['id']) != id) continue;
+          if (avatar.isNotEmpty && _safeStr(profile['avatar']) != avatar) {
+            profile['avatar'] = avatar;
+            changed = true;
+          }
+          if (resolvedName.isNotEmpty &&
+              (_safeStr(profile['name']).isEmpty ||
+                  _safeStr(profile['name']) == 'Пользователь')) {
+            profile['name'] = resolvedName;
+            changed = true;
+          }
+        }
+        if (changed && mounted) setState(() {});
+      } catch (_) {}
+    }));
+  }
+
+  Future<void> _openCommunityUserProfile(int userId) async {
+    if (userId <= 0 || !mounted) return;
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => MyProfileScreen(userId: userId, publicView: true),
+      ),
+    );
+    if (!mounted) return;
+    await _refreshCommunityFeed();
   }
 
   void _showError(String message) {
@@ -643,11 +811,23 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
 
   List<Map<String, dynamic>> get _visiblePosts {
     final q = _searchQuery.trim().toLowerCase();
-    return posts.where((post) {
-      if (_onlyMine && _safeInt(post['user_id']) != _currentUserId) {
-        return false;
+
+    final result = posts.where((post) {
+      final authorId = _safeInt(post['user_id']);
+
+      switch (_feedScope) {
+        case _CommunityFeedScope.mine:
+          if (authorId != _currentUserId) return false;
+          break;
+        case _CommunityFeedScope.following:
+          if (!_followingUserIds.contains(authorId)) return false;
+          break;
+        case _CommunityFeedScope.all:
+          break;
       }
+
       if (q.isEmpty) return true;
+
       final tags = _hashtagsForPost(post).join(' ');
       final haystack = <String>[
         _safeStr(post['title']),
@@ -658,7 +838,18 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
         tags,
       ].join(' ').toLowerCase();
       return haystack.contains(q);
-    }).toList(growable: false);
+    }).toList(growable: true);
+
+    // Как в социальной ленте: новые публикации всегда выше.
+    result.sort((a, b) {
+      final aDate =
+          a['date'] is DateTime ? a['date'] as DateTime : DateTime(1970);
+      final bDate =
+          b['date'] is DateTime ? b['date'] as DateTime : DateTime(1970);
+      return bDate.compareTo(aDate);
+    });
+
+    return List<Map<String, dynamic>>.unmodifiable(result);
   }
 
   void _setSearch(String value) {
@@ -928,7 +1119,7 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
         final visiblePosts = _visiblePosts;
 
         final feed = RefreshIndicator(
-          onRefresh: _fetchPosts,
+          onRefresh: _refreshCommunityFeed,
           color: FeedPalette.primaryGreen,
           child: ListView(
             physics: mobile
@@ -951,6 +1142,10 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
                 mobile: mobile,
                 resultCount: visiblePosts.length,
               ),
+              if (_feedScope == _CommunityFeedScope.following) ...[
+                const SizedBox(height: 8),
+                _buildFollowingProfilesStrip(),
+              ],
               if (!mobile) ...[
                 const SizedBox(height: 10),
                 _buildCreatePostCard(),
@@ -1347,7 +1542,7 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
             icon: Icons.refresh_rounded,
             title: 'Обновить ленту',
             subtitle: 'Загрузить новые записи',
-            onTap: _fetchPosts,
+            onTap: _refreshCommunityFeed,
           ),
           const SizedBox(height: 8),
           sectionTitle('Последние публикации', Icons.schedule_rounded),
@@ -1466,7 +1661,7 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
           item(Icons.add_box_outlined, 'Создать', 'фото, текст или видео',
               onTap: _openCreateEditor),
           item(Icons.refresh_rounded, 'Обновить', 'загрузить новые записи',
-              onTap: _fetchPosts),
+              onTap: _refreshCommunityFeed),
           const Spacer(),
           Padding(
             padding: const EdgeInsets.all(10),
@@ -1603,14 +1798,31 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
             children: [
               filterButton(
                 label: 'Все',
-                selected: !_onlyMine,
-                onTap: () => setState(() => _onlyMine = false),
+                selected: _feedScope == _CommunityFeedScope.all,
+                onTap: () => setState(
+                  () => _feedScope = _CommunityFeedScope.all,
+                ),
+              ),
+              const SizedBox(width: 7),
+              filterButton(
+                label: 'Подписки',
+                selected: _feedScope == _CommunityFeedScope.following,
+                onTap: () {
+                  setState(
+                    () => _feedScope = _CommunityFeedScope.following,
+                  );
+                  if (_currentUserId > 0 && !_followingLoading) {
+                    _fetchFollowingUserIds();
+                  }
+                },
               ),
               const SizedBox(width: 7),
               filterButton(
                 label: 'Мои',
-                selected: _onlyMine,
-                onTap: () => setState(() => _onlyMine = true),
+                selected: _feedScope == _CommunityFeedScope.mine,
+                onTap: () => setState(
+                  () => _feedScope = _CommunityFeedScope.mine,
+                ),
               ),
               const Spacer(),
               Text(
@@ -1655,16 +1867,28 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
 
   Widget _buildEmptyFeedState() {
     final hasQuery = _searchQuery.trim().isNotEmpty;
+    final isFollowing = _feedScope == _CommunityFeedScope.following;
+    final isMine = _feedScope == _CommunityFeedScope.mine;
+
     final title = hasQuery
         ? 'Ничего не найдено'
-        : _onlyMine
-            ? 'У вас пока нет публикаций'
-            : 'Пока нет публикаций';
+        : isFollowing
+            ? (_followingLoading
+                ? 'Загружаем подписки'
+                : 'В подписках пока нет публикаций')
+            : isMine
+                ? 'У вас пока нет публикаций'
+                : 'Пока нет публикаций';
+
     final subtitle = hasQuery
         ? 'Попробуйте другой текст или нажмите на хэштег в публикации.'
-        : _onlyMine
-            ? 'Создайте свой первый пост — он появится здесь и в общей ленте.'
-            : 'Создайте первый пост — он появится в общей ленте.';
+        : isFollowing
+            ? (_followingUserIds.isEmpty
+                ? 'Подпишитесь на игроков, тренеров или клубы — их новые публикации появятся здесь.'
+                : 'У пользователей, на которых вы подписаны, пока нет новых публикаций.')
+            : isMine
+                ? 'Создайте свой первый пост — он появится здесь и в общей ленте.'
+                : 'Создайте первый пост — он появится в общей ленте.';
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(10, 8, 10, 12),
@@ -1684,12 +1908,126 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
               textAlign: TextAlign.center,
               style: _text(11.8),
             ),
-            if (!hasQuery && _currentUserId > 0) ...[
+            if (!hasQuery &&
+                !isFollowing &&
+                _currentUserId > 0) ...[
               const SizedBox(height: 12),
               _buildCreateButton(),
             ],
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildFollowingProfilesStrip() {
+    if (_feedScope != _CommunityFeedScope.following) {
+      return const SizedBox.shrink();
+    }
+
+    if (_followingLoading && _followingProfiles.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.fromLTRB(10, 0, 10, 10),
+        child: SizedBox(
+          height: 76,
+          child: Center(
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: FeedPalette.primaryGreen,
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (_followingProfiles.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(0, 0, 0, 10),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 9),
+      color: Colors.white,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                'Вы подписаны',
+                style: _title(12.2, weight: FontWeight.w600),
+              ),
+              const Spacer(),
+              Text(
+                '${_followingProfiles.length}',
+                style: _text(
+                  10.2,
+                  weight: FontWeight.w500,
+                  color: FeedPalette.textMuted,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 9),
+          SizedBox(
+            height: 72,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              itemCount: _followingProfiles.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 12),
+              itemBuilder: (context, index) {
+                final profile = _followingProfiles[index];
+                final userId = _safeInt(profile['id']);
+                final name = _safeStr(profile['name']).trim();
+                final avatar = _safeStr(profile['avatar']).trim();
+                final firstName = name.split(RegExp(r'\s+')).first;
+
+                return InkWell(
+                  onTap: () => _openCommunityUserProfile(userId),
+                  borderRadius: BorderRadius.circular(16),
+                  child: SizedBox(
+                    width: 58,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(2),
+                          decoration: const BoxDecoration(
+                            shape: BoxShape.circle,
+                            gradient: FeedPalette.greenGradient,
+                          ),
+                          child: Container(
+                            padding: const EdgeInsets.all(2),
+                            decoration: const BoxDecoration(
+                              color: Colors.white,
+                              shape: BoxShape.circle,
+                            ),
+                            child: _AvatarCircle(
+                              radius: 21,
+                              name: name,
+                              url: avatar,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 5),
+                        Text(
+                          firstName.isEmpty ? 'Профиль' : firstName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
+                          style: _text(
+                            9.2,
+                            weight: FontWeight.w500,
+                            color: FeedPalette.text,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1907,16 +2245,7 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
               Padding(
                 padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
                 child: InkWell(
-                  onTap: () {
-                    if (userId <= 0) return;
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) =>
-                            MyProfileScreen(userId: userId, publicView: true),
-                      ),
-                    );
-                  },
+                  onTap: () => _openCommunityUserProfile(userId),
                   borderRadius: BorderRadius.circular(12),
                   child: Row(
                     children: [

@@ -16,6 +16,7 @@ import 'package:sportoteka/presentation/chat_screen/cmr_notifications_panel.dart
 import 'package:sportoteka/presentation/chat_screen/create_group_chat_screen.dart';
 import 'package:sportoteka/presentation/chat_screen/sportoteka_news_screen.dart';
 import 'package:sportoteka/presentation/club_workspace/cmr_club_ai_assistant_panel.dart';
+import 'package:sportoteka/presentation/my_profile_screen/my_profile_screen.dart';
 
 class _ChatStyle {
   static const Color bg = Colors.white;
@@ -179,6 +180,11 @@ enum _ChatTab { notifications, privateChats, groups, calls }
 
 class _ChatScreenState extends State<ChatScreen> {
   static const _apiBase = 'https://sportotekaapp.ru/api';
+
+  int _clubIdForChat(Map<String, dynamic>? chat) {
+    final fromChat = int.tryParse('${chat?['club_id'] ?? chat?['clubId'] ?? ''}') ?? 0;
+    return fromChat > 0 ? fromChat : (widget.clubId ?? 0);
+  }
 
   // ✅ endpoints
   static const _createChatUrl = '$_apiBase/create_chat.php';
@@ -364,13 +370,150 @@ class _ChatScreenState extends State<ChatScreen> {
     return n.isNotEmpty ? n : (t.isNotEmpty ? t : "Группа");
   }
 
-  String _peerPhoto(Map<String, dynamic> chat) {
-    final isPrivate = _isPrivate(chat);
-    if (!isPrivate) return "";
-    final raw = (chat['peer_photo'] ?? '').toString().trim();
-    if (raw.isEmpty || raw.toLowerCase() == 'null') return "";
-    if (raw.startsWith('http')) return raw;
-    return "https://sportotekaapp.ru/uploads/$raw";
+  String _chatPhoto(Map<String, dynamic> chat) {
+    final keys = _isPrivate(chat)
+        ? const [
+            'peer_photo',
+            'peer_photo_url',
+            'opponent_photo',
+            'opponent_photo_url',
+            'companion_photo',
+            'interlocutor_photo',
+            'photo',
+            'photo_url',
+            'avatar',
+            'avatar_url',
+            'user_photo',
+            'user_avatar',
+          ]
+        : const [
+            'group_photo',
+            'group_photo_url',
+            'group_avatar',
+            'group_avatar_url',
+            'chat_photo',
+            'chat_avatar',
+            'photo',
+            'photo_url',
+            'avatar',
+            'avatar_url',
+          ];
+    for (final key in keys) {
+      final raw = (chat[key] ?? '').toString().replaceAll('\\', '/').trim();
+      if (raw.isEmpty ||
+          const {'null', 'undefined', 'false', '0'}.contains(raw.toLowerCase())) {
+        continue;
+      }
+      if (raw.startsWith('https://') || raw.startsWith('http://')) return raw;
+      if (raw.startsWith('//')) return 'https:$raw';
+      if (raw.startsWith('/')) return 'https://sportotekaapp.ru$raw';
+      if (raw.startsWith('uploads/') || raw.startsWith('api/')) {
+        return 'https://sportotekaapp.ru/$raw';
+      }
+      return 'https://sportotekaapp.ru/uploads/$raw';
+    }
+    return '';
+  }
+
+  int _chatPeerUserId(Map<String, dynamic>? chat) {
+    if (chat == null || !_isPrivate(chat)) return 0;
+    for (final key in const <String>[
+      'peer_id',
+      'peer_user_id',
+      'other_user_id',
+      'opponent_id',
+      'companion_id',
+      'interlocutor_id',
+      'participant_id',
+      'receiver_id',
+      'sender_id',
+      'user_id',
+    ]) {
+      final id = _asInt(chat[key]);
+      if (id > 0 && id != widget.userId) return id;
+    }
+    return 0;
+  }
+
+  Future<void> _ensureChatPeerData(Map<String, dynamic>? chat) async {
+    if (chat == null || !_isPrivate(chat)) return;
+    final chatId = _asInt(chat['id'] ?? chat['chat_id']);
+    if (chatId <= 0) return;
+    if (_chatPeerUserId(chat) > 0 && _chatPhoto(chat).isNotEmpty) return;
+
+    try {
+      final res = await http
+          .get(Uri.parse('$_apiBase/get_chat_members.php?chat_id=$chatId'))
+          .timeout(const Duration(seconds: 8));
+      if (res.statusCode != 200) return;
+
+      final decoded = json.decode(res.body.trimLeft());
+      final raw = decoded is List
+          ? decoded
+          : decoded is Map
+              ? (decoded['members'] ?? decoded['data'] ?? <dynamic>[])
+              : <dynamic>[];
+      if (raw is! List) return;
+
+      Map<String, dynamic>? peer;
+      for (final entry in raw.whereType<Map>()) {
+        final member = Map<String, dynamic>.from(entry);
+        final id = _asInt(member['user_id'] ?? member['userId'] ?? member['id']);
+        if (id > 0 && id != widget.userId) {
+          peer = member;
+          break;
+        }
+      }
+      if (peer == null) return;
+
+      final peerId =
+          _asInt(peer['user_id'] ?? peer['userId'] ?? peer['id']);
+      final peerPhoto = _chatPhoto(<String, dynamic>{
+        ...peer,
+        'is_private': 1,
+        'peer_photo': peer['peer_photo'] ??
+            peer['photo'] ??
+            peer['photo_url'] ??
+            peer['avatar'] ??
+            peer['avatar_url'] ??
+            peer['user_photo'] ??
+            peer['user_avatar'],
+      });
+      final first = (peer['first_name'] ?? '').toString().trim();
+      final last = (peer['last_name'] ?? '').toString().trim();
+      final peerName = '$first $last'.trim();
+
+      chat['peer_id'] = peerId;
+      if (peerPhoto.isNotEmpty) chat['peer_photo'] = peerPhoto;
+      if (peerName.isNotEmpty) {
+        chat['title'] = peerName;
+        chat['peer_name'] = peerName;
+      }
+
+      if (!mounted || _selectedChatId != chatId) return;
+      setState(() {
+        _selectedChat = Map<String, dynamic>.from(chat!);
+        if ((_selectedChatName.trim().isEmpty ||
+                _selectedChatName == 'Личный чат') &&
+            peerName.isNotEmpty) {
+          _selectedChatName = peerName;
+        }
+      });
+    } catch (_) {
+      // Старый API участников не должен мешать открытию переписки.
+    }
+  }
+
+  Future<void> _openChatPeerProfile(Map<String, dynamic>? chat) async {
+    if (chat == null || !_isPrivate(chat)) return;
+    if (_chatPeerUserId(chat) <= 0) await _ensureChatPeerData(chat);
+    final peerId = _chatPeerUserId(chat);
+    if (peerId <= 0 || !mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => MyProfileScreen(userId: peerId, publicView: true),
+      ),
+    );
   }
 
   // ===== TELEGRAM-LIKE TIME =====
@@ -911,7 +1054,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   // ===== OPEN CHAT =====
   Future<void> _openChat(Map<String, dynamic> chat) async {
-    final title = _chatTitle(chat);
+    var title = _chatTitle(chat);
     final chatId = _asInt(chat['id']);
 
     final unread = int.tryParse((chat['unread_count'] ?? '0').toString()) ?? 0;
@@ -935,17 +1078,28 @@ class _ChatScreenState extends State<ChatScreen> {
         _selectedChatId = chatId;
         _selectedChatName = title;
       });
+      if (_isPrivate(chat)) unawaited(_ensureChatPeerData(_selectedChat));
       return;
     }
 
     // Телефон: обычный полноэкранный маршрут.
+    if (_isPrivate(chat)) {
+      await _ensureChatPeerData(chat);
+      title = _chatTitle(chat);
+    }
+    if (!mounted) return;
     await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => ChatRoomScreen(
           chatId: chatId,
           userId: widget.userId,
+          clubId: _clubIdForChat(chat),
           chatName: title,
+          isGroup: !_isPrivate(chat),
+          groupAvatarUrl: _isPrivate(chat) ? '' : _chatPhoto(chat),
+          peerUserId: _chatPeerUserId(chat),
+          peerAvatarUrl: _isPrivate(chat) ? _chatPhoto(chat) : '',
         ),
       ),
     );
@@ -959,6 +1113,7 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _createOrOpenPrivateChat({
     required int peerId,
     String? peerTitleForHeader,
+    String peerAvatarUrl = '',
   }) async {
     final messenger = ScaffoldMessenger.of(context);
     messenger.hideCurrentSnackBar();
@@ -1014,6 +1169,8 @@ class _ChatScreenState extends State<ChatScreen> {
             'title': title,
             'name': title,
             'is_private': 1,
+            'peer_id': peerId,
+            'peer_photo': peerAvatarUrl,
           };
         });
         unawaited(_reloadCurrentTab());
@@ -1026,7 +1183,10 @@ class _ChatScreenState extends State<ChatScreen> {
           builder: (_) => ChatRoomScreen(
             chatId: chatId,
             userId: widget.userId,
+            clubId: widget.clubId ?? 0,
             chatName: title,
+            peerUserId: peerId,
+            peerAvatarUrl: peerAvatarUrl,
           ),
         ),
       ).then((_) {
@@ -1702,6 +1862,7 @@ class _ChatScreenState extends State<ChatScreen> {
     await _createOrOpenPrivateChat(
       peerId: chosen.id,
       peerTitleForHeader: chosen.title,
+      peerAvatarUrl: chosen.photo,
     );
   }
 
@@ -2271,7 +2432,7 @@ class _ChatScreenState extends State<ChatScreen> {
     final title =
         _selectedChatName.trim().isEmpty ? 'Чат' : _selectedChatName.trim();
     final isPrivate = chat == null ? true : _isPrivate(chat);
-    final avatarUrl = chat == null ? '' : _peerPhoto(chat);
+    final avatarUrl = chat == null ? '' : _chatPhoto(chat);
 
     return Container(
       color: Colors.white,
@@ -2282,6 +2443,9 @@ class _ChatScreenState extends State<ChatScreen> {
             subtitle: isPrivate ? 'Личный диалог' : 'Групповой чат',
             avatarUrl: avatarUrl,
             isGroup: !isPrivate,
+            onProfileTap: isPrivate
+                ? () => unawaited(_openChatPeerProfile(chat))
+                : null,
             onBack: showBack ? _closeEmbeddedChat : null,
           ),
           const Divider(
@@ -2294,7 +2458,12 @@ class _ChatScreenState extends State<ChatScreen> {
               key: ValueKey('profile-chat-$chatId'),
               chatId: chatId,
               userId: widget.userId,
+              clubId: _clubIdForChat(chat),
               chatName: title,
+              isGroup: !isPrivate,
+              groupAvatarUrl: isPrivate ? '' : avatarUrl,
+              peerUserId: _chatPeerUserId(chat),
+              peerAvatarUrl: isPrivate ? avatarUrl : '',
               embedded: true,
             ),
           ),
@@ -2471,7 +2640,10 @@ class _ChatScreenState extends State<ChatScreen> {
                   },
                 )
               : _tab == _ChatTab.calls
-                  ? CallHistoryPanel(userId: widget.userId)
+                  ? CallHistoryPanel(
+                      userId: widget.userId,
+                      clubId: widget.clubId ?? 0,
+                    )
                   : isLoading
                       ? const Center(
                           child: CircularProgressIndicator(
@@ -2972,7 +3144,7 @@ class _ChatScreenState extends State<ChatScreen> {
     Map<String, dynamic> chat,
   ) {
     final title = _chatTitle(chat);
-    final peerPhoto = _peerPhoto(chat);
+    final peerPhoto = _chatPhoto(chat);
     final isPrivate = _isPrivate(chat);
     final isGroup = !isPrivate;
     final rightTime = _chatRightTime(chat);
@@ -3056,7 +3228,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       color: _ChatStyle.soft,
                       borderRadius: BorderRadius.circular(11),
                     ),
-                    child: isPrivate && peerPhoto.isNotEmpty
+                    child: peerPhoto.isNotEmpty
                         ? Image.network(
                             peerPhoto,
                             fit: BoxFit.cover,
@@ -3363,6 +3535,7 @@ class _ProfileChatHeader extends StatelessWidget {
   final String avatarUrl;
   final bool isGroup;
   final VoidCallback? onBack;
+  final VoidCallback? onProfileTap;
 
   const _ProfileChatHeader({
     required this.title,
@@ -3370,6 +3543,7 @@ class _ProfileChatHeader extends StatelessWidget {
     required this.avatarUrl,
     required this.isGroup,
     this.onBack,
+    this.onProfileTap,
   });
 
   String get _initials {
@@ -3411,62 +3585,78 @@ class _ProfileChatHeader extends StatelessWidget {
             ),
             const SizedBox(width: 9),
           ],
-          Container(
-            width: 36,
-            height: 36,
-            clipBehavior: Clip.antiAlias,
-            decoration: BoxDecoration(
-              color: _ChatStyle.greenSoft,
+          Expanded(
+            child: Material(
+              color: Colors.transparent,
               borderRadius: BorderRadius.circular(11),
-            ),
-            child: avatarUrl.isNotEmpty
-                ? Image.network(
-                    avatarUrl,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Center(
-                      child: isGroup
-                          ? const _ChatDots(compact: true)
-                          : Text(
-                              _initials,
-                              style: _ChatText.title(
-                                10.7,
-                                color: _ChatStyle.greenDark,
+              child: InkWell(
+                onTap: onProfileTap,
+                borderRadius: BorderRadius.circular(11),
+                child: Row(
+                  children: <Widget>[
+                    Container(
+                      width: 36,
+                      height: 36,
+                      clipBehavior: Clip.antiAlias,
+                      decoration: BoxDecoration(
+                        color: _ChatStyle.greenSoft,
+                        borderRadius: BorderRadius.circular(11),
+                      ),
+                      child: avatarUrl.isNotEmpty
+                          ? Image.network(
+                              avatarUrl,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Center(
+                                child: isGroup
+                                    ? const _ChatDots(compact: true)
+                                    : Text(
+                                        _initials,
+                                        style: _ChatText.title(
+                                          10.7,
+                                          color: _ChatStyle.greenDark,
+                                        ),
+                                      ),
                               ),
+                            )
+                          : Center(
+                              child: isGroup
+                                  ? const _ChatDots(compact: true)
+                                  : Text(
+                                      _initials,
+                                      style: _ChatText.title(
+                                        10.7,
+                                        color: _ChatStyle.greenDark,
+                                      ),
+                                    ),
                             ),
                     ),
-                  )
-                : Center(
-                    child: isGroup
-                        ? const _ChatDots(compact: true)
-                        : Text(
-                            _initials,
-                            style: _ChatText.title(
-                              10.7,
-                              color: _ChatStyle.greenDark,
-                            ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text(
+                            title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: _ChatText.title(13.8),
                           ),
-                  ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: _ChatText.title(13.8),
+                          const SizedBox(height: 2),
+                          Text(
+                            onProfileTap == null
+                                ? subtitle
+                                : '$subtitle · профиль',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: _ChatText.body(9.8),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: _ChatText.body(9.8),
-                ),
-              ],
+              ),
             ),
           ),
           const SizedBox(width: 8),

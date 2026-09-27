@@ -567,40 +567,84 @@ class _UploadReelScreenState extends State<UploadReelScreen>
 
     final base = Theme.of(context);
 
+    Widget publishHint() {
+      if (_videoFile == null) {
+        return Center(
+          child: Text(
+            'Сначала выберите ролик из галереи',
+            textAlign: TextAlign.center,
+            style: _t(
+              9.4,
+              color: const Color(0xFF98A2B3),
+            ),
+          ),
+        );
+      }
+
+      if (_descriptionController.text.trim().isEmpty) {
+        return Center(
+          child: Text(
+            'Добавьте короткую подпись, чтобы опубликовать Reels',
+            textAlign: TextAlign.center,
+            style: _t(
+              9.4,
+              color: const Color(0xFF98A2B3),
+            ),
+          ),
+        );
+      }
+
+      return const SizedBox.shrink();
+    }
+
     Widget content() {
+      final composerWidth = MediaQuery.sizeOf(context).width;
+      final wideComposer = widget.hideChrome && composerWidth >= 680;
+
       return Column(
         children: [
           if (_isUploading) _buildSlimUploadProgress(),
           Expanded(
             child: ListView(
               physics: const BouncingScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(12, 10, 12, 28),
+              padding: EdgeInsets.fromLTRB(
+                wideComposer ? 14 : 12,
+                wideComposer ? 12 : 10,
+                wideComposer ? 14 : 12,
+                28,
+              ),
               children: [
-                _buildInstagramVideoComposer(),
-                const SizedBox(height: 12),
-                _buildInstagramCaption(),
-                const SizedBox(height: 18),
-                if (_videoFile == null)
-                  Center(
-                    child: Text(
-                      'Сначала выберите ролик из галереи',
-                      style: _t(
-                        9.4,
-                        color: const Color(0xFF98A2B3),
+                if (wideComposer)
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        flex: 11,
+                        child: _buildInstagramVideoComposer(
+                          compactPreview: true,
+                        ),
                       ),
-                    ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        flex: 9,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _buildInstagramCaption(),
+                            const SizedBox(height: 14),
+                            publishHint(),
+                          ],
+                        ),
+                      ),
+                    ],
                   )
-                else if (_descriptionController.text.trim().isEmpty)
-                  Center(
-                    child: Text(
-                      'Добавьте короткую подпись, чтобы опубликовать Reels',
-                      textAlign: TextAlign.center,
-                      style: _t(
-                        9.4,
-                        color: const Color(0xFF98A2B3),
-                      ),
-                    ),
-                  ),
+                else ...[
+                  _buildInstagramVideoComposer(),
+                  const SizedBox(height: 12),
+                  _buildInstagramCaption(),
+                  const SizedBox(height: 18),
+                  publishHint(),
+                ],
               ],
             ),
           ),
@@ -755,17 +799,94 @@ class _UploadReelScreenState extends State<UploadReelScreen>
     );
   }
 
-  Widget _buildInstagramVideoComposer() {
+  Widget _buildInstagramVideoComposer({bool compactPreview = false}) {
     final hasVideo = _videoFile != null;
 
     return Column(
       children: [
         Center(
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 330),
+            constraints: BoxConstraints(
+              maxWidth: 330,
+              maxHeight: compactPreview ? 430 : double.infinity,
+            ),
             child: hasVideo
                 ? _buildVideoPreview()
-                : AspectRatio(
+                : compactPreview
+                    ? SizedBox(
+                        height: 360,
+                        child: Material(
+                          color: const Color(0xFFF2F6F3),
+                          borderRadius: BorderRadius.circular(16),
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(16),
+                            onTap: _isUploading ? null : _pickVideo,
+                            child: Stack(
+                              children: [
+                                Positioned.fill(
+                                  child: DecoratedBox(
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(16),
+                                      gradient: const LinearGradient(
+                                        begin: Alignment.topCenter,
+                                        end: Alignment.bottomCenter,
+                                        colors: [
+                                          Color(0xFFF4F8F5),
+                                          Color(0xFFEAF5EE),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                Center(
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Container(
+                                        width: 54,
+                                        height: 54,
+                                        decoration: BoxDecoration(
+                                          color: Colors.white,
+                                          shape: BoxShape.circle,
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: Colors.black.withOpacity(.06),
+                                              blurRadius: 18,
+                                              offset: const Offset(0, 7),
+                                            ),
+                                          ],
+                                        ),
+                                        child: const Icon(
+                                          Icons.add_rounded,
+                                          size: 30,
+                                          color: Color(0xFF00A750),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 13),
+                                      Text(
+                                        'Выбрать видео',
+                                        style: _t(
+                                          12.2,
+                                          weight: FontWeight.w700,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        'MP4 / MOV · из галереи',
+                                        style: _t(
+                                          9.5,
+                                          color: const Color(0xFF667085),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      )
+                    : AspectRatio(
                     aspectRatio: 9 / 16,
                     child: Material(
                       color: const Color(0xFFF2F6F3),
