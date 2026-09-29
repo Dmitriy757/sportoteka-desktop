@@ -2348,22 +2348,53 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
               nestedDocumentKey.isNotEmpty);
 
       final currentText = message.text.trimRight();
-      final tailStart = math.max(0, currentText.length - 1400);
-      final answerTail = currentText.substring(tailStart);
-      final continuePrompt =
-          'Продолжи ПРЕДЫДУЩИЙ ответ непосредственно после его последнего '
-          'символа. Это не новый вопрос и не новый ответ. Если конец оборван '
-          'внутри слова или предложения, СНАЧАЛА допиши именно этот оборванный '
-          'фрагмент, затем продолжай мысль. Не перескакивай на другую тему, не '
-          'добавляй вступление «Продолжение», не повторяй заголовки и уже '
-          'показанный текст. Сохрани язык, структуру и нумерацию. Продолжай '
-          'до логического завершения текущего раздела или списка: не обрывай '
-          'ответ на двоеточии, незавершённом пункте, маркере или половине '
-          'предложения. Верни только текст, который должен идти сразу после '
-          'показанного конца.\n\n'
-          'ТОЧНЫЙ КОНЕЦ ПРЕДЫДУЩЕГО ОТВЕТА:\n'
-          '<<<$answerTail>>>\n\n'
-          'Продолжай строго после символов перед >>>.';
+
+      // PersonalAssistantRequest на сервере ограничивает поле q 2000
+      // символами. Раньше инструкция + 1400 символов предыдущего ответа
+      // превышали этот лимит, и FastAPI возвращал string_too_long ещё до Qwen.
+      //
+      // Предыдущий ответ уже присутствует в memory, поэтому для точной склейки
+      // достаточно компактного хвоста. Используем runes, чтобы не разрезать
+      // surrogate pair/emoji посередине.
+      const continuationTailRunes = 720;
+      const continuationQueryLimit = 1800; // запас до серверных 2000
+      final currentRunes = currentText.runes.toList(growable: false);
+      final tailFrom = math.max(0, currentRunes.length - continuationTailRunes);
+      var answerTail =
+          String.fromCharCodes(currentRunes.sublist(tailFrom));
+
+      const continuePrefix =
+          'Продолжи предыдущий ответ без вступления и без повторения уже '
+          'показанного текста. Сохрани язык, формат и нумерацию. Если конец '
+          'оборван внутри слова или предложения, сначала закончи этот фрагмент. '
+          'Продолжай с места остановки до логического завершения текущего '
+          'раздела или списка. Не заканчивай на двоеточии, пустом маркере или '
+          'половине предложения. Верни только новый текст.\n\n'
+          'КОНЕЦ ПРЕДЫДУЩЕГО ОТВЕТА:\n<<<';
+      const continueSuffix =
+          '>>>\n\nПродолжай непосредственно после текста перед >>>.';
+
+      String buildContinuePrompt() =>
+          '$continuePrefix$answerTail$continueSuffix';
+
+      var continuePrompt = buildContinuePrompt();
+
+      // Дополнительная защита на случай изменения инструкции в будущем:
+      // q физически не уйдёт на сервер длиннее безопасного лимита.
+      while (continuePrompt.runes.length > continuationQueryLimit &&
+          answerTail.runes.length > 240) {
+        final tailRunes = answerTail.runes.toList(growable: false);
+        final removeCount =
+            math.min(120, math.max(1, tailRunes.length - 240)).toInt();
+        answerTail =
+            String.fromCharCodes(tailRunes.sublist(removeCount));
+        continuePrompt = buildContinuePrompt();
+      }
+
+      debugPrint(
+        '[AI_CONTINUE] q_chars=${continuePrompt.runes.length} '
+        'tail_chars=${answerTail.runes.length}',
+      );
 
       final memory = _conversationMemory(throughIndex: index);
       final requestUrl = documentAi ? _documentAskUrl : _askUrl;

@@ -29,9 +29,6 @@ class _CmrClubDirectionsPanelState extends State<CmrClubDirectionsPanel> {
   static const List<String> _availableDisciplines = <String>[
     'EA Sports FC',
     'eFootball',
-    'Counter-Strike 2',
-    'Dota 2',
-    'Valorant',
   ];
 
   bool _loading = true;
@@ -57,9 +54,16 @@ class _CmrClubDirectionsPanelState extends State<CmrClubDirectionsPanel> {
     if (!mounted) return;
     setState(() {
       _state = state;
+      final supportedDisciplines = state.disciplines
+          .where(_availableDisciplines.contains)
+          .toSet();
       _selectedDisciplines
         ..clear()
-        ..addAll(state.disciplines.isEmpty ? const <String>['EA Sports FC'] : state.disciplines);
+        ..addAll(
+          supportedDisciplines.isEmpty
+              ? const <String>['EA Sports FC']
+              : supportedDisciplines,
+        );
       _loading = false;
     });
   }
@@ -254,7 +258,7 @@ class _CmrClubDirectionsPanelState extends State<CmrClubDirectionsPanel> {
                     Text(
                       _state.active
                           ? 'Sportoteka Esports подключён к ${widget.clubName.trim().isEmpty ? 'клубу' : widget.clubName.trim()}'
-                          : 'Отдельный Workspace: команды, турниры, Live, видео и AI-анализ',
+                          : 'Футбольный Esports Workspace: команды, турниры, Live, видео и AI-анализ',
                       style: AppTypography.custom(
                         size: 11.5,
                         weight: FontWeight.w400,
@@ -269,7 +273,7 @@ class _CmrClubDirectionsPanelState extends State<CmrClubDirectionsPanel> {
           ),
           const SizedBox(height: 16),
           Text(
-            'Дисциплины',
+            'Футбольные симуляторы',
             style: AppTypography.custom(
               size: 11.5,
               weight: FontWeight.w600,
@@ -309,6 +313,16 @@ class _CmrClubDirectionsPanelState extends State<CmrClubDirectionsPanel> {
               );
             }).toList(growable: false),
           ),
+          const SizedBox(height: 8),
+          Text(
+            'В этом направлении используются только футбольные игровые дисциплины.',
+            style: AppTypography.custom(
+              size: 10.8,
+              weight: FontWeight.w400,
+              color: _muted,
+              height: 1.35,
+            ),
+          ),
           const SizedBox(height: 16),
           Row(
             children: [
@@ -316,7 +330,7 @@ class _CmrClubDirectionsPanelState extends State<CmrClubDirectionsPanel> {
                 child: Text(
                   _state.active
                       ? 'Команды создаются внутри Sportoteka Esports. Никакая киберкоманда не создаётся автоматически.'
-                      : 'После подключения в HUB появится отдельная карточка Sportoteka Esports.',
+                      : 'После подключения в HUB появится отдельная карточка Sportoteka Esports для футбольного киберспорта.',
                   style: AppTypography.custom(
                     size: 11.5,
                     weight: FontWeight.w400,

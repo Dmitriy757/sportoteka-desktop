@@ -4,6 +4,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:sportoteka/core/theme/app_typography.dart';
 
@@ -27,6 +28,9 @@ class SportotekaNewsScreen extends StatefulWidget {
 
 class _SportotekaNewsScreenState extends State<SportotekaNewsScreen> {
   static const _base = 'https://sportotekaapp.ru/api/sportoteka_news';
+
+  String get _hiddenThroughKey =>
+      'sportoteka_news_hidden_through_${widget.userId}';
 
   final ScrollController _scroll = ScrollController();
 
@@ -65,12 +69,25 @@ class _SportotekaNewsScreenState extends State<SportotekaNewsScreen> {
       if (decoded is! Map || decoded['success'] != true) return;
 
       final raw = decoded['items'];
-      final next = raw is List
+      final allItems = raw is List
           ? raw
               .whereType<Map>()
               .map((e) => Map<String, dynamic>.from(e))
               .toList()
           : <Map<String, dynamic>>[];
+
+      // Удаление канала означает «забыть всю историю до текущего сообщения».
+      // list.php по-прежнему может вернуть старые записи, поэтому отсекаем их
+      // локально по сохранённой границе. При следующем системном сообщении
+      // пользователь увидит только новое, а удалённая история не воскреснет.
+      final prefs = await SharedPreferences.getInstance();
+      final hiddenThroughId = prefs.getInt(_hiddenThroughKey) ?? 0;
+      final next = hiddenThroughId > 0
+          ? allItems.where((item) {
+              final id = int.tryParse('${item['id'] ?? ''}');
+              return id == null || id > hiddenThroughId;
+            }).toList()
+          : allItems;
 
       if (!mounted) return;
 
@@ -112,6 +129,21 @@ class _SportotekaNewsScreenState extends State<SportotekaNewsScreen> {
     } catch (_) {}
   }
 
+  Future<void> _rememberHiddenThroughLatest() async {
+    var latestId = 0;
+    for (final item in _items) {
+      final id = int.tryParse('${item['id'] ?? ''}') ?? 0;
+      if (id > latestId) latestId = id;
+    }
+    if (latestId <= 0) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    final current = prefs.getInt(_hiddenThroughKey) ?? 0;
+    if (latestId > current) {
+      await prefs.setInt(_hiddenThroughKey, latestId);
+    }
+  }
+
   Future<void> _hideChannel() async {
     if (_hiding) return;
 
@@ -126,8 +158,9 @@ class _SportotekaNewsScreenState extends State<SportotekaNewsScreen> {
           ),
         ),
         content: Text(
-          'Канал исчезнет из списка чатов. '
-          'Когда SPORTOTEKA опубликует новое сообщение, он появится снова.',
+          'Канал исчезнет из списка чатов, а текущая история будет удалена. '
+          'Когда SPORTOTEKA опубликует новое сообщение, канал появится снова '
+          'только с новыми уведомлениями.',
           style: AppTypography.body(
             color: const Color(0xFF667085),
           ),
@@ -165,6 +198,9 @@ class _SportotekaNewsScreenState extends State<SportotekaNewsScreen> {
           res.statusCode == 200 && decoded is Map && decoded['success'] == true;
 
       if (!success || !mounted) return;
+
+      await _rememberHiddenThroughLatest();
+      if (!mounted) return;
 
       widget.onUnreadChanged?.call(0);
       widget.onHidden?.call();

@@ -218,6 +218,9 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _newsVisible = false;
   Map<String, dynamic>? _newsLatest;
 
+  String get _newsHiddenThroughKey =>
+      'sportoteka_news_hidden_through_${widget.userId}';
+
   _ChatTab _tab = _ChatTab.privateChats;
 
   // На планшете и ПК чат открываем внутри этого же экрана, а не через
@@ -643,6 +646,14 @@ class _ChatScreenState extends State<ChatScreen> {
           ? Map<String, dynamic>.from(decoded['latest'] as Map)
           : null;
 
+      // В том числе мигрирует уже скрытый ранее канал: пока summary.php
+      // сообщает visible=false, фиксируем последнюю запись как границу удаления.
+      // Поэтому после обновления приложения старые уведомления тоже не вернутся
+      // при первом новом системном сообщении.
+      if (!visible && latest != null) {
+        await _rememberSportotekaNewsHiddenThrough(latest);
+      }
+
       if (mounted) {
         final changed = visible != _newsVisible ||
             unread != _newsUnread ||
@@ -687,6 +698,20 @@ class _ChatScreenState extends State<ChatScreen> {
     await _fetchUnreadTotal();
   }
 
+  Future<void> _rememberSportotekaNewsHiddenThrough([
+    Map<String, dynamic>? latest,
+  ]) async {
+    final source = latest ?? _newsLatest;
+    final latestId = int.tryParse('${source?['id'] ?? ''}') ?? 0;
+    if (latestId <= 0) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    final current = prefs.getInt(_newsHiddenThroughKey) ?? 0;
+    if (latestId > current) {
+      await prefs.setInt(_newsHiddenThroughKey, latestId);
+    }
+  }
+
   Future<void> _hideSportotekaNews() async {
     try {
       final res = await http.post(
@@ -701,6 +726,9 @@ class _ChatScreenState extends State<ChatScreen> {
           decoded is Map &&
           decoded['success'] == true &&
           mounted) {
+        await _rememberSportotekaNewsHiddenThrough();
+        if (!mounted) return;
+
         setState(() {
           _newsVisible = false;
           _newsUnread = 0;
@@ -720,8 +748,9 @@ class _ChatScreenState extends State<ChatScreen> {
           style: _ChatText.title(13.5),
         ),
         content: Text(
-          'Канал исчезнет из списка. После следующего сообщения '
-          'SPORTOTEKA он появится снова автоматически.',
+          'Канал исчезнет из списка, а текущая история будет удалена. '
+          'После следующего сообщения SPORTOTEKA он появится снова '
+          'только с новыми уведомлениями.',
           style: _ChatText.body(11.0),
         ),
         actions: <Widget>[

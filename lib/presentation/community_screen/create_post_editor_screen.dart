@@ -267,7 +267,7 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
       text: updated,
       selection: TextSelection.collapsed(offset: start + emoji.length),
     );
-    _blocks[index] = TextBlock(updated);
+    _blocks[index] = block.copyWith(text: updated);
     if (mounted) setState(() {});
   }
 
@@ -918,7 +918,7 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
 
     if (ok == true) {
       final t = ctrl.text.trim();
-      setState(() => _blocks[i] = TextBlock(t));
+      setState(() => _blocks[i] = b.copyWith(text: t));
     }
   }
 
@@ -1711,6 +1711,353 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
     return spans;
   }
 
+
+  TextAlign _pressTextAlign(String value) {
+    switch (value) {
+      case 'center':
+        return TextAlign.center;
+      case 'right':
+        return TextAlign.right;
+      case 'justify':
+        return TextAlign.justify;
+      default:
+        return TextAlign.left;
+    }
+  }
+
+  TextStyle _pressTextBlockStyle(TextBlock block) {
+    final decorations = <TextDecoration>[];
+    if (block.underline) decorations.add(TextDecoration.underline);
+    if (block.strike) decorations.add(TextDecoration.lineThrough);
+
+    return AppTypography.body(
+      color: Color(block.colorValue),
+    ).copyWith(
+      fontSize: block.fontSize,
+      height: 1.42,
+      fontWeight: block.bold ? FontWeight.w700 : FontWeight.w500,
+      fontStyle: block.italic ? FontStyle.italic : FontStyle.normal,
+      decoration: decorations.isEmpty
+          ? TextDecoration.none
+          : TextDecoration.combine(decorations),
+      decorationColor: Color(block.colorValue),
+    );
+  }
+
+  void _updatePressTextBlock(
+    int index,
+    TextBlock block, {
+    double? fontSize,
+    bool? bold,
+    bool? italic,
+    bool? underline,
+    bool? strike,
+    String? align,
+    int? colorValue,
+    bool reset = false,
+  }) {
+    if (index < 0 || index >= _blocks.length) return;
+    final current = _blocks[index] is TextBlock
+        ? _blocks[index] as TextBlock
+        : block;
+
+    setState(() {
+      _blocks[index] = reset
+          ? TextBlock(current.text)
+          : current.copyWith(
+              fontSize: fontSize,
+              bold: bold,
+              italic: italic,
+              underline: underline,
+              strike: strike,
+              align: align,
+              colorValue: colorValue,
+            );
+    });
+  }
+
+  Widget _pressFormatButton({
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback onTap,
+    bool active = false,
+  }) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: active ? const Color(0xFFEAF7F0) : Colors.transparent,
+        borderRadius: BorderRadius.circular(7),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(7),
+          child: SizedBox(
+            width: 34,
+            height: 34,
+            child: Icon(
+              icon,
+              size: 17,
+              color: active
+                  ? const Color(0xFF067A46)
+                  : const Color(0xFF4B5563),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPressTextToolbar(TextBlock block, int index) {
+    const sizes = <double>[12, 14, 16, 18, 22, 26, 30];
+    const colors = <int>[
+      0xFF111827,
+      0xFF4B5563,
+      0xFF067A46,
+      0xFF00A750,
+      0xFF2563EB,
+      0xFFD92D20,
+    ];
+
+    return Container(
+      height: 42,
+      decoration: const BoxDecoration(
+        color: Color(0xFFFAFBFA),
+        border: Border(
+          bottom: BorderSide(color: Color(0xFFE9ECEA), width: .7),
+        ),
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+        child: Row(
+          children: [
+            PopupMenuButton<double>(
+              tooltip: 'Размер шрифта',
+              padding: EdgeInsets.zero,
+              onSelected: (value) => _updatePressTextBlock(
+                index,
+                block,
+                fontSize: value,
+              ),
+              itemBuilder: (_) => sizes
+                  .map(
+                    (size) => PopupMenuItem<double>(
+                      value: size,
+                      child: Text('${size.toInt()} px'),
+                    ),
+                  )
+                  .toList(),
+              child: Container(
+                height: 34,
+                padding: const EdgeInsets.symmetric(horizontal: 9),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(7),
+                  border: Border.all(
+                    color: const Color(0xFFE1E5E2),
+                    width: .7,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.format_size_rounded,
+                      size: 16,
+                      color: Color(0xFF4B5563),
+                    ),
+                    const SizedBox(width: 5),
+                    Text(
+                      '${block.fontSize.toInt()}',
+                      style: _editorText(
+                        9.6,
+                        weight: FontWeight.w600,
+                        color: const Color(0xFF374151),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: 4),
+            _pressFormatButton(
+              icon: Icons.format_bold_rounded,
+              tooltip: 'Жирный',
+              active: block.bold,
+              onTap: () => _updatePressTextBlock(
+                index,
+                block,
+                bold: !block.bold,
+              ),
+            ),
+            _pressFormatButton(
+              icon: Icons.format_italic_rounded,
+              tooltip: 'Курсив',
+              active: block.italic,
+              onTap: () => _updatePressTextBlock(
+                index,
+                block,
+                italic: !block.italic,
+              ),
+            ),
+            _pressFormatButton(
+              icon: Icons.format_underlined_rounded,
+              tooltip: 'Подчёркивание',
+              active: block.underline,
+              onTap: () => _updatePressTextBlock(
+                index,
+                block,
+                underline: !block.underline,
+              ),
+            ),
+            _pressFormatButton(
+              icon: Icons.strikethrough_s_rounded,
+              tooltip: 'Зачёркивание',
+              active: block.strike,
+              onTap: () => _updatePressTextBlock(
+                index,
+                block,
+                strike: !block.strike,
+              ),
+            ),
+            Container(
+              width: 1,
+              height: 22,
+              margin: const EdgeInsets.symmetric(horizontal: 4),
+              color: const Color(0xFFE1E5E2),
+            ),
+            _pressFormatButton(
+              icon: Icons.format_align_left_rounded,
+              tooltip: 'По левому краю',
+              active: block.align == 'left',
+              onTap: () => _updatePressTextBlock(
+                index,
+                block,
+                align: 'left',
+              ),
+            ),
+            _pressFormatButton(
+              icon: Icons.format_align_center_rounded,
+              tooltip: 'По центру',
+              active: block.align == 'center',
+              onTap: () => _updatePressTextBlock(
+                index,
+                block,
+                align: 'center',
+              ),
+            ),
+            _pressFormatButton(
+              icon: Icons.format_align_right_rounded,
+              tooltip: 'По правому краю',
+              active: block.align == 'right',
+              onTap: () => _updatePressTextBlock(
+                index,
+                block,
+                align: 'right',
+              ),
+            ),
+            _pressFormatButton(
+              icon: Icons.format_align_justify_rounded,
+              tooltip: 'По ширине',
+              active: block.align == 'justify',
+              onTap: () => _updatePressTextBlock(
+                index,
+                block,
+                align: 'justify',
+              ),
+            ),
+            Container(
+              width: 1,
+              height: 22,
+              margin: const EdgeInsets.symmetric(horizontal: 4),
+              color: const Color(0xFFE1E5E2),
+            ),
+            PopupMenuButton<int>(
+              tooltip: 'Цвет текста',
+              padding: EdgeInsets.zero,
+              onSelected: (value) => _updatePressTextBlock(
+                index,
+                block,
+                colorValue: value,
+              ),
+              itemBuilder: (_) => colors
+                  .map(
+                    (value) => PopupMenuItem<int>(
+                      value: value,
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 18,
+                            height: 18,
+                            decoration: BoxDecoration(
+                              color: Color(value),
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: const Color(0xFFD7DBD8),
+                                width: .6,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 9),
+                          Text(
+                            value == 0xFF111827
+                                ? 'Основной'
+                                : value == 0xFF4B5563
+                                    ? 'Графит'
+                                    : value == 0xFF067A46
+                                        ? 'Зелёный тёмный'
+                                        : value == 0xFF00A750
+                                            ? 'Зелёный'
+                                            : value == 0xFF2563EB
+                                                ? 'Синий'
+                                                : 'Красный',
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                  .toList(),
+              child: Container(
+                width: 34,
+                height: 34,
+                alignment: Alignment.center,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    const Icon(
+                      Icons.format_color_text_rounded,
+                      size: 17,
+                      color: Color(0xFF4B5563),
+                    ),
+                    Positioned(
+                      bottom: 5,
+                      child: Container(
+                        width: 15,
+                        height: 3,
+                        decoration: BoxDecoration(
+                          color: Color(block.colorValue),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            _pressFormatButton(
+              icon: Icons.format_clear_rounded,
+              tooltip: 'Сбросить форматирование',
+              onTap: () => _updatePressTextBlock(
+                index,
+                block,
+                reset: true,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildTextBlockPreview(TextBlock b, int index) {
     if (widget.pressMode) {
       final controller = _pressTextController(index, b.text);
@@ -1725,51 +2072,57 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
             width: .7,
           ),
         ),
-        child: TextField(
-          controller: controller,
-          autofocus: b.text.trim().isEmpty && index == _blocks.length - 1,
-          minLines: 5,
-          maxLines: 18,
-          keyboardType: TextInputType.multiline,
-          textInputAction: TextInputAction.newline,
-          textCapitalization: TextCapitalization.sentences,
-          enableSuggestions: true,
-          autocorrect: true,
-          style: AppTypography.body(
-            color: const Color(0xFF111827),
-          ).copyWith(
-            height: 1.42,
-            fontWeight: FontWeight.w500,
-          ),
-          onChanged: (value) {
-            _blocks[index] = TextBlock(value);
-          },
-          decoration: InputDecoration(
-            hintText: 'Введите текст публикации…',
-            hintStyle: _editorText(
-              10.6,
-              color: const Color(0xFF98A2B3),
-            ),
-            filled: true,
-            fillColor: Colors.transparent,
-            contentPadding: const EdgeInsets.fromLTRB(12, 12, 4, 12),
-            suffixIconConstraints: const BoxConstraints(
-              minWidth: 44,
-              minHeight: 44,
-            ),
-            suffixIcon: IconButton(
-              tooltip: 'Добавить смайлик',
-              onPressed: _saving ? null : () => _showPressEmojiPicker(index),
-              icon: const Icon(
-                Icons.emoji_emotions_outlined,
-                size: 20,
-                color: Color(0xFF067A46),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _buildPressTextToolbar(b, index),
+            TextField(
+              controller: controller,
+              autofocus: b.text.trim().isEmpty && index == _blocks.length - 1,
+              minLines: 5,
+              maxLines: 18,
+              keyboardType: TextInputType.multiline,
+              textInputAction: TextInputAction.newline,
+              textCapitalization: TextCapitalization.sentences,
+              enableSuggestions: true,
+              autocorrect: true,
+              textAlign: _pressTextAlign(b.align),
+              style: _pressTextBlockStyle(b),
+              onChanged: (value) {
+                final current = _blocks[index] is TextBlock
+                    ? _blocks[index] as TextBlock
+                    : b;
+                _blocks[index] = current.copyWith(text: value);
+              },
+              decoration: InputDecoration(
+                hintText: 'Введите текст публикации…',
+                hintStyle: _editorText(
+                  10.6,
+                  color: const Color(0xFF98A2B3),
+                ),
+                filled: true,
+                fillColor: Colors.transparent,
+                contentPadding: const EdgeInsets.fromLTRB(12, 12, 4, 12),
+                suffixIconConstraints: const BoxConstraints(
+                  minWidth: 44,
+                  minHeight: 44,
+                ),
+                suffixIcon: IconButton(
+                  tooltip: 'Добавить смайлик',
+                  onPressed: _saving ? null : () => _showPressEmojiPicker(index),
+                  icon: const Icon(
+                    Icons.emoji_emotions_outlined,
+                    size: 20,
+                    color: Color(0xFF067A46),
+                  ),
+                ),
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
               ),
             ),
-            border: InputBorder.none,
-            enabledBorder: InputBorder.none,
-            focusedBorder: InputBorder.none,
-          ),
+          ],
         ),
       );
     }
@@ -2579,7 +2932,7 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
                     ],
                     Expanded(
                       child: Text(
-                        widget.isEdit ? 'Редактирование' : (_internalNewsMode ? 'Новая новость клуба' : 'Новая публикация'),
+                        widget.isEdit ? 'Редактирование' : (widget.pressMode ? (_internalNewsMode ? 'Новость в клуб' : 'Новость в общую ленту') : (_internalNewsMode ? 'Новая новость клуба' : 'Новая публикация')),
                         textAlign: isPhone ? TextAlign.center : TextAlign.start,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -2675,7 +3028,7 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
           titleSpacing: isPhone ? 0 : 14,
           title: isPhone
               ? Text(
-                  widget.isEdit ? 'Редактирование' : (_internalNewsMode ? 'Новая новость клуба' : 'Новая публикация'),
+                  widget.isEdit ? 'Редактирование' : (widget.pressMode ? (_internalNewsMode ? 'Новость в клуб' : 'Новость в общую ленту') : (_internalNewsMode ? 'Новая новость клуба' : 'Новая публикация')),
                   style: _editorText(
                     13.2,
                     weight: FontWeight.w600,
@@ -2688,7 +3041,7 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
                     _brandDots(),
                     const SizedBox(width: 8),
                     Text(
-                      widget.isEdit ? 'Редактирование поста' : (_internalNewsMode ? 'Новая новость клуба' : 'Новый пост'),
+                      widget.isEdit ? 'Редактирование поста' : (widget.pressMode ? (_internalNewsMode ? 'Новость в клуб' : 'Новость в общую ленту') : (_internalNewsMode ? 'Новая новость клуба' : 'Новый пост')),
                       style: _editorText(
                         14,
                         weight: FontWeight.w600,
@@ -2765,8 +3118,86 @@ class _CreatePostEditorScreenState extends State<CreatePostEditorScreen> {
     );
   }
 
+  Widget _buildPublicationDestinationBanner() {
+    final internal = _internalNewsMode;
+    final title = internal
+        ? 'Новость в клуб · внутренняя'
+        : 'Новость в общую ленту · публичная';
+    final subtitle = internal
+        ? 'Эту новость увидят только участники клуба и выбранных команд.'
+        : 'Эта новость попадёт в общую ленту СПОРТОТЕКИ и будет видна всем пользователям.';
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      decoration: BoxDecoration(
+        color: internal
+            ? const Color(0xFFF3FAF6)
+            : const Color(0xFFF7F9F8),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: internal
+              ? const Color(0xFFD7F0E2)
+              : const Color(0xFFE1E5E2),
+          width: .7,
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(9),
+            ),
+            child: Icon(
+              internal ? Icons.lock_outline_rounded : Icons.public_rounded,
+              size: 17,
+              color: internal
+                  ? const Color(0xFF067A46)
+                  : const Color(0xFF374151),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: _editorText(
+                    10.8,
+                    weight: FontWeight.w700,
+                    color: internal
+                        ? const Color(0xFF067A46)
+                        : const Color(0xFF111827),
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  subtitle,
+                  style: _editorText(
+                    9.8,
+                    color: const Color(0xFF5F6670),
+                  ).copyWith(height: 1.35),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   List<Widget> _buildEditorChildren() {
     return <Widget>[
+      if (widget.pressMode) ...[
+        _buildPublicationDestinationBanner(),
+        const SizedBox(height: 8),
+      ],
       if (_internalNewsMode) ...[
         _buildInternalAudienceSelector(),
         const SizedBox(height: 8),

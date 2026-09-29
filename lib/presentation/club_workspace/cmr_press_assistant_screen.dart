@@ -199,7 +199,7 @@ class _PressDotCluster extends StatelessWidget {
   }
 }
 
-enum _PressContentSection { clubNews, publicFeed, myMaterials }
+enum _PressContentSection { clubNews, publicFeed }
 
 class CmrPressAssistantScreen extends StatefulWidget {
   final int userId;
@@ -252,6 +252,16 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
   Map<String, dynamic>? _editingPost;
   List<Map<String, dynamic>> _posts = <Map<String, dynamic>>[];
   List<Map<String, dynamic>> _pressAssignments = <Map<String, dynamic>>[];
+  final Map<int, int> _workspaceNewsCounts = <int, int>{};
+  int _wholeClubNewsCount = 0;
+  int _allAccessibleNewsCount = 0;
+
+  // Независимый фильтр раздела «Новости клуба».
+  // 0 = все доступные команды; > 0 = конкретная команда.
+  // Он специально не связан с _activeTeamId: рабочая область определяет
+  // контекст работы/публикации, а этот фильтр — только то, что видно в ленте.
+  int _clubNewsFilterTeamId = 0;
+
   _PressContentSection _contentSection = _PressContentSection.clubNews;
 
   int _activeTeamId = 0;
@@ -365,7 +375,10 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
       await _assertStaffAccess();
       await _loadUser();
       await _loadAssignments();
-      await _loadPosts();
+      await Future.wait<void>(<Future<void>>[
+        _loadPosts(),
+        _loadWorkspaceNewsCounts(),
+      ]);
     } catch (e) {
       _error = 'Не удалось загрузить пресс-кабинет: $e';
     } finally {
@@ -544,7 +557,7 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
 
   Future<List<Map<String, dynamic>>> _fetchInternalPosts(
     int userId, {
-    bool mine = false,
+    int? teamId,
   }) async {
     final clubId = _resolvedClubId;
     if (clubId <= 0) throw Exception('Для пресс-службы не определён клуб');
@@ -552,8 +565,7 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
     final params = <String, String>{
       'viewer_id': '$userId',
       'club_id': '$clubId',
-      'team_id': '$_activeTeamId',
-      if (mine) 'mine': '1',
+      'team_id': '${teamId ?? _activeTeamId}',
     };
     final uri = Uri.parse('$_apiBase/get_club_news.php')
         .replace(queryParameters: params);
@@ -573,6 +585,74 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
     }).toList();
   }
 
+  Future<List<Map<String, dynamic>>> _fetchAllAccessibleInternalPosts(
+    int userId,
+  ) async {
+    if (_pressAssignments.isEmpty) return <Map<String, dynamic>>[];
+
+    // При доступе на весь клуб сервер уже может вернуть общую клубную ленту.
+    if (_canPublishWholeClub) {
+      return _fetchInternalPosts(userId, teamId: 0);
+    }
+
+    // Если пресс-секретарь назначен только на отдельные команды, собираем
+    // общую ленту из всех доступных ему команд и удаляем дубли новостей,
+    // опубликованных одновременно в несколько команд.
+    final teamIds = _pressAssignments
+        .map((row) => _asInt(row['team_id'] ?? row['teamId']))
+        .where((id) => id > 0)
+        .toSet()
+        .toList();
+
+    final chunks = await Future.wait<List<Map<String, dynamic>>>(
+      teamIds.map((teamId) => _fetchInternalPosts(userId, teamId: teamId)),
+    );
+
+    final unique = <String, Map<String, dynamic>>{};
+    for (final chunk in chunks) {
+      for (final post in chunk) {
+        final id = _asInt(post['id']);
+        final key = id > 0
+            ? 'id:$id'
+            : 'fallback:${_s(post['created_at'])}|${_s(post['title'])}|${_s(post['body'])}';
+        unique[key] = post;
+      }
+    }
+    return unique.values.toList();
+  }
+
+  Future<void> _loadWorkspaceNewsCounts() async {
+    final userId = await _resolvedUserId();
+    if (userId <= 0 || _pressAssignments.isEmpty) return;
+
+    try {
+      final entries = await Future.wait<MapEntry<int, int>>(
+        _pressAssignments.map((row) async {
+          final teamId = _asInt(row['team_id'] ?? row['teamId']);
+          if (teamId <= 0) return const MapEntry<int, int>(0, 0);
+          final posts = await _fetchInternalPosts(userId, teamId: teamId);
+          return MapEntry<int, int>(teamId, posts.length);
+        }),
+      );
+
+      final allAccessiblePosts = await _fetchAllAccessibleInternalPosts(userId);
+      final allAccessibleCount = allAccessiblePosts.length;
+      final wholeClubCount = _canPublishWholeClub ? allAccessibleCount : 0;
+
+      if (!mounted) return;
+      setState(() {
+        _workspaceNewsCounts
+          ..clear()
+          ..addEntries(entries.where((entry) => entry.key > 0));
+        _wholeClubNewsCount = wholeClubCount;
+        _allAccessibleNewsCount = allAccessibleCount;
+      });
+    } catch (_) {
+      // Счётчики — вспомогательная информация. Ошибка их загрузки не должна
+      // блокировать сам кабинет пресс-службы.
+    }
+  }
+
   Future<void> _loadPosts() async {
     final userId = await _resolvedUserId();
     if (userId <= 0) return;
@@ -587,20 +667,17 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
     List<Map<String, dynamic>> result;
     switch (_contentSection) {
       case _PressContentSection.clubNews:
-        result = await _fetchInternalPosts(userId);
+        if (_clubNewsFilterTeamId > 0) {
+          result = await _fetchInternalPosts(
+            userId,
+            teamId: _clubNewsFilterTeamId,
+          );
+        } else {
+          result = await _fetchAllAccessibleInternalPosts(userId);
+        }
         break;
       case _PressContentSection.publicFeed:
         result = await _fetchPublicPosts(userId);
-        break;
-      case _PressContentSection.myMaterials:
-        final chunks = await Future.wait<List<Map<String, dynamic>>>([
-          _fetchInternalPosts(userId, mine: true),
-          _fetchPublicPosts(userId),
-        ]);
-        result = <Map<String, dynamic>>[
-          ...chunks[0],
-          ...chunks[1],
-        ].where((post) => _asInt(post['user_id']) == userId).toList();
         break;
     }
 
@@ -690,18 +767,17 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
         return 'Новости клуба';
       case _PressContentSection.publicFeed:
         return 'Пресс-лента';
-      case _PressContentSection.myMaterials:
-        return 'Мои материалы';
     }
   }
 
   String get _newContentLabel =>
       _contentSection == _PressContentSection.publicFeed
-          ? 'Новая публикация'
-          : 'Новая новость';
+          ? 'Новость в общую ленту'
+          : 'Новость в клуб';
 
   Future<void> _selectContentSection(_PressContentSection section) async {
-    if (!mounted || _contentSection == section) return;
+    if (!mounted) return;
+    if (_contentSection == section && !_profileOpen && !_editorOpen) return;
     setState(() {
       _contentSection = section;
       _profileOpen = false;
@@ -714,6 +790,39 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
     } catch (e) {
       if (mounted) _snack('Не удалось загрузить раздел: $e');
     }
+  }
+
+  Future<void> _selectClubNewsFilter(int teamId) async {
+    if (teamId > 0) {
+      final available = _pressAssignments.any(
+        (row) => _asInt(row['team_id'] ?? row['teamId']) == teamId,
+      );
+      if (!available) return;
+    }
+
+    if (!mounted || _clubNewsFilterTeamId == teamId) return;
+    setState(() {
+      _clubNewsFilterTeamId = teamId;
+      _posts = <Map<String, dynamic>>[];
+      _error = null;
+    });
+
+    try {
+      await _loadPosts();
+    } catch (e) {
+      if (mounted) _snack('Не удалось применить фильтр: $e');
+    }
+  }
+
+  String get _clubNewsFilterLabel {
+    if (_clubNewsFilterTeamId <= 0) return 'Все команды';
+    final name = _teamNameById(_clubNewsFilterTeamId);
+    return name.isEmpty ? 'Команда' : name;
+  }
+
+  int _clubNewsFilterCount(int teamId) {
+    if (teamId <= 0) return _allAccessibleNewsCount;
+    return _workspaceNewsCounts[teamId] ?? 0;
   }
 
   List<int> _postTargetTeamIds(Map<String, dynamic> post) {
@@ -743,13 +852,30 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
       .where((row) => _asInt(row['id']) > 0)
       .toList();
 
-  void _openNewPost() {
+  void _openNewPostFor(_PressContentSection destination) {
     if (!mounted) return;
     setState(() {
+      _contentSection = destination;
       _profileOpen = false;
       _editingPost = null;
       _editorOpen = true;
     });
+  }
+
+  void _openNewInternalPost() {
+    _openNewPostFor(_PressContentSection.clubNews);
+  }
+
+  void _openNewPublicPost() {
+    _openNewPostFor(_PressContentSection.publicFeed);
+  }
+
+  void _openNewPost() {
+    _openNewPostFor(
+      _contentSection == _PressContentSection.publicFeed
+          ? _PressContentSection.publicFeed
+          : _PressContentSection.clubNews,
+    );
   }
 
   String _normalizePostMediaUrl(String raw) {
@@ -903,7 +1029,10 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
         _snack(_apiMessage(data, 'Не удалось удалить материал'));
         return;
       }
-      await _loadPosts();
+      await Future.wait<void>(<Future<void>>[
+        _loadPosts(),
+        _loadWorkspaceNewsCounts(),
+      ]);
       _snack('Материал удалён');
     } catch (e) {
       _snack('Ошибка удаления: $e');
@@ -917,7 +1046,12 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
       _editorOpen = false;
       _editingPost = null;
     });
-    if (refresh) await _loadPosts();
+    if (refresh) {
+      await Future.wait<void>(<Future<void>>[
+        _loadPosts(),
+        _loadWorkspaceNewsCounts(),
+      ]);
+    }
   }
 
   Future<int> _resolvedUserId() async {
@@ -1118,6 +1252,11 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
     });
   }
 
+  void _closeProfile() {
+    if (!mounted || !_profileOpen) return;
+    setState(() => _profileOpen = false);
+  }
+
   void _openFeed() {
     _selectContentSection(_PressContentSection.publicFeed);
   }
@@ -1130,7 +1269,7 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
 
   Widget _brandDots() => const _PressDotCluster();
 
-  Widget _buildHeader({required bool mobile}) {
+  Widget _buildHeader({required bool mobile, bool showProfileAction = false}) {
     return Container(
       constraints: BoxConstraints(minHeight: mobile ? 58 : 62),
       padding: EdgeInsets.symmetric(
@@ -1177,38 +1316,18 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
               ],
             ),
           ),
-          if (!mobile && !_profileOpen) ...[
-            Material(
-              color: _CmrPressColors.greenSoft2,
-              borderRadius: BorderRadius.circular(9),
-              child: InkWell(
-                onTap: _openNewPost,
-                borderRadius: BorderRadius.circular(9),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 11,
-                    vertical: 9,
-                  ),
-                  child: Text(
-                    _newContentLabel,
-                    style: _CmrPressText.action().copyWith(
-                      color: _CmrPressColors.greenDark,
-                      fontSize: 10.8,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 6),
-          ],
-          if (mobile && !_profileOpen)
+          if (showProfileAction)
             IconButton(
-              tooltip: _newContentLabel,
-              onPressed: _openNewPost,
-              icon: const Icon(
-                Icons.add_rounded,
+              tooltip: _profileOpen ? 'К новостям' : 'Профиль',
+              onPressed: _profileOpen ? _closeProfile : _openProfile,
+              icon: Icon(
+                _profileOpen
+                    ? Icons.arrow_back_rounded
+                    : Icons.person_outline_rounded,
                 size: 20,
-                color: _CmrPressColors.greenDark,
+                color: _profileOpen
+                    ? _CmrPressColors.greenDark
+                    : _CmrPressColors.muted2,
               ),
             ),
           if (widget.onClose != null)
@@ -1226,12 +1345,174 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
     );
   }
 
+  Widget _buildCreateDestinationChooser({bool compact = false}) {
+    Widget destination({
+      required IconData icon,
+      required String title,
+      required String subtitle,
+      required bool active,
+      required VoidCallback onTap,
+      required bool internal,
+    }) {
+      return Material(
+        color: active
+            ? (internal
+                ? _CmrPressColors.greenSoft
+                : _CmrPressColors.soft2)
+            : Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(10),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            curve: Curves.easeOutCubic,
+            constraints: const BoxConstraints(minHeight: 54),
+            padding: const EdgeInsets.fromLTRB(10, 8, 9, 8),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: active
+                    ? (internal
+                        ? _CmrPressColors.greenBorder
+                        : _CmrPressColors.line)
+                    : _CmrPressColors.line.withOpacity(.72),
+                width: .7,
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 34,
+                  height: 34,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: internal
+                        ? _CmrPressColors.greenSoft
+                        : _CmrPressColors.soft,
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  child: Icon(
+                    icon,
+                    size: 17,
+                    color: internal
+                        ? _CmrPressColors.greenDark
+                        : _CmrPressColors.graphiteSoft,
+                  ),
+                ),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        maxLines: compact ? 2 : 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: _CmrPressText.value(10.8).copyWith(
+                          color: internal
+                              ? _CmrPressColors.greenDark
+                              : _CmrPressColors.text,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        subtitle,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: _CmrPressText.muted(9.5),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Icon(
+                  active
+                      ? Icons.check_circle_rounded
+                      : Icons.chevron_right_rounded,
+                  size: active ? 16 : 17,
+                  color: active
+                      ? (internal
+                          ? _CmrPressColors.greenDark
+                          : _CmrPressColors.graphiteSoft)
+                      : _CmrPressColors.subtle,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final stacked = compact || constraints.maxWidth < 620;
+        final internalActive = _editorOpen &&
+            _editingPost == null &&
+            _contentSection == _PressContentSection.clubNews;
+        final publicActive = _editorOpen &&
+            _editingPost == null &&
+            _contentSection == _PressContentSection.publicFeed;
+
+        final club = destination(
+          icon: Icons.lock_outline_rounded,
+          title: 'Новость в клуб',
+          subtitle: 'Только внутри клуба и выбранных команд',
+          active: internalActive,
+          onTap: _openNewInternalPost,
+          internal: true,
+        );
+        final public = destination(
+          icon: Icons.public_rounded,
+          title: 'Новость в общую ленту',
+          subtitle: 'Публично для всей СПОРТОТЕКИ',
+          active: publicActive,
+          onTap: _openNewPublicPost,
+          internal: false,
+        );
+
+        return Container(
+          padding: EdgeInsets.fromLTRB(
+            stacked ? 10 : 14,
+            9,
+            stacked ? 10 : 14,
+            9,
+          ),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            border: Border(
+              bottom: BorderSide(color: _CmrPressColors.line, width: .55),
+            ),
+          ),
+          child: stacked
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    club,
+                    const SizedBox(height: 6),
+                    public,
+                  ],
+                )
+              : Row(
+                  children: [
+                    Expanded(child: club),
+                    const SizedBox(width: 8),
+                    Expanded(child: public),
+                  ],
+                ),
+        );
+      },
+    );
+  }
+
   String get _workspaceContextLabel {
     final parts = <String>[
       if (_activeClubName.trim().isNotEmpty) _activeClubName.trim(),
       if (_activeTeamName.trim().isNotEmpty) _activeTeamName.trim(),
     ];
     final context = parts.isEmpty ? 'Назначенные команды' : parts.join(' • ');
+    if (_profileOpen) return 'Профиль • $context';
     return '$_contentSectionTitle • $context';
   }
 
@@ -1435,6 +1716,7 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
       required String subtitle,
       required bool active,
       required VoidCallback onTap,
+      int? count,
     }) {
       return Material(
         color: Colors.transparent,
@@ -1469,11 +1751,49 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: _CmrPressText.navLabel(active: active),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: _CmrPressText.navLabel(active: active),
+                            ),
+                          ),
+                          if (count != null) ...[
+                            const SizedBox(width: 7),
+                            Container(
+                              constraints: const BoxConstraints(minWidth: 24),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 7,
+                                vertical: 3,
+                              ),
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                color: active
+                                    ? Colors.white.withOpacity(.82)
+                                    : _CmrPressColors.soft,
+                                borderRadius: BorderRadius.circular(999),
+                                border: Border.all(
+                                  color: active
+                                      ? _CmrPressColors.greenBorder
+                                      : _CmrPressColors.line.withOpacity(.7),
+                                  width: .6,
+                                ),
+                              ),
+                              child: Text(
+                                '$count',
+                                style: _CmrPressText.caption().copyWith(
+                                  color: active
+                                      ? _CmrPressColors.greenDark
+                                      : _CmrPressColors.muted2,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                       const SizedBox(height: 3),
                       Text(
@@ -1500,6 +1820,7 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _buildHeader(mobile: false),
+            if (!_profileOpen) _buildCreateDestinationChooser(compact: true),
             Expanded(
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(10, 10, 10, 12),
@@ -1521,6 +1842,7 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
                     item(
                       title: 'Весь клуб',
                       subtitle: 'общеклубные и командные новости',
+                      count: _wholeClubNewsCount,
                       active: _activeTeamId <= 0,
                       onTap: () {
                         _selectClubScope();
@@ -1533,6 +1855,7 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
                           ? 'Команда #${_asInt(row['team_id'])}'
                           : _s(row['team_name']).trim(),
                       subtitle: 'новости команды',
+                      count: _workspaceNewsCounts[_asInt(row['team_id'])] ?? 0,
                       active: _activeTeamId > 0 &&
                           _activeTeamId == _asInt(row['team_id']),
                       onTap: () {
@@ -1552,7 +1875,7 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
                   Padding(
                     padding: const EdgeInsets.fromLTRB(10, 0, 8, 7),
                     child: Text(
-                      'РАЗДЕЛЫ',
+                      'КОНТЕНТ',
                       style: AppTypography.custom(
                         size: 8.8,
                         weight: FontWeight.w600,
@@ -1571,6 +1894,10 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
                       _PressContentSection.clubNews,
                     ),
                   ),
+                  if (!_profileOpen &&
+                      !_editorOpen &&
+                      _contentSection == _PressContentSection.clubNews)
+                    _buildClubNewsTeamFilter(sidebar: true),
                   const SizedBox(height: 4),
                   item(
                     title: 'Пресс-лента',
@@ -1581,31 +1908,29 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
                       _PressContentSection.publicFeed,
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  item(
-                    title: 'Мои материалы',
-                    subtitle: 'внутренние и публичные',
-                    active: !_profileOpen && !_editorOpen &&
-                        _contentSection == _PressContentSection.myMaterials,
-                    onTap: () => _selectContentSection(
-                      _PressContentSection.myMaterials,
+                  const SizedBox(height: 9),
+                  Container(
+                    height: 1,
+                    margin: const EdgeInsets.symmetric(horizontal: 4),
+                    color: _CmrPressColors.line,
+                  ),
+                  const SizedBox(height: 9),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(10, 0, 8, 7),
+                    child: Text(
+                      'АККАУНТ',
+                      style: AppTypography.custom(
+                        size: 8.8,
+                        weight: FontWeight.w600,
+                        color: _CmrPressColors.subtle,
+                        height: 1.1,
+                        letterSpacing: .35,
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  item(
-                    title: _newContentLabel,
-                    subtitle: _contentSection == _PressContentSection.publicFeed
-                        ? 'публикация в общей ленте'
-                        : (_canPublishWholeClub
-                            ? 'весь клуб или выбранные команды'
-                            : 'одна или несколько доступных команд'),
-                    active: _editorOpen && _editingPost == null,
-                    onTap: _openNewPost,
-                  ),
-                  const SizedBox(height: 4),
                   item(
                     title: 'Профиль',
-                    subtitle: 'имя и безопасность',
+                    subtitle: 'имя, email и пароль',
                     active: _profileOpen,
                     onTap: _openProfile,
                   ),
@@ -1672,6 +1997,221 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildClubNewsTeamFilter({required bool sidebar}) {
+    if (_contentSection != _PressContentSection.clubNews ||
+        _profileOpen ||
+        _editorOpen) {
+      return const SizedBox.shrink();
+    }
+
+    Widget option({
+      required int teamId,
+      required String label,
+      required int count,
+    }) {
+      final selected = _clubNewsFilterTeamId == teamId;
+      return Material(
+        color: selected ? _CmrPressColors.greenSoft : _CmrPressColors.soft,
+        borderRadius: BorderRadius.circular(sidebar ? 9 : 999),
+        child: InkWell(
+          onTap: () => _selectClubNewsFilter(teamId),
+          borderRadius: BorderRadius.circular(sidebar ? 9 : 999),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            curve: Curves.easeOutCubic,
+            constraints: BoxConstraints(
+              minHeight: sidebar ? 38 : 34,
+            ),
+            padding: EdgeInsets.symmetric(
+              horizontal: sidebar ? 9 : 10,
+              vertical: sidebar ? 7 : 6,
+            ),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(sidebar ? 9 : 999),
+              border: Border.all(
+                color: selected
+                    ? _CmrPressColors.greenBorder
+                    : _CmrPressColors.line.withOpacity(.7),
+                width: .7,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: sidebar ? MainAxisSize.max : MainAxisSize.min,
+              children: [
+                Icon(
+                  selected
+                      ? Icons.radio_button_checked_rounded
+                      : Icons.radio_button_unchecked_rounded,
+                  size: 14,
+                  color: selected
+                      ? _CmrPressColors.greenDark
+                      : _CmrPressColors.subtle,
+                ),
+                const SizedBox(width: 6),
+                if (sidebar)
+                  Expanded(
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: _CmrPressText.navLabel(active: selected).copyWith(
+                        fontSize: 10.2,
+                      ),
+                    ),
+                  )
+                else
+                  Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: _CmrPressText.action().copyWith(
+                      fontSize: 10.1,
+                      fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                      color: selected
+                          ? _CmrPressColors.greenDark
+                          : _CmrPressColors.text,
+                    ),
+                  ),
+                const SizedBox(width: 6),
+                Container(
+                  constraints: const BoxConstraints(minWidth: 22),
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: selected
+                        ? Colors.white.withOpacity(.85)
+                        : Colors.white,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    '$count',
+                    style: _CmrPressText.caption().copyWith(
+                      fontSize: 8.8,
+                      fontWeight: FontWeight.w600,
+                      color: selected
+                          ? _CmrPressColors.greenDark
+                          : _CmrPressColors.muted2,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    final options = <Widget>[
+      option(
+        teamId: 0,
+        label: 'Все команды',
+        count: _clubNewsFilterCount(0),
+      ),
+      for (final row in _pressAssignments)
+        option(
+          teamId: _asInt(row['team_id'] ?? row['teamId']),
+          label: _s(row['team_name'] ?? row['teamName']).trim().isEmpty
+              ? 'Команда #${_asInt(row['team_id'] ?? row['teamId'])}'
+              : _s(row['team_name'] ?? row['teamName']).trim(),
+          count: _clubNewsFilterCount(
+            _asInt(row['team_id'] ?? row['teamId']),
+          ),
+        ),
+    ];
+
+    if (sidebar) {
+      return Container(
+        margin: const EdgeInsets.fromLTRB(18, 4, 2, 7),
+        padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+        decoration: BoxDecoration(
+          color: _CmrPressColors.soft.withOpacity(.72),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: _CmrPressColors.line.withOpacity(.7),
+            width: .7,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                const Icon(
+                  Icons.filter_alt_outlined,
+                  size: 13,
+                  color: _CmrPressColors.muted2,
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'ФИЛЬТР НОВОСТЕЙ',
+                    style: AppTypography.custom(
+                      size: 8.2,
+                      weight: FontWeight.w600,
+                      color: _CmrPressColors.subtle,
+                      height: 1.1,
+                      letterSpacing: .28,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 7),
+            for (var i = 0; i < options.length; i++) ...[
+              options[i],
+              if (i != options.length - 1) const SizedBox(height: 5),
+            ],
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(
+          bottom: BorderSide(color: _CmrPressColors.line, width: .55),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.filter_alt_outlined,
+                size: 14,
+                color: _CmrPressColors.greenDark,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                'Команда: $_clubNewsFilterLabel',
+                style: _CmrPressText.action().copyWith(
+                  fontSize: 9.8,
+                  fontWeight: FontWeight.w600,
+                  color: _CmrPressColors.greenDark,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 7),
+          SizedBox(
+            height: 36,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              itemCount: options.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 6),
+              itemBuilder: (_, index) => options[index],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1764,12 +2304,6 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
               Icons.public_rounded,
               _PressContentSection.publicFeed,
             ),
-            const SizedBox(width: 7),
-            tab(
-              compact ? 'Мои' : 'Мои материалы',
-              Icons.folder_outlined,
-              _PressContentSection.myMaterials,
-            ),
           ],
         ),
       ),
@@ -1784,11 +2318,22 @@ class _CmrPressAssistantScreenState extends State<CmrPressAssistantScreen> {
       color: Colors.white,
       child: Column(
         children: [
-          if (mobile || tablet) _buildHeader(mobile: mobile),
+          if (mobile || tablet)
+            _buildHeader(
+              mobile: mobile,
+              showProfileAction: true,
+            ),
+          if ((mobile || tablet) && !_editorOpen && !_profileOpen)
+            _buildCreateDestinationChooser(compact: mobile),
           if ((mobile || tablet) && !_editorOpen && !_profileOpen)
             _buildProfileStrip(),
           if ((mobile || tablet) && !_editorOpen && !_profileOpen)
             _buildSectionTabs(compact: mobile),
+          if ((mobile || tablet) &&
+              !_editorOpen &&
+              !_profileOpen &&
+              _contentSection == _PressContentSection.clubNews)
+            _buildClubNewsTeamFilter(sidebar: false),
           Expanded(
             child: _editorOpen
                 ? _editor()

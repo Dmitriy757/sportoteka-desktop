@@ -27,9 +27,7 @@ import 'package:sportoteka/presentation/reels_screen/reels_screen.dart';
 import 'package:sportoteka/presentation/chat_screen/chat_room_screen.dart';
 import 'package:sportoteka/presentation/chat_screen/chat_screen.dart';
 import 'package:sportoteka/presentation/chat_screen/cmr_notifications_panel.dart';
-import 'package:sportoteka/presentation/club_workspace/club_workspace_screen.dart';
 import 'package:sportoteka/presentation/club_workspace/cmr_club_ai_assistant_panel.dart';
-import 'package:sportoteka/presentation/club_workspace/cmr_press_assistant_screen.dart';
 import 'package:sportoteka/presentation/booking_screen/booking_screen.dart';
 import 'package:sportoteka/presentation/catalog/events_list_screen.dart';
 import 'package:sportoteka/presentation/catalog/team_list_screen.dart';
@@ -821,10 +819,6 @@ class _MyProfileScreenState extends State<MyProfileScreen>
   String lastName = "";
   String email = "";
   String role = "";
-  // Отдельная должность, выданная клубом через ключ/назначение.
-  // Базовый users.role может при этом оставаться trainer.
-  String _assignedStaffRole = "";
-  Map<String, dynamic>? _pressAssistantAssignment;
   String? photo;
   String? bio;
   String? location;
@@ -922,103 +916,6 @@ class _MyProfileScreenState extends State<MyProfileScreen>
     return r == 'club' || r == 'клуб' || r.contains('club');
   }
 
-  String _normalizeAssignedStaffRole(dynamic value) {
-    final v = '${value ?? ''}'.trim().toLowerCase();
-    if (v.isEmpty || v == 'null') return '';
-
-    if (v.contains('press') || v.contains('пресс')) return 'press';
-
-    if (v == 'doctor' ||
-        v == 'medic' ||
-        v.contains('medical') ||
-        v.contains('мед') ||
-        v.contains('врач')) {
-      return 'medic';
-    }
-
-    if (v.contains('assistant') ||
-        v.contains('ассист') ||
-        v.contains('помощ')) {
-      return 'assistant';
-    }
-
-    if (v == 'main' ||
-        v.contains('head_coach') ||
-        v.contains('head coach') ||
-        v.contains('главн')) {
-      return 'head_coach';
-    }
-
-    return '';
-  }
-
-  String get _assignedStaffRoleLabel {
-    switch (_assignedStaffRole) {
-      case 'press':
-        return 'пресс-служба';
-      case 'medic':
-        return 'медик';
-      case 'assistant':
-        return 'ассистент';
-      case 'head_coach':
-        return 'главный тренер';
-      default:
-        return '';
-    }
-  }
-
-  bool get hasPressAssistantAccess {
-    if (_assignedStaffRole == 'press') return true;
-
-    final r = role.trim().toLowerCase();
-    if (r == 'press_assistant' ||
-        r == 'press' ||
-        r == 'press_service' ||
-        r.contains('press_assistant') ||
-        r.contains('пресс')) {
-      return true;
-    }
-
-    final assignment = _pressAssistantAssignment;
-    if (assignment == null) return false;
-    final profile =
-        '${assignment['profile'] ?? assignment['link_profile'] ?? assignment['staff_role'] ?? ''}'
-            .trim()
-            .toLowerCase();
-    return profile.contains('press') || profile.contains('пресс');
-  }
-
-  // Отдельный пресс-доступ не должен отнимать основную должность.
-  // Тренер/медик/ассистент сохраняет свой обычный Workspace и получает
-  // «Пресс-службу» дополнительным модулем. Только пользователь без другой
-  // рабочей роли открывает пресс-кабинет как основной.
-  bool get isPressAssistantRole {
-    if (!hasPressAssistantAccess) return false;
-
-    final r = role.trim().toLowerCase();
-    final hasOtherPrimaryRole =
-        r == 'coach' ||
-        r == 'trainer' ||
-        r == 'тренер' ||
-        r.contains('coach') ||
-        r.contains('trainer') ||
-        r == 'club' ||
-        r == 'клуб' ||
-        r.contains('club') ||
-        r == 'player' ||
-        r == 'игрок' ||
-        r.contains('player') ||
-        r.contains('игрок') ||
-        r == 'parent' ||
-        r == 'родитель' ||
-        r == 'guardian' ||
-        r.contains('parent') ||
-        r.contains('родител') ||
-        r.contains('guardian');
-
-    return !hasOtherPrimaryRole;
-  }
-
   bool get isCoachRole {
     final r = role.trim().toLowerCase();
     return r == 'coach' ||
@@ -1075,32 +972,29 @@ class _MyProfileScreenState extends State<MyProfileScreen>
     return fullName;
   }
 
+  // Рабочие кабинеты клуба/тренера/пресс-службы не являются частью
+  // социального профиля. Для рабочих ролей профиль ведёт только в Workspace Hub.
+  // Личные разделы игрока и родителя остаются доступными напрямую.
+  bool get _primaryAreaIsPersonal => isPlayer || isParentRole;
+
   String get _primaryZoneTitle {
-    if (isPressAssistantRole) return 'Пресс-служба';
-    if (isPlayer) return 'Мой кабинет';
-    if (isCoachRole) return 'Кабинет тренера';
-    if (isClubRole) return 'Кабинет клуба';
+    if (isPlayer) return 'Мой Dashboard';
     if (isParentRole) return 'Мои дети';
-    return 'Мой кабинет';
+    return 'Workspace';
   }
 
   String get _primaryZoneSubtitle {
-    if (isPressAssistantRole) return 'создание и редактирование новостей команды';
     if (isPlayer) return 'личный прогресс, тренировки и матчи';
-    if (isCoachRole) return 'команда, состав, календарь и матчи';
-    if (isClubRole) return 'команды, тренеры, состав и аналитика';
-    if (isParentRole)
+    if (isParentRole) {
       return 'дневник, посещаемость, тестирование и успехи ребёнка';
-    return 'профиль, лента, чат и сервисы';
+    }
+    return 'выбор клуба, команды и рабочего пространства';
   }
 
   IconData get _primaryZoneIcon {
-    if (isPressAssistantRole) return Icons.campaign_outlined;
     if (isPlayer) return Icons.dashboard_customize_outlined;
-    if (isCoachRole) return Icons.sports_soccer_outlined;
-    if (isClubRole) return Icons.apartment_outlined;
     if (isParentRole) return Icons.family_restroom_outlined;
-    return Icons.person_outline_rounded;
+    return Icons.account_tree_outlined;
   }
 
   bool get _isDesktopOperatingSystem {
@@ -1367,11 +1261,6 @@ class _MyProfileScreenState extends State<MyProfileScreen>
       return;
     }
 
-    if (isPressAssistantRole) {
-      await _openPressAssistantArea();
-      return;
-    }
-
     if (isParentRole) {
       _openCmrWindow(
         title: 'Мои дети',
@@ -1403,38 +1292,9 @@ class _MyProfileScreenState extends State<MyProfileScreen>
       return;
     }
 
-    _openProPanel();
-  }
-
-  Future<void> _openPressAssistantArea() async {
-    final myId = await PrefUtils.getUserId() ?? widget.userId ?? 0;
-    if (!mounted || myId <= 0) return;
-
-    final assignment = _pressAssistantAssignment ?? const <String, dynamic>{};
-    int asInt(dynamic value) =>
-        value is num ? value.toInt() : int.tryParse('${value ?? ''}') ?? 0;
-    String clean(dynamic value) {
-      final text = '${value ?? ''}'.trim();
-      return text.toLowerCase() == 'null' ? '' : text;
-    }
-
-    _openCmrWindow(
-      title: 'Пресс-служба',
-      icon: Icons.campaign_outlined,
-      maxWidth: 1240,
-      maxHeight: 840,
-      child: CmrPressAssistantScreen(
-        userId: myId,
-        clubId: asInt(assignment['club_id'] ?? assignment['clubId']),
-        teamId: asInt(assignment['team_id'] ?? assignment['teamId']),
-        clubName: clean(assignment['club_name'] ?? assignment['clubName']),
-        teamName: clean(assignment['team_name'] ?? assignment['teamName']),
-        sportName: clean(assignment['sport']).isEmpty
-            ? 'Футбол'
-            : clean(assignment['sport']),
-        embedded: true,
-      ),
-    );
+    // Тренер, клуб, пресс-служба и другие рабочие роли всегда выбирают
+    // рабочее пространство через единый Workspace Hub.
+    _goToWorkspaceHub();
   }
 
   void _goToWorkspaceHub() {
@@ -1483,31 +1343,6 @@ class _MyProfileScreenState extends State<MyProfileScreen>
       ),
     );
     if (mounted) setState(() => _mobileDockKey = 'chat');
-  }
-
-  Future<void> _openProPanel() async {
-    if (isPressAssistantRole) {
-      await _openPressAssistantArea();
-      return;
-    }
-
-    // Панель клуба/тренера — это отдельный рабочий стол Workspace.
-    // Важно открывать через Get.to с arguments: ClubWorkspaceScreen читает
-    // Get.arguments и так получает режим, club_id/trainer_id и нужную команду.
-    final currentUserId = await PrefUtils.getUserId() ?? widget.userId ?? 0;
-    if (!mounted) return;
-
-    final args = <String, dynamic>{
-      'mode': isCoachRole ? 'trainer_workspace' : 'club_workspace',
-      if (isClubRole && currentUserId > 0) 'club_id': currentUserId,
-      if (isCoachRole && currentUserId > 0) 'trainer_id': currentUserId,
-      if ((playerTeamId ?? 0) > 0) 'initial_team_id': playerTeamId,
-    };
-
-    Get.to<void>(
-      () => const ClubWorkspaceScreen(),
-      arguments: args,
-    );
   }
 
   void _openAllReels() => _openGlobalReels();
@@ -1917,7 +1752,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
                               style: _flagshipTitle(15.2,
                                   weight: FontWeight.w700)),
                           const SizedBox(height: 2),
-                          Text('Быстрый переход без входа в кабинет',
+                          Text('Быстрый переход без открытия Workspace',
                               style: _flagshipText(10.4,
                                   color: const Color(0xFF667085))),
                         ],
@@ -1958,12 +1793,10 @@ class _MyProfileScreenState extends State<MyProfileScreen>
                   ),
                 if (isCoachRole || isClubRole)
                   quickItem(
-                    icon: _primaryZoneIcon,
-                    title: _primaryZoneTitle,
-                    subtitle: 'открыть полный рабочий кабинет',
-                    onTap: () {
-                      _openPrimaryArea();
-                    },
+                    icon: Icons.account_tree_outlined,
+                    title: 'Workspace',
+                    subtitle: 'выбрать клуб, команду и рабочее пространство',
+                    onTap: _goToWorkspaceHub,
                   ),
                 if (isParentRole)
                   quickItem(
@@ -2589,7 +2422,6 @@ class _MyProfileScreenState extends State<MyProfileScreen>
         _loadFollowersData(),
         // Дизайн профиля больше не загружаем с сервера: белый социальный профиль по умолчанию.
       ]);
-      await _resolvePressAssistantAssignment();
     } catch (_) {
       // ignore
     } finally {
@@ -2753,123 +2585,6 @@ class _MyProfileScreenState extends State<MyProfileScreen>
           });
         }
       }
-    }
-  }
-
-  Future<void> _resolvePressAssistantAssignment() async {
-    final currentUserId = await PrefUtils.getUserId() ?? 0;
-    final viewedUserId = widget.userId ?? currentUserId;
-    if (currentUserId <= 0 || viewedUserId != currentUserId) return;
-
-    int priorityFor(String code) {
-      switch (code) {
-        case 'press':
-          return 400;
-        case 'medic':
-          return 300;
-        case 'assistant':
-          return 200;
-        case 'head_coach':
-          return 100;
-        default:
-          return 0;
-      }
-    }
-
-    String bestRole = '';
-    int bestPriority = 0;
-    Map<String, dynamic>? bestAssignment;
-    Map<String, dynamic>? pressAssignment;
-
-    void inspect(dynamic node) {
-      if (node is Map) {
-        final map = Map<String, dynamic>.from(node);
-
-        // get_trainer_profile.php в разных версиях отдаёт должность
-        // в разных полях. Проверяем все известные варианты.
-        for (final key in const <String>[
-          'profile',
-          'link_profile',
-          'staff_role',
-          'position_code',
-          'role_code',
-          'position',
-          'role_title',
-          'specialization',
-          'role',
-        ]) {
-          final code = _normalizeAssignedStaffRole(map[key]);
-          if (code.isEmpty) continue;
-
-          if (code == 'press' && pressAssignment == null) {
-            pressAssignment = Map<String, dynamic>.from(map);
-          }
-
-          final priority = priorityFor(code);
-          if (priority > bestPriority) {
-            bestPriority = priority;
-            bestRole = code;
-            bestAssignment = Map<String, dynamic>.from(map);
-          }
-        }
-
-        for (final value in map.values) {
-          inspect(value);
-        }
-      } else if (node is List) {
-        for (final value in node) {
-          inspect(value);
-        }
-      }
-    }
-
-    try {
-      final response = await http
-          .post(
-            Uri.parse('$_apiBase/get_trainer_profile.php'),
-            headers: const <String, String>{
-              'Content-Type': 'application/json; charset=utf-8',
-            },
-            body: jsonEncode(<String, dynamic>{
-              'trainer_id': currentUserId,
-              'user_id': currentUserId,
-            }),
-          )
-          .timeout(const Duration(seconds: 12));
-
-      dynamic decoded;
-      try {
-        decoded = jsonDecode(utf8.decode(response.bodyBytes));
-      } catch (_) {
-        decoded = null;
-      }
-
-      inspect(decoded);
-
-      // Если профиль тренера ничего специального не вернул, пробуем
-      // сам users.role. Для обычного trainer это даст пустую строку.
-      if (bestRole.isEmpty) {
-        bestRole = _normalizeAssignedStaffRole(role);
-        if (bestRole == 'press') {
-          pressAssignment = <String, dynamic>{'profile': 'press_assistant'};
-        }
-      }
-
-      if (!mounted) return;
-      setState(() {
-        _assignedStaffRole = bestRole;
-        _pressAssistantAssignment = pressAssignment ??
-            (bestRole == 'press' ? bestAssignment : null);
-      });
-    } catch (_) {
-      final fallback = _normalizeAssignedStaffRole(role);
-      if (!mounted) return;
-      setState(() {
-        _assignedStaffRole = fallback;
-        _pressAssistantAssignment = fallback == 'press'
-            ? <String, dynamic>{'profile': 'press_assistant'}
-            : null;
-      });
     }
   }
 
@@ -4787,7 +4502,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
                 left: 0,
                 right: 0,
                 bottom: 10,
-                child: _buildProfileTabletTaskbar(),
+                child: _buildProfileTabletTaskbar(isVisitor: isVisitor),
               ),
             ],
           );
@@ -4796,7 +4511,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
     );
   }
 
-  Widget _buildProfileTabletTaskbar() {
+  Widget _buildProfileTabletTaskbar({required bool isVisitor}) {
     final width = MediaQuery.of(context).size.width;
     final compact = width < 920;
 
@@ -4933,51 +4648,54 @@ class _MyProfileScreenState extends State<MyProfileScreen>
                 onTap: _openProfileHomeMoreSheet,
                 system: true,
               ),
-              const SizedBox(width: 8),
-              Material(
-                color: Colors.transparent,
-                borderRadius: BorderRadius.circular(16),
-                child: InkWell(
-                  onTap: _goToWorkspaceHub,
+              if (!isVisitor) ...[
+                const SizedBox(width: 8),
+                Material(
+                  color: Colors.transparent,
                   borderRadius: BorderRadius.circular(16),
-                  child: Container(
-                    width: compact ? 44 : 118,
-                    height: 44,
-                    padding: EdgeInsets.symmetric(horizontal: compact ? 0 : 11),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF3FAF6),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: const Color(0xFFD7F0E2)),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: compact
-                          ? MainAxisAlignment.center
-                          : MainAxisAlignment.start,
-                      children: [
-                        const Icon(
-                          Icons.account_tree_outlined,
-                          color: Color(0xFF067A46),
-                          size: 20,
-                        ),
-                        if (!compact) ...[
-                          const SizedBox(width: 8),
-                          Text(
-                            'Workspace',
-                            style: AppTypography.custom(
-                              size: 10.8,
-                              weight: FontWeight.w600,
-                              color: const Color(0xFF067A46),
-                              height: 1.1,
-                              letterSpacing: 0,
-                            ),
+                  child: InkWell(
+                    onTap: _goToWorkspaceHub,
+                    borderRadius: BorderRadius.circular(16),
+                    child: Container(
+                      width: compact ? 44 : 118,
+                      height: 44,
+                      padding:
+                          EdgeInsets.symmetric(horizontal: compact ? 0 : 11),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF3FAF6),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: const Color(0xFFD7F0E2)),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: compact
+                            ? MainAxisAlignment.center
+                            : MainAxisAlignment.start,
+                        children: [
+                          const Icon(
+                            Icons.account_tree_outlined,
+                            color: Color(0xFF067A46),
+                            size: 20,
                           ),
+                          if (!compact) ...[
+                            const SizedBox(width: 8),
+                            Text(
+                              'Workspace',
+                              style: AppTypography.custom(
+                                size: 10.8,
+                                weight: FontWeight.w600,
+                                color: const Color(0xFF067A46),
+                                height: 1.1,
+                                letterSpacing: 0,
+                              ),
+                            ),
+                          ],
                         ],
-                      ],
+                      ),
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 8),
+                const SizedBox(width: 8),
+              ],
               Material(
                 color: Colors.transparent,
                 borderRadius: BorderRadius.circular(16),
@@ -5034,13 +4752,15 @@ class _MyProfileScreenState extends State<MyProfileScreen>
                 ),
               ),
               divider(),
-              button(
-                icon: Icons.tune_rounded,
-                tooltip: 'Настройки',
-                onTap: () => _selectProfileWorkspaceSection('settings'),
-                system: true,
-              ),
-              const SizedBox(width: 6),
+              if (!isVisitor) ...[
+                button(
+                  icon: Icons.tune_rounded,
+                  tooltip: 'Настройки',
+                  onTap: () => _selectProfileWorkspaceSection('settings'),
+                  system: true,
+                ),
+                const SizedBox(width: 6),
+              ],
               button(
                 icon: Icons.refresh_rounded,
                 tooltip: 'Обновить',
@@ -5108,7 +4828,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
                 left: 0,
                 right: 0,
                 bottom: 14,
-                child: _buildProfileDesktopDock(),
+                child: _buildProfileDesktopDock(isVisitor: isVisitor),
               ),
             ],
           );
@@ -5526,10 +5246,10 @@ class _MyProfileScreenState extends State<MyProfileScreen>
     );
   }
 
-  Widget _buildProfileDesktopDock() {
+  Widget _buildProfileDesktopDock({required bool isVisitor}) {
     // На ПК используем тот же нижний flagship-taskbar, что и на планшете.
     // Так навигация и «Ещё» выглядят одинаково на больших экранах.
-    return _buildProfileTabletTaskbar();
+    return _buildProfileTabletTaskbar(isVisitor: isVisitor);
   }
 
   Widget _buildFlagshipPhoneOrTabletBody({
@@ -6934,7 +6654,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
       if (isOwnProfile)
         _ProfileFlagshipAction(
             'Выйти в Workspace',
-            'закрыть профиль и выбрать рабочий кабинет',
+            'закрыть профиль и выбрать рабочее пространство',
             Icons.account_tree_outlined,
             _goToWorkspaceHub,
             group: 'Навигация',
@@ -7635,7 +7355,9 @@ class _MyProfileScreenState extends State<MyProfileScreen>
               Expanded(
                 child: _buildFlagshipSmallButton(
                   label: isOwnProfile ? _primaryZoneTitle : 'Написать',
-                  icon: Icons.chat_bubble_outline_rounded,
+                  icon: isOwnProfile
+                      ? _primaryZoneIcon
+                      : Icons.chat_bubble_outline_rounded,
                   onTap: isOwnProfile ? _openPrimaryArea : _openPrivateChat,
                   primary: isOwnProfile,
                   compact: compactSocial,
@@ -7841,7 +7563,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
           _buildAccessStripe(
             icon: _primaryZoneIcon,
             title: _primaryZoneSubtitle,
-            value: 'Открыть',
+            value: _primaryAreaIsPersonal ? 'Открыть' : 'Выбрать',
             strong: true,
             onTap: _openPrimaryArea,
           ),
@@ -7975,12 +7697,13 @@ class _MyProfileScreenState extends State<MyProfileScreen>
           _buildSettingsLine(Icons.notifications_none_rounded, 'Уведомления',
               'Открыть', _openProfileSettingsSheet),
           _buildSettingsLine(
-              Icons.security_rounded,
-              isParentRole
-                  ? 'Доступ к детям'
-                  : (isPlayer ? 'Личный доступ' : 'Права клуба'),
-              isParentRole ? 'Мои дети' : (isPlayer ? 'Dashboard' : 'Панель'),
-              _openPrimaryArea),
+            Icons.security_rounded,
+            isParentRole
+                ? 'Доступ к детям'
+                : (isPlayer ? 'Личный доступ' : 'Workspace'),
+            isParentRole ? 'Мои дети' : (isPlayer ? 'Dashboard' : 'Выбрать'),
+            _openPrimaryArea,
+          ),
         ],
       ),
     );
@@ -8182,7 +7905,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
   }
 
   Widget _buildLoggedInClubStrip() {
-    final isWorkspaceRole = isClubRole || isCoachRole || isParentRole;
+    final isWorkspaceRole = isClubRole || isCoachRole;
 
     return Container(
       width: double.infinity,
@@ -8204,11 +7927,11 @@ class _MyProfileScreenState extends State<MyProfileScreen>
           ),
           if (isWorkspaceRole)
             InkWell(
-              onTap: _openPrimaryArea,
+              onTap: _goToWorkspaceHub,
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
                 child: Text(
-                  'Кабинет',
+                  'Workspace',
                   style: _flagshipText(
                     10.1,
                     color: const Color(0xFF067A46),
@@ -8518,22 +8241,16 @@ class _MyProfileScreenState extends State<MyProfileScreen>
   }
 
   void _openProfileHomeMoreSheet() {
-    final actions = <_ProfileFlagshipAction>[
+    final actions = _isPublicProfileView
+        ? _flagshipWorkspaceActions
+        : <_ProfileFlagshipAction>[
       if (isOwnProfile)
         _ProfileFlagshipAction(
             'Выйти в Workspace',
-            'закрыть профиль и выбрать рабочий кабинет',
+            'закрыть профиль и выбрать рабочее пространство',
             Icons.account_tree_outlined,
             _goToWorkspaceHub,
             group: 'Навигация',
-            primary: true),
-      if (isOwnProfile && hasPressAssistantAccess)
-        _ProfileFlagshipAction(
-            'Пресс-служба',
-            'новости назначенных команд',
-            Icons.campaign_outlined,
-            _openPressAssistantArea,
-            group: 'Работа',
             primary: true),
       _ProfileFlagshipAction('Лента', 'новости и публикации сообщества',
           Icons.dynamic_feed_rounded, _openCommunityFeedHome,
@@ -9562,7 +9279,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
             _buildSettingsRow(
               icon: Icons.account_tree_outlined,
               title: 'Выйти в Workspace',
-              subtitle: 'Закрыть профиль и выбрать рабочий кабинет',
+              subtitle: 'Закрыть профиль и выбрать рабочее пространство',
               strong: true,
               onTap: _goToWorkspaceHub,
             ),
