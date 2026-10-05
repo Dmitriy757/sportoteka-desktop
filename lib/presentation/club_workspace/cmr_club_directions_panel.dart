@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:sportoteka/core/theme/app_typography.dart';
 import 'package:sportoteka/presentation/esports_workspace/esports_direction_service.dart';
+import 'package:sportoteka/presentation/esports_workspace/esports_workspace_screen.dart';
 
 class CmrClubDirectionsPanel extends StatefulWidget {
   final int clubId;
@@ -87,6 +88,19 @@ class _CmrClubDirectionsPanelState extends State<CmrClubDirectionsPanel> {
           state.serverConfirmed
               ? 'Киберспортивное направление подключено. В HUB появится Sportoteka Esports.'
               : 'Киберспорт включён в приложении. В HUB появится Sportoteka Esports.',
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openEsportsWorkspace() async {
+    if (!_state.active || !mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => EsportsWorkspaceScreen(
+          clubId: widget.clubId,
+          userId: widget.userId,
+          clubName: widget.clubName,
         ),
       ),
     );
@@ -324,45 +338,55 @@ class _CmrClubDirectionsPanelState extends State<CmrClubDirectionsPanel> {
             ),
           ),
           const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  _state.active
-                      ? 'Команды создаются внутри Sportoteka Esports. Никакая киберкоманда не создаётся автоматически.'
-                      : 'После подключения в HUB появится отдельная карточка Sportoteka Esports для футбольного киберспорта.',
-                  style: AppTypography.custom(
-                    size: 11.5,
-                    weight: FontWeight.w400,
-                    color: _muted,
-                    height: 1.35,
-                  ),
+          Text(
+            _state.active
+                ? 'Команды создаются внутри Sportoteka Esports. Никакая киберкоманда не создаётся автоматически.'
+                : 'После подключения в HUB появится отдельная карточка Sportoteka Esports для футбольного киберспорта.',
+            style: AppTypography.custom(
+              size: 11.5,
+              weight: FontWeight.w400,
+              color: _muted,
+              height: 1.35,
+            ),
+          ),
+          const SizedBox(height: 12),
+          if (_state.active)
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              alignment: WrapAlignment.end,
+              children: [
+                FilledButton.icon(
+                  onPressed: _saving ? null : _openEsportsWorkspace,
+                  style: FilledButton.styleFrom(backgroundColor: _green),
+                  icon: const Icon(Icons.open_in_new_rounded),
+                  label: const Text('Открыть Sportoteka Esports'),
                 ),
-              ),
-              const SizedBox(width: 12),
-              if (_state.active)
                 OutlinedButton(
                   onPressed: _saving ? null : _deactivate,
                   child: const Text('Отключить'),
-                )
-              else
-                FilledButton.icon(
-                  onPressed: _saving || _selectedDisciplines.isEmpty ? null : _activate,
-                  style: FilledButton.styleFrom(backgroundColor: _green),
-                  icon: _saving
-                      ? const SizedBox(
-                          width: 15,
-                          height: 15,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Icon(Icons.add_rounded),
-                  label: const Text('Подключить киберспорт'),
                 ),
-            ],
-          ),
+              ],
+            )
+          else
+            Align(
+              alignment: Alignment.centerRight,
+              child: FilledButton.icon(
+                onPressed: _saving || _selectedDisciplines.isEmpty ? null : _activate,
+                style: FilledButton.styleFrom(backgroundColor: _green),
+                icon: _saving
+                    ? const SizedBox(
+                        width: 15,
+                        height: 15,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(Icons.add_rounded),
+                label: const Text('Подключить киберспорт'),
+              ),
+            ),
         ],
       ),
     );

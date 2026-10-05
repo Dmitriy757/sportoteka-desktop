@@ -9,6 +9,7 @@ import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
 
 import 'package:sportoteka/core/theme/app_typography.dart';
+import 'package:sportoteka/core/personal_workspace/personal_workspace_os_service.dart';
 import 'package:sportoteka/core/utils/pref_utils.dart';
 import 'package:sportoteka/presentation/team_matches_screen/team_match_detail_screen.dart';
 import 'package:sportoteka/presentation/team_video_analysis/team_match_video_workspace_screen.dart';
@@ -208,12 +209,21 @@ class CmrTeamMatchesPanel extends StatefulWidget {
   final int clubId;
   final String clubName;
 
+  /// Personal mode keeps the same CMR matches UI but stores records in the
+  /// account-owned Sportoteka OS (`category=matches`) instead of team tables.
+  final bool personalMode;
+  final int ownerUserId;
+  final String ownerName;
+
   const CmrTeamMatchesPanel({
     super.key,
     required this.teamId,
     required this.teamName,
     required this.clubId,
     required this.clubName,
+    this.personalMode = false,
+    this.ownerUserId = 0,
+    this.ownerName = '',
   });
 
   @override
@@ -248,7 +258,8 @@ class _CmrTeamMatchesPanelState extends State<CmrTeamMatchesPanel> {
 
   List<Map<String, dynamic>> matches = [];
 
-  bool get canEdit => role.toLowerCase().trim() != 'player';
+  bool get _isPersonal => widget.personalMode && widget.ownerUserId > 0;
+  bool get canEdit => _isPersonal || role.toLowerCase().trim() != 'player';
 
   @override
   void initState() {
@@ -283,6 +294,60 @@ class _CmrTeamMatchesPanelState extends State<CmrTeamMatchesPanel> {
     return '';
   }
 
+  Future<List<Map<String, dynamic>>> _personalMatches() async {
+    final nodes = await PersonalWorkspaceOsService.list(
+      userId: widget.ownerUserId,
+      category: 'matches',
+    );
+    final out = <Map<String, dynamic>>[];
+    for (final node in nodes) {
+      if ('${node['kind'] ?? ''}' != 'document') continue;
+      final payload = PersonalWorkspaceOsService.decodeDocumentContent(node);
+      if (payload == null) continue;
+      final module = '${payload['module'] ?? ''}'.trim();
+      if (module.isNotEmpty && module != 'personal_match') continue;
+      out.add(<String, dynamic>{
+        ...payload,
+        'id': node['id'],
+        'match_id': node['id'],
+        'owner_user_id': widget.ownerUserId,
+        'personal_mode': true,
+        'created_at': payload['created_at'] ?? node['created_at'],
+        'updated_at': node['updated_at'],
+      });
+    }
+    return out;
+  }
+
+  Future<bool> _savePersonalMatch(Map<String, dynamic> payload,
+      {int id = 0}) async {
+    final opponent = _s(payload['opponent']).trim();
+    final date = _s(payload['match_date']).trim();
+    final data = await PersonalWorkspaceOsService.saveDocument(
+      userId: widget.ownerUserId,
+      category: 'matches',
+      id: id,
+      name: opponent.isEmpty
+          ? (date.isEmpty ? 'Личный матч' : 'Матч $date')
+          : (date.isEmpty ? opponent : '$opponent · $date'),
+      content: jsonEncode(<String, dynamic>{
+        ...payload,
+        'module': 'personal_match',
+        'owner_user_id': widget.ownerUserId,
+        'personal_mode': true,
+      }),
+    );
+    if (data['success'] != true) {
+      Get.snackbar(
+        'Матчи',
+        '${data['message'] ?? 'Не удалось сохранить личный матч'}',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      return false;
+    }
+    return true;
+  }
+
   Future<void> _fetch({bool initial = false}) async {
     if (!mounted) return;
     setState(() {
@@ -295,6 +360,30 @@ class _CmrTeamMatchesPanelState extends State<CmrTeamMatchesPanel> {
     });
 
     try {
+      if (_isPersonal) {
+        final parsed = await _personalMatches();
+        parsed.sort((a, b) =>
+            _parseDate(_s(a['match_date'])).compareTo(_parseDate(_s(b['match_date']))));
+        if (!mounted) return;
+        setState(() {
+          matches = parsed;
+          final hasSelectedMatch = selectedMatchId > 0 &&
+              parsed.any((m) => _matchId(m) == selectedMatchId);
+          if (!hasSelectedMatch) {
+            selectedMatchId = parsed.isEmpty ? 0 : _matchId(parsed.last);
+          }
+          if (initial || !_hasMatchesInMonth(parsed, selectedMonth)) {
+            selectedMonth = _bestMonthForMatches(parsed);
+            selectedDay = null;
+            filter = CmrMatchesFilter.all;
+            calendarRevision++;
+          }
+          loading = false;
+          refreshing = false;
+        });
+        return;
+      }
+
       final res = await http.post(
         Uri.parse(getUrl),
         headers: const {'Content-Type': 'application/json; charset=utf-8'},
@@ -349,7 +438,7 @@ class _CmrTeamMatchesPanelState extends State<CmrTeamMatchesPanel> {
 
   Future<void> _openCreate() async {
     if (!canEdit) return;
-    if (widget.teamId <= 0) {
+    if (!_isPersonal && widget.teamId <= 0) {
       Get.snackbar('Ошибка', 'Не удалось определить team_id');
       return;
     }
@@ -403,6 +492,24 @@ class _CmrTeamMatchesPanelState extends State<CmrTeamMatchesPanel> {
     }
 
     try {
+      if (_isPersonal) {
+        return _savePersonalMatch(<String, dynamic>{
+          'team_id': 0,
+          'team_name': widget.ownerName.trim().isEmpty ? 'Личный профиль' : widget.ownerName.trim(),
+          'event_type': eventType,
+          'opponent': opponent.trim(),
+          'our_score': int.tryParse(ourScore.trim()) ?? 0,
+          'opponent_score': int.tryParse(opponentScore.trim()) ?? 0,
+          'match_date': matchDate,
+          'competition_name': competitionName.trim(),
+          'tour_label': tourLabel.trim(),
+          'stadium': stadium.trim(),
+          'referees': referees.trim(),
+          'notes': notes.trim(),
+          'created_at': DateTime.now().toIso8601String(),
+        });
+      }
+
       final res = await http.post(
         Uri.parse(addUrl),
         headers: const {'Content-Type': 'application/json; charset=utf-8'},
@@ -457,6 +564,19 @@ class _CmrTeamMatchesPanelState extends State<CmrTeamMatchesPanel> {
     if (ok != true) return;
 
     try {
+      if (_isPersonal) {
+        final data = await PersonalWorkspaceOsService.delete(
+          userId: widget.ownerUserId,
+          id: id,
+        );
+        if (data['success'] != true) {
+          throw Exception('${data['message'] ?? 'Не удалось удалить личный матч'}');
+        }
+        await _fetch();
+        Get.snackbar('Готово', 'Матч удалён');
+        return;
+      }
+
       final res = await http.post(Uri.parse(deleteUrl), body: {
         'id': id.toString(),
         'team_id': widget.teamId.toString(),
@@ -473,6 +593,11 @@ class _CmrTeamMatchesPanelState extends State<CmrTeamMatchesPanel> {
   }
 
   Future<void> _openDetails(Map<String, dynamic> match) async {
+    if (_isPersonal) {
+      _selectMatchForPane(match);
+      return;
+    }
+
     final id = _i(match['id'] ?? match['match_id']);
     if (id <= 0 || openingMatchId != 0) return;
 
@@ -1277,7 +1402,77 @@ Widget _buildTabletMatchesWorkspace({
   }
 
 
+  Future<void> _editPersonalMatch(Map<String, dynamic> match) async {
+    final opponent = TextEditingController(text: _s(match['opponent']));
+    final date = TextEditingController(text: _s(match['match_date']));
+    final our = TextEditingController(text: _s(match['our_score']));
+    final theirs = TextEditingController(text: _s(match['opponent_score']));
+    final competition = TextEditingController(text: _s(match['competition_name']));
+    final stadium = TextEditingController(text: _s(match['stadium']));
+    final notes = TextEditingController(text: _s(match['notes']));
+    final accepted = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Редактировать личный матч'),
+        content: SizedBox(
+          width: 520,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(controller: opponent, decoration: const InputDecoration(labelText: 'Соперник')),
+                TextField(controller: date, decoration: const InputDecoration(labelText: 'Дата YYYY-MM-DD')),
+                Row(children: [
+                  Expanded(child: TextField(controller: our, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Наш счёт'))),
+                  const SizedBox(width: 10),
+                  Expanded(child: TextField(controller: theirs, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Счёт соперника'))),
+                ]),
+                TextField(controller: competition, decoration: const InputDecoration(labelText: 'Турнир / соревнование')),
+                TextField(controller: stadium, decoration: const InputDecoration(labelText: 'Стадион')),
+                TextField(controller: notes, maxLines: 3, decoration: const InputDecoration(labelText: 'Заметки')),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(dialogContext).pop(false), child: const Text('Отмена')),
+          OutlinedButton(onPressed: () => Navigator.of(dialogContext).pop(true), child: const Text('Сохранить')),
+        ],
+      ),
+    );
+    if (accepted == true && mounted) {
+      final id = _matchId(match);
+      final ok = await _savePersonalMatch(<String, dynamic>{
+        ...match,
+        'opponent': opponent.text.trim(),
+        'match_date': date.text.trim(),
+        'our_score': int.tryParse(our.text.trim()) ?? 0,
+        'opponent_score': int.tryParse(theirs.text.trim()) ?? 0,
+        'competition_name': competition.text.trim(),
+        'stadium': stadium.text.trim(),
+        'notes': notes.text.trim(),
+        'updated_at': DateTime.now().toIso8601String(),
+      }, id: id);
+      if (ok) await _fetch();
+    }
+    opponent.dispose();
+    date.dispose();
+    our.dispose();
+    theirs.dispose();
+    competition.dispose();
+    stadium.dispose();
+    notes.dispose();
+  }
+
   void _openMatchDocumentsPane(Map<String, dynamic> match) {
+    if (_isPersonal) {
+      Get.snackbar(
+        'Документы матча',
+        'Документы личного матча хранятся в Sportoteka OS.',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      return;
+    }
     final id = _matchId(match);
     if (id <= 0) return;
     setState(() {
@@ -1287,6 +1482,10 @@ Widget _buildTabletMatchesWorkspace({
   }
 
   void _openMatchEditorPane(Map<String, dynamic> match) {
+    if (_isPersonal) {
+      unawaited(_editPersonalMatch(match));
+      return;
+    }
     final id = _matchId(match);
     if (id <= 0 || !canEdit) return;
     setState(() {
@@ -1296,6 +1495,14 @@ Widget _buildTabletMatchesWorkspace({
   }
 
   void _openMatchVideoPane(Map<String, dynamic> match) {
+    if (_isPersonal) {
+      Get.snackbar(
+        'Видео матча',
+        'Для личного матча видео открывается через персональный Видеоцентр.',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      return;
+    }
     final id = _matchId(match);
     if (id <= 0) return;
 

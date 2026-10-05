@@ -1,0 +1,559 @@
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:url_launcher/url_launcher.dart';
+
+import 'package:sportoteka/core/theme/app_typography.dart';
+import 'package:sportoteka/core/utils/pref_utils.dart';
+
+class PersonalSportotekaOsScreen extends StatefulWidget {
+  const PersonalSportotekaOsScreen({
+    super.key,
+    this.initialCategory,
+    this.initialCategoryName,
+  });
+
+  final String? initialCategory;
+  final String? initialCategoryName;
+
+  @override
+  State<PersonalSportotekaOsScreen> createState() =>
+      _PersonalSportotekaOsScreenState();
+}
+
+class _PersonalSportotekaOsScreenState extends State<PersonalSportotekaOsScreen> {
+  static const _base = 'https://sportotekaapp.ru/api/personal_workspace_os';
+  static const _green = Color(0xFF00A750);
+  static const _text = Color(0xFF101828);
+  static const _muted = Color(0xFF667085);
+  static const _line = Color(0xFFE9EEF3);
+
+  int _userId = 0;
+  bool _loading = true;
+  bool _busy = false;
+  String? _error;
+  String? _category;
+  String _categoryName = 'Sportoteka OS';
+  int? _parentId;
+  final List<Map<String, dynamic>> _crumbs = [];
+  List<Map<String, dynamic>> _roots = [];
+  List<Map<String, dynamic>> _items = [];
+  bool _listView = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _boot();
+  }
+
+  Future<void> _boot() async {
+    _userId = await PrefUtils.getUserId() ?? 0;
+    final initial = (widget.initialCategory ?? '').trim();
+    if (initial.isNotEmpty) {
+      _category = initial;
+      _categoryName = (widget.initialCategoryName ?? '').trim().isNotEmpty
+          ? widget.initialCategoryName!.trim()
+          : 'Sportoteka OS';
+      _parentId = null;
+      _crumbs
+        ..clear()
+        ..add(<String, dynamic>{'id': null, 'name': _categoryName});
+    }
+    await _load();
+  }
+
+  Map<String, dynamic> _decode(http.Response r) {
+    try {
+      final raw = utf8.decode(r.bodyBytes, allowMalformed: true);
+      final v = jsonDecode(raw);
+      if (v is Map) return Map<String, dynamic>.from(v);
+    } catch (_) {}
+    return <String, dynamic>{'success': false, 'message': 'Некорректный ответ сервера'};
+  }
+
+  Future<Map<String, dynamic>> _post(String endpoint, Map<String, String> body) async {
+    try {
+      final r = await http
+          .post(Uri.parse('$_base/$endpoint'), body: body)
+          .timeout(const Duration(seconds: 20));
+      return _decode(r);
+    } catch (e) {
+      return <String, dynamic>{'success': false, 'message': 'Ошибка соединения: $e'};
+    }
+  }
+
+  Future<void> _load() async {
+    if (!mounted) return;
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    if (_userId <= 0) {
+      setState(() {
+        _loading = false;
+        _error = 'Не удалось определить пользователя';
+      });
+      return;
+    }
+
+    final body = <String, String>{'user_id': '$_userId'};
+    if (_category != null) body['category'] = _category!;
+    if (_parentId != null) body['parent_id'] = '$_parentId';
+    final data = await _post('list.php', body);
+    if (!mounted) return;
+    if (data['success'] == true) {
+      setState(() {
+        _roots = (data['roots'] is List)
+            ? (data['roots'] as List)
+                .whereType<Map>()
+                .map((e) => Map<String, dynamic>.from(e))
+                .toList()
+            : _roots;
+        _items = (data['items'] is List)
+            ? (data['items'] as List)
+                .whereType<Map>()
+                .map((e) => Map<String, dynamic>.from(e))
+                .toList()
+            : <Map<String, dynamic>>[];
+        _loading = false;
+      });
+    } else {
+      setState(() {
+        _loading = false;
+        _error = '${data['message'] ?? 'Не удалось загрузить Sportoteka OS'}';
+      });
+    }
+  }
+
+  IconData _iconForRoot(String code) {
+    switch (code) {
+      case 'documents':
+        return Icons.description_outlined;
+      case 'schemes':
+        return Icons.draw_outlined;
+      case 'plans':
+        return Icons.folder_copy_outlined;
+      case 'matches':
+        return Icons.sports_soccer_outlined;
+      case 'video':
+        return Icons.video_library_outlined;
+      case 'reports':
+        return Icons.analytics_outlined;
+      default:
+        return Icons.folder_outlined;
+    }
+  }
+
+  IconData _iconForItem(Map<String, dynamic> item) {
+    final kind = '${item['kind'] ?? ''}';
+    if (kind == 'folder') return Icons.folder_outlined;
+    if (kind == 'document') return Icons.description_outlined;
+    final mime = '${item['mime_type'] ?? ''}'.toLowerCase();
+    if (mime.startsWith('image/')) return Icons.image_outlined;
+    if (mime.startsWith('video/')) return Icons.movie_outlined;
+    if (mime.contains('pdf')) return Icons.picture_as_pdf_outlined;
+    return Icons.insert_drive_file_outlined;
+  }
+
+  void _openRoot(Map<String, dynamic> root) {
+    setState(() {
+      _category = '${root['category']}';
+      _categoryName = '${root['name']}';
+      _parentId = null;
+      _crumbs
+        ..clear()
+        ..add(<String, dynamic>{'id': null, 'name': _categoryName});
+    });
+    _load();
+  }
+
+  void _openFolder(Map<String, dynamic> item) {
+    final id = int.tryParse('${item['id'] ?? 0}') ?? 0;
+    if (id <= 0) return;
+    setState(() {
+      _parentId = id;
+      _crumbs.add(<String, dynamic>{'id': id, 'name': '${item['name']}'});
+    });
+    _load();
+  }
+
+  Future<void> _goBack() async {
+    if (_category == null) {
+      Navigator.of(context).maybePop();
+      return;
+    }
+    if (_crumbs.length <= 1) {
+      setState(() {
+        _category = null;
+        _categoryName = 'Sportoteka OS';
+        _parentId = null;
+        _crumbs.clear();
+      });
+      await _load();
+      return;
+    }
+    setState(() {
+      _crumbs.removeLast();
+      final id = _crumbs.last['id'];
+      _parentId = id is int ? id : int.tryParse('$id');
+    });
+    await _load();
+  }
+
+  Future<String?> _askText(String title, {String initial = ''}) async {
+    final c = TextEditingController(text: initial);
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: TextField(
+          controller: c,
+          autofocus: true,
+          decoration: const InputDecoration(hintText: 'Название'),
+          onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Отмена')),
+          TextButton(onPressed: () => Navigator.pop(ctx, c.text.trim()), child: const Text('Сохранить')),
+        ],
+      ),
+    );
+    c.dispose();
+    return result?.trim();
+  }
+
+  Future<void> _createFolder() async {
+    if (_category == null || _busy) return;
+    final name = await _askText('Новая папка');
+    if (name == null || name.isEmpty) return;
+    setState(() => _busy = true);
+    final data = await _post('create_folder.php', <String, String>{
+      'user_id': '$_userId',
+      'category': _category!,
+      'name': name,
+      if (_parentId != null) 'parent_id': '$_parentId',
+    });
+    if (mounted) setState(() => _busy = false);
+    if (data['success'] == true) {
+      await _load();
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${data['message'] ?? 'Не удалось создать папку'}')));
+    }
+  }
+
+  Future<void> _createDocument() async {
+    if (_category == null || _busy) return;
+    final titleCtrl = TextEditingController();
+    final bodyCtrl = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Новый документ'),
+        content: SizedBox(
+          width: 520,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(controller: titleCtrl, autofocus: true, decoration: const InputDecoration(labelText: 'Название')),
+              const SizedBox(height: 12),
+              TextField(controller: bodyCtrl, maxLines: 8, decoration: const InputDecoration(labelText: 'Текст документа', alignLabelWithHint: true)),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Создать')),
+        ],
+      ),
+    );
+    final name = titleCtrl.text.trim();
+    final body = bodyCtrl.text;
+    titleCtrl.dispose();
+    bodyCtrl.dispose();
+    if (ok != true || name.isEmpty) return;
+    setState(() => _busy = true);
+    final data = await _post('create_document.php', <String, String>{
+      'user_id': '$_userId',
+      'category': _category!,
+      'name': name,
+      'content': body,
+      if (_parentId != null) 'parent_id': '$_parentId',
+    });
+    if (mounted) setState(() => _busy = false);
+    if (data['success'] == true) await _load();
+  }
+
+  Future<void> _upload() async {
+    if (_category == null || _busy || kIsWeb) return;
+    final result = await FilePicker.pickFiles(withData: false);
+    if (result == null || result.files.isEmpty) return;
+    final path = result.files.single.path;
+    if (path == null || path.isEmpty) return;
+    setState(() => _busy = true);
+    try {
+      final req = http.MultipartRequest('POST', Uri.parse('$_base/upload.php'))
+        ..fields['user_id'] = '$_userId'
+        ..fields['category'] = _category!;
+      if (_parentId != null) req.fields['parent_id'] = '$_parentId';
+      req.files.add(await http.MultipartFile.fromPath('file', path));
+      final streamed = await req.send().timeout(const Duration(minutes: 3));
+      final raw = await streamed.stream.bytesToString();
+      final data = jsonDecode(raw);
+      if (data is Map && data['success'] == true) await _load();
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Не удалось загрузить файл: $e')));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _rename(Map<String, dynamic> item) async {
+    final id = int.tryParse('${item['id'] ?? 0}') ?? 0;
+    if (id <= 0) return;
+    final name = await _askText('Переименовать', initial: '${item['name'] ?? ''}');
+    if (name == null || name.isEmpty) return;
+    final data = await _post('rename.php', {'user_id': '$_userId', 'id': '$id', 'name': name});
+    if (data['success'] == true) await _load();
+  }
+
+  Future<void> _delete(Map<String, dynamic> item) async {
+    final id = int.tryParse('${item['id'] ?? 0}') ?? 0;
+    if (id <= 0) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Удалить?'),
+        content: Text('«${item['name'] ?? ''}» будет удалено из личной Sportoteka OS.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Удалить')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    final data = await _post('delete.php', {'user_id': '$_userId', 'id': '$id'});
+    if (data['success'] == true) await _load();
+  }
+
+  Future<void> _openItem(Map<String, dynamic> item) async {
+    final kind = '${item['kind'] ?? ''}';
+    if (kind == 'folder') {
+      _openFolder(item);
+      return;
+    }
+    if (kind == 'document') {
+      final content = '${item['content'] ?? ''}';
+      if (!mounted) return;
+      showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text('${item['name'] ?? 'Документ'}'),
+          content: SizedBox(
+            width: 620,
+            child: SingleChildScrollView(
+              child: SelectableText(content.isEmpty ? 'Документ пуст.' : content),
+            ),
+          ),
+          actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Закрыть'))],
+        ),
+      );
+      return;
+    }
+    final rawUrl = '${item['file_url'] ?? ''}'.trim();
+    if (rawUrl.isNotEmpty) {
+      final uri = Uri.tryParse(rawUrl);
+      if (uri != null) await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  void _showItemMenu(Map<String, dynamic> item) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
+      builder: (ctx) => SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 10, 14, 18),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(leading: const Icon(Icons.drive_file_rename_outline), title: const Text('Переименовать'), onTap: () { Navigator.pop(ctx); _rename(item); }),
+              ListTile(leading: const Icon(Icons.delete_outline), title: const Text('Удалить'), onTap: () { Navigator.pop(ctx); _delete(item); }),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _rootTile(Map<String, dynamic> root) {
+    final code = '${root['category'] ?? ''}';
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: () => _openRoot(root),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(16, 15, 16, 15),
+          decoration: BoxDecoration(
+            border: Border.all(color: _line),
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Row(
+            children: [
+              Icon(_iconForRoot(code), color: const Color(0xFF344054), size: 22),
+              const SizedBox(width: 12),
+              Expanded(child: Text('${root['name'] ?? ''}', style: AppTypography.custom(size: 12.5, weight: FontWeight.w600, color: _text, height: 1.1, letterSpacing: 0))),
+              const Icon(Icons.chevron_right_rounded, color: _muted, size: 19),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _itemTile(Map<String, dynamic> item) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => _openItem(item),
+        onLongPress: () => _showItemMenu(item),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: _line, width: .7))),
+          child: Row(
+            children: [
+              Icon(_iconForItem(item), color: const Color(0xFF344054), size: 20),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('${item['name'] ?? ''}', maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTypography.custom(size: 11.8, weight: FontWeight.w600, color: _text, height: 1.1, letterSpacing: 0)),
+                    const SizedBox(height: 3),
+                    Text('${item['kind'] == 'folder' ? 'Папка' : item['kind'] == 'document' ? 'Документ' : 'Файл'}', style: AppTypography.custom(size: 9.3, weight: FontWeight.w400, color: _muted, height: 1, letterSpacing: 0)),
+                  ],
+                ),
+              ),
+              IconButton(onPressed: () => _showItemMenu(item), icon: const Icon(Icons.more_horiz_rounded, size: 20), color: _muted),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _gridItem(Map<String, dynamic> item) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: () => _openItem(item),
+        onLongPress: () => _showItemMenu(item),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(border: Border.all(color: _line), borderRadius: BorderRadius.circular(18)),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: [
+                Icon(_iconForItem(item), color: const Color(0xFF344054), size: 25),
+                const Spacer(),
+                GestureDetector(onTap: () => _showItemMenu(item), child: const Icon(Icons.more_horiz_rounded, color: _muted, size: 19)),
+              ]),
+              const Spacer(),
+              Text('${item['name'] ?? ''}', maxLines: 2, overflow: TextOverflow.ellipsis, style: AppTypography.custom(size: 11.2, weight: FontWeight.w600, color: _text, height: 1.15, letterSpacing: 0)),
+              const SizedBox(height: 4),
+              Text(item['kind'] == 'folder' ? 'Папка' : item['kind'] == 'document' ? 'Документ' : 'Файл', style: AppTypography.custom(size: 9, weight: FontWeight.w400, color: _muted, height: 1, letterSpacing: 0)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: SafeArea(
+        child: Column(
+          children: [
+            Container(
+              height: 58,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: _line, width: .7))),
+              child: Row(
+                children: [
+                  IconButton(onPressed: _goBack, icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18)),
+                  const SizedBox(width: 2),
+                  const Icon(Icons.grid_view_rounded, color: _green, size: 21),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(_category == null ? 'Sportoteka OS' : _categoryName, style: AppTypography.custom(size: 13.8, weight: FontWeight.w700, color: _text, height: 1.05, letterSpacing: 0)),
+                        const SizedBox(height: 3),
+                        Text(_category == null ? 'личные документы и материалы' : 'личное хранилище · только ваш аккаунт', style: AppTypography.custom(size: 9.5, weight: FontWeight.w400, color: _muted, height: 1, letterSpacing: 0)),
+                      ],
+                    ),
+                  ),
+                  if (_category != null) ...[
+                    IconButton(onPressed: _busy ? null : _createFolder, tooltip: 'Новая папка', icon: const Icon(Icons.create_new_folder_outlined, size: 20)),
+                    IconButton(onPressed: _busy ? null : _createDocument, tooltip: 'Новый документ', icon: const Icon(Icons.note_add_outlined, size: 20)),
+                    if (!kIsWeb) IconButton(onPressed: _busy ? null : _upload, tooltip: 'Загрузить файл', icon: const Icon(Icons.upload_file_outlined, size: 20)),
+                    const SizedBox(width: 3),
+                    IconButton(onPressed: () => setState(() => _listView = !_listView), tooltip: _listView ? 'Сетка' : 'Список', icon: Icon(_listView ? Icons.grid_view_outlined : Icons.view_list_outlined, size: 20)),
+                  ],
+                  IconButton(onPressed: _load, tooltip: 'Обновить', icon: const Icon(Icons.refresh_rounded, size: 20)),
+                ],
+              ),
+            ),
+            if (_busy) const LinearProgressIndicator(minHeight: 1.5, color: _green),
+            Expanded(
+              child: _loading
+                  ? const Center(child: CircularProgressIndicator(strokeWidth: 2, color: _green))
+                  : _error != null
+                      ? Center(child: Padding(padding: const EdgeInsets.all(24), child: Text(_error!, textAlign: TextAlign.center, style: const TextStyle(color: _muted))))
+                      : _category == null
+                          ? GridView.builder(
+                              padding: const EdgeInsets.all(16),
+                              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(maxCrossAxisExtent: 320, mainAxisExtent: 66, crossAxisSpacing: 10, mainAxisSpacing: 10),
+                              itemCount: _roots.length,
+                              itemBuilder: (_, i) => _rootTile(_roots[i]),
+                            )
+                          : _items.isEmpty
+                              ? Center(
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(_iconForRoot(_category!), size: 36, color: const Color(0xFF98A2B3)),
+                                      const SizedBox(height: 10),
+                                      Text('Пока пусто', style: AppTypography.custom(size: 13, weight: FontWeight.w600, color: _text, height: 1, letterSpacing: 0)),
+                                      const SizedBox(height: 5),
+                                      Text('Создайте папку, документ или загрузите файл.', style: AppTypography.custom(size: 10.2, weight: FontWeight.w400, color: _muted, height: 1.2, letterSpacing: 0)),
+                                    ],
+                                  ),
+                                )
+                              : _listView
+                                  ? ListView.builder(itemCount: _items.length, itemBuilder: (_, i) => _itemTile(_items[i]))
+                                  : GridView.builder(
+                                      padding: const EdgeInsets.all(14),
+                                      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(maxCrossAxisExtent: 190, mainAxisExtent: 138, crossAxisSpacing: 10, mainAxisSpacing: 10),
+                                      itemCount: _items.length,
+                                      itemBuilder: (_, i) => _gridItem(_items[i]),
+                                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

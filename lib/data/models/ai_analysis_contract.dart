@@ -1,0 +1,285 @@
+// Shared validation for recording analysis. No Flutter or package dependencies.
+// V8.8.3: a percentage is progress, never proof that a job has completed.
+class AiAnalysisContract {
+  static Map<String, dynamic> map(dynamic value) => value is Map
+      ? Map<String, dynamic>.from(value)
+      : <String, dynamic>{};
+
+  static double? number(dynamic value) {
+    final result = value is num
+        ? value.toDouble()
+        : double.tryParse('${value ?? ''}'.trim().replaceAll(',', '.'));
+    return result != null && result.isFinite ? result : null;
+  }
+
+  static int? integer(dynamic value) {
+    final parsed = number(value);
+    return parsed != null && parsed == parsed.roundToDouble()
+        ? parsed.toInt()
+        : null;
+  }
+
+  static int? firstPositive(Iterable<dynamic> values, {int? max}) {
+    for (final raw in values) {
+      final value = integer(raw);
+      if (value != null && value > 0 && (max == null || value <= max)) {
+        return value;
+      }
+    }
+    return null;
+  }
+
+  // Job/data/result wrappers occur in different deployed server versions.
+  // Keep the outer authoritative status ahead of a nested report's status.
+  static List<Map<String, dynamic>> envelopes(Map<String, dynamic> root) {
+    final result = <Map<String, dynamic>>[root];
+    void visit(Map<String, dynamic> current, int depth) {
+      if (depth >= 4) return;
+      for (final key in const ['job', 'data', 'result', 'analysis']) {
+        final child = map(current[key]);
+        if (child.isEmpty) continue;
+        result.add(child);
+        visit(child, depth + 1);
+      }
+    }
+    visit(root, 0);
+    return result;
+  }
+
+  static String status(Map<String, dynamic>? payload) {
+    if (payload == null) return '';
+    const known = {
+      'created', 'starting', 'opening_video', 'reconnecting', 'reconnecting_camera',
+      'queued', 'accepted', 'pending', 'processing', 'running', 'analyzing',
+      'finalizing', 'failed', 'error', 'cancelled', 'canceled', 'stopped', 'disconnected',
+      'completed', 'complete', 'done', 'finished',
+    };
+    for (final item in envelopes(payload)) {
+      final value = '${item['status'] ?? item['state'] ?? ''}'
+          .trim().toLowerCase();
+      if (known.contains(value)) return value;
+      if (item['success'] == false) return 'failed';
+    }
+    // An explicitly completed report is allowed only if no outer job state
+    // contradicts it. Generic HTTP "success" is not a terminal job state.
+    for (final item in envelopes(payload)) {
+      final report = map(item['report']);
+      final value = '${report['status'] ?? report['state'] ?? ''}'
+          .trim().toLowerCase();
+      if (known.contains(value)) return value;
+    }
+    return '';
+  }
+
+  static bool completed(Map<String, dynamic>? payload) =>
+      const {'completed', 'complete', 'done', 'finished'}.contains(status(payload));
+
+  static bool failed(Map<String, dynamic>? payload) =>
+      const {'failed', 'error', 'cancelled', 'canceled', 'stopped', 'disconnected'}.contains(status(payload));
+
+  static int progress(Map<String, dynamic>? payload) {
+    if (payload == null) return 0;
+
+    // V8.9.7: different server wrappers may coexist in one response. The outer
+    // transport wrapper can temporarily contain progress=0 while job/data (or
+    // the attached report) already carries a real percentage. Returning the
+    // first value made the UI oscillate 1% -> 0% -> 2% -> 0%. Use the strongest
+    // valid observation in this payload; monotonicity across payloads is kept by
+    // AiVideoAnalysisController.
+    var best = 0;
+    for (final item in envelopes(payload)) {
+      final percent = number(item['progress_percent'] ?? item['percent']);
+      if (percent != null) {
+        best = best > percent.round() ? best : percent.round();
+      }
+      final fraction = number(item['progress_fraction']);
+      if (fraction != null) {
+        final value = (fraction * 100).round();
+        best = best > value ? best : value;
+      }
+      final value = number(item['progress']);
+      if (value != null) {
+        final rounded = value.round();
+        best = best > rounded ? best : rounded;
+      }
+      final report = map(item['report']);
+      if (report.isNotEmpty) {
+        final reportPercent = number(report['progress_percent'] ?? report['percent']);
+        if (reportPercent != null) {
+          final rounded = reportPercent.round();
+          best = best > rounded ? best : rounded;
+        }
+        final reportValue = number(report['progress']);
+        if (reportValue != null) {
+          final rounded = reportValue.round();
+          best = best > rounded ? best : rounded;
+        }
+      }
+    }
+    return best.clamp(0, 100).toInt();
+  }
+
+  static String jobId(Map<String, dynamic> payload) {
+    for (final item in envelopes(payload)) {
+      final value = '${item['job_id'] ?? item['match_live_id'] ?? ''}'.trim();
+      if (value.isNotEmpty) return value;
+    }
+    for (final item in envelopes(payload)) {
+      final report = map(item['report']);
+      final value = '${report['job_id'] ?? report['match_live_id'] ?? ''}'.trim();
+      if (value.isNotEmpty) return value;
+    }
+    return '';
+  }
+
+  static Map<String, dynamic> result(Map<String, dynamic> payload) {
+    final parts = envelopes(payload);
+    final merged = <String, dynamic>{};
+    for (final part in parts.reversed) {
+      merged.addAll(part);
+    }
+    // The final report has priority, including intentional empty collections.
+    // An empty final events list must not resurrect an earlier partial list.
+    for (final part in parts.reversed) {
+      final report = map(part['report']);
+      if (report.isNotEmpty) merged.addAll(report);
+    }
+    return merged;
+  }
+
+  static List<dynamic> list(dynamic value) {
+    if (value is List) return value;
+    if (value is Map) {
+      for (final key in const ['items', 'rows', 'events', 'data']) {
+        if (value[key] is List) return value[key] as List;
+      }
+    }
+    return const <dynamic>[];
+  }
+
+  static bool hasResult(Map<String, dynamic> payload) {
+    final normalized = result(payload);
+    for (final key in const ['events', 'auto_ttd', 'ttd_suggestions',
+      'resolved_players', 'player_bindings', 'frames']) {
+      if (normalized[key] is List) return true;
+    }
+    return normalized['match_stats'] is Map || normalized['stats'] is Map;
+  }
+
+  static double confidence(dynamic value) {
+    var parsed = number(value) ?? 0;
+    if (parsed > 1 && parsed <= 100) parsed /= 100;
+    return parsed.clamp(0.0, 1.0).toDouble();
+  }
+
+  static String side(dynamic value, String own) {
+    final raw = '${value ?? ''}'.trim().toLowerCase();
+    if (const {'', 'unknown', 'none', 'null', 'player'}.contains(raw)) return '';
+    if (const {'own', 'my'}.contains(raw)) return own;
+    if (const {'opponent', 'guest'}.contains(raw)) return own == 'home' ? 'away' : 'home';
+    if (raw == 'team1') return 'home';
+    if (raw == 'team2') return 'away';
+    return raw;
+  }
+
+  // Only canonical roster IDs are valid official TTD owners. A transport ID
+  // in participant.id is not a player ID. Number-only matching needs a side.
+  static int resolvePlayer({
+    required Map<String, dynamic> meta,
+    required String ownTeam,
+    required List<Map<String, dynamic>> roster,
+    required Map<String, int> bindings,
+  }) {
+    if (meta['identity_conflict'] == true || meta['identity_unresolved'] == true) return 0;
+    final ids = roster.map((p) => firstPositive([
+      p['player_id'], p['playerId'], p['id'], p['user_id'], p['userId'],
+    ])).whereType<int>().toSet();
+    final team = side(meta['team'] ?? meta['team_tag'] ?? meta['team_key'] ?? meta['side'], ownTeam);
+    if (team.isNotEmpty && team != ownTeam) return 0;
+
+    int readOwner(Map<String, dynamic> item) => firstPositive([
+      item['resolved_player_id'], item['player_id'], item['playerId'], item['athlete_id'],
+    ]) ?? 0;
+    final direct = readOwner(meta);
+    if (direct > 0) return ids.contains(direct) ? direct : 0;
+
+    for (final raw in list(meta['participants'])) {
+      final participant = map(raw);
+      if (participant['identity_conflict'] == true || participant['identity_unresolved'] == true) continue;
+      final role = '${participant['role'] ?? participant['kind'] ?? ''}'.toLowerCase();
+      if (const {'target', 'receiver', 'recipient'}.contains(role)) continue;
+      final participantTeam = side(participant['team'] ?? participant['team_id'] ?? participant['side'], ownTeam);
+      if (participantTeam.isNotEmpty && participantTeam != ownTeam) continue;
+      final id = readOwner(participant);
+      if (ids.contains(id)) return id;
+    }
+
+    final trackId = '${meta['track_id'] ?? meta['trackId'] ?? ''}'.trim();
+    final bound = bindings[trackId] ?? 0;
+    if (bound > 0 && ids.contains(bound)) return bound;
+
+    if (team != ownTeam) return 0;
+    final jersey = firstPositive([
+      meta['resolved_jersey_number'], meta['best_jersey_number'],
+      meta['jersey_number'], meta['jerseyNumber'], meta['shirt_number'],
+      meta['player_number'], meta['number'],
+    ], max: 99);
+    if (jersey == null) return 0;
+    final matches = <int>{};
+    for (final player in roster) {
+      final number = firstPositive([
+        player['jersey_number'], player['jerseyNumber'], player['number'],
+        player['player_number'], player['shirt_number'], player['game_number'],
+      ], max: 99);
+      final id = firstPositive([player['player_id'], player['playerId'], player['id']]);
+      if (number == jersey && id != null) matches.add(id);
+    }
+    return matches.length == 1 ? matches.single : 0;
+  }
+}
+
+class AiBallBox {
+  final double left, top, right, bottom;
+  const AiBallBox(this.left, this.top, this.right, this.bottom);
+}
+
+// Parses the ball contracts emitted by old/new engines without inventing a
+// detection from missing coordinates. Geometry remains in server coordinates.
+AiBallBox? parseAiBallBox(Map<String, dynamic> raw) {
+  if (raw['visible'] == false || raw['detected'] == false && raw['predicted'] != true) return null;
+  double? read(dynamic x) => AiAnalysisContract.number(x);
+  AiBallBox? box(double? l, double? t, double? r, double? b) =>
+      l != null && t != null && r != null && b != null && r > l && b > t
+          ? AiBallBox(l, t, r, b) : null;
+  final source = raw['bbox'] ?? raw['box'] ?? raw['rect'] ?? raw['bounding_box'];
+  if (source is List && source.length >= 4) {
+    final a = read(source[0]), b = read(source[1]);
+    final c = read(source[2]), d = read(source[3]);
+    final mode = '${raw['bbox_format'] ?? raw['box_format'] ?? 'xyxy'}'.toLowerCase();
+    if (a == null || b == null || c == null || d == null) return null;
+    if (mode == 'cxcywh') return box(a - c / 2, b - d / 2, a + c / 2, b + d / 2);
+    if (mode == 'xywh') return box(a, b, a + c, b + d);
+    return box(a, b, c, d);
+  }
+  final fields = source is Map ? AiAnalysisContract.map(source) : raw;
+  final l = read(fields['left'] ?? fields['x1']);
+  final t = read(fields['top'] ?? fields['y1']);
+  final w = read(fields['width'] ?? fields['w']);
+  final h = read(fields['height'] ?? fields['h']);
+  final r = read(fields['right'] ?? fields['x2']) ?? (l != null && w != null ? l + w : null);
+  final b = read(fields['bottom'] ?? fields['y2']) ?? (t != null && h != null ? t + h : null);
+  final parsed = box(l, t, r, b);
+  if (parsed != null) return parsed;
+  final xyBox = box(read(fields['x']), read(fields['y']),
+      read(fields['x']) != null && w != null ? read(fields['x'])! + w : null,
+      read(fields['y']) != null && h != null ? read(fields['y'])! + h : null);
+  if (xyBox != null) return xyBox;
+  final center = raw['center'] ?? raw['position'];
+  final x = center is Map ? read(center['x']) : center is List && center.length >= 2 ? read(center[0]) : read(raw['x']);
+  final y = center is Map ? read(center['y']) : center is List && center.length >= 2 ? read(center[1]) : read(raw['y']);
+  if (x == null || y == null) return null;
+  // Keep normalized-coordinate balls normalized before the common scaling.
+  final radius = read(raw['radius']) ?? (x >= 0 && x <= 1 && y >= 0 && y <= 1 ? 0.005 : 5.0);
+  if (radius <= 0) return null;
+  return box(x - radius, y - radius, x + radius, y + radius);
+}

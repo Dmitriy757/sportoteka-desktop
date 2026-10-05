@@ -1,0 +1,106 @@
+import 'package:flutter/material.dart';
+
+import 'package:sportoteka/core/utils/pref_utils.dart';
+import 'package:sportoteka/presentation/workspace_os/workspace_finder_panel.dart';
+
+/// Compatibility entry point for the personal profile.
+///
+/// IMPORTANT: this widget owns NO Workspace UI. It only resolves the current
+/// account and launches the single shared [SportotekaWorkspaceFinderPanel]
+/// with [WorkspaceOsScope.personal]. Any visual/UX change made in the common
+/// Workspace OS therefore applies to club and personal spaces automatically.
+class PersonalSportotekaOsScreen extends StatefulWidget {
+  const PersonalSportotekaOsScreen({
+    super.key,
+    this.initialCategory,
+    this.initialCategoryName,
+    this.selectionMode = false,
+    this.selectionCategory,
+    this.initialFolderId,
+    this.initialFolderTitle,
+    this.onFolderSelected,
+    this.onCancel,
+    this.onOpenModule,
+  });
+
+  final String? initialCategory;
+  final String? initialCategoryName;
+  final bool selectionMode;
+  final String? selectionCategory;
+  final int? initialFolderId;
+  final String? initialFolderTitle;
+  final ValueChanged<Map<String, dynamic>>? onFolderSelected;
+  final VoidCallback? onCancel;
+  final ValueChanged<String>? onOpenModule;
+
+  @override
+  State<PersonalSportotekaOsScreen> createState() =>
+      _PersonalSportotekaOsScreenState();
+}
+
+class _PersonalSportotekaOsScreenState
+    extends State<PersonalSportotekaOsScreen> {
+  int _userId = 0;
+  String _ownerName = 'Личный профиль';
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadOwner();
+  }
+
+  Future<void> _loadOwner() async {
+    final userId = await PrefUtils.getUserId() ?? 0;
+    final first = await PrefUtils.getUserFirstName();
+    final last = await PrefUtils.getUserLastName();
+    final name = '$first $last'.trim();
+    if (!mounted) return;
+    setState(() {
+      _userId = userId;
+      if (name.isNotEmpty) _ownerName = name;
+      _loading = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return const ColoredBox(
+        color: Colors.white,
+        child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+      );
+    }
+    if (_userId <= 0) {
+      return const ColoredBox(
+        color: Colors.white,
+        child: Center(child: Text('Не удалось определить пользователя')),
+      );
+    }
+
+    return SportotekaWorkspaceFinderPanel(
+      scope: WorkspaceOsScope.personal,
+      ownerUserId: _userId,
+      ownerDisplayName: _ownerName,
+      clubId: 0,
+      clubName: _ownerName,
+      currentUserId: _userId,
+      teams: const <Map<String, dynamic>>[],
+      players: const <Map<String, dynamic>>[],
+      trainers: const <Map<String, dynamic>>[],
+      selectedTeamId: null,
+      selectedTeamName: '',
+      initialModuleKey: widget.initialCategory,
+      initialFolderId: widget.initialFolderId,
+      initialFolderTitle: widget.initialFolderTitle,
+      selectionMode: widget.selectionMode,
+      selectionModuleKey: widget.selectionCategory,
+      onFolderSelected: widget.onFolderSelected,
+      onSelectionCancel: widget.onCancel,
+      onOpenModule: widget.onOpenModule ?? (_) {},
+      onOpenPlayer: (_) {},
+      onOpenTeam: (_) {},
+      onOpenTrainer: (_) {},
+    );
+  }
+}

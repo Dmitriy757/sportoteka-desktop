@@ -911,6 +911,18 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
         return 'Администратор';
       case 'press_assistant':
         return 'Пресс-служба';
+      case 'esports_head_coach':
+        return 'Главный тренер Esports';
+      case 'esports_coach':
+        return 'Тренер Esports';
+      case 'esports_analyst':
+        return 'Аналитик Esports';
+      case 'esports_streamer':
+        return 'Видео / стрим Esports';
+      case 'esports_manager':
+        return 'Менеджер Esports';
+      case 'esports_admin':
+        return 'Администратор Esports';
       default:
         return 'Тренер';
     }
@@ -958,6 +970,18 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
         return 'Кабинет администратора';
       case 'press_assistant':
         return 'Пресс-служба';
+      case 'esports_head_coach':
+        return 'Esports · главный тренер';
+      case 'esports_coach':
+        return 'Esports · тренер';
+      case 'esports_analyst':
+        return 'Esports · аналитик';
+      case 'esports_streamer':
+        return 'Esports · видео / стрим';
+      case 'esports_manager':
+        return 'Esports · менеджер';
+      case 'esports_admin':
+        return 'Esports · администратор';
       default:
         return 'Кабинет тренера';
     }
@@ -987,13 +1011,51 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
   bool _staffAccessRevoked(Map<String, dynamic> access) =>
       _staffStatus(access) == 'revoked';
 
+  String _staffWorkspaceType(Map<String, dynamic> access) {
+    final raw = _cleanString(
+      access['workspace_type'] ??
+          access['workspace'] ??
+          access['direction'] ??
+          access['module'],
+    ).toLowerCase();
+    if (raw.contains('esport') || raw.contains('cyber') || raw.contains('кибер')) {
+      return 'esports';
+    }
+    if (_staffRoleCode(access).startsWith('esports_')) return 'esports';
+    return 'club';
+  }
+
+  bool _staffIsEsports(Map<String, dynamic> access) =>
+      _staffWorkspaceType(access) == 'esports';
+
   List<Map<String, dynamic>> _staffTeams(Map<String, dynamic> access) {
-    final raw = access['teams'] ?? access['scopes'];
+    final raw = _staffIsEsports(access)
+        ? (access['esports_teams'] ?? access['teams'] ?? access['scopes'])
+        : (access['teams'] ?? access['scopes']);
     if (raw is! List) return const <Map<String, dynamic>>[];
     return raw
         .whereType<Map>()
         .map((e) => Map<String, dynamic>.from(e))
         .toList(growable: false);
+  }
+
+  Set<int> _staffEsportsAthleteIds(Map<String, dynamic> access) {
+    final raw = access['esports_players'] ??
+        access['players'] ??
+        access['player_ids'] ??
+        access['athlete_ids'];
+    if (raw is! List) return <int>{};
+    final out = <int>{};
+    for (final item in raw) {
+      if (item is Map) {
+        final id = _asInt(item['player_id'] ?? item['athlete_id'] ?? item['id']);
+        if (id > 0) out.add(id);
+      } else {
+        final id = _asInt(item);
+        if (id > 0) out.add(id);
+      }
+    }
+    return out;
   }
 
   String _staffSubtitle(Map<String, dynamic> access) {
@@ -1059,6 +1121,15 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
     final teamId = _asInt(first['team_id'] ?? first['id']);
     final teamName = _cleanString(first['team_name'] ?? first['name']);
     final clubName = _cleanString(access['club_name'] ?? _clubName);
+    final esportsAccess = _staffIsEsports(access);
+
+    // Явно фиксируем Staff-контекст отдельно от личного Workspace.
+    await PrefUtils.setActiveWorkspaceType(esportsAccess ? 'staff_esports' : 'staff');
+    await PrefUtils.setActiveWorkspaceScope(
+      clubId: clubId,
+      teamId: teamId,
+      staffAccessId: accessId,
+    );
 
     // HUB является единственной точкой выбора рабочего клуба.
     if (clubId > 0) {
@@ -1068,6 +1139,29 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
     if (clubName.isNotEmpty) {
       await PrefUtils.setUserClubName(clubName);
       await PrefUtils.setActiveStaffClubName(clubName);
+    }
+
+    if (esportsAccess) {
+      final allowedTeamIds = teams
+          .map((team) => _asInt(team['team_id'] ?? team['id']))
+          .where((id) => id > 0)
+          .toSet();
+      final allowedAthleteIds = _staffEsportsAthleteIds(access);
+
+      Get.to<void>(
+        () => EsportsWorkspaceScreen(
+          clubId: clubId,
+          userId: userId,
+          clubName: clubName,
+          clubLogoUrl: _staffImage(access),
+          staffAccessId: accessId > 0 ? accessId : null,
+          staffRoleCode: roleCode,
+          allowedTeamIds: allowedTeamIds.isEmpty ? null : allowedTeamIds,
+          allowedAthleteIds:
+              allowedAthleteIds.isEmpty ? null : allowedAthleteIds,
+        ),
+      );
+      return;
     }
 
     if (roleCode == 'press_assistant') {
@@ -1107,11 +1201,28 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
     );
   }
 
+  Future<void> _openPersonalWorkspace() async {
+    final userId = await PrefUtils.getUserId() ?? 0;
+    await PrefUtils.setActiveWorkspaceType('personal');
+    await PrefUtils.clearActiveWorkspaceScope();
+    if (!mounted || userId <= 0) return;
+
+    // Личный Workspace — это существующий профиль пользователя с его
+    // социальным блоком и встроенным меню модулей, а не отдельный каталог.
+    Get.to<void>(
+      () => MyProfileScreen(userId: userId),
+      transition: Transition.noTransition,
+      duration: Duration.zero,
+    );
+  }
+
   Future<void> _openWorkspace() async {
     final userId = await PrefUtils.getUserId() ?? 0;
     if (!mounted) return;
 
     if (_isPlayer) {
+      await PrefUtils.setActiveWorkspaceType('personal');
+      await PrefUtils.clearActiveWorkspaceScope();
       Get.to<void>(
         () => MyProfileScreen(userId: userId),
       );
@@ -1128,6 +1239,12 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
         return;
       }
 
+      await PrefUtils.setActiveWorkspaceType('staff_legacy');
+      await PrefUtils.setActiveWorkspaceScope(
+        clubId: await PrefUtils.getActiveStaffClubId(),
+        teamId: _teamId,
+      );
+      if (!mounted) return;
       Get.to<void>(
         () => const ClubWorkspaceScreen(),
         arguments: <String, dynamic>{
@@ -1140,6 +1257,12 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
     }
 
     if (_isClub) {
+      await PrefUtils.setActiveWorkspaceType('club');
+      await PrefUtils.setActiveWorkspaceScope(
+        clubId: userId,
+        teamId: _teamId,
+      );
+      if (!mounted) return;
       await Get.to<void>(
         () => const ClubWorkspaceScreen(),
         arguments: <String, dynamic>{
@@ -1274,6 +1397,7 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
         userId: userId,
         clubName: (_clubName ?? '').trim(),
         clubLogoUrl: _clubLogoUrl,
+        athleteOnly: _isEsportsPlayer,
       ),
     );
   }
@@ -1411,10 +1535,20 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
     );
   }
 
+  _HubCardData get _personalWorkspaceCard {
+    return _HubCardData(
+      title: 'Мой профиль',
+      subtitle: 'Профиль, подписчики, публикации и личные модули',
+      imageUrl: _userAvatarUrl,
+      circularImage: true,
+      onTap: _openPersonalWorkspace,
+    );
+  }
+
   _HubCardData get _profileCard {
     return _HubCardData(
       title: 'Мой профиль',
-      subtitle: 'Лента, поиск людей, видеоуроки, чаты и площадки',
+      subtitle: 'Профиль, подписчики, публикации и личные модули',
       imageUrl: _userAvatarUrl,
       circularImage: true,
       onTap: _openProfile,
@@ -1443,7 +1577,7 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
 
   String get _choiceSubtitle {
     if (_staffHasRows) {
-      return 'Выберите рабочий клуб или откройте личный профиль. Каждый клуб имеет свой Staff Key и свои команды.';
+      return 'Мой профиль остаётся личной зоной пользователя. Рабочие клубы ниже используют только свои Staff-права и клубные подписки.';
     }
     if (_isParent) {
       return 'Откройте родительский кабинет или добавьте доступ по Parent Key.';
@@ -1499,7 +1633,7 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
       return 'Sportoteka Esports — отдельная рабочая зона. Футбольный состав, GPS и футбольные метрики здесь не используются.';
     }
     if (_isPlayer) {
-      return 'Центр игрока открывает личную социальную зону, а «Моя команда» — привязанную команду.';
+      return '«Мой профиль» содержит личные модули и социальную часть, а «Моя команда» — привязанную команду.';
     }
     return 'Доступные разделы определяются ролью и разрешениями аккаунта.';
   }
@@ -1816,6 +1950,12 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
                 const SizedBox(height: 12),
               ],
 
+              _WorkspaceChoiceCard(
+                data: _profileCard,
+                compact: false,
+              ),
+              const SizedBox(height: 16),
+
               if (_staffHasRows) ...[
                 _staffClubChoiceHeader(compact: false),
                 for (final access in _staffAccesses) ...[
@@ -1847,10 +1987,11 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
                 const SizedBox(height: 12),
               ],
 
-              _WorkspaceChoiceCard(
-                data: _secondaryCard,
-                compact: false,
-              ),
+              if (_isPlayer && !_isEsportsPlayer)
+                _WorkspaceChoiceCard(
+                  data: _playerTeamCard,
+                  compact: false,
+                ),
 
               if (_isCoach &&
                   !_staffHasRows &&
@@ -1909,6 +2050,12 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
                         const SizedBox(height: 10),
                       ],
 
+                      _WorkspaceChoiceCard(
+                        data: _profileCard,
+                        compact: true,
+                      ),
+                      const SizedBox(height: 14),
+
                       if (_staffHasRows) ...[
                         _staffClubChoiceHeader(compact: true),
                         for (final access in _staffAccesses) ...[
@@ -1940,10 +2087,11 @@ class _WorkspaceHubScreenState extends State<WorkspaceHubScreen> {
                         const SizedBox(height: 10),
                       ],
 
-                      _WorkspaceChoiceCard(
-                        data: _secondaryCard,
-                        compact: true,
-                      ),
+                      if (_isPlayer && !_isEsportsPlayer)
+                        _WorkspaceChoiceCard(
+                          data: _playerTeamCard,
+                          compact: true,
+                        ),
 
                       if (_isCoach &&
                           !_staffHasRows &&

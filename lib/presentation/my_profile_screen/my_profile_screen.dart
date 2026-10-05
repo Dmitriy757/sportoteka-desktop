@@ -17,6 +17,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:sportoteka/core/theme/app_typography.dart';
 import 'package:sportoteka/core/utils/pref_utils.dart';
 import 'package:sportoteka/core/auth/club_access_guard.dart';
+import 'package:sportoteka/core/staff_access/staff_access_service.dart';
 import 'package:sportoteka/presentation/auth/club_access_screen.dart';
 import 'package:sportoteka/presentation/community_screen/news_detail_screen.dart';
 import 'package:sportoteka/presentation/community_screen/create_content_screen.dart';
@@ -33,6 +34,15 @@ import 'package:sportoteka/presentation/catalog/events_list_screen.dart';
 import 'package:sportoteka/presentation/catalog/team_list_screen.dart';
 import 'package:sportoteka/presentation/service_screens/generic_service_screen.dart';
 import 'package:sportoteka/presentation/subscription/subscription_screen.dart';
+import 'package:sportoteka/core/subscription/personal_module_service.dart';
+import 'package:sportoteka/core/personal_workspace/personal_workspace_os_service.dart';
+import 'package:sportoteka/presentation/personal_workspace/personal_sportoteka_os_screen.dart';
+import 'package:sportoteka/presentation/workspace_os/workspace_window_manager.dart';
+import 'package:sportoteka/presentation/workspace_os/sportoteka_workspace_icons.dart';
+import 'package:sportoteka/presentation/training_graphics/training_graphics_screen.dart';
+import 'package:sportoteka/presentation/plans/cmr_plans_panel.dart';
+import 'package:sportoteka/presentation/team_matches_screen/cmr_team_matches_panel.dart';
+import 'package:sportoteka/presentation/testing/cmr_testing_panel.dart';
 import 'package:sportoteka/presentation/tracking/tracking_mode_screen.dart';
 import 'package:sportoteka/presentation/tracker/player/player_my_trainings_screen.dart';
 import 'package:sportoteka/presentation/video_lessons/video_lessons_hub_screen.dart';
@@ -828,6 +838,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
   String? playerClubName;
   String? playerTeamLogoUrl;
   int? playerTeamId;
+  int? playerId;
   List<dynamic> userPosts = [];
   bool isLoadingPosts = false;
   List<Map<String, dynamic>> userReels = [];
@@ -901,6 +912,20 @@ class _MyProfileScreenState extends State<MyProfileScreen>
   final Set<int> _socialFollowingBusy = <int>{};
   static const bool _enableSportotekaAi = true;
   bool _skillsExpanded = false;
+
+  // Личный Workspace живёт внутри профиля. Модули загружаются с сервера
+  // и отображаются прямо в существующем меню профиля.
+  bool _personalModulesLoading = false;
+  String? _personalModulesError;
+  List<Map<String, dynamic>> _personalModules = <Map<String, dynamic>>[];
+  final Set<String> _personalModuleRequestBusy = <String>{};
+
+  // Рабочий Workspace нужен только при реальном клубном/Staff-контексте.
+  // Личный профиль больше не считается отдельным Workspace.
+  bool _hasStaffWorkspaceAccess = false;
+
+  bool get _canOpenWorkWorkspace =>
+      isClubRole || isCoachRole || _hasStaffWorkspaceAccess;
 
   // ========== ВАЖНО: ГЕТТЕР ISPLAYER ==========
   bool get isPlayer {
@@ -1596,6 +1621,11 @@ class _MyProfileScreenState extends State<MyProfileScreen>
   }
 
   void _openTrackingWindow() {
+    unawaited(_openPersonalModuleByCode('tracker'));
+  }
+
+  Future<void> _openTrackingUnlocked() async {
+    if (!mounted) return;
     _openCmrWindow(
       title: 'Трекинг',
       icon: Icons.monitor_heart_rounded,
@@ -1606,6 +1636,10 @@ class _MyProfileScreenState extends State<MyProfileScreen>
   }
 
   Future<void> _openPersonalTrainingsQuick() async {
+    await _openPersonalModuleByCode('training_management');
+  }
+
+  Future<void> _openPersonalTrainingsUnlocked() async {
     final myId = await PrefUtils.getUserId() ?? widget.userId ?? 0;
     if (!mounted || myId <= 0) return;
 
@@ -1896,13 +1930,20 @@ class _MyProfileScreenState extends State<MyProfileScreen>
   }
 
   void _openSubscriptionWindow() {
-    _openCmrWindow(
-      title: 'PRO подписка',
-      icon: Icons.workspace_premium_rounded,
-      maxWidth: 980,
-      maxHeight: 760,
-      child: const SubscriptionScreen(),
-    );
+    if (isClubRole) {
+      _openCmrWindow(
+        title: 'Подписка клуба',
+        icon: Icons.workspace_premium_rounded,
+        maxWidth: 980,
+        maxHeight: 760,
+        child: const SubscriptionScreen(),
+      );
+      return;
+    }
+
+    // Для обычного пользователя подписки больше не открываются отдельным
+    // экраном: все модули находятся в текущем меню Личного Workspace.
+    _openProfileHomeMoreSheet();
   }
 
   void _openGlobalHomeSection(String title, int modeIndex) {
@@ -2411,6 +2452,21 @@ class _MyProfileScreenState extends State<MyProfileScreen>
     }
   }
 
+  Future<void> _loadWorkingWorkspaceAccess() async {
+    if (_isPublicProfileView) return;
+    final userId = await PrefUtils.getUserId() ?? 0;
+    if (userId <= 0) return;
+
+    try {
+      final state = await StaffAccessService.loadMyStatus(userId);
+      final hasAccess = StaffAccessService.activeAccesses(state).isNotEmpty;
+      if (!mounted || hasAccess == _hasStaffWorkspaceAccess) return;
+      setState(() => _hasStaffWorkspaceAccess = hasAccess);
+    } catch (_) {
+      // Профиль остаётся доступным даже при временной ошибке Staff API.
+    }
+  }
+
   Future<void> _loadInitialData() async {
     try {
       await Future.wait([
@@ -2420,13 +2476,722 @@ class _MyProfileScreenState extends State<MyProfileScreen>
         _fetchAuthorFeedPosts(),
         _checkIfFollowing(),
         _loadFollowersData(),
+        _loadWorkingWorkspaceAccess(),
         // Дизайн профиля больше не загружаем с сервера: белый социальный профиль по умолчанию.
       ]);
+
+      if (isOwnProfile && !_isPublicProfileView) {
+        unawaited(_loadPersonalModules());
+      }
     } catch (_) {
       // ignore
     } finally {
       if (mounted) setState(() => isLoadingProfile = false);
     }
+  }
+
+  List<Map<String, dynamic>> get _fallbackPersonalModules => const [
+        {
+          'module_code': 'sportoteka_os',
+          'title': 'Sportoteka OS',
+          'category': 'system',
+          'price_monthly_byn': 0,
+          'state': 'free',
+          'has_access': true,
+        },
+        {
+          'module_code': 'tactics_2d',
+          'title': 'Редактор схем 2D',
+          'category': 'coaching',
+          'price_monthly_byn': 11,
+          'state': 'locked',
+          'has_access': false,
+        },
+        {
+          'module_code': 'tactics_3d',
+          'title': 'Редактор схем 3D',
+          'category': 'coaching',
+          'price_monthly_byn': 18,
+          'state': 'locked',
+          'has_access': false,
+        },
+        {
+          'module_code': 'training_plans',
+          'title': 'Планы-конспекты',
+          'category': 'coaching',
+          'price_monthly_byn': 11,
+          'state': 'locked',
+          'has_access': false,
+        },
+        {
+          'module_code': 'training_management',
+          'title': 'Личные тренировки',
+          'category': 'coaching',
+          'price_monthly_byn': 15,
+          'state': 'locked',
+          'has_access': false,
+        },
+        {
+          'module_code': 'matches',
+          'title': 'Матчи',
+          'category': 'analysis',
+          'price_monthly_byn': 15,
+          'state': 'locked',
+          'has_access': false,
+        },
+        {
+          'module_code': 'testing',
+          'title': 'Тестирование',
+          'category': 'analysis',
+          'price_monthly_byn': 15,
+          'state': 'locked',
+          'has_access': false,
+        },
+        {
+          'module_code': 'player_analytics',
+          'title': 'Аналитика игрока',
+          'category': 'analysis',
+          'price_monthly_byn': 11,
+          'state': 'locked',
+          'has_access': false,
+        },
+        {
+          'module_code': 'video_center',
+          'title': 'Видеоцентр',
+          'category': 'video',
+          'price_monthly_byn': 15,
+          'state': 'locked',
+          'has_access': false,
+        },
+        {
+          'module_code': 'video_analysis',
+          'title': 'Видеоанализ PRO',
+          'category': 'video',
+          'price_monthly_byn': 33,
+          'state': 'locked',
+          'has_access': false,
+        },
+        {
+          'module_code': 'video_ai',
+          'title': 'AI Видео',
+          'category': 'video',
+          'price_monthly_byn': 54,
+          'state': 'locked',
+          'has_access': false,
+        },
+        {
+          'module_code': 'tracker',
+          'title': 'Tracker / Replay',
+          'category': 'tracking',
+          'price_monthly_byn': 29,
+          'state': 'locked',
+          'has_access': false,
+        },
+        {
+          'module_code': 'live_analytics',
+          'title': 'Live Analytics',
+          'category': 'tracking',
+          'price_monthly_byn': 36,
+          'state': 'locked',
+          'has_access': false,
+        },
+        {
+          'module_code': 'ai_assistant',
+          'title': 'AI ассистент',
+          'category': 'ai',
+          'price_monthly_byn': 18,
+          'state': 'locked',
+          'has_access': false,
+        },
+      ];
+
+  Future<void> _loadPersonalModules({bool silent = false}) async {
+    if (_isPublicProfileView || !isOwnProfile) return;
+
+    if (!silent && mounted) {
+      setState(() {
+        _personalModulesLoading = true;
+        _personalModulesError = null;
+      });
+    }
+
+    final result = await PersonalModuleService.statusForCurrentUser();
+    if (!mounted) return;
+
+    if (result['success'] == true) {
+      final modules = PersonalModuleService.modules(result)
+          .where((item) => '${item['module_code'] ?? ''}' != 'workspace_personal')
+          .toList(growable: true);
+      if (!modules.any((item) => '${item['module_code'] ?? ''}' == 'sportoteka_os')) {
+        modules.insert(0, <String, dynamic>{
+          'module_code': 'sportoteka_os',
+          'title': 'Sportoteka OS',
+          'category': 'system',
+          'price_monthly_byn': 0,
+          'state': 'free',
+          'has_access': true,
+        });
+      }
+      setState(() {
+        _personalModules = List<Map<String, dynamic>>.from(modules);
+        _personalModulesLoading = false;
+        _personalModulesError = null;
+      });
+      return;
+    }
+
+    setState(() {
+      if (_personalModules.isEmpty) {
+        _personalModules = _fallbackPersonalModules;
+      }
+      _personalModulesLoading = false;
+      _personalModulesError = '${result['message'] ?? 'Не удалось обновить статус модулей'}';
+    });
+  }
+
+  Map<String, dynamic>? _personalModule(String code) {
+    for (final item in _personalModules) {
+      if ('${item['module_code'] ?? ''}'.trim() == code) return item;
+    }
+    return null;
+  }
+
+  String _personalModuleState(Map<String, dynamic> item) =>
+      '${item['state'] ?? 'locked'}'.trim().toLowerCase();
+
+  bool _personalModuleHasAccess(Map<String, dynamic> item) =>
+      item['has_access'] == true ||
+      _personalModuleState(item) == 'active' ||
+      _personalModuleState(item) == 'free';
+
+  bool _personalModulePending(Map<String, dynamic> item) =>
+      _personalModuleState(item) == 'pending';
+
+  String _personalModulePrice(Map<String, dynamic> item) {
+    double? value = double.tryParse('${item['price_monthly_byn'] ?? ''}');
+
+    // Совместимость на время обновления сервера: если пришёл старый RUB-каталог,
+    // переводим известные тарифы в округлённые BYN.
+    if (value == null || value <= 0) {
+      final rub = int.tryParse('${item['price_monthly_rub'] ?? ''}') ?? 0;
+      const converted = <int, double>{
+        299: 11,
+        399: 15,
+        499: 18,
+        799: 29,
+        899: 33,
+        999: 36,
+        1490: 54,
+      };
+      value = converted[rub];
+    }
+
+    if (value == null || value <= 0) return 'Бесплатно';
+    final whole = value == value.roundToDouble();
+    final formatted = whole
+        ? value.toInt().toString()
+        : value.toStringAsFixed(2).replaceAll('.', ',');
+    return '$formatted BYN / мес';
+  }
+
+  String _personalModuleExpiry(Map<String, dynamic> item) {
+    final ent = item['entitlement'];
+    if (ent is! Map) return '';
+    final raw = '${ent['expires_at'] ?? ''}'.trim();
+    if (raw.isEmpty || raw == 'null') return 'активен';
+    final dt = DateTime.tryParse(raw.replaceAll(' ', 'T'));
+    if (dt == null) return 'активен';
+    String two(int value) => value.toString().padLeft(2, '0');
+    return 'до ${two(dt.day)}.${two(dt.month)}.${dt.year}';
+  }
+
+  String _personalModuleGroup(Map<String, dynamic> item) {
+    switch ('${item['category'] ?? ''}'.trim().toLowerCase()) {
+      case 'system':
+        return 'Система';
+      case 'coaching':
+        return 'Тренировки';
+      case 'analysis':
+        return 'Аналитика';
+      case 'video':
+        return 'Видео';
+      case 'tracking':
+        return 'Трекинг';
+      case 'ai':
+        return 'AI';
+      default:
+        return 'Модули';
+    }
+  }
+
+  IconData _personalModuleIcon(String code) {
+    switch (code) {
+      case 'sportoteka_os':
+        return Icons.folder_copy_outlined;
+      case 'tactics_2d':
+        return Icons.draw_outlined;
+      case 'tactics_3d':
+        return Icons.view_in_ar_outlined;
+      case 'training_plans':
+        return Icons.description_outlined;
+      case 'training_management':
+        return Icons.directions_run_outlined;
+      case 'matches':
+        return Icons.sports_soccer_outlined;
+      case 'testing':
+        return Icons.fact_check_outlined;
+      case 'player_analytics':
+        return Icons.insights_outlined;
+      case 'video_center':
+        return Icons.video_library_outlined;
+      case 'video_analysis':
+        return Icons.movie_filter_outlined;
+      case 'video_ai':
+        return Icons.auto_awesome_outlined;
+      case 'tracker':
+        return Icons.sensors_outlined;
+      case 'live_analytics':
+        return Icons.monitor_heart_outlined;
+      case 'ai_assistant':
+        return Icons.psychology_alt_outlined;
+      default:
+        return Icons.apps_outlined;
+    }
+  }
+
+  Future<void> _requestPersonalModuleByCode(String code) async {
+    var item = _personalModule(code);
+    if (item == null) {
+      await _loadPersonalModules(silent: true);
+      item = _personalModule(code);
+    }
+    if (!mounted || item == null) {
+      Get.snackbar(
+        'Модули',
+        'Не удалось получить данные модуля. Обновите профиль.',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      return;
+    }
+
+    if (_personalModuleHasAccess(item)) {
+      await _openPersonalModuleUnlocked(code, item);
+      return;
+    }
+
+    if (_personalModulePending(item)) {
+      Get.snackbar(
+        '${item['title'] ?? 'Модуль'}',
+        'Заявка уже отправлена и находится на рассмотрении.',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      return;
+    }
+
+    if (_personalModuleRequestBusy.contains(code)) return;
+
+    final accepted = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('${item!['title'] ?? 'Подключить модуль'}'),
+        content: Text(
+          '${_personalModulePrice(item!)}\n\n'
+          'Отправить заявку на подключение? Администратор SPORTOTEKA получит уведомление.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Отмена'),
+          ),
+          OutlinedButton.icon(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            icon: const Icon(Icons.arrow_outward_rounded, size: 17),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: const Color(0xFF067A46),
+              backgroundColor: Colors.transparent,
+              side: const BorderSide(color: Color(0xFFB9DDC9)),
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            label: const Text('Отправить заявку'),
+          ),
+        ],
+      ),
+    );
+
+    if (accepted != true || !mounted) return;
+
+    setState(() => _personalModuleRequestBusy.add(code));
+    final userId = await PrefUtils.getUserId() ?? 0;
+    if (userId <= 0) {
+      if (mounted) setState(() => _personalModuleRequestBusy.remove(code));
+      return;
+    }
+
+    final result = await PersonalModuleService.request(
+      userId: userId,
+      moduleCode: code,
+      source: 'profile_workspace_menu',
+    );
+    if (!mounted) return;
+    setState(() => _personalModuleRequestBusy.remove(code));
+
+    if (result['success'] == true) {
+      await _loadPersonalModules(silent: true);
+      if (!mounted) return;
+      Get.snackbar(
+        result['already_pending'] == true
+            ? 'Заявка уже отправлена'
+            : result['already_active'] == true
+                ? 'Модуль уже активен'
+                : 'Заявка отправлена',
+        result['already_active'] == true
+            ? 'Доступ к модулю уже активен.'
+            : 'После подтверждения администратора модуль откроется в этом же меню.',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      return;
+    }
+
+    Get.snackbar(
+      'Не удалось отправить заявку',
+      '${result['message'] ?? 'Повторите попытку позже'}',
+      snackPosition: SnackPosition.BOTTOM,
+    );
+  }
+
+  Future<void> _openPersonalModuleByCode(String code) async {
+    var item = _personalModule(code);
+    if (item == null) {
+      await _loadPersonalModules(silent: true);
+      item = _personalModule(code);
+    }
+    if (!mounted) return;
+    if (item == null || !_personalModuleHasAccess(item)) {
+      await _requestPersonalModuleByCode(code);
+      return;
+    }
+    await _openPersonalModuleUnlocked(code, item);
+  }
+
+  Future<List<Map<String, dynamic>>> _loadPersonalGraphicsCloud(
+    int userId,
+  ) async {
+    final nodes = await PersonalWorkspaceOsService.listRecursive(
+      userId: userId,
+      category: 'schemes',
+      rootTitle: 'Схемы',
+    );
+    final out = <Map<String, dynamic>>[];
+    for (final node in nodes) {
+      if ('${node['kind'] ?? ''}' != 'document') continue;
+      final payload = PersonalWorkspaceOsService.decodeDocumentContent(node);
+      if (payload == null) continue;
+      out.add(<String, dynamic>{
+        ...payload,
+        'id': node['id'],
+        '_workspace_parent_id': node['_workspace_parent_id'] ?? node['parent_id'],
+        '_workspace_parent_title': node['_workspace_parent_title'] ?? 'Схемы',
+        'updated_at': node['updated_at'],
+        'updated_at_ms': DateTime.tryParse('${node['updated_at'] ?? ''}')
+                ?.millisecondsSinceEpoch ??
+            0,
+      });
+    }
+    return out;
+  }
+
+  Future<Map<String, dynamic>?> _savePersonalGraphicCloud(
+    int userId,
+    Map<String, dynamic> document,
+  ) async {
+    final rawId = _asInt(document['id']);
+    // New local graphics use microsecond timestamps as temporary IDs. Only
+    // server-sized IDs are valid update targets for Sportoteka OS.
+    final serverId = rawId > 0 && rawId < 1000000000 ? rawId : 0;
+    final title = '${document['title'] ?? 'Схема'}'.trim();
+    final parentRaw = document['_workspace_parent_id'];
+    final parentId = _asInt(parentRaw);
+    final data = await PersonalWorkspaceOsService.saveDocument(
+      userId: userId,
+      category: 'schemes',
+      id: serverId,
+      parentId: parentId > 0 ? parentId : null,
+      name: title.isEmpty ? 'Схема' : title,
+      content: jsonEncode(<String, dynamic>{
+        ...document,
+        'module': 'personal_tactics',
+        'owner_user_id': userId,
+        'club_id': 0,
+        'team_id': 0,
+      }),
+    );
+    if (data['success'] != true || data['item'] is! Map) return null;
+    final item = Map<String, dynamic>.from(data['item'] as Map);
+    return <String, dynamic>{
+      ...document,
+      'id': item['id'],
+      'updated_at': item['updated_at'],
+      'updated_at_ms': DateTime.tryParse('${item['updated_at'] ?? ''}')
+              ?.millisecondsSinceEpoch ??
+          DateTime.now().millisecondsSinceEpoch,
+    };
+  }
+
+  Future<void> _deletePersonalGraphicCloud(int userId, int graphicId) async {
+    final data = await PersonalWorkspaceOsService.delete(
+      userId: userId,
+      id: graphicId,
+    );
+    if (data['success'] != true) {
+      throw StateError('${data['message'] ?? 'Не удалось удалить схему'}');
+    }
+  }
+
+  Future<Map<String, dynamic>?> _pickPersonalGraphicsFolder({
+    required int userId,
+    int? initialFolderId,
+    String? initialFolderTitle,
+  }) async {
+    if (!mounted || userId <= 0) return null;
+
+    Map<String, dynamic>? picked;
+    final width = MediaQuery.sizeOf(context).width;
+
+    if (width < 760) {
+      return Navigator.of(context, rootNavigator: true)
+          .push<Map<String, dynamic>>(
+        MaterialPageRoute<Map<String, dynamic>>(
+          fullscreenDialog: true,
+          builder: (_) => PersonalSportotekaOsScreen(
+            initialCategory: 'schemes',
+            initialCategoryName: 'Схемы',
+            selectionMode: true,
+            selectionCategory: 'schemes',
+            initialFolderId: initialFolderId,
+            initialFolderTitle: initialFolderTitle,
+          ),
+        ),
+      );
+    }
+
+    await showWorkspaceManagedWindow(
+      context,
+      id: 'personal-scheme-folder-picker-$userId',
+      title: 'Sportoteka OS',
+      subtitle: '$fullName · личное пространство',
+      iconKind: SportotekaWorkspaceIconKind.plans,
+      preferredSize: const Size(1280, 790),
+      builder: (closeWindow) => PersonalSportotekaOsScreen(
+        initialCategory: 'schemes',
+        initialCategoryName: 'Схемы',
+        selectionMode: true,
+        selectionCategory: 'schemes',
+        initialFolderId: initialFolderId,
+        initialFolderTitle: initialFolderTitle,
+        onFolderSelected: (value) {
+          picked = value;
+          closeWindow();
+        },
+        onCancel: closeWindow,
+      ),
+    );
+
+    return picked;
+  }
+
+  Future<void> _openPersonalTactics({required bool startIn3D}) async {
+    final myId = await PrefUtils.getUserId() ?? widget.userId ?? 0;
+    if (!mounted || myId <= 0) return;
+    _openCmrWindow(
+      title: startIn3D ? 'Редактор схем 3D' : 'Редактор схем 2D',
+      icon: startIn3D ? Icons.view_in_ar_outlined : Icons.draw_outlined,
+      maxWidth: 1500,
+      maxHeight: 940,
+      child: TrainingGraphicsScreen(
+        personalMode: true,
+        userId: myId,
+        userDisplayName: fullName,
+        initial3DMode: startIn3D,
+        personalLibraryLoader: _loadPersonalGraphicsCloud,
+        personalGraphicSaver: _savePersonalGraphicCloud,
+        personalGraphicDeleter: _deletePersonalGraphicCloud,
+        personalFolderPicker: _pickPersonalGraphicsFolder,
+      ),
+    );
+  }
+
+  Future<void> _openPersonalPlans() async {
+    final myId = await PrefUtils.getUserId() ?? widget.userId ?? 0;
+    if (!mounted || myId <= 0) return;
+    _openCmrWindow(
+      title: 'Планы-конспекты',
+      icon: Icons.description_outlined,
+      maxWidth: 1480,
+      maxHeight: 900,
+      child: CmrPlansPanel(
+        clubId: 0,
+        clubName: 'Личный профиль',
+        teamId: null,
+        teamName: 'Личный профиль',
+        trainerId: myId,
+        trainerName: fullName,
+        personalMode: true,
+        ownerUserId: myId,
+      ),
+    );
+  }
+
+  Future<void> _openPersonalMatches() async {
+    final myId = await PrefUtils.getUserId() ?? widget.userId ?? 0;
+    if (!mounted || myId <= 0) return;
+    _openCmrWindow(
+      title: 'Матчи',
+      icon: Icons.sports_soccer_outlined,
+      maxWidth: 1480,
+      maxHeight: 900,
+      child: CmrTeamMatchesPanel(
+        teamId: 0,
+        teamName: 'Личные матчи',
+        clubId: 0,
+        clubName: 'Личный профиль',
+        personalMode: true,
+        ownerUserId: myId,
+        ownerName: fullName,
+      ),
+    );
+  }
+
+  Future<void> _openPersonalTesting() async {
+    final myId = await PrefUtils.getUserId() ?? widget.userId ?? 0;
+    if (!mounted || myId <= 0) return;
+    _openCmrWindow(
+      title: 'Тестирование',
+      icon: Icons.fact_check_outlined,
+      maxWidth: 1480,
+      maxHeight: 900,
+      child: CmrTestingPanel(
+        clubId: 0,
+        teamId: playerTeamId ?? 0,
+        clubName: 'Личный профиль',
+        teamName: (playerTeamName ?? '').trim().isEmpty
+            ? 'Личный профиль'
+            : playerTeamName!.trim(),
+        userId: myId,
+        initialPlayerId: playerId,
+        initialPlayerName: fullName,
+        personalMode: true,
+        ownerUserId: myId,
+        ownerPlayerId: playerId ?? 0,
+        ownerPlayerName: fullName,
+      ),
+    );
+  }
+
+  void _openPersonalOs({String? category, String? title}) {
+    if (!mounted) return;
+    _openCmrWindow(
+      title: title ?? 'Sportoteka OS',
+      icon: Icons.folder_copy_outlined,
+      maxWidth: 1360,
+      maxHeight: 880,
+      child: PersonalSportotekaOsScreen(
+        initialCategory: category,
+        initialCategoryName: title,
+      ),
+    );
+  }
+
+  Future<void> _openPersonalModuleUnlocked(
+    String code,
+    Map<String, dynamic> item,
+  ) async {
+    switch (code) {
+      case 'sportoteka_os':
+        _openPersonalOs();
+        return;
+      case 'tactics_2d':
+        await _openPersonalTactics(startIn3D: false);
+        return;
+      case 'tactics_3d':
+        await _openPersonalTactics(startIn3D: true);
+        return;
+      case 'training_plans':
+        await _openPersonalPlans();
+        return;
+      case 'training_management':
+        await _openPersonalTrainingsUnlocked();
+        return;
+      case 'matches':
+        await _openPersonalMatches();
+        return;
+      case 'testing':
+        await _openPersonalTesting();
+        return;
+      case 'tracker':
+        await _openTrackingUnlocked();
+        return;
+      case 'live_analytics':
+        await _openTrackingUnlocked();
+        return;
+      case 'ai_assistant':
+        await _openPersonalAiUnlocked();
+        return;
+      case 'player_analytics':
+        if (isPlayer) {
+          await _openPrimaryArea();
+          return;
+        }
+        break;
+      case 'video_center':
+        _openPersonalOs(category: 'video', title: 'Видеоцентр');
+        return;
+      case 'video_analysis':
+      case 'video_ai':
+        _openPersonalOs(category: 'video', title: '${item['title'] ?? 'Видео'}');
+        Get.snackbar(
+          '${item['title'] ?? 'Видео'}',
+          'Личные видео уже отделены от клуба. Сам движок анализа подключаем к этому хранилищу следующим безопасным шагом.',
+          snackPosition: SnackPosition.BOTTOM,
+        );
+        return;
+    }
+
+    _openPersonalOs();
+  }
+
+  List<_ProfileFlagshipAction> get _personalModuleMenuActions {
+    return _personalModules.map((item) {
+      final code = '${item['module_code'] ?? ''}'.trim();
+      final active = _personalModuleHasAccess(item);
+      final pending = _personalModulePending(item);
+      final busy = _personalModuleRequestBusy.contains(code);
+      final title = '${item['title'] ?? code}'.trim();
+      final subtitle = active
+          ? _personalModuleExpiry(item)
+          : pending
+              ? 'заявка отправлена · на рассмотрении'
+              : _personalModulePrice(item);
+
+      return _ProfileFlagshipAction(
+        title,
+        subtitle,
+        _personalModuleIcon(code),
+        () => unawaited(_openPersonalModuleByCode(code)),
+        group: _personalModuleGroup(item),
+        locked: !active && !pending,
+        pending: pending,
+        badge: busy
+            ? 'Отправка…'
+            : active
+                ? 'Открыть'
+                : pending
+                    ? 'Заявка'
+                    : 'Подключить',
+      );
+    }).toList(growable: false);
   }
 
   Future<void> loadUserData() async {
@@ -2496,6 +3261,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
       String? resolvedClubName;
       String? resolvedTeamLogo;
       int? resolvedTeamId;
+      int? resolvedPlayerId;
 
       final player = (root['player'] is Map)
           ? (root['player'] as Map).cast<String, dynamic>()
@@ -2505,6 +3271,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
           : null;
 
       if (player != null) {
+        resolvedPlayerId = _asInt(player['id'] ?? player['player_id']);
         final apiAge = _asInt(player['age']);
         final birthAny = player['birth_date'] ??
             player['dob'] ??
@@ -2558,6 +3325,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
         playerClubName = resolvedClubName;
         playerTeamLogoUrl = resolvedTeamLogo;
         playerTeamId = (resolvedTeamId ?? 0) > 0 ? resolvedTeamId : null;
+        playerId = (resolvedPlayerId ?? 0) > 0 ? resolvedPlayerId : null;
       });
 
       if (viewedUserId == currentUserId) {
@@ -4473,21 +5241,31 @@ class _MyProfileScreenState extends State<MyProfileScreen>
                     child: Container(
                       width: double.infinity,
                       color: Colors.white,
-                      child: RefreshIndicator(
-                        onRefresh: _loadInitialData,
-                        color: const Color(0xFF00A750),
-                        child: AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 180),
-                          switchInCurve: Curves.easeOutCubic,
-                          switchOutCurve: Curves.easeInCubic,
-                          child: KeyedSubtree(
-                            key: ValueKey('tablet-${_profileWorkspaceSection}'),
-                            child: _buildProfileWorkspaceBody(
-                              compact: true,
-                              isVisitor: isVisitor,
+                      child: Column(
+                        children: [
+                          // На планшете оставляем только верхний социальный блок
+                          // и нижний dock. Боковое меню не дублирует навигацию.
+                          _buildProfileWorkspaceTopBar(compact: true),
+                          Expanded(
+                            child: RefreshIndicator(
+                              onRefresh: _loadInitialData,
+                              color: const Color(0xFF00A750),
+                              child: AnimatedSwitcher(
+                                duration: const Duration(milliseconds: 180),
+                                switchInCurve: Curves.easeOutCubic,
+                                switchOutCurve: Curves.easeInCubic,
+                                child: KeyedSubtree(
+                                  key: ValueKey(
+                                      'tablet-${_profileWorkspaceSection}'),
+                                  child: _buildProfileWorkspaceBody(
+                                    compact: true,
+                                    isVisitor: isVisitor,
+                                  ),
+                                ),
+                              ),
                             ),
                           ),
-                        ),
+                        ],
                       ),
                     ),
                   ),
@@ -4578,10 +5356,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
         tooltip: 'Главная',
         active:
             _profileWorkspaceSection == 'posts' && _mobileDockKey == 'profile',
-        onTap: () {
-          _closeMobileWindow(dockKey: 'profile');
-          _selectProfileWorkspaceSection('posts');
-        },
+        onTap: () => unawaited(_openOwnProfileFromGlobalNav()),
       ),
       button(
         icon: Icons.dynamic_feed_rounded,
@@ -4648,7 +5423,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
                 onTap: _openProfileHomeMoreSheet,
                 system: true,
               ),
-              if (!isVisitor) ...[
+              if (!isVisitor && _canOpenWorkWorkspace) ...[
                 const SizedBox(width: 8),
                 Material(
                   color: Colors.transparent,
@@ -4771,7 +5546,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
               button(
                 icon: Icons.home_rounded,
                 tooltip: 'Главная',
-                onTap: () => _selectProfileWorkspaceSection('posts'),
+                onTap: () => unawaited(_openOwnProfileFromGlobalNav()),
                 system: true,
               ),
             ],
@@ -5497,6 +6272,157 @@ class _MyProfileScreenState extends State<MyProfileScreen>
       );
     }
 
+    Widget moduleItem(Map<String, dynamic> module) {
+      final code = '${module['module_code'] ?? ''}'.trim();
+      final active = _personalModuleHasAccess(module);
+      final pending = _personalModulePending(module);
+      final busy = _personalModuleRequestBusy.contains(code);
+      final title = '${module['title'] ?? code}'.trim();
+      final subtitle = active
+          ? _personalModuleExpiry(module)
+          : pending
+              ? 'заявка отправлена'
+              : _personalModulePrice(module);
+
+      return Container(
+        margin: const EdgeInsets.only(bottom: 4),
+        decoration: BoxDecoration(
+          color: active ? const Color(0xFFF7FBF8) : Colors.transparent,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: InkWell(
+                borderRadius: BorderRadius.circular(14),
+                onTap: () => unawaited(_openPersonalModuleByCode(code)),
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(compact ? 9 : 11, 8, 6, 8),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 30,
+                        height: 30,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: active
+                              ? const Color(0xFFEAF8F0)
+                              : pending
+                                  ? const Color(0xFFFFF7ED)
+                                  : const Color(0xFFF7F9F8),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Icon(
+                          active
+                              ? _personalModuleIcon(code)
+                              : pending
+                                  ? Icons.schedule_rounded
+                                  : Icons.lock_outline_rounded,
+                          size: 16,
+                          color: active
+                              ? const Color(0xFF067A46)
+                              : pending
+                                  ? const Color(0xFFEA580C)
+                                  : const Color(0xFF667085),
+                        ),
+                      ),
+                      const SizedBox(width: 9),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: _flagshipText(
+                                10.7,
+                                color: const Color(0xFF344054),
+                                weight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              subtitle,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: _flagshipText(
+                                8.4,
+                                color: pending
+                                    ? const Color(0xFFEA580C)
+                                    : const Color(0xFF98A2B3),
+                                weight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            if (!active) ...[
+              const SizedBox(width: 4),
+              Padding(
+                padding: const EdgeInsets.only(right: 6),
+                child: pending
+                    ? Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 7, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFF7ED),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          'Заявка',
+                          style: _flagshipText(
+                            7.8,
+                            color: const Color(0xFFEA580C),
+                            weight: FontWeight.w700,
+                          ),
+                        ),
+                      )
+                    : SizedBox(
+                        height: 27,
+                        child: OutlinedButton(
+                          onPressed: busy
+                              ? null
+                              : () => unawaited(
+                                  _requestPersonalModuleByCode(code)),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            side: const BorderSide(color: Color(0xFFD7F0E2)),
+                            foregroundColor: const Color(0xFF067A46),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                          child: Text(
+                            busy ? '…' : 'Подключить',
+                            style: _flagshipText(
+                              7.8,
+                              color: const Color(0xFF067A46),
+                              weight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+              ),
+            ] else
+              const Padding(
+                padding: EdgeInsets.only(right: 8),
+                child: Icon(
+                  Icons.chevron_right_rounded,
+                  size: 17,
+                  color: Color(0xFF98A2B3),
+                ),
+              ),
+          ],
+        ),
+      );
+    }
+
     return Container(
       color: Colors.white,
       padding: EdgeInsets.fromLTRB(compact ? 6 : 8, 8, compact ? 6 : 8, 8),
@@ -5575,6 +6501,90 @@ class _MyProfileScreenState extends State<MyProfileScreen>
                     icon: Icons.forum_outlined,
                     onTap: _openMainChat,
                   ),
+                  if (!isClubRole) ...[
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(10, 14, 10, 6),
+                    child: Text(
+                      'МОДУЛИ',
+                      style: TextStyle(
+                        fontSize: 8.5,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFF98A2B3),
+                        letterSpacing: .55,
+                      ),
+                    ),
+                  ),
+                  if (_personalModulesLoading && _personalModules.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 10),
+                      child: Center(
+                        child: SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 1.8,
+                            color: Color(0xFF00A750),
+                          ),
+                        ),
+                      ),
+                    )
+                  else ...[
+                    if (_personalModulesError != null)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(8, 2, 8, 5),
+                        child: InkWell(
+                          onTap: () => unawaited(_loadPersonalModules()),
+                          borderRadius: BorderRadius.circular(8),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 5),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.refresh_rounded,
+                                    size: 13, color: Color(0xFF98A2B3)),
+                                const SizedBox(width: 5),
+                                Expanded(
+                                  child: Text(
+                                    'Обновить статус модулей',
+                                    style: _flagshipText(
+                                      7.8,
+                                      color: const Color(0xFF98A2B3),
+                                      weight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    for (final group in const <String>[
+                      'Тренировки',
+                      'Аналитика',
+                      'Видео',
+                      'Трекинг',
+                      'AI',
+                      'Модули',
+                    ]) ...[
+                      if (_personalModules.any(
+                          (module) => _personalModuleGroup(module) == group))
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(10, 7, 10, 4),
+                          child: Text(
+                            group.toUpperCase(),
+                            style: _flagshipText(
+                              7.6,
+                              color: const Color(0xFF98A2B3),
+                              weight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      for (final module in _personalModules.where(
+                          (module) => _personalModuleGroup(module) == group))
+                        moduleItem(module),
+                    ],
+                  ],
+                  ],
                   const Padding(
                     padding: EdgeInsets.fromLTRB(10, 14, 10, 6),
                     child: Text(
@@ -5619,8 +6629,8 @@ class _MyProfileScreenState extends State<MyProfileScreen>
       VoidCallback? onTap,
     }) {
       final child = SizedBox(
-        width: ultraCompact ? 44 : (compact ? 54 : 68),
-        height: 34,
+        width: ultraCompact ? 46 : (compact ? 64 : 72),
+        height: 38,
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -5628,7 +6638,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
               '$value',
               maxLines: 1,
               style: _flagshipText(
-                compact ? 10.2 : 10.8,
+                compact ? 10.8 : 11.2,
                 color: const Color(0xFF111827),
                 weight: FontWeight.w800,
                 height: 1,
@@ -5640,7 +6650,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: _flagshipText(
-                ultraCompact ? 7.0 : (compact ? 7.4 : 8.0),
+                ultraCompact ? 7.2 : (compact ? 7.8 : 8.2),
                 color: const Color(0xFF7A8493),
                 weight: FontWeight.w500,
                 height: 1,
@@ -5659,8 +6669,8 @@ class _MyProfileScreenState extends State<MyProfileScreen>
     }
 
     return Container(
-      height: 40,
-      padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 3),
+      height: 44,
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
       decoration: BoxDecoration(
         color: const Color(0xFFF7F9F8),
         borderRadius: BorderRadius.circular(11),
@@ -5760,6 +6770,29 @@ class _MyProfileScreenState extends State<MyProfileScreen>
           ),
           child: Row(
             children: [
+              if (_isPublicProfileView && Navigator.of(context).canPop()) ...[
+                Tooltip(
+                  message: 'Вернуться назад',
+                  child: Material(
+                    color: const Color(0xFFF7F9F8),
+                    borderRadius: BorderRadius.circular(10),
+                    child: InkWell(
+                      onTap: () => Navigator.of(context).maybePop(),
+                      borderRadius: BorderRadius.circular(10),
+                      child: const SizedBox(
+                        width: 34,
+                        height: 34,
+                        child: Icon(
+                          Icons.chevron_left_rounded,
+                          size: 19,
+                          color: Color(0xFF344054),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+              ],
               Container(
                 width: 34,
                 height: 34,
@@ -6651,10 +7684,10 @@ class _MyProfileScreenState extends State<MyProfileScreen>
     }
 
     return [
-      if (isOwnProfile)
+      if (isOwnProfile && _canOpenWorkWorkspace)
         _ProfileFlagshipAction(
-            'Выйти в Workspace',
-            'закрыть профиль и выбрать рабочее пространство',
+            'Рабочие пространства',
+            'клубы, команды и Staff-доступы',
             Icons.account_tree_outlined,
             _goToWorkspaceHub,
             group: 'Навигация',
@@ -6714,9 +7747,15 @@ class _MyProfileScreenState extends State<MyProfileScreen>
       _ProfileFlagshipAction('Настройки', 'профиль и доступ',
           Icons.settings_outlined, _openProfileSettingsSheet,
           group: 'Аккаунт'),
-      _ProfileFlagshipAction('PRO подписка', 'расширенные возможности',
-          Icons.workspace_premium_rounded, _openSubscriptionWindow,
-          group: 'Аккаунт', pro: true),
+      if (isOwnProfile && !isClubRole) ..._personalModuleMenuActions,
+      if (isOwnProfile && isClubRole)
+        _ProfileFlagshipAction(
+          'Подписка клуба',
+          'управление тарифом организации',
+          Icons.workspace_premium_rounded,
+          _openSubscriptionWindow,
+          group: 'Аккаунт',
+        ),
       if (isOwnProfile)
         _ProfileFlagshipAction('Выйти из профиля', 'завершить текущую сессию',
             Icons.logout_rounded, _logoutFromProfile,
@@ -7094,6 +8133,30 @@ class _MyProfileScreenState extends State<MyProfileScreen>
                             7.5,
                             color: const Color(0xFF00A750),
                             weight: FontWeight.w800,
+                          ),
+                        ),
+                      ],
+                      if (action.badge != null) ...[
+                        const SizedBox(width: 5),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: action.pending
+                                ? const Color(0xFFFFF7ED)
+                                : action.locked
+                                    ? const Color(0xFFF3FAF6)
+                                    : const Color(0xFFECFDF3),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            action.badge!,
+                            style: _flagshipText(
+                              7.2,
+                              color: action.pending
+                                  ? const Color(0xFFEA580C)
+                                  : const Color(0xFF067A46),
+                              weight: FontWeight.w700,
+                            ),
                           ),
                         ),
                       ],
@@ -7905,7 +8968,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
   }
 
   Widget _buildLoggedInClubStrip() {
-    final isWorkspaceRole = isClubRole || isCoachRole;
+    final isWorkspaceRole = _canOpenWorkWorkspace;
 
     return Container(
       width: double.infinity,
@@ -8043,6 +9106,29 @@ class _MyProfileScreenState extends State<MyProfileScreen>
 
     // В чужом профиле кнопка «Главная» должна вести именно в МОЙ профиль,
     // а не просто переключать вкладку публикаций текущего пользователя.
+    if (viewingAnotherProfile) {
+      Navigator.of(context).pushReplacement<void, void>(
+        MaterialPageRoute<void>(
+          builder: (_) => const MyProfileScreen(),
+        ),
+      );
+      return;
+    }
+
+    _closeMobileWindow(dockKey: 'profile');
+    if (!mounted) return;
+    _selectProfileWorkspaceSection('posts');
+  }
+
+  Future<void> _openOwnProfileFromGlobalNav() async {
+    final myUserId = await PrefUtils.getUserId() ?? 0;
+    if (!mounted) return;
+
+    final viewedUserId = widget.userId ?? myUserId;
+    final viewingAnotherProfile =
+        widget.publicView || !isOwnProfile ||
+        (myUserId > 0 && viewedUserId > 0 && viewedUserId != myUserId);
+
     if (viewingAnotherProfile) {
       Navigator.of(context).pushReplacement<void, void>(
         MaterialPageRoute<void>(
@@ -8198,7 +9284,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
                   dockItem(
                     keyName: 'profile',
                     icon: Icons.home_outlined,
-                    onTap: () => unawaited(_openMyProfileFromBottomBar()),
+                    onTap: () => unawaited(_openOwnProfileFromGlobalNav()),
                   ),
                   dockItem(
                     keyName: 'feed',
@@ -8244,10 +9330,10 @@ class _MyProfileScreenState extends State<MyProfileScreen>
     final actions = _isPublicProfileView
         ? _flagshipWorkspaceActions
         : <_ProfileFlagshipAction>[
-      if (isOwnProfile)
+      if (isOwnProfile && _canOpenWorkWorkspace)
         _ProfileFlagshipAction(
-            'Выйти в Workspace',
-            'закрыть профиль и выбрать рабочее пространство',
+            'Рабочие пространства',
+            'клубы, команды и Staff-доступы',
             Icons.account_tree_outlined,
             _goToWorkspaceHub,
             group: 'Навигация',
@@ -8298,9 +9384,15 @@ class _MyProfileScreenState extends State<MyProfileScreen>
             Icons.add_a_photo_outlined,
             _openProfileMediaPickerSheet,
             group: 'Аккаунт'),
-      _ProfileFlagshipAction('PRO подписка', 'расширенные возможности',
-          Icons.workspace_premium_rounded, _openSubscriptionWindow,
-          group: 'Аккаунт', pro: true),
+      if (isOwnProfile && !isClubRole) ..._personalModuleMenuActions,
+      if (isOwnProfile && isClubRole)
+        _ProfileFlagshipAction(
+          'Подписка клуба',
+          'управление тарифом организации',
+          Icons.workspace_premium_rounded,
+          _openSubscriptionWindow,
+          group: 'Аккаунт',
+        ),
       _ProfileFlagshipAction('Настройки', 'профиль и доступ',
           Icons.settings_outlined, _openProfileSettingsSheet,
           group: 'Аккаунт'),
@@ -8395,6 +9487,12 @@ class _MyProfileScreenState extends State<MyProfileScreen>
       'Основное',
       'Обучение',
       'Сервисы',
+      'Тренировки',
+      'Аналитика',
+      'Видео',
+      'Трекинг',
+      'AI',
+      'Модули',
       'Профиль',
       'Аккаунт',
     ];
@@ -8491,6 +9589,32 @@ class _MyProfileScreenState extends State<MyProfileScreen>
                                   size: 8.2,
                                   weight: FontWeight.w600,
                                   color: const Color(0xFFEA580C),
+                                  height: 1,
+                                  letterSpacing: 0,
+                                ),
+                              ),
+                            ),
+                          ],
+                          if (action.badge != null) ...[
+                            const SizedBox(width: 5),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: action.pending
+                                    ? const Color(0xFFFFF7ED)
+                                    : action.locked
+                                        ? const Color(0xFFF3FAF6)
+                                        : const Color(0xFFECFDF3),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Text(
+                                action.badge!,
+                                style: AppTypography.custom(
+                                  size: 7.8,
+                                  weight: FontWeight.w600,
+                                  color: action.pending
+                                      ? const Color(0xFFEA580C)
+                                      : const Color(0xFF067A46),
                                   height: 1,
                                   letterSpacing: 0,
                                 ),
@@ -9276,13 +10400,14 @@ class _MyProfileScreenState extends State<MyProfileScreen>
               ),
             ),
             const SizedBox(height: 8),
-            _buildSettingsRow(
-              icon: Icons.account_tree_outlined,
-              title: 'Выйти в Workspace',
-              subtitle: 'Закрыть профиль и выбрать рабочее пространство',
-              strong: true,
-              onTap: _goToWorkspaceHub,
-            ),
+            if (_canOpenWorkWorkspace)
+              _buildSettingsRow(
+                icon: Icons.account_tree_outlined,
+                title: 'Рабочие пространства',
+                subtitle: 'Клубы, команды и Staff-доступы',
+                strong: true,
+                onTap: _goToWorkspaceHub,
+              ),
             _buildSettingsRow(
               icon: Icons.camera_alt_outlined,
               title: _profileMediaEditTitle,
@@ -9311,8 +10436,10 @@ class _MyProfileScreenState extends State<MyProfileScreen>
             ),
             _buildSettingsRow(
               icon: Icons.workspace_premium_rounded,
-              title: 'PRO подписка',
-              subtitle: 'Управление возможностями аккаунта',
+              title: isClubRole ? 'Подписка клуба' : 'Модули и подписка',
+              subtitle: isClubRole
+                  ? 'Управление тарифом организации'
+                  : 'Управление личными возможностями',
               onTap: _openSubscriptionWindow,
             ),
             if (isOwnProfile) ...[
@@ -9999,6 +11126,11 @@ class _MyProfileScreenState extends State<MyProfileScreen>
   }
 
   Future<void> _openPersonalAi() async {
+    if (!isOwnProfile || !_enableSportotekaAi) return;
+    await _openPersonalModuleByCode('ai_assistant');
+  }
+
+  Future<void> _openPersonalAiUnlocked() async {
     if (!isOwnProfile || !_enableSportotekaAi) return;
 
     final myId = await PrefUtils.getUserId() ?? widget.userId ?? 0;
@@ -11187,7 +12319,7 @@ class _ProfileModuleMenuTile extends StatelessWidget {
                           : const Color(0xFF344054),
                     ),
                   ),
-                  if (action.pro)
+                  if (action.pro || action.locked || action.pending)
                     Positioned(
                       right: -4,
                       top: -4,
@@ -11199,8 +12331,13 @@ class _ProfileModuleMenuTile extends StatelessWidget {
                           shape: BoxShape.circle,
                           border: Border.all(color: Colors.white, width: 1.5),
                         ),
-                        child: const Icon(Icons.lock_rounded,
-                            size: 9, color: Color(0xFFF05A18)),
+                        child: Icon(
+                          action.pending ? Icons.schedule_rounded : Icons.lock_rounded,
+                          size: 9,
+                          color: action.pending
+                              ? const Color(0xFFEA580C)
+                              : const Color(0xFFF05A18),
+                        ),
                       ),
                     ),
                 ],
@@ -11223,6 +12360,34 @@ class _ProfileModuleMenuTile extends StatelessWidget {
                   ),
                 ),
               ),
+              if (action.badge != null) ...[
+                const SizedBox(height: 5),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: action.pending
+                        ? const Color(0xFFFFF7ED)
+                        : action.locked
+                            ? const Color(0xFFF3FAF6)
+                            : const Color(0xFFECFDF3),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    action.badge!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.custom(
+                      size: 7.8,
+                      weight: FontWeight.w600,
+                      color: action.pending
+                          ? const Color(0xFFEA580C)
+                          : const Color(0xFF067A46),
+                      height: 1,
+                      letterSpacing: 0,
+                    ),
+                  ),
+                ),
+              ],
               if (selected) ...[
                 const SizedBox(height: 5),
                 Container(
@@ -12343,6 +13508,9 @@ class _ProfileFlagshipAction {
   final bool pro;
   final bool primary;
   final bool danger;
+  final bool locked;
+  final bool pending;
+  final String? badge;
 
   const _ProfileFlagshipAction(
     this.title,
@@ -12353,6 +13521,9 @@ class _ProfileFlagshipAction {
     this.pro = false,
     this.primary = false,
     this.danger = false,
+    this.locked = false,
+    this.pending = false,
+    this.badge,
   });
 }
 
@@ -12883,7 +14054,6 @@ class _HoverAnimation extends StatefulWidget {
 class _HoverAnimationState extends State<_HoverAnimation>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
-  bool _isHovered = false;
 
   @override
   void initState() {
@@ -12901,19 +14071,18 @@ class _HoverAnimationState extends State<_HoverAnimation>
   @override
   Widget build(BuildContext context) {
     return MouseRegion(
-      onEnter: (_) {
-        setState(() => _isHovered = true);
-        _controller.forward();
-      },
-      onExit: (_) {
-        setState(() => _isHovered = false);
-        _controller.reverse();
-      },
+      // macOS: не вызываем setState во время MouseTracker device update.
+      // AnimatedBuilder сам перерисует scale по AnimationController.
+      onEnter: (_) => _controller.forward(),
+      onExit: (_) => _controller.reverse(),
       child: AnimatedBuilder(
         animation: _controller,
         builder: (context, child) {
           return Transform.scale(
-              scale: 1.0 + (_controller.value * 0.05), child: child);
+            scale: 1.0 + (_controller.value * 0.05),
+            transformHitTests: false,
+            child: child,
+          );
         },
         child: widget.child,
       ),

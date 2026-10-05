@@ -14,6 +14,9 @@ import 'package:sportoteka/presentation/chat_screen/chat_room_screen.dart';
 import 'package:sportoteka/presentation/chat_screen/call_history_panel.dart';
 import 'package:sportoteka/presentation/chat_screen/cmr_notifications_panel.dart';
 import 'package:sportoteka/presentation/chat_screen/create_group_chat_screen.dart';
+import 'package:sportoteka/presentation/chat_screen/edit_group_chat_screen.dart';
+import 'package:sportoteka/presentation/chat_screen/create_channel_screen.dart';
+import 'package:sportoteka/presentation/chat_screen/channel_management_screen.dart';
 import 'package:sportoteka/presentation/chat_screen/sportoteka_news_screen.dart';
 import 'package:sportoteka/presentation/club_workspace/cmr_club_ai_assistant_panel.dart';
 import 'package:sportoteka/presentation/my_profile_screen/my_profile_screen.dart';
@@ -203,6 +206,12 @@ class _ChatScreenState extends State<ChatScreen> {
   static const _leaveGroupUrl = '$_apiBase/leave_group.php';
   static const _deleteGroupUrl = '$_apiBase/delete_group_force.php';
 
+  // ✅ channel endpoints
+  static const _channelStatesUrl = '$_apiBase/get_channel_states.php';
+  static const _joinChannelUrl = '$_apiBase/join_channel.php';
+  static const _requestChannelJoinUrl = '$_apiBase/request_channel_join.php';
+  static const _cancelChannelJoinUrl = '$_apiBase/cancel_channel_join_request.php';
+
   // ===== DATA =====
   List<Map<String, dynamic>> _privateChats = [];
   List<Map<String, dynamic>> _groups = [];
@@ -229,6 +238,10 @@ class _ChatScreenState extends State<ChatScreen> {
   Map<String, dynamic>? _selectedChat;
   int? _selectedChatId;
   String _selectedChatName = '';
+
+  // Tablet/desktop: подробности группы/канала открываются в той же правой
+  // области, где находится переписка, без отдельного окна.
+  int _embeddedCommunityTab = 0;
 
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _chatListScrollController = ScrollController();
@@ -333,6 +346,7 @@ class _ChatScreenState extends State<ChatScreen> {
       _selectedChat = null;
       _selectedChatId = null;
       _selectedChatName = '';
+      _embeddedCommunityTab = 0;
     });
   }
 
@@ -350,6 +364,20 @@ class _ChatScreenState extends State<ChatScreen> {
 
   bool _iAmOwner(Map<String, dynamic> chat) =>
       _asInt(chat['owner_id']) == widget.userId;
+
+  bool _isChannel(Map<String, dynamic> chat) =>
+      chat['is_channel'] == true ||
+      chat['is_channel'] == 1 ||
+      chat['is_channel'] == '1';
+
+  String _channelRole(Map<String, dynamic> chat) =>
+      (chat['my_role'] ?? '').toString().trim().toLowerCase();
+
+  String _channelRequestStatus(Map<String, dynamic> chat) =>
+      (chat['join_request_status'] ?? '').toString().trim().toLowerCase();
+
+  int _channelSubscriberCount(Map<String, dynamic> chat) =>
+      _asInt(chat['subscriber_count']);
 
   bool _isDeletedChat(Map<String, dynamic> chat) {
     final raw = chat['is_deleted'] ?? chat['deleted'];
@@ -370,7 +398,7 @@ class _ChatScreenState extends State<ChatScreen> {
       if (t.isNotEmpty) return t;
       return n.isNotEmpty ? n : "Личный чат";
     }
-    return n.isNotEmpty ? n : (t.isNotEmpty ? t : "Группа");
+    return n.isNotEmpty ? n : (t.isNotEmpty ? t : (_isChannel(chat) ? "Канал" : "Группа"));
   }
 
   String _chatPhoto(Map<String, dynamic> chat) {
@@ -390,6 +418,8 @@ class _ChatScreenState extends State<ChatScreen> {
             'user_avatar',
           ]
         : const [
+            'channel_avatar_url',
+            'channel_avatar',
             'group_photo',
             'group_photo_url',
             'group_avatar',
@@ -407,13 +437,22 @@ class _ChatScreenState extends State<ChatScreen> {
           const {'null', 'undefined', 'false', '0'}.contains(raw.toLowerCase())) {
         continue;
       }
-      if (raw.startsWith('https://') || raw.startsWith('http://')) return raw;
-      if (raw.startsWith('//')) return 'https:$raw';
-      if (raw.startsWith('/')) return 'https://sportotekaapp.ru$raw';
-      if (raw.startsWith('uploads/') || raw.startsWith('api/')) {
-        return 'https://sportotekaapp.ru/$raw';
+      var normalized = raw;
+      while (normalized.contains('/uploads/uploads/')) {
+        normalized = normalized.replaceAll('/uploads/uploads/', '/uploads/');
       }
-      return 'https://sportotekaapp.ru/uploads/$raw';
+      while (normalized.startsWith('uploads/uploads/')) {
+        normalized = normalized.substring('uploads/'.length);
+      }
+      if (normalized.startsWith('https://') || normalized.startsWith('http://')) {
+        return normalized;
+      }
+      if (normalized.startsWith('//')) return 'https:$normalized';
+      if (normalized.startsWith('/')) return 'https://sportotekaapp.ru$normalized';
+      if (normalized.startsWith('uploads/') || normalized.startsWith('api/')) {
+        return 'https://sportotekaapp.ru/$normalized';
+      }
+      return 'https://sportotekaapp.ru/uploads/$normalized';
     }
     return '';
   }
@@ -562,7 +601,19 @@ class _ChatScreenState extends State<ChatScreen> {
   String _groupStatusLine({
     required bool isPublic,
     required bool iAmMember,
+    bool isChannel = false,
+    String requestStatus = '',
+    int subscriberCount = 0,
   }) {
+    if (isChannel) {
+      if (iAmMember) {
+        final count = subscriberCount > 0 ? ' · $subscriberCount подписчиков' : '';
+        return 'Вы подписаны$count';
+      }
+      if (requestStatus == 'pending') return 'Заявка отправлена · ожидает решения';
+      if (isPublic) return 'Открытый канал · нажмите, чтобы подписаться';
+      return 'Закрытый канал · отправьте заявку';
+    }
     if (isPublic) return iAmMember ? "Вы участник" : "Нажмите, чтобы вступить";
     return iAmMember ? "Вы участник" : "Доступ по приглашению";
   }
@@ -607,21 +658,64 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _loadGroups() async {
     setState(() => isLoading = true);
     try {
-      final uri = Uri.parse('$_groupsFeedUrl?user_id=${widget.userId}');
-      final res = await http.get(uri);
+      List<Map<String, dynamic>> groups = <Map<String, dynamic>>[];
+      List<Map<String, dynamic>> channels = <Map<String, dynamic>>[];
 
-      if (res.statusCode == 200) {
-        final data = json.decode(res.body);
-
-        final ok = data is Map && data['success'] == true;
-        final listRaw = ok ? (data['groups'] as List? ?? []) : [];
-        final list = List<Map<String, dynamic>>.from(listRaw);
-
-        if (!mounted) return;
-        setState(() => _groups = list);
+      try {
+        final res = await http
+            .get(Uri.parse('$_groupsFeedUrl?user_id=${widget.userId}'))
+            .timeout(const Duration(seconds: 10));
+        if (res.statusCode == 200) {
+          final data = json.decode(res.body);
+          final ok = data is Map && data['success'] == true;
+          final raw = ok ? (data['groups'] as List? ?? const <dynamic>[]) : const <dynamic>[];
+          groups = raw.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+        }
+      } catch (e) {
+        debugPrint('Ошибка загрузки групп: $e');
       }
-    } catch (e) {
-      debugPrint('Ошибка загрузки групп: $e');
+
+      try {
+        final res = await http
+            .get(Uri.parse('$_channelStatesUrl?user_id=${widget.userId}'))
+            .timeout(const Duration(seconds: 10));
+        if (res.statusCode == 200) {
+          final data = json.decode(res.body);
+          final raw = data is Map && data['success'] == true
+              ? (data['channels'] as List? ?? const <dynamic>[])
+              : const <dynamic>[];
+          channels = raw.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+        }
+      } catch (e) {
+        debugPrint('Channel API пока недоступен: $e');
+      }
+
+      final byId = <int, Map<String, dynamic>>{};
+      for (final group in groups) {
+        final id = _asInt(group['id'] ?? group['chat_id']);
+        if (id > 0) byId[id] = Map<String, dynamic>.from(group);
+      }
+      for (final channel in channels) {
+        final id = _asInt(channel['id'] ?? channel['chat_id']);
+        if (id <= 0) continue;
+        final merged = <String, dynamic>{
+          ...?byId[id],
+          ...channel,
+          'id': id,
+          'chat_id': id,
+          'is_channel': 1,
+          'is_private': 0,
+        };
+        if (!_iAmMember(merged) && !_isPublicGroup(merged)) {
+          merged['last_message'] = '';
+          merged['last_time'] = '';
+          merged['unread_count'] = 0;
+        }
+        byId[id] = merged;
+      }
+
+      if (!mounted) return;
+      setState(() => _groups = byId.values.toList());
     } finally {
       if (mounted) setState(() => isLoading = false);
     }
@@ -1059,7 +1153,14 @@ class _ChatScreenState extends State<ChatScreen> {
       final id = _asInt(c['id']);
       if (_archived.contains(id)) return false;
       if (q.isEmpty) return true;
-      return _chatTitle(c).toLowerCase().contains(q);
+      final title = _chatTitle(c).toLowerCase();
+      final username = (c['username'] ?? c['channel_username'] ?? '')
+          .toString()
+          .toLowerCase();
+      final description = (c['description'] ?? '').toString().toLowerCase();
+      return title.contains(q) ||
+          username.contains(q.replaceFirst('@', '')) ||
+          description.contains(q);
     }).toList();
 
     base.sort((a, b) {
@@ -1079,6 +1180,114 @@ class _ChatScreenState extends State<ChatScreen> {
 
     if (!mounted) return;
     setState(() => _filtered = base);
+  }
+
+  Future<void> _createCommunity() async {
+    final kind = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 2, 12, 14),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Padding(
+                padding: const EdgeInsets.fromLTRB(6, 2, 6, 10),
+                child: Text('Что создать?', style: _ChatText.title(15)),
+              ),
+              _CreateCommunityTile(
+                icon: Icons.groups_2_rounded,
+                title: 'Группа',
+                subtitle: 'Все участники могут общаться',
+                onTap: () => Navigator.pop(sheetContext, 'group'),
+              ),
+              const SizedBox(height: 7),
+              _CreateCommunityTile(
+                icon: Icons.campaign_rounded,
+                title: 'Канал',
+                subtitle: 'Публикуют владелец и администраторы',
+                onTap: () => Navigator.pop(sheetContext, 'channel'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (!mounted || kind == null) return;
+
+    final ok = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute<bool>(
+        builder: (_) => kind == 'channel'
+            ? CreateChannelScreen(userId: widget.userId)
+            : CreateGroupChatScreen(userId: widget.userId),
+      ),
+    );
+    if (ok == true) await _reloadCurrentTab();
+  }
+
+  Future<void> _openChannelManagement(Map<String, dynamic> chat) async {
+    if (!_isChannel(chat) || !_iAmMember(chat) || !mounted) return;
+    final leftOrDeleted = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute<bool>(
+        builder: (_) => ChannelManagementScreen(
+          chatId: _asInt(chat['id'] ?? chat['chat_id']),
+          currentUserId: widget.userId,
+        ),
+      ),
+    );
+    if (!mounted) return;
+    if (leftOrDeleted == true) _closeEmbeddedChat();
+    await _loadGroups();
+    _applyFiltersAndSorting();
+  }
+
+  Future<void> _openGroupManagement(Map<String, dynamic> chat) async {
+    if (_isPrivate(chat) || _isChannel(chat) || !mounted) return;
+    final chatId = _asInt(chat['id'] ?? chat['chat_id']);
+    if (chatId <= 0) return;
+
+    final result = await Navigator.push<dynamic>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => EditGroupChatScreen(
+          chatId: chatId,
+          currentUserId: widget.userId,
+          chatName: _chatTitle(chat),
+          groupAvatarUrl: _chatPhoto(chat),
+        ),
+      ),
+    );
+    if (!mounted) return;
+
+    if (result is Map && result['removed'] == true) {
+      _closeEmbeddedChat();
+      await _loadGroups();
+      _applyFiltersAndSorting();
+      return;
+    }
+
+    if (result is Map) {
+      final renamed = (result['name'] ?? '').toString().trim();
+      if (renamed.isNotEmpty) {
+        setState(() {
+          _selectedChatName = renamed;
+          if (_selectedChat != null && _asInt(_selectedChat!['id']) == chatId) {
+            _selectedChat!['name'] = renamed;
+            _selectedChat!['title'] = renamed;
+          }
+        });
+      }
+    }
+    await _loadGroups();
+    _applyFiltersAndSorting();
   }
 
   // ===== OPEN CHAT =====
@@ -1106,6 +1315,7 @@ class _ChatScreenState extends State<ChatScreen> {
         _selectedChat = Map<String, dynamic>.from(chat);
         _selectedChatId = chatId;
         _selectedChatName = title;
+        _embeddedCommunityTab = 0;
       });
       if (_isPrivate(chat)) unawaited(_ensureChatPeerData(_selectedChat));
       return;
@@ -1127,6 +1337,9 @@ class _ChatScreenState extends State<ChatScreen> {
           chatName: title,
           isGroup: !_isPrivate(chat),
           groupAvatarUrl: _isPrivate(chat) ? '' : _chatPhoto(chat),
+          isChannel: _isChannel(chat),
+          channelRole: _channelRole(chat),
+          channelSubscriberCount: _channelSubscriberCount(chat),
           peerUserId: _chatPeerUserId(chat),
           peerAvatarUrl: _isPrivate(chat) ? _chatPhoto(chat) : '',
         ),
@@ -1193,6 +1406,7 @@ class _ChatScreenState extends State<ChatScreen> {
           _tab = _ChatTab.privateChats;
           _selectedChatId = chatId;
           _selectedChatName = title;
+          _embeddedCommunityTab = 0;
           _selectedChat = <String, dynamic>{
             'id': chatId,
             'title': title,
@@ -1225,6 +1439,127 @@ class _ChatScreenState extends State<ChatScreen> {
       if (mounted && messenger.mounted)
         messenger.showSnackBar(SnackBar(content: Text("Ошибка сети: $e")));
     }
+  }
+
+  Future<void> _subscribeChannel(Map<String, dynamic> chat) async {
+    final chatId = _asInt(chat['id'] ?? chat['chat_id']);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final isPublic = _isPublicGroup(chat);
+      final res = await http.post(
+        Uri.parse(isPublic ? _joinChannelUrl : _requestChannelJoinUrl),
+        body: <String, String>{
+          'chat_id': chatId.toString(),
+          'user_id': widget.userId.toString(),
+        },
+      ).timeout(const Duration(seconds: 12));
+      final data = json.decode(res.body);
+      final ok = res.statusCode == 200 && data is Map && data['success'] == true;
+      if (!ok) {
+        final error = data is Map
+            ? (data['error'] ?? data['message'] ?? 'Ошибка').toString()
+            : 'HTTP ${res.statusCode}';
+        if (mounted && messenger.mounted) {
+          messenger.showSnackBar(SnackBar(content: Text('Не удалось выполнить действие: $error')));
+        }
+        return;
+      }
+
+      await _loadGroups();
+      _applyFiltersAndSorting();
+      if (!mounted) return;
+      if (isPublic) {
+        final fresh = _groups.firstWhere(
+          (item) => _asInt(item['id'] ?? item['chat_id']) == chatId,
+          orElse: () => <String, dynamic>{...chat, 'i_am_member': 1, 'my_role': 'subscriber'},
+        );
+        await _openChat(fresh);
+      } else {
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Заявка отправлена владельцу канала')),
+        );
+      }
+    } catch (e) {
+      if (mounted && messenger.mounted) {
+        messenger.showSnackBar(SnackBar(content: Text('Ошибка сети: $e')));
+      }
+    }
+  }
+
+  Future<void> _cancelChannelRequest(Map<String, dynamic> chat) async {
+    final chatId = _asInt(chat['id'] ?? chat['chat_id']);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final res = await http.post(
+        Uri.parse(_cancelChannelJoinUrl),
+        body: <String, String>{
+          'chat_id': chatId.toString(),
+          'user_id': widget.userId.toString(),
+        },
+      ).timeout(const Duration(seconds: 10));
+      final data = json.decode(res.body);
+      if (res.statusCode != 200 || data is! Map || data['success'] != true) {
+        throw Exception(data is Map ? (data['error'] ?? 'Ошибка') : 'HTTP ${res.statusCode}');
+      }
+      await _loadGroups();
+      _applyFiltersAndSorting();
+      if (mounted && messenger.mounted) {
+        messenger.showSnackBar(const SnackBar(content: Text('Заявка отменена')));
+      }
+    } catch (e) {
+      if (mounted && messenger.mounted) {
+        messenger.showSnackBar(SnackBar(content: Text('Не удалось отменить заявку: $e')));
+      }
+    }
+  }
+
+  Future<void> _showChannelSubscribeDialog(Map<String, dynamic> chat) async {
+    final title = _chatTitle(chat);
+    final isPublic = _isPublicGroup(chat);
+    if (_channelRequestStatus(chat) == 'pending') {
+      final cancel = await showDialog<bool>(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('Заявка уже отправлена'),
+          content: const Text('Она ожидает решения владельца или администратора канала.'),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Закрыть'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Отменить заявку'),
+            ),
+          ],
+        ),
+      );
+      if (cancel == true) await _cancelChannelRequest(chat);
+      return;
+    }
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text(isPublic ? 'Подписаться на канал?' : 'Отправить заявку?'),
+        content: Text(
+          isPublic
+              ? 'Подписаться на «$title»? После подписки канал появится в ваших чатах.'
+              : '«$title» — закрытый канал. Владелец или администратор увидит вашу заявку и сможет принять или отклонить её.',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Отмена'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: _ChatStyle.green),
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(isPublic ? 'Подписаться' : 'Отправить заявку'),
+          ),
+        ],
+      ),
+    );
+    if (ok == true) await _subscribeChannel(chat);
   }
 
   // ===== JOIN GROUP =====
@@ -1801,6 +2136,9 @@ class _ChatScreenState extends State<ChatScreen> {
           case 'delete_group':
             if (!isPrivate && !deleted) await _confirmDeleteGroup(chat);
             break;
+          case 'manage_channel':
+            if (!deleted) await _openChannelManagement(chat);
+            break;
         }
       },
       itemBuilder: (_) {
@@ -1844,6 +2182,17 @@ class _ChatScreenState extends State<ChatScreen> {
               child: Text(
                 'Удалить чат',
                 style: TextStyle(color: Color(0xFFEF4444)),
+              ),
+            ),
+          ];
+        }
+
+        if (_isChannel(chat)) {
+          return <PopupMenuEntry<String>>[
+            PopupMenuItem<String>(
+              value: 'manage_channel',
+              child: Text(
+                _iAmOwner(chat) ? 'Управление каналом' : 'О канале и подписке',
               ),
             ),
           ];
@@ -1904,6 +2253,37 @@ class _ChatScreenState extends State<ChatScreen> {
     if (!isPrivate) {
       final iAmMember = _iAmMember(chat);
       if (!iAmMember) return _buildTelegramTile(chat);
+
+      if (_isChannel(chat)) {
+        return Dismissible(
+          key: ValueKey('channel_$id'),
+          direction: DismissDirection.endToStart,
+          background: Container(
+            color: _ChatStyle.greenSoft,
+            padding: const EdgeInsets.only(right: 18),
+            alignment: Alignment.centerRight,
+            child: const Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: <Widget>[
+                Icon(Icons.settings_rounded, color: _ChatStyle.greenDark),
+                SizedBox(width: 8),
+                Text(
+                  'Канал',
+                  style: TextStyle(
+                    color: _ChatStyle.greenDark,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          confirmDismiss: (_) async {
+            await _openChannelManagement(chat);
+            return false;
+          },
+          child: _buildTelegramTile(chat),
+        );
+      }
 
       final bgAction = Container(
         color: const Color(0xFFEEF2FF),
@@ -2223,7 +2603,7 @@ class _ChatScreenState extends State<ChatScreen> {
           ? '$_notificationUnread непрочитанных'
           : 'Всё прочитано',
       _ChatTab.privateChats => '${_filtered.length} диалогов',
-      _ChatTab.groups => '${_filtered.length} групп',
+      _ChatTab.groups => '${_filtered.length} групп и каналов',
       _ChatTab.calls => 'История звонков',
     };
 
@@ -2343,22 +2723,11 @@ class _ChatScreenState extends State<ChatScreen> {
         Padding(
           padding: const EdgeInsets.only(right: 10),
           child: _ChatHeaderAction(
-            label: _tab == _ChatTab.groups ? 'Новая группа' : 'Новый чат',
+            label: _tab == _ChatTab.groups ? 'Создать' : 'Новый чат',
             emphasized: true,
             onTap: () async {
               if (_tab == _ChatTab.groups) {
-                final ok = await Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => CreateGroupChatScreen(
-                      userId: widget.userId,
-                    ),
-                  ),
-                );
-
-                if (ok == true) {
-                  await _reloadCurrentTab();
-                }
+                await _createCommunity();
               } else {
                 await _openNewPrivateChatSheet();
               }
@@ -2451,6 +2820,91 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
+  Future<void> _refreshSelectedCommunity() async {
+    final chatId = _selectedChatId;
+    if (chatId == null || chatId <= 0) return;
+    await _loadGroups();
+    _applyFiltersAndSorting();
+    if (!mounted) return;
+    Map<String, dynamic>? fresh;
+    for (final item in _groups) {
+      if (_asInt(item['id'] ?? item['chat_id']) == chatId) {
+        fresh = Map<String, dynamic>.from(item);
+        break;
+      }
+    }
+    if (fresh == null) return;
+    setState(() {
+      _selectedChat = fresh;
+      _selectedChatName = _chatTitle(fresh!);
+    });
+  }
+
+  void _setEmbeddedCommunityTab(int value) {
+    if (!mounted) return;
+    setState(() => _embeddedCommunityTab = value.clamp(0, 2).toInt());
+  }
+
+  Widget _embeddedCommunityTabs({required bool isChannel}) {
+    Widget tab({required int index, required IconData icon, required String label}) {
+      final selected = _embeddedCommunityTab == index;
+      return Expanded(
+        child: Material(
+          color: selected ? _ChatStyle.greenSoft : _ChatStyle.soft,
+          borderRadius: BorderRadius.circular(12),
+          child: InkWell(
+            onTap: () => _setEmbeddedCommunityTab(index),
+            borderRadius: BorderRadius.circular(12),
+            child: SizedBox(
+              height: 38,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: <Widget>[
+                  Icon(
+                    icon,
+                    size: 15,
+                    color: selected ? _ChatStyle.greenDark : _ChatStyle.muted,
+                  ),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: _ChatText.body(
+                        10.1,
+                        color: selected ? _ChatStyle.greenDark : _ChatStyle.text,
+                        weight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.fromLTRB(10, 6, 10, 8),
+      child: Row(
+        children: <Widget>[
+          tab(index: 0, icon: Icons.forum_rounded, label: 'Сообщения'),
+          const SizedBox(width: 7),
+          tab(
+            index: 1,
+            icon: Icons.groups_2_rounded,
+            label: isChannel ? 'Подписчики' : 'Участники',
+          ),
+          const SizedBox(width: 7),
+          tab(index: 2, icon: Icons.tune_rounded, label: 'Настройки'),
+        ],
+      ),
+    );
+  }
+
   Widget _buildEmbeddedChatPane({required bool showBack}) {
     final chatId = _selectedChatId;
     if (chatId == null || chatId <= 0) {
@@ -2461,7 +2915,18 @@ class _ChatScreenState extends State<ChatScreen> {
     final title =
         _selectedChatName.trim().isEmpty ? 'Чат' : _selectedChatName.trim();
     final isPrivate = chat == null ? true : _isPrivate(chat);
+    final isChannel = chat != null && _isChannel(chat);
     final avatarUrl = chat == null ? '' : _chatPhoto(chat);
+    final canOpenCommunityDetails =
+        !isPrivate && chat != null && (!isChannel || _iAmMember(chat));
+
+    final profileOrDetailsTap = isPrivate
+        ? () => unawaited(_openChatPeerProfile(chat))
+        : canOpenCommunityDetails
+            ? () => _setEmbeddedCommunityTab(
+                  _embeddedCommunityTab == 0 ? 1 : 0,
+                )
+            : null;
 
     return Container(
       color: Colors.white,
@@ -2469,32 +2934,82 @@ class _ChatScreenState extends State<ChatScreen> {
         children: <Widget>[
           _ProfileChatHeader(
             title: title,
-            subtitle: isPrivate ? 'Личный диалог' : 'Групповой чат',
+            subtitle: isPrivate
+                ? 'Личный диалог'
+                : (isChannel
+                    ? '${_channelSubscriberCount(chat!)} подписчиков · канал'
+                    : 'Групповой чат'),
             avatarUrl: avatarUrl,
             isGroup: !isPrivate,
-            onProfileTap: isPrivate
-                ? () => unawaited(_openChatPeerProfile(chat))
-                : null,
+            detailsOpen: _embeddedCommunityTab > 0 && !isPrivate,
+            onProfileTap: profileOrDetailsTap,
+            // На планшете/ПК ниже уже есть отдельная вкладка «Настройки».
+            // Не дублируем её второй иконкой в шапке.
+            onActionTap: null,
             onBack: showBack ? _closeEmbeddedChat : null,
           ),
-          const Divider(
-            height: 1,
-            thickness: .6,
-            color: _ChatStyle.line,
-          ),
+          if (!isPrivate) _embeddedCommunityTabs(isChannel: isChannel),
           Expanded(
-            child: ChatRoomScreen(
-              key: ValueKey('profile-chat-$chatId'),
-              chatId: chatId,
-              userId: widget.userId,
-              clubId: _clubIdForChat(chat),
-              chatName: title,
-              isGroup: !isPrivate,
-              groupAvatarUrl: isPrivate ? '' : avatarUrl,
-              peerUserId: _chatPeerUserId(chat),
-              peerAvatarUrl: isPrivate ? avatarUrl : '',
-              embedded: true,
-            ),
+            child: _embeddedCommunityTab > 0 && !isPrivate && chat != null
+                ? (isChannel
+                    ? ChannelManagementScreen(
+                        key: ValueKey(
+                          'embedded-channel-details-$chatId-${_embeddedCommunityTab - 1}',
+                        ),
+                        chatId: chatId,
+                        currentUserId: widget.userId,
+                        embedded: true,
+                        showTabs: false,
+                        initialTab: _embeddedCommunityTab - 1,
+                        onRemoved: () {
+                          _closeEmbeddedChat();
+                          unawaited(_loadGroups());
+                        },
+                        onUpdated: () => unawaited(_refreshSelectedCommunity()),
+                      )
+                    : EditGroupChatScreen(
+                        key: ValueKey(
+                          'embedded-group-details-$chatId-${_embeddedCommunityTab - 1}',
+                        ),
+                        chatId: chatId,
+                        currentUserId: widget.userId,
+                        chatName: title,
+                        groupAvatarUrl: avatarUrl,
+                        embedded: true,
+                        showTabs: false,
+                        initialTab: _embeddedCommunityTab - 1,
+                        onTabRequested: (tab) =>
+                            _setEmbeddedCommunityTab(tab + 1),
+                        onNameChanged: (name) {
+                          if (!mounted) return;
+                          setState(() {
+                            _selectedChatName = name;
+                            _selectedChat?['name'] = name;
+                            _selectedChat?['title'] = name;
+                          });
+                          unawaited(_loadGroups());
+                        },
+                        onRemoved: () {
+                          _closeEmbeddedChat();
+                          unawaited(_loadGroups());
+                        },
+                      ))
+                : ChatRoomScreen(
+                    key: ValueKey('profile-chat-$chatId'),
+                    chatId: chatId,
+                    userId: widget.userId,
+                    clubId: _clubIdForChat(chat),
+                    chatName: title,
+                    isGroup: !isPrivate,
+                    groupAvatarUrl: isPrivate ? '' : avatarUrl,
+                    isChannel: isChannel,
+                    channelRole: chat == null ? '' : _channelRole(chat),
+                    channelSubscriberCount:
+                        chat == null ? 0 : _channelSubscriberCount(chat),
+                    peerUserId: _chatPeerUserId(chat),
+                    peerAvatarUrl: isPrivate ? avatarUrl : '',
+                    embedded: true,
+                  ),
           ),
         ],
       ),
@@ -2571,7 +3086,7 @@ class _ChatScreenState extends State<ChatScreen> {
               const SizedBox(width: 6),
               Expanded(
                 child: _tabChip(
-                  label: 'Группы',
+                  label: 'Сообщества',
                   selected: _tab == _ChatTab.groups,
                   onTap: () async {
                     if (_tab == _ChatTab.groups) return;
@@ -2644,7 +3159,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       decoration: InputDecoration(
                         hintText: _tab == _ChatTab.privateChats
                             ? 'Поиск диалогов'
-                            : 'Поиск групп',
+                            : 'Поиск групп и каналов',
                         hintStyle: _ChatText.body(
                           10.8,
                           color: _ChatStyle.muted2,
@@ -2723,7 +3238,7 @@ class _ChatScreenState extends State<ChatScreen> {
           const SizedBox(width: 6),
           Expanded(
             child: _tabChip(
-              label: 'Группы',
+              label: 'Сообщества',
               selected: _tab == _ChatTab.groups,
               onTap: () async {
                 if (_tab == _ChatTab.groups) return;
@@ -2774,15 +3289,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
     Future<void> createSidebarChat() async {
       if (_tab == _ChatTab.groups) {
-        final ok = await Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => CreateGroupChatScreen(userId: widget.userId),
-          ),
-        );
-        if (ok == true) {
-          await _reloadCurrentTab();
-        }
+        await _createCommunity();
         return;
       }
       await _openNewPrivateChatSheet();
@@ -2961,7 +3468,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                           ? Icons.group_add_rounded
                                           : Icons.add_comment_rounded,
                                       tooltip: _tab == _ChatTab.groups
-                                          ? 'Новая группа'
+                                          ? 'Создать группу или канал'
                                           : 'Новый чат',
                                       emphasized: true,
                                       onTap: () =>
@@ -3083,7 +3590,7 @@ class _ChatScreenState extends State<ChatScreen> {
                           decoration: InputDecoration(
                             hintText: _tab == _ChatTab.privateChats
                                 ? 'Поиск диалогов'
-                                : 'Поиск групп',
+                                : 'Поиск групп и каналов',
                             hintStyle: _ChatText.body(
                               10.8,
                               color: _ChatStyle.muted2,
@@ -3157,7 +3664,7 @@ class _ChatScreenState extends State<ChatScreen> {
             const SizedBox(height: 4),
             Text(
               _tab == _ChatTab.groups
-                  ? 'Создайте группу или вступите в открытую'
+                  ? 'Создайте группу или канал, либо подпишитесь на существующий'
                   : 'Создайте первый личный диалог',
               style: _ChatText.body(10.0),
               textAlign: TextAlign.center,
@@ -3191,19 +3698,34 @@ class _ChatScreenState extends State<ChatScreen> {
 
     final isPublic = isGroup ? _isPublicGroup(chat) : false;
     final iAmMember = isGroup ? _iAmMember(chat) : true;
+    final isChannel = isGroup && _isChannel(chat);
+    final channelRequestStatus = isChannel ? _channelRequestStatus(chat) : '';
+    final subscriberCount = isChannel ? _channelSubscriberCount(chat) : 0;
+    final pendingRequestCount = isChannel ? _asInt(chat['pending_request_count']) : 0;
+    final channelRole = isChannel ? _channelRole(chat) : '';
 
     final rawLast = (chat['last_message'] ?? '').toString().trim();
+    final pendingPrefix = isChannel &&
+            pendingRequestCount > 0 &&
+            const <String>{'owner', 'admin'}.contains(channelRole)
+        ? '$pendingRequestCount заявок · '
+        : '';
 
     final secondLine = deleted
         ? 'Чат удалён'
         : rawLast.isNotEmpty
-            ? rawLast
-            : (isGroup
+            ? '$pendingPrefix$rawLast'
+            : (pendingPrefix.isNotEmpty
+                ? '${pendingPrefix}ожидают решения'
+                : (isGroup
                 ? _groupStatusLine(
                     isPublic: isPublic,
                     iAmMember: iAmMember,
+                    isChannel: isChannel,
+                    requestStatus: channelRequestStatus,
+                    subscriberCount: subscriberCount,
                   )
-                : 'Напишите первым');
+                : 'Напишите первым'));
 
     final initials = title
         .trim()
@@ -3229,7 +3751,11 @@ class _ChatScreenState extends State<ChatScreen> {
             );
             return;
           }
-          if (isGroup && isPublic && !iAmMember) {
+          if (isChannel && !iAmMember) {
+            _showChannelSubscribeDialog(chat);
+            return;
+          }
+          if (isGroup && !isChannel && isPublic && !iAmMember) {
             _showJoinDialog(chat);
             return;
           }
@@ -3272,9 +3798,15 @@ class _ChatScreenState extends State<ChatScreen> {
                             ),
                           )
                         : Center(
-                            child: isGroup
-                                ? const _ChatDots(compact: true)
-                                : Text(
+                            child: isChannel
+                                ? const Icon(
+                                    Icons.campaign_rounded,
+                                    color: _ChatStyle.greenDark,
+                                    size: 20,
+                                  )
+                                : isGroup
+                                    ? const _ChatDots(compact: true)
+                                    : Text(
                                     initials.isEmpty ? 'П' : initials,
                                     style: _ChatText.title(
                                       10.5,
@@ -3327,9 +3859,18 @@ class _ChatScreenState extends State<ChatScreen> {
                         if (isGroup) ...<Widget>[
                           const SizedBox(width: 7),
                           _MiniChip(
-                            text: isPublic ? 'Открытая' : 'Закрытая',
+                            text: isChannel
+                                ? (isPublic ? 'Канал' : 'Закрытый канал')
+                                : (isPublic ? 'Открытая' : 'Закрытая'),
                             tone: isPublic ? _ChipTone.blue : _ChipTone.orange,
                           ),
+                          if (isChannel && channelRequestStatus == 'pending') ...<Widget>[
+                            const SizedBox(width: 5),
+                            const _MiniChip(
+                              text: 'Заявка',
+                              tone: _ChipTone.orange,
+                            ),
+                          ],
                         ],
                       ],
                     ),
@@ -3558,21 +4099,82 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 } // ✅ _ChatScreenState
 
+class _CreateCommunityTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  const _CreateCommunityTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: _ChatStyle.soft,
+      borderRadius: BorderRadius.circular(15),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(15),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+          child: Row(
+            children: <Widget>[
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: _ChatStyle.greenSoft,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, color: _ChatStyle.greenDark, size: 20),
+              ),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(title, style: _ChatText.title(13.5)),
+                    const SizedBox(height: 2),
+                    Text(subtitle, style: _ChatText.body(10.8)),
+                  ],
+                ),
+              ),
+              const Icon(
+                Icons.chevron_right_rounded,
+                color: _ChatStyle.muted2,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _ProfileChatHeader extends StatelessWidget {
   final String title;
   final String subtitle;
   final String avatarUrl;
   final bool isGroup;
+  final bool detailsOpen;
   final VoidCallback? onBack;
   final VoidCallback? onProfileTap;
+  final VoidCallback? onActionTap;
 
   const _ProfileChatHeader({
     required this.title,
     required this.subtitle,
     required this.avatarUrl,
     required this.isGroup,
+    this.detailsOpen = false,
     this.onBack,
     this.onProfileTap,
+    this.onActionTap,
   });
 
   String get _initials {
@@ -3675,7 +4277,11 @@ class _ProfileChatHeader extends StatelessWidget {
                           Text(
                             onProfileTap == null
                                 ? subtitle
-                                : '$subtitle · профиль',
+                                : (isGroup
+                                    ? (detailsOpen
+                                        ? '$subtitle · вернуться к сообщениям'
+                                        : '$subtitle · подробнее')
+                                    : '$subtitle · профиль'),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: _ChatText.body(9.8),
@@ -3689,14 +4295,33 @@ class _ProfileChatHeader extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          Container(
-            width: 6,
-            height: 6,
-            decoration: const BoxDecoration(
-              color: _ChatStyle.green,
-              shape: BoxShape.circle,
+          if (isGroup && onActionTap != null)
+            Material(
+              color: _ChatStyle.greenSoft,
+              borderRadius: BorderRadius.circular(9),
+              child: InkWell(
+                onTap: onActionTap,
+                borderRadius: BorderRadius.circular(9),
+                child: SizedBox(
+                  width: 32,
+                  height: 32,
+                  child: Icon(
+                    Icons.tune_rounded,
+                    size: 16,
+                    color: _ChatStyle.greenDark,
+                  ),
+                ),
+              ),
+            )
+          else
+            Container(
+              width: 6,
+              height: 6,
+              decoration: const BoxDecoration(
+                color: _ChatStyle.green,
+                shape: BoxShape.circle,
+              ),
             ),
-          ),
         ],
       ),
     );
@@ -3994,12 +4619,27 @@ class _NewPrivateChatSheetState extends State<_NewPrivateChatSheet> {
             ? full
             : (email.isNotEmpty ? email : "Пользователь #$id");
 
-        final rawPhoto = (x['photo'] ?? x['avatar'] ?? '').toString().trim();
+        var rawPhoto = (x['photo'] ??
+                x['photo_url'] ??
+                x['avatar'] ??
+                x['avatar_url'] ??
+                '')
+            .toString()
+            .trim()
+            .replaceAll('\\', '/');
+        while (rawPhoto.contains('/uploads/uploads/')) {
+          rawPhoto = rawPhoto.replaceAll('/uploads/uploads/', '/uploads/');
+        }
+        while (rawPhoto.startsWith('uploads/uploads/')) {
+          rawPhoto = rawPhoto.substring('uploads/'.length);
+        }
         final photo = rawPhoto.isEmpty || rawPhoto.toLowerCase() == 'null'
             ? ""
-            : (rawPhoto.startsWith('http')
+            : (rawPhoto.startsWith('http://') || rawPhoto.startsWith('https://')
                 ? rawPhoto
-                : "https://sportotekaapp.ru/uploads/$rawPhoto");
+                : (rawPhoto.startsWith('/')
+                    ? 'https://sportotekaapp.ru$rawPhoto'
+                    : 'https://sportotekaapp.ru/${rawPhoto.startsWith('uploads/') ? rawPhoto : 'uploads/$rawPhoto'}'));
 
         parsed.add(
             _UserPick(id: id, title: title, subtitle: email, photo: photo));

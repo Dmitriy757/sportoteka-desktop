@@ -51,6 +51,7 @@ class _CmrClubNewsPanelState extends State<CmrClubNewsPanel> {
   bool _editorOpen = false;
   _ClubNewsView _view = _ClubNewsView.all;
   int _teamFilter = 0;
+  final Set<String> _expandedPostKeys = <String>{};
 
   @override
   void initState() {
@@ -444,274 +445,479 @@ class _CmrClubNewsPanelState extends State<CmrClubNewsPanel> {
     );
   }
 
+  String _authorInitials(Map<String, dynamic> post) {
+    final value = _author(post).trim();
+    if (value.isEmpty) return 'С';
+    final parts = value.split(RegExp(r'\s+')).where((e) => e.isNotEmpty).toList();
+    if (parts.isEmpty) return 'С';
+    if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
+    return '${parts.first.substring(0, 1)}${parts.last.substring(0, 1)}'.toUpperCase();
+  }
+
+  Widget _authorAvatar(Map<String, dynamic> post) {
+    final avatar = _normalizeMedia(
+      _s(post['author_avatar'] ?? post['avatar'] ?? post['avatar_url']),
+    );
+    if (avatar.isNotEmpty) {
+      return ClipOval(
+        child: Image.network(
+          avatar,
+          width: 36,
+          height: 36,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => _authorAvatarFallback(post),
+        ),
+      );
+    }
+    return _authorAvatarFallback(post);
+  }
+
+  Widget _authorAvatarFallback(Map<String, dynamic> post) {
+    return Container(
+      width: 36,
+      height: 36,
+      alignment: Alignment.center,
+      decoration: const BoxDecoration(
+        color: _greenSoft,
+        shape: BoxShape.circle,
+      ),
+      child: Text(
+        _authorInitials(post),
+        style: AppTypography.custom(
+          size: 11.5,
+          weight: FontWeight.w700,
+          color: _greenDark,
+          height: 1,
+        ),
+      ),
+    );
+  }
+
+  Widget _newsBadge(Map<String, dynamic> post) {
+    final deleted = _s(post['deleted_at']).isNotEmpty;
+    final archived = _s(post['status']).toLowerCase() == 'archived';
+    final color = _statusColor(post);
+    final text = deleted
+        ? 'Корзина'
+        : archived
+            ? 'Снята'
+            : _audience(post);
+
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 190),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+      decoration: BoxDecoration(
+        color: deleted || archived ? _statusSoft(post) : _greenSoft,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 4.5,
+            height: 4.5,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              text,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.custom(
+                size: 9.8,
+                weight: FontWeight.w600,
+                color: deleted || archived ? color : _greenDark,
+                height: 1.1,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _postKey(Map<String, dynamic> post) {
+    final id = _i(post['id']);
+    if (id > 0) return 'id:$id';
+    return '${_s(post['created_at'])}|${_s(post['title'])}|${_s(post['user_id'])}';
+  }
+
+  String _plainPostBody(Map<String, dynamic> post) {
+    var text = _s(post['body'] ?? post['text']);
+    if (text.isEmpty) return '';
+    text = text
+        .replaceAll(RegExp(r'<br\s*/?>', caseSensitive: false), '\n')
+        .replaceAll(RegExp(r'</p\s*>', caseSensitive: false), '\n')
+        .replaceAll(RegExp(r'</div\s*>', caseSensitive: false), '\n')
+        .replaceAll(RegExp(r'<li[^>]*>', caseSensitive: false), '• ')
+        .replaceAll(RegExp(r'</li\s*>', caseSensitive: false), '\n')
+        .replaceAll(RegExp(r'<[^>]+>'), '')
+        .replaceAll('&nbsp;', ' ')
+        .replaceAll('&amp;', '&')
+        .replaceAll('&quot;', '"')
+        .replaceAll('&#39;', "'")
+        .replaceAll('&lt;', '<')
+        .replaceAll('&gt;', '>');
+    return text
+        .replaceAll(RegExp(r'[ \t]+'), ' ')
+        .replaceAll(RegExp(r' *\n *'), '\n')
+        .replaceAll(RegExp(r'\n{3,}'), '\n\n')
+        .trim();
+  }
+
+  bool _bodyNeedsExpansion(String body) {
+    return body.length > 220 || body.split('\n').length > 4;
+  }
+
   Widget _postTile(Map<String, dynamic> post) {
     final deleted = _s(post['deleted_at']).isNotEmpty;
     final archived = _s(post['status']).toLowerCase() == 'archived';
     final title = _s(post['title']).isEmpty ? 'Без заголовка' : _s(post['title']);
-    final body = _s(post['body'])
-        .replaceAll(RegExp(r'<[^>]+>'), ' ')
-        .replaceAll(RegExp(r'&nbsp;'), ' ')
-        .replaceAll(RegExp(r'&amp;'), '&')
-        .replaceAll(RegExp(r'\s+'), ' ')
-        .trim();
+    final body = _plainPostBody(post);
+    final postKey = _postKey(post);
+    final expanded = _expandedPostKeys.contains(postKey);
+    final canExpand = _bodyNeedsExpansion(body);
     final cover = _cover(post);
     final canEditThis = widget.canManage && post['can_edit'] == true && !deleted;
-    final statusColor = _statusColor(post);
-
-    Widget preview() {
-      final fallback = Container(
-        color: _statusSoft(post),
-        alignment: Alignment.center,
-        child: Icon(
-          deleted
-              ? Icons.delete_outline_rounded
-              : archived
-                  ? Icons.archive_outlined
-                  : Icons.newspaper_rounded,
-          size: 27,
-          color: statusColor,
-        ),
-      );
-      if (cover.isEmpty) return fallback;
-      return Image.network(
-        cover,
-        fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => fallback,
-      );
-    }
 
     return LayoutBuilder(
       builder: (context, constraints) {
         final compact = constraints.maxWidth < 620;
-        final imageWidth = compact ? 78.0 : 116.0;
-        final imageHeight = compact ? 78.0 : 92.0;
+        final horizontal = compact ? 10.0 : 14.0;
 
         return Padding(
-          padding: EdgeInsets.fromLTRB(
-            compact ? 10 : 14,
-            5,
-            compact ? 10 : 14,
-            7,
-          ),
+          padding: EdgeInsets.fromLTRB(horizontal, 6, horizontal, 8),
           child: Material(
-            color: Colors.transparent,
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            clipBehavior: Clip.antiAlias,
             child: InkWell(
               onTap: canEditThis ? () => _openEdit(post) : null,
-              borderRadius: BorderRadius.circular(14),
-              child: Ink(
+              child: Container(
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: _line, width: .8),
+                  border: Border.all(color: _line.withOpacity(.82), width: .75),
+                  boxShadow: <BoxShadow>[
+                    BoxShadow(
+                      color: Colors.black.withOpacity(.018),
+                      blurRadius: 18,
+                      spreadRadius: -12,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
                 ),
-                child: Padding(
-                  padding: EdgeInsets.all(compact ? 9 : 11),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(11),
-                        child: SizedBox(
-                          width: imageWidth,
-                          height: imageHeight,
-                          child: preview(),
-                        ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(
+                        compact ? 12 : 14,
+                        compact ? 12 : 14,
+                        compact ? 8 : 10,
+                        10,
                       ),
-                      SizedBox(width: compact ? 10 : 13),
-                      Expanded(
+                      child: Row(
+                        children: [
+                          _authorAvatar(post),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  _author(post),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: AppTypography.itemTitle(color: _text),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  _dateLabel(post['created_at']),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: AppTypography.caption(color: _muted),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          _newsBadge(post),
+                          if (widget.canManage) ...[
+                            const SizedBox(width: 2),
+                            PopupMenuButton<String>(
+                              tooltip: 'Действия',
+                              elevation: 10,
+                              color: Colors.white,
+                              surfaceTintColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              icon: const Icon(
+                                Icons.more_horiz_rounded,
+                                size: 20,
+                                color: _muted,
+                              ),
+                              onSelected: (value) {
+                                if (value == 'edit') _openEdit(post);
+                                if (value == 'archive') _setStatus(post, 'archived');
+                                if (value == 'publish') _setStatus(post, 'published');
+                                if (value == 'delete') _delete(post);
+                                if (value == 'restore') _restore(post);
+                              },
+                              itemBuilder: (_) {
+                                if (deleted) {
+                                  return const <PopupMenuEntry<String>>[
+                                    PopupMenuItem<String>(
+                                      value: 'restore',
+                                      child: Row(
+                                        children: [
+                                          Icon(Icons.restore_rounded, size: 18),
+                                          SizedBox(width: 9),
+                                          Text('Восстановить'),
+                                        ],
+                                      ),
+                                    ),
+                                  ];
+                                }
+                                return <PopupMenuEntry<String>>[
+                                  if (post['can_edit'] == true)
+                                    const PopupMenuItem<String>(
+                                      value: 'edit',
+                                      child: Row(
+                                        children: [
+                                          Icon(Icons.edit_outlined, size: 18),
+                                          SizedBox(width: 9),
+                                          Text('Редактировать'),
+                                        ],
+                                      ),
+                                    ),
+                                  PopupMenuItem<String>(
+                                    value: archived ? 'publish' : 'archive',
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          archived
+                                              ? Icons.publish_rounded
+                                              : Icons.archive_outlined,
+                                          size: 18,
+                                        ),
+                                        const SizedBox(width: 9),
+                                        Text(
+                                          archived
+                                              ? 'Опубликовать снова'
+                                              : 'Снять с публикации',
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const PopupMenuDivider(),
+                                  const PopupMenuItem<String>(
+                                    value: 'delete',
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          Icons.delete_outline_rounded,
+                                          size: 18,
+                                          color: _red,
+                                        ),
+                                        SizedBox(width: 9),
+                                        Text(
+                                          'Удалить',
+                                          style: TextStyle(color: _red),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ];
+                              },
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(
+                        compact ? 12 : 14,
+                        0,
+                        compact ? 12 : 14,
+                        8,
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.only(top: 6),
+                            child: Container(
+                              width: 6,
+                              height: 6,
+                              decoration: BoxDecoration(
+                                color: _statusColor(post),
+                                shape: BoxShape.circle,
+                                boxShadow: <BoxShadow>[
+                                  BoxShadow(
+                                    color: _statusColor(post).withOpacity(.18),
+                                    blurRadius: 8,
+                                    spreadRadius: .4,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 9),
+                          Expanded(
+                            child: Text(
+                              title,
+                              maxLines: compact ? 3 : 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTypography.custom(
+                                size: compact ? 16.0 : 16.5,
+                                weight: FontWeight.w600,
+                                color: _text,
+                                height: 1.2,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (body.isNotEmpty)
+                      Padding(
+                        padding: EdgeInsets.fromLTRB(
+                          compact ? 12 : 14,
+                          0,
+                          compact ? 12 : 14,
+                          10,
+                        ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    title,
-                                    maxLines: compact ? 2 : 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: AppTypography.itemTitle(color: _text),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 4,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: _statusSoft(post),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Container(
-                                        width: 5,
-                                        height: 5,
-                                        decoration: BoxDecoration(
-                                          color: statusColor,
-                                          shape: BoxShape.circle,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 5),
-                                      Text(
-                                        _statusLabel(post),
-                                        style: AppTypography.commentMeta(
-                                          color: statusColor,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                            if (body.isNotEmpty) ...[
-                              const SizedBox(height: 6),
-                              Text(
-                                body,
-                                maxLines: compact ? 2 : 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: AppTypography.caption(color: _muted),
+                            Text(
+                              body,
+                              maxLines: expanded ? null : (cover.isEmpty ? 5 : 4),
+                              overflow: expanded
+                                  ? TextOverflow.visible
+                                  : TextOverflow.ellipsis,
+                              style: AppTypography.custom(
+                                size: compact ? 12.8 : 13.2,
+                                weight: FontWeight.w400,
+                                color: _text,
+                                height: 1.42,
                               ),
-                            ],
-                            const SizedBox(height: 9),
-                            Wrap(
-                              spacing: 6,
-                              runSpacing: 6,
-                              children: [
-                                _metaPill(
-                                  Icons.groups_2_outlined,
-                                  _audience(post),
-                                  color: _greenDark,
-                                ),
-                                _metaPill(
-                                  Icons.person_outline_rounded,
-                                  _author(post),
-                                ),
-                                _metaPill(
-                                  Icons.schedule_rounded,
-                                  _dateLabel(post['created_at']),
-                                ),
-                              ],
                             ),
-                            if (_i(post['updated_by']) > 0 &&
-                                _i(post['updated_by']) != _i(post['user_id'])) ...[
-                              const SizedBox(height: 7),
-                              Row(
-                                children: [
-                                  const Icon(
-                                    Icons.edit_note_rounded,
-                                    size: 15,
-                                    color: _greenDark,
-                                  ),
-                                  const SizedBox(width: 5),
-                                  Expanded(
+                            if (canExpand) ...[
+                              const SizedBox(height: 6),
+                              Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(8),
+                                  onTap: () {
+                                    setState(() {
+                                      if (expanded) {
+                                        _expandedPostKeys.remove(postKey);
+                                      } else {
+                                        _expandedPostKeys.add(postKey);
+                                      }
+                                    });
+                                  },
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 2,
+                                      vertical: 3,
+                                    ),
                                     child: Text(
-                                      'Изменено администратором клуба',
-                                      style: AppTypography.commentMeta(
+                                      expanded ? 'Свернуть' : 'Показать полностью',
+                                      style: AppTypography.custom(
+                                        size: 11.7,
+                                        weight: FontWeight.w600,
                                         color: _greenDark,
+                                        height: 1.2,
                                       ),
                                     ),
                                   ),
-                                ],
+                                ),
                               ),
                             ],
                           ],
                         ),
                       ),
-                      if (widget.canManage) ...[
-                        const SizedBox(width: 4),
-                        PopupMenuButton<String>(
-                          tooltip: 'Действия',
-                          elevation: 10,
-                          color: Colors.white,
-                          surfaceTintColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
+                    if (cover.isNotEmpty)
+                      AspectRatio(
+                        aspectRatio: compact ? 1.35 : 1.65,
+                        child: Container(
+                          width: double.infinity,
+                          color: _soft,
+                          child: Image.network(
+                            cover,
+                            width: double.infinity,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => Container(
+                              color: _soft,
+                              alignment: Alignment.center,
+                              child: const Icon(
+                                Icons.broken_image_outlined,
+                                size: 30,
+                                color: _muted,
+                              ),
+                            ),
+                            loadingBuilder: (context, child, progress) {
+                              if (progress == null) return child;
+                              return const Center(
+                                child: SizedBox(
+                                  width: 24,
+                                  height: 24,
+                                  child: CircularProgressIndicator(
+                                    color: _green,
+                                    strokeWidth: 2.2,
+                                  ),
+                                ),
+                              );
+                            },
                           ),
-                          icon: const Icon(
-                            Icons.more_horiz_rounded,
-                            size: 20,
+                        ),
+                      ),
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(
+                        compact ? 12 : 14,
+                        9,
+                        compact ? 12 : 14,
+                        11,
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.groups_2_outlined,
+                            size: 17,
                             color: _muted,
                           ),
-                          onSelected: (value) {
-                            if (value == 'edit') _openEdit(post);
-                            if (value == 'archive') _setStatus(post, 'archived');
-                            if (value == 'publish') _setStatus(post, 'published');
-                            if (value == 'delete') _delete(post);
-                            if (value == 'restore') _restore(post);
-                          },
-                          itemBuilder: (_) {
-                            if (deleted) {
-                              return const <PopupMenuEntry<String>>[
-                                PopupMenuItem<String>(
-                                  value: 'restore',
-                                  child: Row(
-                                    children: [
-                                      Icon(Icons.restore_rounded, size: 18),
-                                      SizedBox(width: 9),
-                                      Text('Восстановить'),
-                                    ],
-                                  ),
-                                ),
-                              ];
-                            }
-                            return <PopupMenuEntry<String>>[
-                              if (post['can_edit'] == true)
-                                const PopupMenuItem<String>(
-                                  value: 'edit',
-                                  child: Row(
-                                    children: [
-                                      Icon(Icons.edit_outlined, size: 18),
-                                      SizedBox(width: 9),
-                                      Text('Редактировать'),
-                                    ],
-                                  ),
-                                ),
-                              PopupMenuItem<String>(
-                                value: archived ? 'publish' : 'archive',
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      archived
-                                          ? Icons.publish_rounded
-                                          : Icons.archive_outlined,
-                                      size: 18,
-                                    ),
-                                    const SizedBox(width: 9),
-                                    Text(
-                                      archived
-                                          ? 'Опубликовать снова'
-                                          : 'Снять с публикации',
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const PopupMenuDivider(),
-                              const PopupMenuItem<String>(
-                                value: 'delete',
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      Icons.delete_outline_rounded,
-                                      size: 18,
-                                      color: _red,
-                                    ),
-                                    SizedBox(width: 9),
-                                    Text(
-                                      'Удалить',
-                                      style: TextStyle(color: _red),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ];
-                          },
-                        ),
-                      ],
-                    ],
-                  ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              _audience(post),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTypography.commentMeta(color: _muted),
+                            ),
+                          ),
+                          if (_i(post['updated_by']) > 0 &&
+                              _i(post['updated_by']) != _i(post['user_id'])) ...[
+                            const SizedBox(width: 10),
+                            const Icon(
+                              Icons.edit_note_rounded,
+                              size: 16,
+                              color: _greenDark,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Изменено',
+                              style: AppTypography.commentMeta(color: _greenDark),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -860,17 +1066,49 @@ class _CmrClubNewsPanelState extends State<CmrClubNewsPanel> {
         final titleBlock = Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Container(
+            SizedBox(
               width: compact ? 38 : 42,
               height: compact ? 38 : 42,
-              decoration: BoxDecoration(
-                color: _greenSoft,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Icon(
-                Icons.campaign_outlined,
-                size: 21,
-                color: _greenDark,
+              child: Center(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Container(
+                      width: 4,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: _green.withOpacity(.28),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Container(
+                      width: 5,
+                      height: 5,
+                      decoration: BoxDecoration(
+                        color: _green.withOpacity(.58),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Container(
+                      width: 7,
+                      height: 7,
+                      decoration: BoxDecoration(
+                        color: _green,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: _green.withOpacity(.16),
+                            blurRadius: 10,
+                            spreadRadius: .2,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
             const SizedBox(width: 11),

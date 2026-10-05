@@ -1,34 +1,40 @@
+import 'dart:async';
 import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 import 'package:sportoteka/core/theme/app_typography.dart';
+import 'package:sportoteka/presentation/my_profile_screen/my_profile_screen.dart';
 
-
-class _EditGroupUi {
-  static const Color bg = Color(0xFFF6F7F9);
+class _GroupInfoUi {
+  static const Color bg = Colors.white;
+  static const Color surface = Color(0xFFF8FAF9);
   static const Color card = Colors.white;
   static const Color green = Color(0xFF00A750);
   static const Color greenDark = Color(0xFF067A46);
-  static const Color greenSoft = Color(0xFFF3FBF7);
-  static const Color border = Color(0xFFEFF1F4);
+  static const Color greenSoft = Color(0xFFF3FAF6);
+  static const Color border = Color(0xFFEDF0EE);
   static const Color text = Color(0xFF0B0F14);
-  static const Color muted = Color(0xFF6B7280);
-  static const Color red = Color(0xFFEF4444);
+  static const Color muted = Color(0xFF667085);
+  static const Color muted2 = Color(0xFF98A2B3);
+  static const Color red = Color(0xFFD92D20);
+  static const Color amber = Color(0xFFF59E0B);
+
   static TextStyle title(double size) {
     final base = size >= 15
         ? AppTypography.screenTitle(color: text)
-        : size >= 13.4
-            ? AppTypography.subsectionTitle(color: text)
+        : size >= 13.2
+            ? AppTypography.sectionTitle(color: text)
             : AppTypography.itemTitle(color: text);
     return base.copyWith(fontWeight: FontWeight.w700);
   }
 
-  static TextStyle mutedText(double size) {
-    final base = size >= 11.5
-        ? AppTypography.secondary(color: muted)
-        : AppTypography.caption(color: muted);
-    return base.copyWith(fontWeight: FontWeight.w500);
+  static TextStyle body(double size, {Color color = muted, FontWeight weight = FontWeight.w500}) {
+    final base = size >= 11.3
+        ? AppTypography.secondary(color: color)
+        : AppTypography.caption(color: color);
+    return base.copyWith(fontWeight: weight);
   }
 }
 
@@ -36,12 +42,29 @@ class EditGroupChatScreen extends StatefulWidget {
   final int chatId;
   final int currentUserId;
   final String chatName;
+  final String groupAvatarUrl;
+
+  /// На планшете/ПК управление группой встраивается прямо в правую область
+  /// чата, поэтому отдельный Scaffold/маршрут не нужен.
+  final bool embedded;
+  final bool showTabs;
+  final int initialTab;
+  final ValueChanged<int>? onTabRequested;
+  final ValueChanged<String>? onNameChanged;
+  final VoidCallback? onRemoved;
 
   const EditGroupChatScreen({
     super.key,
     required this.chatId,
     required this.currentUserId,
     required this.chatName,
+    this.groupAvatarUrl = '',
+    this.embedded = false,
+    this.showTabs = true,
+    this.initialTab = 0,
+    this.onTabRequested,
+    this.onNameChanged,
+    this.onRemoved,
   });
 
   @override
@@ -49,450 +72,1111 @@ class EditGroupChatScreen extends StatefulWidget {
 }
 
 class _EditGroupChatScreenState extends State<EditGroupChatScreen> {
-  final TextEditingController _searchController = TextEditingController();
+  static const _apiBase = 'https://sportotekaapp.ru/api';
 
-  List<Map<String, dynamic>> members = [];
-  List<Map<String, dynamic>> searchResults = [];
+  final TextEditingController _searchController = TextEditingController();
+  late final TextEditingController _nameController;
+  Timer? _searchDebounce;
+
+  List<Map<String, dynamic>> members = <Map<String, dynamic>>[];
+  List<Map<String, dynamic>> searchResults = <Map<String, dynamic>>[];
 
   bool isSearching = false;
   bool isLoadingMembers = false;
-
-  String? lastError; // покажем текст под блоком, если сервер вернул что-то не то
+  bool isLoadingInfo = false;
+  bool isSavingName = false;
+  bool isSavingVisibility = false;
+  bool _isOwner = false;
+  bool _isPublic = true;
+  int _ownerId = 0;
+  int _memberCount = 0;
+  int _tab = 0;
+  String _groupName = '';
+  String? lastError;
 
   @override
   void initState() {
     super.initState();
-    _loadMembers();
+    _groupName = widget.chatName.trim().isEmpty ? 'Группа' : widget.chatName.trim();
+    _tab = widget.initialTab == 1 ? 1 : 0;
+    _nameController = TextEditingController(text: _groupName);
+    unawaited(_loadGroupInfo());
+    unawaited(_loadMembers());
   }
 
-  // ---------- УТИЛИТЫ ----------
+  @override
+  void dispose() {
+    _searchDebounce?.cancel();
+    _searchController.dispose();
+    _nameController.dispose();
+    super.dispose();
+  }
 
   String _sanitizeBody(String body) {
-    if (body.isNotEmpty && body.codeUnitAt(0) == 0xFEFF) {
-      body = body.substring(1); // убрать BOM
+    var value = body;
+    if (value.isNotEmpty && value.codeUnitAt(0) == 0xFEFF) {
+      value = value.substring(1);
     }
-    return body.trimLeft();
+    return value.trimLeft();
   }
 
-  /// Безопасный JSON-декодер: пустое тело -> null; не JSON -> FormatException
-  dynamic _safeJsonDecode(String body) {
-    final t = _sanitizeBody(body);
-    if (t.isEmpty) return null;
-    if (!(t.startsWith('{') || t.startsWith('['))) {
-      final preview = t.substring(0, t.length > 200 ? 200 : t.length);
-      throw const FormatException('Сервер вернул не JSON');
+  dynamic _decodeJson(String body) {
+    final text = _sanitizeBody(body);
+    if (text.isEmpty) return null;
+    if (!(text.startsWith('{') || text.startsWith('['))) {
+      final preview = text.substring(0, text.length > 180 ? 180 : text.length);
+      throw FormatException('Ответ сервера не JSON: $preview');
     }
-    return json.decode(t);
-  }
-
-  /// Жёсткий декодер для GET-методов, где точно должен прийти JSON
-  dynamic _decodeJsonOrThrow(String body) {
-    final t = _sanitizeBody(body);
-    if (!(t.startsWith('{') || t.startsWith('['))) {
-      final preview = t.substring(0, t.length > 200 ? 200 : t.length);
-      throw FormatException('Ответ не JSON. Начало: $preview');
-    }
-    return json.decode(t);
+    return json.decode(text);
   }
 
   List<Map<String, dynamic>> _parseList(dynamic body) {
     final raw = body is List
         ? body
         : (body is Map
-            ? (body['members'] ?? body['users'] ?? body['data'] ?? body['list'] ?? [])
-            : []);
-    return List<Map<String, dynamic>>.from(
-      (raw as List).map((e) => Map<String, dynamic>.from(e as Map)),
+            ? (body['members'] ?? body['users'] ?? body['data'] ?? body['list'] ?? const [])
+            : const []);
+    if (raw is! List) return <Map<String, dynamic>>[];
+    return raw
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
+  }
+
+  String _normalizeMediaUrl(dynamic rawValue) {
+    var raw = (rawValue ?? '').toString().trim().replaceAll('\\', '/');
+    if (raw.isEmpty || const {'null', 'undefined', 'false', '0'}.contains(raw.toLowerCase())) {
+      return '';
+    }
+
+    // Некоторые старые API уже возвращают "uploads/...", а другой слой снова
+    // добавляет uploads. Нормализуем и абсолютные, и относительные варианты.
+    while (raw.contains('/uploads/uploads/')) {
+      raw = raw.replaceAll('/uploads/uploads/', '/uploads/');
+    }
+    while (raw.startsWith('uploads/uploads/')) {
+      raw = raw.substring('uploads/'.length);
+    }
+
+    if (raw.startsWith('https://') || raw.startsWith('http://')) return raw;
+    if (raw.startsWith('//')) return 'https:$raw';
+    if (raw.startsWith('/')) return 'https://sportotekaapp.ru$raw';
+    if (raw.startsWith('uploads/') || raw.startsWith('api/')) {
+      return 'https://sportotekaapp.ru/$raw';
+    }
+    return 'https://sportotekaapp.ru/uploads/$raw';
+  }
+
+  ({int? id, String first, String last, String email, String avatar}) _u(
+    Map<String, dynamic> source,
+  ) {
+    final rawId = source['id'] ?? source['user_id'];
+    final id = rawId is int ? rawId : int.tryParse('${rawId ?? ''}');
+    final first = (source['first_name'] ?? source['firstname'] ?? '').toString().trim();
+    final last = (source['last_name'] ?? source['lastname'] ?? '').toString().trim();
+    final email = (source['email'] ?? '').toString().trim();
+    final rawAvatar = source['photo'] ??
+        source['photo_url'] ??
+        source['avatar'] ??
+        source['avatar_url'] ??
+        source['user_photo'] ??
+        source['user_avatar'];
+    return (
+      id: id,
+      first: first,
+      last: last,
+      email: email,
+      avatar: _normalizeMediaUrl(rawAvatar),
     );
   }
 
-  ({int? id, String first, String last, String email, String avatar}) _u(Map<String, dynamic> m) {
-    final idRaw = m['id'] ?? m['user_id'];
-    final id = idRaw is String ? int.tryParse(idRaw) : (idRaw is int ? idRaw : null);
-    final first = (m['first_name'] ?? m['firstname'] ?? '').toString();
-    final last = (m['last_name'] ?? m['lastname'] ?? '').toString();
-    final email = (m['email'] ?? '').toString();
-    final avatar = (m['avatar_url'] ?? m['avatar'] ?? '').toString();
-    return (id: id, first: first, last: last, email: email, avatar: avatar);
+  String _displayName(({int? id, String first, String last, String email, String avatar}) data) {
+    final name = '${data.first} ${data.last}'.trim();
+    if (name.isNotEmpty) return name;
+    if (data.email.isNotEmpty) return data.email;
+    return 'Пользователь';
   }
 
-  // ---------- API ----------
+  void _toast(String text, {bool error = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(text),
+        backgroundColor: error ? _GroupInfoUi.red : null,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  Future<void> _loadGroupInfo() async {
+    if (!mounted) return;
+    setState(() => isLoadingInfo = true);
+    try {
+      final uri = Uri.parse('$_apiBase/group_manage.php').replace(queryParameters: {
+        'chat_id': widget.chatId.toString(),
+        'user_id': widget.currentUserId.toString(),
+      });
+      final res = await http.get(uri, headers: const {'Accept': 'application/json'});
+      final data = _decodeJson(res.body);
+      if (res.statusCode != 200 || data is! Map || data['success'] != true) {
+        throw Exception(data is Map ? (data['error'] ?? 'HTTP ${res.statusCode}') : 'HTTP ${res.statusCode}');
+      }
+      final chat = data['chat'] is Map ? Map<String, dynamic>.from(data['chat']) : <String, dynamic>{};
+      final name = (chat['name'] ?? _groupName).toString().trim();
+      if (!mounted) return;
+      setState(() {
+        _ownerId = int.tryParse('${chat['owner_id'] ?? 0}') ?? 0;
+        _isOwner = data['is_owner'] == true || _ownerId == widget.currentUserId;
+        _isPublic = '${chat['is_public'] ?? 1}' == '1' || chat['is_public'] == true;
+        _memberCount = int.tryParse('${data['member_count'] ?? members.length}') ?? members.length;
+        if (name.isNotEmpty) {
+          _groupName = name;
+          if (_nameController.text != name) _nameController.text = name;
+        }
+      });
+    } catch (e) {
+      // Старые серверы без group_manage.php не должны ломать просмотр участников.
+      if (!mounted) return;
+      setState(() {
+        _memberCount = members.length;
+        _isOwner = false;
+      });
+      debugPrint('group_manage info: $e');
+    } finally {
+      if (mounted) setState(() => isLoadingInfo = false);
+    }
+  }
 
   Future<void> _loadMembers() async {
+    if (!mounted) return;
     setState(() {
       isLoadingMembers = true;
       lastError = null;
     });
     try {
-      final uri = Uri.parse(
-        'https://sportotekaapp.ru/api/get_chat_members.php?chat_id=${widget.chatId}',
-      );
-      final res = await http.get(uri, headers: {'Accept': 'application/json'});
-
-      if (res.statusCode == 200) {
-        final body = _decodeJsonOrThrow(res.body);
-        final list = _parseList(body);
-        if (!mounted) return;
-        setState(() => members = list);
-      } else {
-        if (!mounted) return;
-        setState(() => lastError = 'HTTP ${res.statusCode}');
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Ошибка загрузки участников')),
-        );
-      }
+      final uri = Uri.parse('$_apiBase/get_chat_members.php').replace(queryParameters: {
+        'chat_id': widget.chatId.toString(),
+      });
+      final res = await http.get(uri, headers: const {'Accept': 'application/json'});
+      if (res.statusCode != 200) throw Exception('HTTP ${res.statusCode}');
+      final list = _parseList(_decodeJson(res.body));
+      if (!mounted) return;
+      setState(() {
+        members = list;
+        _memberCount = list.length;
+      });
     } catch (e) {
       if (!mounted) return;
-      setState(() => lastError = 'Ошибка загрузки: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(e is FormatException
-              ? 'Ошибка загрузки: сервер вернул не JSON'
-              : 'Ошибка загрузки: $e'),
-        ),
-      );
+      setState(() => lastError = 'Не удалось загрузить участников');
+      debugPrint('get_chat_members: $e');
     } finally {
       if (mounted) setState(() => isLoadingMembers = false);
     }
   }
 
+  void _searchChanged(String value) {
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 280), () {
+      unawaited(_searchUsers(value));
+    });
+    if (value.trim().isEmpty && mounted) {
+      setState(() => searchResults = <Map<String, dynamic>>[]);
+    }
+  }
+
   Future<void> _searchUsers(String query) async {
-    if (query.trim().isEmpty) {
-      setState(() {
-        searchResults = [];
-        lastError = null;
-      });
+    final q = query.trim();
+    if (q.isEmpty) {
+      if (mounted) setState(() => searchResults = <Map<String, dynamic>>[]);
       return;
     }
+    if (!mounted) return;
     setState(() {
       isSearching = true;
       lastError = null;
     });
     try {
-      final uri = Uri.parse(
-        'https://sportotekaapp.ru/api/search_users.php?q=${Uri.encodeComponent(query)}&exclude=${widget.currentUserId}',
-      );
-      final res = await http.get(uri, headers: {'Accept': 'application/json'});
-
-      if (res.statusCode == 200) {
-        final body = _decodeJsonOrThrow(res.body);
-        final list = _parseList(body);
-        if (!mounted) return;
-        setState(() => searchResults = list);
-      } else {
-        if (!mounted) return;
-        setState(() => lastError = 'HTTP ${res.statusCode}');
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Ошибка поиска')),
-        );
-      }
+      final uri = Uri.parse('$_apiBase/search_users.php').replace(queryParameters: {
+        'q': q,
+        'exclude': widget.currentUserId.toString(),
+      });
+      final res = await http.get(uri, headers: const {'Accept': 'application/json'});
+      if (res.statusCode != 200) throw Exception('HTTP ${res.statusCode}');
+      final list = _parseList(_decodeJson(res.body));
+      if (!mounted || _searchController.text.trim() != q) return;
+      setState(() => searchResults = list);
     } catch (e) {
-      if (!mounted) return;
-      setState(() => lastError = 'Ошибка поиска: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(e is FormatException
-              ? 'Ошибка поиска: сервер вернул не JSON'
-              : 'Ошибка поиска: $e'),
-        ),
-      );
+      if (mounted) setState(() => lastError = 'Ошибка поиска пользователя');
+      debugPrint('search_users: $e');
     } finally {
       if (mounted) setState(() => isSearching = false);
     }
   }
 
+  bool _alreadyMember(int? userId) {
+    if (userId == null) return false;
+    return members.any((m) => _u(m).id == userId);
+  }
+
   Future<void> _addUserToChat(int userIdToAdd) async {
     try {
       final res = await http.post(
-        Uri.parse('https://sportotekaapp.ru/api/add_user_to_chat.php'),
-        headers: {'Accept': 'application/json'},
+        Uri.parse('$_apiBase/add_user_to_chat.php'),
+        headers: const {'Accept': 'application/json'},
         body: {
           'chat_id': widget.chatId.toString(),
           'user_id': userIdToAdd.toString(),
-          'actor_id': widget.currentUserId.toString(), // ВАЖНО
+          'actor_id': widget.currentUserId.toString(),
         },
       );
-
-      if (res.statusCode != 200) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Добавление: HTTP ${res.statusCode}')),
-        );
+      final data = _decodeJson(res.body);
+      final ok = res.statusCode == 200 && data is Map && (data['success'] == true || data['status'] == 'ok');
+      if (!ok) {
+        final reason = data is Map ? (data['error'] ?? data['message'] ?? 'Ошибка') : 'HTTP ${res.statusCode}';
+        _toast('Не удалось добавить: $reason', error: true);
         return;
       }
-
-      final data = _safeJsonDecode(res.body);
-      if (data == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Добавление: пустой ответ сервера')),
-        );
-        return;
-      }
-
-      final ok = data is Map && (data['success'] == true || data['status'] == 'ok');
-      if (ok) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Пользователь добавлен'), backgroundColor: Colors.green),
-        );
-        await _loadMembers();
-        _searchController.clear();
-        if (mounted) setState(() => searchResults = []);
-      } else {
-        final err = data is Map ? (data['error'] ?? data['message'] ?? 'Ошибка') : 'Ошибка';
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Добавление: $err'), backgroundColor: Colors.red),
-        );
-      }
+      _toast('Участник добавлен');
+      _searchController.clear();
+      if (mounted) setState(() => searchResults = <Map<String, dynamic>>[]);
+      await _loadMembers();
+      unawaited(_loadGroupInfo());
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка добавления: $e'), backgroundColor: Colors.red),
-      );
+      _toast('Ошибка добавления', error: true);
     }
   }
 
   Future<void> _confirmAndRemoveUserFromChat(int userId, String userName) async {
+    if (!_isOwner || userId == widget.currentUserId) return;
     final sure = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Удалить участника?'),
-        content: Text('Вы уверены, что хотите удалить $userName из чата?'),
+        content: Text('$userName больше не будет участником этой группы.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Отмена')),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Удалить', style: TextStyle(color: Colors.red)),
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Отмена')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: _GroupInfoUi.red),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Удалить'),
           ),
         ],
       ),
     );
-
     if (sure != true) return;
 
     try {
       final res = await http.post(
-        Uri.parse('https://sportotekaapp.ru/api/remove_user_from_chat.php'),
-        headers: {'Accept': 'application/json'},
+        Uri.parse('$_apiBase/remove_user_from_chat.php'),
+        headers: const {'Accept': 'application/json'},
         body: {
           'chat_id': widget.chatId.toString(),
           'user_id': userId.toString(),
-          'actor_id': widget.currentUserId.toString(), // ВАЖНО
+          'actor_id': widget.currentUserId.toString(),
         },
       );
-
-      if (res.statusCode != 200) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Удаление: HTTP ${res.statusCode}')),
-        );
+      final data = _decodeJson(res.body);
+      final ok = res.statusCode == 200 && data is Map && (data['success'] == true || data['status'] == 'ok');
+      if (!ok) {
+        final reason = data is Map ? (data['error'] ?? data['message'] ?? 'Ошибка') : 'HTTP ${res.statusCode}';
+        _toast('Не удалось удалить: $reason', error: true);
         return;
       }
-
-      final data = _safeJsonDecode(res.body);
-      if (data == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Удаление: пустой ответ сервера')),
-        );
-        return;
-      }
-
-      final ok = data is Map && (data['success'] == true || data['status'] == 'ok');
-      if (ok) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Пользователь удалён'), backgroundColor: Colors.orange),
-        );
-        await _loadMembers();
-      } else {
-        final err = data is Map ? (data['error'] ?? data['message'] ?? 'Ошибка') : 'Ошибка';
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Удаление: $err'), backgroundColor: Colors.red),
-        );
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка удаления: $e'), backgroundColor: Colors.red),
-      );
+      _toast('Участник удалён');
+      await _loadMembers();
+      unawaited(_loadGroupInfo());
+    } catch (_) {
+      _toast('Ошибка удаления участника', error: true);
     }
   }
 
-  // ---------- UI ----------
+  Future<void> _saveName() async {
+    if (!_isOwner || isSavingName) return;
+    final name = _nameController.text.trim();
+    if (name.isEmpty) {
+      _toast('Введите название группы', error: true);
+      return;
+    }
+    setState(() => isSavingName = true);
+    try {
+      final res = await http.post(
+        Uri.parse('$_apiBase/group_manage.php'),
+        headers: const {'Accept': 'application/json'},
+        body: {
+          'action': 'rename',
+          'chat_id': widget.chatId.toString(),
+          'user_id': widget.currentUserId.toString(),
+          'name': name,
+        },
+      );
+      final data = _decodeJson(res.body);
+      if (res.statusCode != 200 || data is! Map || data['success'] != true) {
+        throw Exception(data is Map ? (data['error'] ?? 'Ошибка') : 'HTTP ${res.statusCode}');
+      }
+      if (!mounted) return;
+      setState(() => _groupName = name);
+      widget.onNameChanged?.call(name);
+      _toast('Название сохранено');
+    } catch (e) {
+      _toast('Не удалось переименовать группу', error: true);
+    } finally {
+      if (mounted) setState(() => isSavingName = false);
+    }
+  }
 
-  Widget _avatar(({int? id, String first, String last, String email, String avatar}) data) {
-    final initials = (data.first.isNotEmpty ? data.first[0] : '?').toUpperCase();
-    return Container(
-      width: 38,
-      height: 38,
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(color: _EditGroupUi.greenSoft, borderRadius: BorderRadius.circular(12), border: Border.all(color: _EditGroupUi.border)),
-      child: data.avatar.isNotEmpty ? Image.network(data.avatar, fit: BoxFit.cover) : Center(child: Text(initials, style: const TextStyle(color: _EditGroupUi.greenDark, fontWeight: FontWeight.w700))),
+  Future<void> _setVisibility(bool value) async {
+    if (!_isOwner || isSavingVisibility || value == _isPublic) return;
+    setState(() => isSavingVisibility = true);
+    try {
+      final res = await http.post(
+        Uri.parse('$_apiBase/group_manage.php'),
+        headers: const {'Accept': 'application/json'},
+        body: {
+          'action': 'visibility',
+          'chat_id': widget.chatId.toString(),
+          'user_id': widget.currentUserId.toString(),
+          'is_public': value ? '1' : '0',
+        },
+      );
+      final data = _decodeJson(res.body);
+      if (res.statusCode != 200 || data is! Map || data['success'] != true) {
+        throw Exception(data is Map ? (data['error'] ?? 'Ошибка') : 'HTTP ${res.statusCode}');
+      }
+      if (mounted) setState(() => _isPublic = value);
+    } catch (_) {
+      _toast('Не удалось изменить доступ', error: true);
+    } finally {
+      if (mounted) setState(() => isSavingVisibility = false);
+    }
+  }
+
+  Future<void> _leaveOrDeleteGroup({required bool delete}) async {
+    final verb = delete ? 'Удалить группу?' : 'Выйти из группы?';
+    final body = delete
+        ? 'Группа «$_groupName» и её история будут удалены. Действие необратимо.'
+        : 'Вы больше не будете участником «$_groupName».';
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(verb),
+        content: Text(body),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Отмена')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: _GroupInfoUi.red),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(delete ? 'Удалить' : 'Выйти'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+
+    try {
+      final res = await http.post(
+        Uri.parse('$_apiBase/${delete ? 'delete_group_force.php' : 'leave_group.php'}'),
+        body: {
+          'chat_id': widget.chatId.toString(),
+          'user_id': widget.currentUserId.toString(),
+        },
+      );
+      final data = _decodeJson(res.body);
+      if (res.statusCode != 200 || data is! Map || data['success'] != true) {
+        throw Exception(data is Map ? (data['error'] ?? 'Ошибка') : 'HTTP ${res.statusCode}');
+      }
+      if (!mounted) return;
+      if (widget.embedded) {
+        widget.onRemoved?.call();
+        return;
+      }
+      Navigator.pop(context, <String, dynamic>{
+        'removed': true,
+        'deleted': delete,
+        'name': _groupName,
+      });
+    } catch (_) {
+      _toast(delete ? 'Не удалось удалить группу' : 'Не удалось выйти из группы', error: true);
+    }
+  }
+
+  Future<void> _openUserProfile(int? userId) async {
+    if (userId == null || userId <= 0 || userId == widget.currentUserId) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => MyProfileScreen(userId: userId, publicView: true),
+      ),
     );
   }
 
-  Widget _buildMembersBlock() {
+  Widget _brandDots({bool compact = true}) {
+    final scale = compact ? .74 : 1.0;
+    Widget dot(double size, double opacity) => Container(
+          width: size * scale,
+          height: size * scale,
+          decoration: BoxDecoration(
+            color: _GroupInfoUi.green.withOpacity(opacity),
+            shape: BoxShape.circle,
+          ),
+        );
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        dot(3.4, .32),
+        SizedBox(width: 3 * scale),
+        dot(4.4, .55),
+        SizedBox(width: 3 * scale),
+        dot(5.4, .78),
+        SizedBox(width: 3 * scale),
+        dot(6.4, 1),
+      ],
+    );
+  }
+
+  Widget _avatar(
+    ({int? id, String first, String last, String email, String avatar}) data, {
+    double size = 40,
+    bool circle = false,
+  }) {
+    final title = _displayName(data);
+    final initial = title.isNotEmpty ? title.substring(0, 1).toUpperCase() : '?';
     return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(children: [
-            Container(width: 34, height: 34, decoration: BoxDecoration(color: _EditGroupUi.greenSoft, borderRadius: BorderRadius.circular(11)), child: const Icon(Icons.groups_rounded, color: _EditGroupUi.greenDark, size: 17)),
-            const SizedBox(width: 9),
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Текущие участники', style: _EditGroupUi.title(13.6)),
-              const SizedBox(height: 2),
-              Text('${members.length} участников', style: _EditGroupUi.mutedText(10.8)),
-            ])),
-            if (isLoadingMembers) const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: _EditGroupUi.green)),
-          ]),
-          const SizedBox(height: 10),
-          if (members.isEmpty && !isLoadingMembers)
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: Center(child: Text('Пока никого нет', style: _EditGroupUi.mutedText(12))),
+      width: size,
+      height: size,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: _GroupInfoUi.greenSoft,
+        shape: circle ? BoxShape.circle : BoxShape.rectangle,
+        borderRadius: circle ? null : BorderRadius.circular(size * .30),
+      ),
+      child: data.avatar.isNotEmpty
+          ? Image.network(
+              data.avatar,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => Center(
+                child: Text(
+                  initial,
+                  style: _GroupInfoUi.title(size * .31).copyWith(color: _GroupInfoUi.greenDark),
+                ),
+              ),
             )
-          else
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 260),
-              child: ListView.separated(
-                itemCount: members.length,
-                shrinkWrap: true,
-                itemBuilder: (context, i) {
-                  final data = _u(members[i]);
-                  final title = '${data.first.isEmpty ? "Без имени" : data.first} ${data.last}'.trim();
-                  return Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                    decoration: BoxDecoration(color: _EditGroupUi.bg, borderRadius: BorderRadius.circular(13)),
-                    child: Row(children: [
-                      _avatar(data),
-                      const SizedBox(width: 9),
-                      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _EditGroupUi.title(13.0)),
-                        if (data.email.isNotEmpty) ...[
-                          const SizedBox(height: 3),
-                          Text(data.email, maxLines: 1, overflow: TextOverflow.ellipsis, style: _EditGroupUi.mutedText(10.6)),
-                        ],
-                      ])),
-                      IconButton(
-                        visualDensity: VisualDensity.compact,
-                        icon: const Icon(Icons.remove_circle_rounded, color: _EditGroupUi.red, size: 20),
-                        onPressed: (data.id == null) ? null : () => _confirmAndRemoveUserFromChat(data.id!, title),
-                      ),
-                    ]),
-                  );
-                },
-                separatorBuilder: (_, __) => const SizedBox(height: 7),
-              ),
-            ),
-          if (lastError != null) ...[
-            const SizedBox(height: 8),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(color: _EditGroupUi.red.withOpacity(.08), borderRadius: BorderRadius.circular(12)),
+          : Center(
               child: Text(
-                lastError!,
-                style: AppTypography.secondary(color: _EditGroupUi.red)
-                    .copyWith(fontWeight: FontWeight.w500),
+                initial,
+                style: _GroupInfoUi.title(size * .31).copyWith(color: _GroupInfoUi.greenDark),
               ),
             ),
-          ],
+    );
+  }
+
+  Widget _memberStack() {
+    final groupAvatar = _normalizeMediaUrl(widget.groupAvatarUrl);
+    if (groupAvatar.isNotEmpty) {
+      return Container(
+        width: 44,
+        height: 44,
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          color: _GroupInfoUi.greenSoft,
+          borderRadius: BorderRadius.circular(13),
+        ),
+        child: Image.network(
+          groupAvatar,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => const Icon(Icons.groups_2_rounded, color: _GroupInfoUi.greenDark),
+        ),
+      );
+    }
+
+    final visible = members.take(3).map(_u).toList();
+    if (visible.isEmpty) {
+      return Container(
+        width: 44,
+        height: 44,
+        decoration: BoxDecoration(color: _GroupInfoUi.greenSoft, borderRadius: BorderRadius.circular(13)),
+        child: const Icon(Icons.groups_2_rounded, color: _GroupInfoUi.greenDark, size: 20),
+      );
+    }
+    return SizedBox(
+      width: 44 + (visible.length - 1) * 13,
+      height: 44,
+      child: Stack(
+        children: [
+          for (var i = 0; i < visible.length; i++)
+            Positioned(
+              left: i * 13,
+              child: Container(
+                padding: const EdgeInsets.all(1.5),
+                decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+                child: _avatar(visible[i], size: 42, circle: true),
+              ),
+            ),
         ],
       ),
     );
   }
 
-  Widget _buildSearchBlock() {
+  Widget _header() {
     return Container(
-      height: 42,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: _EditGroupUi.border)),
-      child: TextField(
-        controller: _searchController,
-        decoration: const InputDecoration(labelText: null, hintText: 'Поиск пользователя', prefixIcon: Icon(Icons.search_rounded, size: 18, color: _EditGroupUi.muted), border: InputBorder.none, isDense: true),
-        style: AppTypography.formText(color: _EditGroupUi.text)
-            .copyWith(fontWeight: FontWeight.w500),
-        onChanged: _searchUsers,
+      height: 64,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      color: Colors.white,
+      child: Row(
+        children: [
+          Material(
+            color: _GroupInfoUi.surface,
+            borderRadius: BorderRadius.circular(10),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(10),
+              onTap: () => Navigator.pop(context, <String, dynamic>{'name': _groupName}),
+              child: const SizedBox(
+                width: 38,
+                height: 38,
+                child: Icon(Icons.chevron_left_rounded, size: 21, color: _GroupInfoUi.text),
+              ),
+            ),
+          ),
+          const SizedBox(width: 9),
+          _memberStack(),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(_groupName, maxLines: 1, overflow: TextOverflow.ellipsis, style: _GroupInfoUi.title(15.5)),
+                const SizedBox(height: 2),
+                Text(
+                  '${_memberCount > 0 ? _memberCount : members.length} участников · ${_isPublic ? 'открытая группа' : 'закрытая группа'}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: _GroupInfoUi.body(10.6),
+                ),
+              ],
+            ),
+          ),
+          if (isLoadingInfo || isLoadingMembers)
+            const Padding(
+              padding: EdgeInsets.only(right: 8),
+              child: SizedBox(width: 17, height: 17, child: CircularProgressIndicator(strokeWidth: 2, color: _GroupInfoUi.green)),
+            ),
+        ],
       ),
     );
   }
 
-  Widget _buildSearchResults() {
-    if (isSearching) return const Center(child: CircularProgressIndicator(color: _EditGroupUi.green));
-    if (searchResults.isEmpty) {
-      return Center(child: Text('Введите имя, фамилию или почту для поиска', style: _EditGroupUi.mutedText(12), textAlign: TextAlign.center));
-    }
-    return ListView.separated(
-      padding: EdgeInsets.fromLTRB(0, 0, 0, MediaQuery.paddingOf(context).bottom + 16),
-      itemCount: searchResults.length,
-      itemBuilder: (context, index) {
-        final data = _u(searchResults[index]);
-        final title = '${data.first.isNotEmpty ? data.first : 'Без имени'} ${data.last}'.trim();
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14)),
-          child: Row(children: [
-            _avatar(data),
-            const SizedBox(width: 9),
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _EditGroupUi.title(13.0)),
-              if (data.email.isNotEmpty) ...[
-                const SizedBox(height: 3),
-                Text(data.email, maxLines: 1, overflow: TextOverflow.ellipsis, style: _EditGroupUi.mutedText(10.6)),
-              ],
-            ])),
-            IconButton(visualDensity: VisualDensity.compact, icon: const Icon(Icons.person_add_alt_1_rounded, color: _EditGroupUi.greenDark, size: 20), onPressed: data.id == null ? null : () => _addUserToChat(data.id!)),
-          ]),
-        );
-      },
-      separatorBuilder: (_, __) => const SizedBox(height: 7),
+  Widget _tabs() {
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 9),
+      child: Row(
+        children: [
+          Expanded(
+            child: _tabButton(
+              selected: _tab == 0,
+              icon: Icons.groups_2_rounded,
+              title: 'Участники',
+              badge: '${_memberCount > 0 ? _memberCount : members.length}',
+              onTap: () => setState(() => _tab = 0),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: _tabButton(
+              selected: _tab == 1,
+              icon: Icons.tune_rounded,
+              title: 'Настройки',
+              onTap: () => setState(() => _tab = 1),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
-  Widget _header() {
+  Widget _tabButton({
+    required bool selected,
+    required IconData icon,
+    required String title,
+    String? badge,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: selected ? _GroupInfoUi.greenSoft : _GroupInfoUi.surface,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          height: 38,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 16, color: selected ? _GroupInfoUi.greenDark : _GroupInfoUi.muted),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: _GroupInfoUi.body(
+                    10.8,
+                    color: selected ? _GroupInfoUi.greenDark : _GroupInfoUi.text,
+                    weight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              if (badge != null) ...[
+                const SizedBox(width: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(999)),
+                  child: Text(badge, style: _GroupInfoUi.body(9.3, color: _GroupInfoUi.greenDark, weight: FontWeight.w700)),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _searchBar() {
+    final q = _searchController.text.trim();
+    return Container(
+      height: 42,
+      decoration: BoxDecoration(
+        color: _GroupInfoUi.surface,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: TextField(
+        controller: _searchController,
+        onChanged: (value) {
+          setState(() {});
+          _searchChanged(value);
+        },
+        decoration: InputDecoration(
+          hintText: 'Найти и добавить пользователя',
+          hintStyle: _GroupInfoUi.body(10.8, color: _GroupInfoUi.muted2),
+          prefixIcon: const Icon(Icons.search_rounded, size: 18, color: _GroupInfoUi.muted),
+          suffixIcon: q.isNotEmpty
+              ? IconButton(
+                  tooltip: 'Очистить',
+                  onPressed: () {
+                    _searchController.clear();
+                    setState(() => searchResults = <Map<String, dynamic>>[]);
+                  },
+                  icon: const Icon(Icons.close_rounded, size: 17, color: _GroupInfoUi.muted),
+                )
+              : null,
+          border: InputBorder.none,
+          isDense: true,
+          contentPadding: const EdgeInsets.symmetric(vertical: 11),
+        ),
+        style: AppTypography.formText(color: _GroupInfoUi.text).copyWith(fontWeight: FontWeight.w500),
+      ),
+    );
+  }
+
+  Widget _participantsTab() {
+    final searching = _searchController.text.trim().isNotEmpty;
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+          child: _searchBar(),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 0, 14, 7),
+          child: Row(
+            children: [
+              Text(
+                searching ? 'Результаты поиска' : 'Все участники',
+                style: _GroupInfoUi.title(12.4),
+              ),
+              const Spacer(),
+              Text(
+                searching ? '${searchResults.length}' : '${members.length}',
+                style: _GroupInfoUi.body(10.2, color: _GroupInfoUi.greenDark, weight: FontWeight.w700),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: isSearching && searching
+              ? const Center(child: CircularProgressIndicator(strokeWidth: 2, color: _GroupInfoUi.green))
+              : _peopleList(searching ? searchResults : members, searchMode: searching),
+        ),
+      ],
+    );
+  }
+
+  Widget _peopleList(List<Map<String, dynamic>> source, {required bool searchMode}) {
+    if (source.isEmpty) {
+      final message = searchMode
+          ? 'Никого не найдено\nПопробуйте имя, фамилию или e-mail'
+          : (isLoadingMembers ? 'Загружаем участников…' : 'В группе пока нет участников');
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text(message, textAlign: TextAlign.center, style: _GroupInfoUi.body(11.3)),
+        ),
+      );
+    }
+
+    return ListView.separated(
+      physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+      padding: EdgeInsets.fromLTRB(10, 0, 10, MediaQuery.paddingOf(context).bottom + 16),
+      itemCount: source.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 3),
+      itemBuilder: (context, index) {
+        final data = _u(source[index]);
+        final title = _displayName(data);
+        final already = _alreadyMember(data.id);
+        final isOwnerRow = data.id != null && data.id == _ownerId;
+        final isMe = data.id == widget.currentUserId;
+
+        return Material(
+          color: _GroupInfoUi.surface,
+          borderRadius: BorderRadius.circular(12),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: data.id == null ? null : () => _openUserProfile(data.id),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
+              child: Row(
+                children: [
+                  _avatar(data, size: 40),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: _GroupInfoUi.title(12.5),
+                              ),
+                            ),
+                            if (isMe) ...[
+                              const SizedBox(width: 5),
+                              Text('Вы', style: _GroupInfoUi.body(9.5, color: _GroupInfoUi.greenDark, weight: FontWeight.w700)),
+                            ],
+                          ],
+                        ),
+                        if (data.email.isNotEmpty || isOwnerRow) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            isOwnerRow ? 'Владелец${data.email.isNotEmpty ? ' · ${data.email}' : ''}' : data.email,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: _GroupInfoUi.body(9.8),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  if (searchMode)
+                    already
+                        ? Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                            decoration: BoxDecoration(color: _GroupInfoUi.surface, borderRadius: BorderRadius.circular(9)),
+                            child: Text('В группе', style: _GroupInfoUi.body(9.4, weight: FontWeight.w600)),
+                          )
+                        : IconButton(
+                            tooltip: 'Добавить',
+                            visualDensity: VisualDensity.compact,
+                            onPressed: data.id == null ? null : () => _addUserToChat(data.id!),
+                            icon: const Icon(Icons.person_add_alt_1_rounded, color: _GroupInfoUi.greenDark, size: 19),
+                          )
+                  else if (_isOwner && !isMe)
+                    IconButton(
+                      tooltip: 'Удалить из группы',
+                      visualDensity: VisualDensity.compact,
+                      onPressed: data.id == null ? null : () => _confirmAndRemoveUserFromChat(data.id!, title),
+                      icon: const Icon(Icons.remove_circle_rounded, color: _GroupInfoUi.red, size: 19),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _settingsTab() {
+    return ListView(
+      physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+      padding: EdgeInsets.fromLTRB(12, 10, 12, MediaQuery.paddingOf(context).bottom + 18),
+      children: [
+        _sectionTitle('Группа', 'Название и доступ'),
+        const SizedBox(height: 7),
+        _settingsCard(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _nameController,
+                      readOnly: !_isOwner,
+                      textInputAction: TextInputAction.done,
+                      onSubmitted: (_) => _saveName(),
+                      decoration: InputDecoration(
+                        labelText: 'Название группы',
+                        labelStyle: _GroupInfoUi.body(10.6),
+                        filled: true,
+                        fillColor: Colors.white,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(11),
+                          borderSide: BorderSide.none,
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(11),
+                          borderSide: BorderSide.none,
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(11),
+                          borderSide: BorderSide.none,
+                        ),
+                        isDense: true,
+                      ),
+                      style: AppTypography.formText(color: _GroupInfoUi.text).copyWith(fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                  if (_isOwner) ...[
+                    const SizedBox(width: 8),
+                    Tooltip(
+                      message: 'Сохранить название',
+                      child: Material(
+                        color: _GroupInfoUi.greenSoft,
+                        borderRadius: BorderRadius.circular(11),
+                        child: InkWell(
+                          onTap: isSavingName ? null : _saveName,
+                          borderRadius: BorderRadius.circular(11),
+                          child: Container(
+                            width: 44,
+                            height: 44,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(11),
+                            ),
+                            child: isSavingName
+                                ? const Center(
+                                    child: SizedBox(
+                                      width: 15,
+                                      height: 15,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: _GroupInfoUi.greenDark,
+                                      ),
+                                    ),
+                                  )
+                                : const Icon(
+                                    Icons.check_rounded,
+                                    size: 20,
+                                    color: _GroupInfoUi.greenDark,
+                                  ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 2),
+            _visibilityRow(),
+          ],
+        ),
+        const SizedBox(height: 14),
+        _sectionTitle('Участники', '$_memberCount человек в группе'),
+        const SizedBox(height: 7),
+        _settingsCard(
+          children: [
+            _settingsAction(
+              icon: Icons.groups_2_rounded,
+              title: 'Список участников',
+              subtitle: 'Просмотр, поиск, добавление${_isOwner ? ' и удаление' : ''}',
+              onTap: () {
+                if (widget.showTabs) {
+                  setState(() => _tab = 0);
+                } else {
+                  widget.onTabRequested?.call(0);
+                }
+              },
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        _sectionTitle('Действия', _isOwner ? 'Управление группой' : 'Ваша подписка на группу'),
+        const SizedBox(height: 7),
+        _settingsCard(
+          children: [
+            if (!_isOwner)
+              _settingsAction(
+                icon: Icons.logout_rounded,
+                title: 'Выйти из группы',
+                subtitle: 'Группа исчезнет из вашего списка',
+                danger: true,
+                onTap: () => _leaveOrDeleteGroup(delete: false),
+              ),
+            if (_isOwner)
+              _settingsAction(
+                icon: Icons.delete_outline_rounded,
+                title: 'Удалить группу',
+                subtitle: 'Удалить группу и историю сообщений',
+                danger: true,
+                onTap: () => _leaveOrDeleteGroup(delete: true),
+              ),
+          ],
+        ),
+        if (lastError != null) ...[
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(color: _GroupInfoUi.red.withOpacity(.06), borderRadius: BorderRadius.circular(11)),
+            child: Text(lastError!, style: _GroupInfoUi.body(10.2, color: _GroupInfoUi.red)),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _visibilityRow() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
-      child: Row(children: [
-        IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.arrow_back_rounded), style: IconButton.styleFrom(backgroundColor: Colors.white, fixedSize: const Size(40, 40), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)))),
-        const SizedBox(width: 8),
-        Container(width: 40, height: 40, decoration: BoxDecoration(color: _EditGroupUi.greenSoft, borderRadius: BorderRadius.circular(13)), child: const Icon(Icons.manage_accounts_rounded, color: _EditGroupUi.greenDark, size: 19)),
-        const SizedBox(width: 10),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Участники', style: _EditGroupUi.title(17.0), maxLines: 1, overflow: TextOverflow.ellipsis),
-          const SizedBox(height: 3),
-          Text(widget.chatName, style: _EditGroupUi.mutedText(11.2), maxLines: 1, overflow: TextOverflow.ellipsis),
-        ])),
-      ]),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      child: Row(
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(color: _GroupInfoUi.greenSoft, borderRadius: BorderRadius.circular(10)),
+            child: Icon(_isPublic ? Icons.public_rounded : Icons.lock_rounded, size: 17, color: _GroupInfoUi.greenDark),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(_isPublic ? 'Открытая группа' : 'Закрытая группа', style: _GroupInfoUi.title(11.8)),
+                const SizedBox(height: 2),
+                Text(
+                  _isPublic ? 'Пользователи могут вступать сами' : 'Добавление только через участников/владельца',
+                  style: _GroupInfoUi.body(9.7),
+                ),
+              ],
+            ),
+          ),
+          if (_isOwner)
+            Switch.adaptive(
+              value: _isPublic,
+              activeColor: _GroupInfoUi.green,
+              onChanged: isSavingVisibility ? null : _setVisibility,
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _sectionTitle(String title, String subtitle) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 2),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          _brandDots(),
+          const SizedBox(width: 8),
+          Text(title, style: _GroupInfoUi.title(12.2)),
+          const SizedBox(width: 7),
+          Expanded(child: Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: _GroupInfoUi.body(9.6))),
+        ],
+      ),
+    );
+  }
+
+  Widget _settingsCard({required List<Widget> children}) {
+    return Container(
+      decoration: BoxDecoration(
+        color: _GroupInfoUi.surface,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(children: children),
+    );
+  }
+
+  Widget _settingsAction({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+    bool danger = false,
+  }) {
+    final color = danger ? _GroupInfoUi.red : _GroupInfoUi.greenDark;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: danger ? _GroupInfoUi.red.withOpacity(.07) : _GroupInfoUi.greenSoft,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, size: 17, color: color),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: _GroupInfoUi.title(11.7).copyWith(color: danger ? _GroupInfoUi.red : _GroupInfoUi.text)),
+                    const SizedBox(height: 2),
+                    Text(subtitle, style: _GroupInfoUi.body(9.6)),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right_rounded, size: 18, color: danger ? _GroupInfoUi.red : _GroupInfoUi.muted2),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _content({required bool includeHeader}) {
+    return Container(
+      color: Colors.white,
+      child: Column(
+        children: [
+          if (includeHeader) _header(),
+          if (widget.showTabs) _tabs(),
+          Expanded(child: _tab == 0 ? _participantsTab() : _settingsTab()),
+        ],
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final media = MediaQuery.of(context);
-    return MediaQuery(
-      data: media.copyWith(textScaler: const TextScaler.linear(1.08)),
-      child: Scaffold(
-      backgroundColor: _EditGroupUi.bg,
-      body: SafeArea(
-        child: Column(
-          children: [
-            _header(),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(12, 0, 12, 0),
-                child: Column(
-                  children: [
-                    _buildMembersBlock(),
-                    const SizedBox(height: 9),
-                    _buildSearchBlock(),
-                    const SizedBox(height: 9),
-                    Expanded(child: _buildSearchResults()),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    ),
+    if (widget.embedded) return _content(includeHeader: false);
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: SafeArea(child: _content(includeHeader: true)),
     );
   }
-
 }

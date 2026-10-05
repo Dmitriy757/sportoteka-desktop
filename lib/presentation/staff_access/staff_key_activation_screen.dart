@@ -56,6 +56,19 @@ class _StaffKeyActivationScreenState extends State<StaffKeyActivationScreen> {
     return StaffAccessService.activeAccesses(_state);
   }
 
+  String _workspaceLabel(Map<String, dynamic> access) {
+    final raw = '${access['workspace_type'] ?? access['workspace'] ?? access['direction'] ?? ''}'
+        .trim()
+        .toLowerCase();
+    final role = '${access['role_code'] ?? access['profile'] ?? ''}'
+        .trim()
+        .toLowerCase();
+    if (raw.contains('esport') || raw.contains('cyber') || role.startsWith('esports_')) {
+      return 'Sportoteka Esports';
+    }
+    return 'Клубный кабинет';
+  }
+
   Future<void> _load() async {
     if (!mounted) return;
 
@@ -177,7 +190,7 @@ class _StaffKeyActivationScreenState extends State<StaffKeyActivationScreen> {
                                         CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        'Доступ к клубу',
+                                        'Staff Access',
                                         style: const TextStyle(
                                           color: _text,
                                           fontSize: 20,
@@ -186,7 +199,7 @@ class _StaffKeyActivationScreenState extends State<StaffKeyActivationScreen> {
                                       ),
                                       const SizedBox(height: 3),
                                       Text(
-                                        'Для сотрудника выпущен Staff Key',
+                                        'Staff Key открывает только назначенную рабочую область',
                                         style: const TextStyle(
                                           color: _muted,
                                           fontSize: 12,
@@ -235,7 +248,8 @@ class _StaffKeyActivationScreenState extends State<StaffKeyActivationScreen> {
                                       Expanded(
                                         child: Text(
                                           '${access['club_name'] ?? 'Клуб'} · '
-                                          '${access['role_title'] ?? 'Сотрудник'}',
+                                          '${access['role_title'] ?? 'Сотрудник'} · '
+                                          '${_workspaceLabel(access)}',
                                           style: const TextStyle(
                                             color: _text,
                                             fontSize: 12,

@@ -1,0 +1,1559 @@
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:url_launcher/url_launcher.dart';
+
+import 'package:sportoteka/core/subscription/personal_module_service.dart';
+import 'package:sportoteka/core/theme/app_typography.dart';
+import 'package:sportoteka/core/utils/pref_utils.dart';
+import 'package:sportoteka/presentation/workspace_os/workspace_finder_models.dart';
+
+class PersonalSportotekaOsScreen extends StatefulWidget {
+  const PersonalSportotekaOsScreen({
+    super.key,
+    this.initialCategory,
+    this.initialCategoryName,
+    this.selectionMode = false,
+    this.selectionCategory,
+    this.initialFolderId,
+    this.initialFolderTitle,
+    this.onFolderSelected,
+    this.onCancel,
+  });
+
+  final String? initialCategory;
+  final String? initialCategoryName;
+
+  /// When true the OS is used as a destination picker. All personal sections
+  /// remain visible, but "Save here" is enabled only in [selectionCategory].
+  final bool selectionMode;
+  final String? selectionCategory;
+  final int? initialFolderId;
+  final String? initialFolderTitle;
+  final ValueChanged<Map<String, dynamic>>? onFolderSelected;
+  final VoidCallback? onCancel;
+
+  @override
+  State<PersonalSportotekaOsScreen> createState() =>
+      _PersonalSportotekaOsScreenState();
+}
+
+class _PersonalOsSection {
+  const _PersonalOsSection({
+    required this.category,
+    required this.title,
+    required this.icon,
+    this.moduleCodes = const <String>[],
+    this.group = 'ЛИЧНОЕ',
+  });
+
+  final String category;
+  final String title;
+  final IconData icon;
+  final List<String> moduleCodes;
+  final String group;
+}
+
+class _PersonalSportotekaOsScreenState extends State<PersonalSportotekaOsScreen> {
+  static const _base = 'https://sportotekaapp.ru/api/personal_workspace_os';
+  static const _green = Color(0xFF0B8F55);
+  static const _greenSoft = Color(0xFFEAF5EF);
+  static const _text = Color(0xFF101814);
+  static const _muted = Color(0xFF758079);
+  static const _line = Color(0xFFE5E8E5);
+  static const _soft = Color(0xFFF4F6F4);
+
+  static const List<_PersonalOsSection> _sections = <_PersonalOsSection>[
+    _PersonalOsSection(
+      category: 'matches',
+      title: 'Матчи',
+      icon: Icons.sports_soccer_rounded,
+      moduleCodes: <String>['matches'],
+    ),
+    _PersonalOsSection(
+      category: 'trainings',
+      title: 'Тренировки',
+      icon: Icons.fitness_center_rounded,
+      moduleCodes: <String>['training_management'],
+    ),
+    _PersonalOsSection(
+      category: 'plans',
+      title: 'Планы-конспекты',
+      icon: Icons.folder_copy_rounded,
+      moduleCodes: <String>['training_plans'],
+    ),
+    _PersonalOsSection(
+      category: 'tracker',
+      title: 'Tracker',
+      icon: Icons.sensors_rounded,
+      moduleCodes: <String>['tracker'],
+    ),
+    _PersonalOsSection(
+      category: 'testing',
+      title: 'Тестирование',
+      icon: Icons.science_rounded,
+      moduleCodes: <String>['testing'],
+    ),
+    _PersonalOsSection(
+      category: 'schemes',
+      title: 'Схемы',
+      icon: Icons.draw_rounded,
+      moduleCodes: <String>['tactics_2d', 'tactics_3d'],
+    ),
+    _PersonalOsSection(
+      category: 'documents',
+      title: 'Документы',
+      icon: Icons.description_rounded,
+      group: 'ЕЩЁ',
+    ),
+    _PersonalOsSection(
+      category: 'video',
+      title: 'Видео',
+      icon: Icons.video_library_rounded,
+      moduleCodes: <String>['video_center', 'video_analysis', 'video_ai'],
+      group: 'ЕЩЁ',
+    ),
+    _PersonalOsSection(
+      category: 'reports',
+      title: 'Отчёты',
+      icon: Icons.analytics_rounded,
+      moduleCodes: <String>[
+        'player_analytics',
+        'tracker',
+        'testing',
+        'video_analysis',
+        'video_ai',
+        'live_analytics',
+      ],
+      group: 'ЕЩЁ',
+    ),
+  ];
+
+  static const Map<String, String> _fallbackModuleTitles = <String, String>{
+    'tactics_2d': 'Редактор схем 2D',
+    'tactics_3d': 'Редактор схем 3D',
+    'training_plans': 'Планы-конспекты',
+    'training_management': 'Личные тренировки',
+    'matches': 'Матчи',
+    'testing': 'Тестирование',
+    'player_analytics': 'Аналитика игрока',
+    'video_center': 'Видеоцентр',
+    'video_analysis': 'Видеоанализ PRO',
+    'video_ai': 'AI Видео',
+    'tracker': 'Tracker / Replay',
+    'live_analytics': 'Live Analytics',
+  };
+
+  static const Map<String, int> _fallbackPrices = <String, int>{
+    'tactics_2d': 11,
+    'tactics_3d': 18,
+    'training_plans': 11,
+    'training_management': 15,
+    'matches': 15,
+    'testing': 15,
+    'player_analytics': 11,
+    'video_center': 15,
+    'video_analysis': 33,
+    'video_ai': 54,
+    'tracker': 29,
+    'live_analytics': 36,
+  };
+
+  int _userId = 0;
+  String _ownerName = 'Личный профиль';
+  bool _loading = true;
+  bool _modulesLoading = true;
+  bool _busy = false;
+  String? _error;
+  String? _category;
+  String _categoryName = 'Sportoteka OS';
+  int? _parentId;
+  final List<Map<String, dynamic>> _crumbs = <Map<String, dynamic>>[];
+  List<Map<String, dynamic>> _items = <Map<String, dynamic>>[];
+  WorkspaceFinderViewMode _viewMode = WorkspaceFinderViewMode.list;
+  bool _showSidebarOnCompact = false;
+  String _searchText = '';
+  final TextEditingController _search = TextEditingController();
+  final Map<String, Map<String, dynamic>> _moduleByCode =
+      <String, Map<String, dynamic>>{};
+
+  @override
+  void initState() {
+    super.initState();
+    _boot();
+  }
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  Future<void> _boot() async {
+    _userId = await PrefUtils.getUserId() ?? 0;
+    final first = await PrefUtils.getUserFirstName();
+    final last = await PrefUtils.getUserLastName();
+    final name = '$first $last'.trim();
+    if (name.isNotEmpty) _ownerName = name;
+
+    await _loadModules();
+
+    final initial = (widget.initialCategory ?? '').trim();
+    if (initial.isNotEmpty) {
+      final section = _sectionFor(initial);
+      if (section != null && _sectionUnlocked(section)) {
+        _category = initial;
+        _categoryName = (widget.initialCategoryName ?? '').trim().isNotEmpty
+            ? widget.initialCategoryName!.trim()
+            : section.title;
+        final initialFolderId = widget.initialFolderId ?? 0;
+        _parentId = initialFolderId > 0 ? initialFolderId : null;
+        _crumbs
+          ..clear()
+          ..add(<String, dynamic>{'id': null, 'name': _categoryName});
+        if (initialFolderId > 0) {
+          final folderTitle = (widget.initialFolderTitle ?? '').trim();
+          _crumbs.add(<String, dynamic>{
+            'id': initialFolderId,
+            'name': folderTitle.isEmpty ? 'Выбранная папка' : folderTitle,
+          });
+        }
+      }
+    }
+    await _load();
+  }
+
+  Future<void> _loadModules() async {
+    if (_userId <= 0) {
+      if (mounted) setState(() => _modulesLoading = false);
+      return;
+    }
+    final result = await PersonalModuleService.status(userId: _userId);
+    if (!mounted) return;
+    _moduleByCode.clear();
+    if (result['success'] == true) {
+      for (final item in PersonalModuleService.modules(result)) {
+        final code = '${item['module_code'] ?? ''}'.trim();
+        if (code.isNotEmpty) _moduleByCode[code] = item;
+      }
+    }
+    setState(() => _modulesLoading = false);
+  }
+
+  _PersonalOsSection? _sectionFor(String category) {
+    for (final section in _sections) {
+      if (section.category == category) return section;
+    }
+    return null;
+  }
+
+  bool _moduleUnlocked(String code) {
+    final item = _moduleByCode[code];
+    if (item == null) return false;
+    final state = '${item['state'] ?? ''}'.trim().toLowerCase();
+    return item['has_access'] == true || state == 'active' || state == 'free';
+  }
+
+  bool _modulePending(String code) {
+    final item = _moduleByCode[code];
+    if (item == null) return false;
+    final state = '${item['state'] ?? ''}'.trim().toLowerCase();
+    return state == 'pending' || state == 'requested' ||
+        item['request_status'] == 'pending';
+  }
+
+  bool _sectionUnlocked(_PersonalOsSection section) {
+    if (section.moduleCodes.isEmpty) return true;
+    if (widget.selectionMode &&
+        (widget.selectionCategory ?? '').trim() == section.category) {
+      // The caller already passed the module entitlement gate. Do not block a
+      // save operation just because the status refresh is temporarily offline.
+      return true;
+    }
+    return section.moduleCodes.any(_moduleUnlocked);
+  }
+
+  bool _sectionPending(_PersonalOsSection section) {
+    if (_sectionUnlocked(section)) return false;
+    return section.moduleCodes.any(_modulePending);
+  }
+
+  String _moduleTitle(String code) {
+    final item = _moduleByCode[code];
+    final title = '${item?['title'] ?? item?['name'] ?? ''}'.trim();
+    return title.isNotEmpty ? title : (_fallbackModuleTitles[code] ?? code);
+  }
+
+  int _modulePrice(String code) {
+    final item = _moduleByCode[code];
+    final raw = item?['price_monthly_byn'] ?? item?['price_byn'];
+    if (raw is num) return raw.round();
+    return int.tryParse('${raw ?? ''}') ?? (_fallbackPrices[code] ?? 0);
+  }
+
+  Map<String, dynamic> _decode(http.Response response) {
+    final raw = utf8.decode(response.bodyBytes, allowMalformed: true).trim();
+    if (raw.isEmpty) {
+      return <String, dynamic>{
+        'success': false,
+        'message': 'Сервер вернул пустой ответ · HTTP ${response.statusCode}',
+      };
+    }
+    if (raw.startsWith('<') || raw.toLowerCase().contains('<html')) {
+      return <String, dynamic>{
+        'success': false,
+        'message': 'Sportoteka OS API недоступен · HTTP ${response.statusCode}',
+      };
+    }
+    try {
+      final value = jsonDecode(raw);
+      if (value is Map) return Map<String, dynamic>.from(value);
+    } catch (_) {}
+    return <String, dynamic>{
+      'success': false,
+      'message': 'Некорректный ответ Sportoteka OS · HTTP ${response.statusCode}',
+    };
+  }
+
+  Future<Map<String, dynamic>> _post(
+    String endpoint,
+    Map<String, String> body,
+  ) async {
+    try {
+      final response = await http
+          .post(Uri.parse('$_base/$endpoint'), body: body)
+          .timeout(const Duration(seconds: 20));
+      return _decode(response);
+    } catch (e) {
+      return <String, dynamic>{
+        'success': false,
+        'message': 'Ошибка соединения: $e',
+      };
+    }
+  }
+
+  Future<void> _load() async {
+    if (!mounted) return;
+    if (_userId <= 0) {
+      setState(() {
+        _loading = false;
+        _error = 'Не удалось определить пользователя';
+      });
+      return;
+    }
+
+    if (_category == null) {
+      setState(() {
+        _loading = false;
+        _error = null;
+        _items = <Map<String, dynamic>>[];
+      });
+      return;
+    }
+
+    final section = _sectionFor(_category!);
+    if (section != null && !_sectionUnlocked(section)) {
+      setState(() {
+        _loading = false;
+        _error = null;
+        _items = <Map<String, dynamic>>[];
+      });
+      return;
+    }
+
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    final body = <String, String>{
+      'user_id': '$_userId',
+      'category': _category!,
+      if (_parentId != null) 'parent_id': '$_parentId',
+    };
+    final data = await _post('list.php', body);
+    if (!mounted) return;
+    if (data['success'] == true) {
+      setState(() {
+        _items = data['items'] is List
+            ? (data['items'] as List)
+                .whereType<Map>()
+                .map((e) => Map<String, dynamic>.from(e))
+                .toList()
+            : <Map<String, dynamic>>[];
+        _loading = false;
+      });
+    } else {
+      setState(() {
+        _loading = false;
+        _error = '${data['message'] ?? 'Не удалось загрузить Sportoteka OS'}';
+      });
+    }
+  }
+
+  Future<void> _openSection(_PersonalOsSection section) async {
+    if (!_sectionUnlocked(section)) {
+      await _showModuleAccess(section);
+      return;
+    }
+    setState(() {
+      _category = section.category;
+      _categoryName = section.title;
+      _parentId = null;
+      _crumbs
+        ..clear()
+        ..add(<String, dynamic>{'id': null, 'name': section.title});
+      _search.clear();
+      _searchText = '';
+      _showSidebarOnCompact = false;
+    });
+    await _load();
+  }
+
+  Future<void> _showModuleAccess(_PersonalOsSection section) async {
+    if (_sectionPending(section)) {
+      _snack('Заявка на модуль уже отправлена.');
+      return;
+    }
+
+    final lockedCodes = section.moduleCodes
+        .where((code) => !_moduleUnlocked(code))
+        .toList(growable: false);
+    if (lockedCodes.isEmpty) return;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.white,
+      barrierColor: Colors.black.withOpacity(.20),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (sheetContext) {
+        return SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 18),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.lock_outline_rounded, size: 19),
+                    const SizedBox(width: 9),
+                    Expanded(
+                      child: Text(
+                        section.title,
+                        style: AppTypography.itemTitle(color: _text),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  lockedCodes.length == 1
+                      ? 'Подключите модуль, чтобы открыть этот раздел в личной Sportoteka OS.'
+                      : 'Выберите модуль, который хотите подключить.',
+                  style: AppTypography.secondary(color: _muted),
+                ),
+                const SizedBox(height: 14),
+                for (final code in lockedCodes)
+                  Container(
+                    decoration: const BoxDecoration(
+                      border: Border(bottom: BorderSide(color: _line)),
+                    ),
+                    child: ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(
+                        _moduleTitle(code),
+                        style: AppTypography.menuTitle(color: _text),
+                      ),
+                      subtitle: Text(
+                        _modulePrice(code) > 0
+                            ? '${_modulePrice(code)} BYN / мес.'
+                            : 'По заявке',
+                        style: AppTypography.caption(color: _muted),
+                      ),
+                      trailing: OutlinedButton(
+                        onPressed: () async {
+                          Navigator.of(sheetContext).pop();
+                          await _requestModule(code);
+                        },
+                        child: const Text('Подключить'),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _requestModule(String code) async {
+    if (_userId <= 0) return;
+    setState(() => _busy = true);
+    final result = await PersonalModuleService.request(
+      userId: _userId,
+      moduleCode: code,
+      source: 'personal_sportoteka_os',
+    );
+    if (mounted) setState(() => _busy = false);
+    if (result['success'] == true) {
+      _snack('Заявка отправлена: ${_moduleTitle(code)}');
+      await _loadModules();
+    } else {
+      _snack('${result['message'] ?? 'Не удалось отправить заявку'}');
+    }
+  }
+
+  void _goHome() {
+    setState(() {
+      _category = null;
+      _categoryName = 'Sportoteka OS';
+      _parentId = null;
+      _crumbs.clear();
+      _items = <Map<String, dynamic>>[];
+      _search.clear();
+      _searchText = '';
+      _showSidebarOnCompact = false;
+      _error = null;
+    });
+  }
+
+  void _openFolder(Map<String, dynamic> item) {
+    final id = int.tryParse('${item['id'] ?? 0}') ?? 0;
+    if (id <= 0) return;
+    setState(() {
+      _parentId = id;
+      _crumbs.add(<String, dynamic>{
+        'id': id,
+        'name': '${item['name'] ?? 'Папка'}',
+      });
+      _search.clear();
+      _searchText = '';
+    });
+    _load();
+  }
+
+  Future<void> _goBack() async {
+    if (_category == null) {
+      if (widget.onCancel != null) {
+        widget.onCancel!();
+      } else {
+        Navigator.of(context).maybePop();
+      }
+      return;
+    }
+    if (_crumbs.length <= 1) {
+      _goHome();
+      return;
+    }
+    setState(() {
+      _crumbs.removeLast();
+      final id = _crumbs.last['id'];
+      final parsed = id is int ? id : int.tryParse('$id');
+      _parentId = parsed != null && parsed > 0 ? parsed : null;
+      _search.clear();
+      _searchText = '';
+    });
+    await _load();
+  }
+
+  Future<String?> _askText(String title, {String initial = ''}) async {
+    final controller = TextEditingController(text: initial);
+    final result = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(title),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(hintText: 'Название'),
+          onSubmitted: (value) =>
+              Navigator.pop(dialogContext, value.trim()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Отмена'),
+          ),
+          TextButton(
+            onPressed: () =>
+                Navigator.pop(dialogContext, controller.text.trim()),
+            child: const Text('Сохранить'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    return result?.trim();
+  }
+
+  Future<void> _createFolder() async {
+    if (_category == null || _busy) return;
+    final name = await _askText('Новая папка');
+    if (name == null || name.isEmpty) return;
+    setState(() => _busy = true);
+    final data = await _post('create_folder.php', <String, String>{
+      'user_id': '$_userId',
+      'category': _category!,
+      'name': name,
+      if (_parentId != null) 'parent_id': '$_parentId',
+    });
+    if (mounted) setState(() => _busy = false);
+    if (data['success'] == true) {
+      await _load();
+    } else {
+      _snack('${data['message'] ?? 'Не удалось создать папку'}');
+    }
+  }
+
+  Future<void> _createDocument() async {
+    if (_category == null || _busy || widget.selectionMode) return;
+    final titleCtrl = TextEditingController();
+    final bodyCtrl = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Новый документ'),
+        content: SizedBox(
+          width: 520,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: titleCtrl,
+                autofocus: true,
+                decoration: const InputDecoration(labelText: 'Название'),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: bodyCtrl,
+                maxLines: 8,
+                decoration: const InputDecoration(
+                  labelText: 'Текст документа',
+                  alignLabelWithHint: true,
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Отмена'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Создать'),
+          ),
+        ],
+      ),
+    );
+    final name = titleCtrl.text.trim();
+    final body = bodyCtrl.text;
+    titleCtrl.dispose();
+    bodyCtrl.dispose();
+    if (ok != true || name.isEmpty) return;
+    setState(() => _busy = true);
+    final data = await _post('create_document.php', <String, String>{
+      'user_id': '$_userId',
+      'category': _category!,
+      'name': name,
+      'content': body,
+      if (_parentId != null) 'parent_id': '$_parentId',
+    });
+    if (mounted) setState(() => _busy = false);
+    if (data['success'] == true) {
+      await _load();
+    } else {
+      _snack('${data['message'] ?? 'Не удалось создать документ'}');
+    }
+  }
+
+  Future<void> _upload() async {
+    if (_category == null || _busy || kIsWeb || widget.selectionMode) return;
+    final result = await FilePicker.pickFiles(withData: false);
+    if (result == null || result.files.isEmpty) return;
+    final path = result.files.single.path;
+    if (path == null || path.isEmpty) return;
+    setState(() => _busy = true);
+    try {
+      final request = http.MultipartRequest(
+        'POST',
+        Uri.parse('$_base/upload.php'),
+      )
+        ..fields['user_id'] = '$_userId'
+        ..fields['category'] = _category!;
+      if (_parentId != null) request.fields['parent_id'] = '$_parentId';
+      request.files.add(await http.MultipartFile.fromPath('file', path));
+      final streamed = await request.send().timeout(const Duration(minutes: 3));
+      final response = await http.Response.fromStream(streamed);
+      final data = _decode(response);
+      if (data['success'] == true) {
+        await _load();
+      } else {
+        _snack('${data['message'] ?? 'Не удалось загрузить файл'}');
+      }
+    } catch (e) {
+      _snack('Не удалось загрузить файл: $e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _rename(Map<String, dynamic> item) async {
+    final id = int.tryParse('${item['id'] ?? 0}') ?? 0;
+    if (id <= 0) return;
+    final name = await _askText(
+      'Переименовать',
+      initial: '${item['name'] ?? ''}',
+    );
+    if (name == null || name.isEmpty) return;
+    final data = await _post('rename.php', <String, String>{
+      'user_id': '$_userId',
+      'id': '$id',
+      'name': name,
+    });
+    if (data['success'] == true) {
+      await _load();
+    } else {
+      _snack('${data['message'] ?? 'Не удалось переименовать'}');
+    }
+  }
+
+  Future<void> _delete(Map<String, dynamic> item) async {
+    final id = int.tryParse('${item['id'] ?? 0}') ?? 0;
+    if (id <= 0) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Удалить?'),
+        content: Text('«${item['name'] ?? ''}» будет удалено из личной Sportoteka OS.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Отмена'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Удалить'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    final data = await _post('delete.php', <String, String>{
+      'user_id': '$_userId',
+      'id': '$id',
+    });
+    if (data['success'] == true) {
+      await _load();
+    } else {
+      _snack('${data['message'] ?? 'Не удалось удалить'}');
+    }
+  }
+
+  Future<void> _openItem(Map<String, dynamic> item) async {
+    final kind = '${item['kind'] ?? ''}';
+    if (kind == 'folder') {
+      _openFolder(item);
+      return;
+    }
+    if (kind == 'document') {
+      final content = '${item['content'] ?? ''}';
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text('${item['name'] ?? 'Документ'}'),
+          content: SizedBox(
+            width: 620,
+            child: SingleChildScrollView(
+              child: SelectableText(content.isEmpty ? 'Документ пуст.' : content),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Закрыть'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+    final rawUrl = '${item['file_url'] ?? ''}'.trim();
+    if (rawUrl.isNotEmpty) {
+      final uri = Uri.tryParse(rawUrl);
+      if (uri != null) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      }
+    }
+  }
+
+  void _showItemMenu(Map<String, dynamic> item) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 10, 14, 18),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.drive_file_rename_outline),
+                title: const Text('Переименовать'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _rename(item);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.delete_outline),
+                title: const Text('Удалить'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _delete(item);
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  bool get _canSelectCurrentFolder {
+    if (!widget.selectionMode || _category == null) return false;
+    final requiredCategory = (widget.selectionCategory ?? '').trim();
+    if (requiredCategory.isEmpty) return true;
+    return _category == requiredCategory;
+  }
+
+  void _selectCurrentFolder() {
+    if (!_canSelectCurrentFolder) {
+      final requiredCategory = (widget.selectionCategory ?? '').trim();
+      final section = _sectionFor(requiredCategory);
+      _snack(
+        section == null
+            ? 'Выберите подходящий раздел.'
+            : 'Для этого материала выберите папку в разделе «${section.title}».',
+      );
+      return;
+    }
+    final value = <String, dynamic>{
+      'id': _parentId ?? 0,
+      'title': _crumbs.isNotEmpty
+          ? '${_crumbs.last['name'] ?? _categoryName}'
+          : _categoryName,
+      'category': _category,
+    };
+    if (widget.onFolderSelected != null) {
+      widget.onFolderSelected!(value);
+    } else {
+      Navigator.of(context).pop(value);
+    }
+  }
+
+  void _snack(String message) {
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(message),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  List<Map<String, dynamic>> get _visibleItems {
+    final query = _searchText.trim().toLowerCase();
+    if (query.isEmpty) return _items;
+    return _items.where((item) {
+      return '${item['name'] ?? ''}'.toLowerCase().contains(query);
+    }).toList(growable: false);
+  }
+
+  IconData _iconForItem(Map<String, dynamic> item) {
+    final kind = '${item['kind'] ?? ''}';
+    if (kind == 'folder') return Icons.folder_outlined;
+    if (kind == 'document') return Icons.description_outlined;
+    final mime = '${item['mime_type'] ?? ''}'.toLowerCase();
+    if (mime.startsWith('image/')) return Icons.image_outlined;
+    if (mime.startsWith('video/')) return Icons.movie_outlined;
+    if (mime.contains('pdf')) return Icons.picture_as_pdf_outlined;
+    return Icons.insert_drive_file_outlined;
+  }
+
+  Widget _sideItem({
+    required IconData icon,
+    required String title,
+    required bool selected,
+    required VoidCallback onTap,
+    bool locked = false,
+    bool pending = false,
+  }) {
+    return Material(
+      color: selected ? _greenSoft : Colors.transparent,
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+          child: Row(
+            children: [
+              Icon(
+                icon,
+                size: 18,
+                color: selected ? _green : const Color(0xFF69736D),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.menuTitle(
+                    color: selected ? _text : const Color(0xFF5E6862),
+                  ),
+                ),
+              ),
+              if (pending)
+                const Icon(Icons.schedule_rounded, size: 15, color: _muted)
+              else if (locked)
+                const Icon(Icons.lock_outline_rounded, size: 15, color: _muted),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSidebar({required bool compact}) {
+    final personal = _sections.where((section) => section.group == 'ЛИЧНОЕ');
+    final extra = _sections.where((section) => section.group == 'ЕЩЁ');
+
+    return Container(
+      width: 260,
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(right: BorderSide(color: _line)),
+      ),
+      child: SafeArea(
+        right: false,
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(12, 16, 12, 24),
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(9, 4, 9, 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('SPORTOTEKA OS', style: AppTypography.menuGroup(color: _green)),
+                  const SizedBox(height: 5),
+                  Text(
+                    _ownerName,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.itemTitle(color: _text),
+                  ),
+                  const SizedBox(height: 2),
+                  Text('Личное пространство', style: AppTypography.caption(color: _muted)),
+                ],
+              ),
+            ),
+            _sideItem(
+              icon: Icons.home_rounded,
+              title: 'Главная',
+              selected: _category == null,
+              onTap: _goHome,
+            ),
+            const SizedBox(height: 15),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 9),
+              child: Text('ЛИЧНОЕ', style: AppTypography.menuGroup(color: _muted)),
+            ),
+            const SizedBox(height: 5),
+            for (final section in personal)
+              _sideItem(
+                icon: section.icon,
+                title: section.title,
+                selected: _category == section.category,
+                locked: !_modulesLoading && !_sectionUnlocked(section),
+                pending: !_modulesLoading && _sectionPending(section),
+                onTap: () => _openSection(section),
+              ),
+            const SizedBox(height: 15),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 9),
+              child: Text('ЕЩЁ', style: AppTypography.menuGroup(color: _muted)),
+            ),
+            const SizedBox(height: 5),
+            for (final section in extra)
+              _sideItem(
+                icon: section.icon,
+                title: section.title,
+                selected: _category == section.category,
+                locked: !_modulesLoading && !_sectionUnlocked(section),
+                pending: !_modulesLoading && _sectionPending(section),
+                onTap: () => _openSection(section),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildToolbar({required bool compact, required bool mobile}) {
+    return Container(
+      height: mobile ? 58 : 62,
+      padding: EdgeInsets.symmetric(horizontal: mobile ? 9 : 14),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: _line)),
+      ),
+      child: Row(
+        children: [
+          if (compact)
+            IconButton(
+              onPressed: () => setState(() => _showSidebarOnCompact = true),
+              icon: const Icon(Icons.menu_rounded),
+              tooltip: 'Разделы',
+            ),
+          IconButton(
+            onPressed: _category == null && _crumbs.isEmpty ? null : _goBack,
+            icon: const Icon(Icons.arrow_back_rounded),
+            tooltip: 'Назад',
+          ),
+          if (!mobile)
+            IconButton(
+              onPressed: _busy ? null : _load,
+              icon: const Icon(Icons.refresh_rounded),
+              tooltip: 'Обновить',
+            ),
+          const SizedBox(width: 4),
+          Expanded(
+            child: Container(
+              height: 38,
+              constraints: const BoxConstraints(maxWidth: 620),
+              decoration: BoxDecoration(
+                color: _soft,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: TextField(
+                controller: _search,
+                onChanged: (value) => setState(() => _searchText = value),
+                enabled: _category != null,
+                style: AppTypography.formText(),
+                decoration: InputDecoration(
+                  border: InputBorder.none,
+                  isDense: true,
+                  prefixIcon: const Icon(Icons.search_rounded, size: 19),
+                  hintText: _category == null
+                      ? 'Выберите раздел'
+                      : 'Поиск в «$_categoryName»',
+                  hintStyle: AppTypography.formHint(),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          if (_category != null)
+            PopupMenuButton<String>(
+              tooltip: 'Создать',
+              enabled: !_busy,
+              onSelected: (value) {
+                if (value == 'folder') _createFolder();
+                if (value == 'document') _createDocument();
+                if (value == 'upload') _upload();
+              },
+              itemBuilder: (_) => <PopupMenuEntry<String>>[
+                PopupMenuItem<String>(
+                  value: 'folder',
+                  child: Text('Новая папка', style: AppTypography.menuTitle()),
+                ),
+                if (!widget.selectionMode)
+                  PopupMenuItem<String>(
+                    value: 'document',
+                    child: Text('Новый документ', style: AppTypography.menuTitle()),
+                  ),
+                if (!widget.selectionMode && !kIsWeb)
+                  PopupMenuItem<String>(
+                    value: 'upload',
+                    child: Text('Загрузить файл', style: AppTypography.menuTitle()),
+                  ),
+              ],
+              child: Container(
+                height: 38,
+                padding: const EdgeInsets.symmetric(horizontal: 11),
+                decoration: BoxDecoration(
+                  color: _green,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.add_rounded, color: Colors.white, size: 19),
+                    if (!mobile) ...[
+                      const SizedBox(width: 5),
+                      Text('Создать', style: AppTypography.actionStrong(color: Colors.white)),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          if (widget.selectionMode) ...[
+            const SizedBox(width: 7),
+            Material(
+              color: _canSelectCurrentFolder ? _greenSoft : const Color(0xFFF3F4F3),
+              borderRadius: BorderRadius.circular(10),
+              child: InkWell(
+                onTap: _busy ? null : _selectCurrentFolder,
+                borderRadius: BorderRadius.circular(10),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 10),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.save_outlined,
+                        size: 17,
+                        color: _canSelectCurrentFolder ? _green : _muted,
+                      ),
+                      if (!mobile) ...[
+                        const SizedBox(width: 6),
+                        Text(
+                          'Сохранить сюда',
+                          style: AppTypography.actionStrong(
+                            color: _canSelectCurrentFolder ? _green : _muted,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+          const SizedBox(width: 5),
+          IconButton(
+            onPressed: () {
+              setState(() {
+                _viewMode = _viewMode == WorkspaceFinderViewMode.list
+                    ? WorkspaceFinderViewMode.grid
+                    : WorkspaceFinderViewMode.list;
+              });
+            },
+            icon: Icon(
+              _viewMode == WorkspaceFinderViewMode.list
+                  ? Icons.grid_view_rounded
+                  : Icons.view_list_rounded,
+            ),
+            tooltip: _viewMode == WorkspaceFinderViewMode.list ? 'Иконки' : 'Список',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBreadcrumbs() {
+    if (_category == null) {
+      return const SizedBox(height: 8);
+    }
+    return Container(
+      height: 48,
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      alignment: Alignment.centerLeft,
+      child: Row(
+        children: [
+          Expanded(
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: _crumbs.length,
+              separatorBuilder: (_, __) => const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 4),
+                child: Icon(Icons.chevron_right_rounded, size: 16, color: _muted),
+              ),
+              itemBuilder: (context, index) {
+                final active = index == _crumbs.length - 1;
+                return InkWell(
+                  onTap: active
+                      ? null
+                      : () async {
+                          setState(() {
+                            _crumbs.removeRange(index + 1, _crumbs.length);
+                            final id = _crumbs[index]['id'];
+                            final parsed = id is int ? id : int.tryParse('$id');
+                            _parentId = parsed != null && parsed > 0 ? parsed : null;
+                          });
+                          await _load();
+                        },
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 5),
+                    child: Text(
+                      '${_crumbs[index]['name'] ?? _categoryName}',
+                      style: active
+                          ? AppTypography.itemTitle(color: _text)
+                          : AppTypography.secondary(color: _muted),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          if (widget.selectionMode &&
+              (widget.selectionCategory ?? '').trim().isNotEmpty &&
+              _category != widget.selectionCategory)
+            Text(
+              'Сохранение: ${_sectionFor(widget.selectionCategory!)?.title ?? widget.selectionCategory}',
+              style: AppTypography.caption(color: _muted),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHome() {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(24, 18, 24, 28),
+      children: [
+        Text('Личная Sportoteka OS', style: AppTypography.custom(size: 20, weight: FontWeight.w700, color: _text, height: 1.08, letterSpacing: 0)),
+        const SizedBox(height: 6),
+        Text(
+          widget.selectionMode
+              ? 'Выберите раздел и папку для сохранения. Закрытые модули остаются видимыми с замком.'
+              : 'Документы и материалы вашего профиля. Данные не смешиваются с клубным Workspace.',
+          style: AppTypography.secondary(color: _muted),
+        ),
+        const SizedBox(height: 22),
+        for (final section in _sections)
+          Container(
+            decoration: const BoxDecoration(
+              border: Border(bottom: BorderSide(color: _line)),
+            ),
+            child: ListTile(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
+              leading: Icon(section.icon, color: const Color(0xFF69736D), size: 21),
+              title: Text(section.title, style: AppTypography.itemTitle(color: _text)),
+              subtitle: !_modulesLoading && !_sectionUnlocked(section)
+                  ? Text(
+                      _sectionPending(section) ? 'Заявка отправлена' : 'Модуль не подключён',
+                      style: AppTypography.caption(color: _muted),
+                    )
+                  : null,
+              trailing: !_modulesLoading && !_sectionUnlocked(section)
+                  ? Icon(
+                      _sectionPending(section)
+                          ? Icons.schedule_rounded
+                          : Icons.lock_outline_rounded,
+                      size: 17,
+                      color: _muted,
+                    )
+                  : const Icon(Icons.chevron_right_rounded, size: 18, color: _muted),
+              onTap: () => _openSection(section),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildListItem(Map<String, dynamic> item) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => _openItem(item),
+        onLongPress: () => _showItemMenu(item),
+        child: Container(
+          height: 74,
+          padding: const EdgeInsets.symmetric(horizontal: 28),
+          decoration: const BoxDecoration(
+            border: Border(bottom: BorderSide(color: _line, width: .8)),
+          ),
+          child: Row(
+            children: [
+              Icon(_iconForItem(item), color: const Color(0xFF8A958F), size: 29),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${item['name'] ?? ''}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.itemTitle(color: _text),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      item['kind'] == 'folder'
+                          ? 'Папка'
+                          : item['kind'] == 'document'
+                              ? 'Документ'
+                              : 'Файл',
+                      style: AppTypography.caption(color: _muted),
+                    ),
+                  ],
+                ),
+              ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: const [
+                  _PersonalOsDot(opacity: .30),
+                  SizedBox(width: 4),
+                  _PersonalOsDot(opacity: .75),
+                  SizedBox(width: 4),
+                  _PersonalOsDot(opacity: .30),
+                ],
+              ),
+              const SizedBox(width: 10),
+              IconButton(
+                onPressed: () => _showItemMenu(item),
+                icon: const Icon(Icons.more_horiz_rounded, size: 21),
+                color: _text,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGridItem(Map<String, dynamic> item) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => _openItem(item),
+        onLongPress: () => _showItemMenu(item),
+        child: Container(
+          padding: const EdgeInsets.all(15),
+          decoration: BoxDecoration(
+            border: Border.all(color: _line),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(_iconForItem(item), color: const Color(0xFF8A958F), size: 28),
+                  const Spacer(),
+                  GestureDetector(
+                    onTap: () => _showItemMenu(item),
+                    child: const Icon(Icons.more_horiz_rounded, size: 20),
+                  ),
+                ],
+              ),
+              const Spacer(),
+              Text(
+                '${item['name'] ?? ''}',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.itemTitle(color: _text),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                item['kind'] == 'folder'
+                    ? 'Папка'
+                    : item['kind'] == 'document'
+                        ? 'Документ'
+                        : 'Файл',
+                style: AppTypography.caption(color: _muted),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmpty() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.folder_open_rounded, size: 38, color: Color(0xFF98A2B3)),
+            const SizedBox(height: 10),
+            Text('Папка пока пустая', style: AppTypography.itemTitle(color: _text)),
+            const SizedBox(height: 4),
+            Text(
+              widget.selectionMode
+                  ? 'Создайте папку или нажмите «Сохранить сюда».'
+                  : 'Создайте папку, документ или загрузите файл.',
+              textAlign: TextAlign.center,
+              style: AppTypography.secondary(color: _muted),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatusBar() {
+    final count = _visibleItems.length;
+    return Container(
+      height: 40,
+      padding: const EdgeInsets.symmetric(horizontal: 18),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(top: BorderSide(color: _line)),
+      ),
+      child: Row(
+        children: [
+          Text('$count объектов', style: AppTypography.caption(color: _muted)),
+          const Spacer(),
+          if (_category != null)
+            Text(
+              'Место сохранения: ${_crumbs.isNotEmpty ? _crumbs.last['name'] : _categoryName}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.caption(color: _muted),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMain({required bool compact, required bool mobile}) {
+    return Column(
+      children: [
+        _buildToolbar(compact: compact, mobile: mobile),
+        _buildBreadcrumbs(),
+        if (_busy) const LinearProgressIndicator(minHeight: 1.5, color: _green),
+        Expanded(
+          child: _category == null
+              ? _buildHome()
+              : _loading
+                  ? const Center(
+                      child: SizedBox.square(
+                        dimension: 25,
+                        child: CircularProgressIndicator(strokeWidth: 2.2, color: _green),
+                      ),
+                    )
+                  : _error != null
+                      ? Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(24),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  _error!,
+                                  textAlign: TextAlign.center,
+                                  style: AppTypography.secondary(color: _muted),
+                                ),
+                                const SizedBox(height: 10),
+                                OutlinedButton(
+                                  onPressed: _load,
+                                  child: const Text('Повторить'),
+                                ),
+                              ],
+                            ),
+                          ),
+                        )
+                      : _visibleItems.isEmpty
+                          ? _buildEmpty()
+                          : _viewMode == WorkspaceFinderViewMode.list
+                              ? ListView.builder(
+                                  itemCount: _visibleItems.length,
+                                  itemBuilder: (_, index) =>
+                                      _buildListItem(_visibleItems[index]),
+                                )
+                              : GridView.builder(
+                                  padding: const EdgeInsets.all(18),
+                                  gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                                    maxCrossAxisExtent: 210,
+                                    mainAxisExtent: 142,
+                                    crossAxisSpacing: 10,
+                                    mainAxisSpacing: 10,
+                                  ),
+                                  itemCount: _visibleItems.length,
+                                  itemBuilder: (_, index) =>
+                                      _buildGridItem(_visibleItems[index]),
+                                ),
+        ),
+        if (_category != null) _buildStatusBar(),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    final mobile = width < 620;
+    final compact = width < 900;
+
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: SafeArea(
+        child: Stack(
+          children: [
+            Row(
+              children: [
+                if (!compact) _buildSidebar(compact: false),
+                Expanded(child: _buildMain(compact: compact, mobile: mobile)),
+              ],
+            ),
+            if (compact && _showSidebarOnCompact) ...[
+              Positioned.fill(
+                child: GestureDetector(
+                  onTap: () => setState(() => _showSidebarOnCompact = false),
+                  child: Container(color: Colors.black.withOpacity(.16)),
+                ),
+              ),
+              Positioned(
+                left: 0,
+                top: 0,
+                bottom: 0,
+                child: Material(
+                  color: Colors.white,
+                  elevation: 10,
+                  child: _buildSidebar(compact: true),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PersonalOsDot extends StatelessWidget {
+  const _PersonalOsDot({required this.opacity});
+
+  final double opacity;
+
+  @override
+  Widget build(BuildContext context) {
+    return Opacity(
+      opacity: opacity,
+      child: Container(
+        width: 6,
+        height: 6,
+        decoration: const BoxDecoration(
+          color: Color(0xFF35B779),
+          shape: BoxShape.circle,
+        ),
+      ),
+    );
+  }
+}

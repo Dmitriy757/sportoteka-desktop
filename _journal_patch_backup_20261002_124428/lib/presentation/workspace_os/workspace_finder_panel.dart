@@ -1,0 +1,7622 @@
+import 'dart:convert';
+import 'dart:io';
+import 'dart:math' as math;
+import 'dart:typed_data';
+
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
+import 'package:sportoteka/core/theme/app_typography.dart';
+import 'package:sportoteka/core/personal_workspace/personal_workspace_os_service.dart';
+import 'package:sportoteka/core/subscription/personal_module_service.dart';
+import 'package:sportoteka/presentation/workspace_os/workspace_document_editor.dart';
+import 'package:sportoteka/presentation/workspace_os/workspace_attachment_preview.dart';
+import 'package:sportoteka/presentation/workspace_os/workspace_chat_document_window.dart';
+import 'package:sportoteka/presentation/workspace_os/workspace_ai_document_library.dart';
+import 'package:sportoteka/presentation/workspace_os/workspace_finder_models.dart';
+import 'package:sportoteka/presentation/workspace_os/workspace_player_project_screen.dart';
+import 'package:sportoteka/presentation/workspace_os/workspace_team_project_screen.dart';
+import 'package:sportoteka/presentation/workspace_os/workspace_trainer_project_screen.dart';
+import 'package:sportoteka/presentation/workspace_os/workspace_server_storage.dart';
+import 'package:sportoteka/presentation/workspace_os/workspace_entity_move_bridge.dart';
+import 'package:sportoteka/presentation/workspace_os/workspace_entity_records.dart';
+import 'package:sportoteka/presentation/workspace_os/workspace_entity_identity.dart';
+import 'package:sportoteka/presentation/workspace_os/workspace_root_data_bridge.dart';
+import 'package:sportoteka/presentation/workspace_os/sportoteka_workspace_icons.dart';
+import 'package:sportoteka/presentation/workspace_os/workspace_live_blocks.dart';
+import 'package:sportoteka/presentation/workspace_os/workspace_window_manager.dart';
+import 'package:sportoteka/presentation/workspace_os/workspace_training_plan_codec.dart';
+import 'package:sportoteka/presentation/workspace_os/workspace_sync_signal.dart';
+import 'package:sportoteka/presentation/workspace_os/workspace_video_center.dart';
+import 'package:sportoteka/presentation/training_graphics/training_graphics_screen.dart';
+import 'package:sportoteka/presentation/tracker/services/tracker_workspace_ai_archive_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+enum WorkspaceOsScope { club, personal }
+
+class _PersonalWorkspaceModuleDefinition {
+  const _PersonalWorkspaceModuleDefinition({
+    required this.key,
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    this.moduleCodes = const <String>[],
+    this.group = 'ЛИЧНОЕ',
+  });
+
+  final String key;
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final List<String> moduleCodes;
+  final String group;
+}
+
+const List<_PersonalWorkspaceModuleDefinition> _personalWorkspaceModules =
+    <_PersonalWorkspaceModuleDefinition>[
+  _PersonalWorkspaceModuleDefinition(
+    key: 'matches',
+    title: 'Матчи',
+    subtitle: 'Личные матчи, видео и отчёты',
+    icon: Icons.sports_soccer_rounded,
+    moduleCodes: <String>['matches'],
+  ),
+  _PersonalWorkspaceModuleDefinition(
+    key: 'trainings',
+    title: 'Тренировки',
+    subtitle: 'Личные тренировки и активность',
+    icon: Icons.fitness_center_rounded,
+    moduleCodes: <String>['training_management'],
+  ),
+  _PersonalWorkspaceModuleDefinition(
+    key: 'plans',
+    title: 'Планы-конспекты',
+    subtitle: 'Личные планы и методические материалы',
+    icon: Icons.folder_copy_rounded,
+    moduleCodes: <String>['training_plans'],
+  ),
+  _PersonalWorkspaceModuleDefinition(
+    key: 'tracker',
+    title: 'Tracker',
+    subtitle: 'GPS, нагрузка, Replay и отчёты',
+    icon: Icons.sensors_rounded,
+    moduleCodes: <String>['tracker'],
+  ),
+  _PersonalWorkspaceModuleDefinition(
+    key: 'testing',
+    title: 'Тестирование',
+    subtitle: 'Личные тесты и результаты',
+    icon: Icons.science_rounded,
+    moduleCodes: <String>['testing'],
+  ),
+  _PersonalWorkspaceModuleDefinition(
+    key: 'schemes',
+    title: 'Схемы',
+    subtitle: 'Редактор схем 2D / 3D',
+    icon: Icons.draw_rounded,
+    moduleCodes: <String>['tactics_2d', 'tactics_3d'],
+  ),
+  _PersonalWorkspaceModuleDefinition(
+    key: 'documents',
+    title: 'Документы',
+    subtitle: 'Личные документы и файлы',
+    icon: Icons.description_rounded,
+    group: 'ЕЩЁ',
+  ),
+  _PersonalWorkspaceModuleDefinition(
+    key: 'video',
+    title: 'Видео',
+    subtitle: 'Личная видеотека и анализ',
+    icon: Icons.video_library_rounded,
+    moduleCodes: <String>['video_center', 'video_analysis', 'video_ai'],
+    group: 'ЕЩЁ',
+  ),
+  _PersonalWorkspaceModuleDefinition(
+    key: 'reports',
+    title: 'Отчёты',
+    subtitle: 'Аналитика, тесты, Tracker и AI',
+    icon: Icons.analytics_rounded,
+    moduleCodes: <String>[
+      'player_analytics',
+      'tracker',
+      'testing',
+      'video_analysis',
+      'video_ai',
+      'live_analytics',
+    ],
+    group: 'ЕЩЁ',
+  ),
+];
+
+class SportotekaWorkspaceFinderPanel extends StatefulWidget {
+  const SportotekaWorkspaceFinderPanel({
+    super.key,
+    required this.clubId,
+    required this.clubName,
+    required this.teams,
+    required this.players,
+    required this.trainers,
+    required this.onOpenModule,
+    required this.onOpenPlayer,
+    required this.onOpenTeam,
+    required this.onOpenTrainer,
+    this.selectedTeamId,
+    this.selectedTeamName = '',
+    this.onRefresh,
+    this.onMoveEntity,
+    this.currentUserId = 0,
+    this.scope = WorkspaceOsScope.club,
+    this.ownerUserId = 0,
+    this.ownerDisplayName = '',
+    this.initialModuleKey,
+    this.initialFolderId,
+    this.initialFolderTitle,
+    this.selectionMode = false,
+    this.selectionModuleKey,
+    this.onFolderSelected,
+    this.onSelectionCancel,
+  });
+
+  final int clubId;
+  final String clubName;
+  final List<Map<String, dynamic>> teams;
+  final List<Map<String, dynamic>> players;
+  final List<Map<String, dynamic>> trainers;
+  final int? selectedTeamId;
+  final String selectedTeamName;
+  final ValueChanged<String> onOpenModule;
+  final ValueChanged<Map<String, dynamic>> onOpenPlayer;
+  final ValueChanged<Map<String, dynamic>> onOpenTeam;
+  final ValueChanged<Map<String, dynamic>> onOpenTrainer;
+  final Future<void> Function()? onRefresh;
+  final int currentUserId;
+
+  /// One Workspace OS, two data scopes. The UI/editor code is shared.
+  final WorkspaceOsScope scope;
+
+  /// Account owner for [WorkspaceOsScope.personal]. If zero, currentUserId is used.
+  final int ownerUserId;
+  final String ownerDisplayName;
+
+  /// Optional initial module/folder, also used by save-destination pickers.
+  final String? initialModuleKey;
+  final int? initialFolderId;
+  final String? initialFolderTitle;
+  final bool selectionMode;
+  final String? selectionModuleKey;
+  final ValueChanged<Map<String, dynamic>>? onFolderSelected;
+  final VoidCallback? onSelectionCancel;
+
+  final Future<bool> Function(
+    WorkspaceFinderNode source,
+    WorkspaceFinderNode target,
+  )? onMoveEntity;
+
+  @override
+  State<SportotekaWorkspaceFinderPanel> createState() =>
+      _SportotekaWorkspaceFinderPanelState();
+}
+
+class _SportotekaWorkspaceFinderPanelState
+    extends State<SportotekaWorkspaceFinderPanel> {
+  static const _green = Color(0xFF0B8F55);
+  static const _bg = Colors.white;
+  static const _line = Color(0xFFE5E8E5);
+  static const _text = Color(0xFF101814);
+  static const _muted = Color(0xFF758079);
+
+  WorkspaceFinderViewMode _viewMode = WorkspaceFinderViewMode.list;
+  String _folderKey = 'home';
+  String _search = '';
+  String? _selectedNodeId;
+  WorkspaceFinderNode? _clipboardNode;
+  String _dateFilter = 'all';
+  bool _groupByDate = true;
+  bool _dateNewestFirst = true;
+  final Map<String, WorkspaceFinderNode> _entityFolderRoots =
+      <String, WorkspaceFinderNode>{};
+  final Map<String, List<WorkspaceFinderNode>> _entityFolderAttachments =
+      <String, List<WorkspaceFinderNode>>{};
+  final Set<String> _entityFolderLoading = <String>{};
+  bool _showSidebarOnCompact = false;
+  bool _inlineAiDocumentLibrary = false;
+  late final WorkspaceServerStorage _serverStorage;
+  bool _serverAvailable = false;
+  bool _serverLoading = false;
+  final WorkspaceEntityMoveBridge _entityMoveBridge =
+      const WorkspaceEntityMoveBridge();
+  final Map<String, List<WorkspaceFinderNode>> _realFolderNodes =
+      <String, List<WorkspaceFinderNode>>{};
+  final Set<String> _realFolderLoading = <String>{};
+  final Map<String, String> _realFolderErrors = <String, String>{};
+  final TrackerWorkspaceAiArchiveService _trackerAiArchive =
+      TrackerWorkspaceAiArchiveService();
+  final Set<String> _trackerAiGeneratingFolders = <String>{};
+  bool _trackerAiBatchRunning = false;
+  int _trackerAiBatchDone = 0;
+  int _trackerAiBatchTotal = 0;
+  List<Map<String, dynamic>> _selectedTeamTrainers =
+      const <Map<String, dynamic>>[];
+  bool _selectedTeamTrainersLoading = false;
+
+  bool get _isPersonal => widget.scope == WorkspaceOsScope.personal;
+  int get _personalUserId =>
+      widget.ownerUserId > 0 ? widget.ownerUserId : widget.currentUserId;
+  String get _personalOwnerTitle {
+    final value = widget.ownerDisplayName.trim();
+    return value.isEmpty ? 'Личный профиль' : value;
+  }
+
+  bool _personalModulesLoading = false;
+  final Map<String, Map<String, dynamic>> _personalModuleByCode =
+      <String, Map<String, dynamic>>{};
+  final Map<String, List<WorkspaceFinderNode>> _personalFolderNodes =
+      <String, List<WorkspaceFinderNode>>{};
+  final Map<String, Map<String, dynamic>> _personalFolderMeta =
+      <String, Map<String, dynamic>>{};
+  final Map<String, String> _personalFolderErrors = <String, String>{};
+
+  final List<String> _recentIds = <String>[];
+  final Set<String> _favoriteIds = <String>{};
+  final Map<String, List<WorkspaceFinderNode>> _localChildren =
+      <String, List<WorkspaceFinderNode>>{};
+  final Map<String, String> _noteBodies = <String, String>{};
+  final Set<String> _pendingSyncIds = <String>{};
+  final List<WorkspaceWindowEntry> _windows = <WorkspaceWindowEntry>[];
+  String? _activeWindowId;
+  int _windowCascade = 0;
+
+  // Folder creation is kept inside the Finder widget tree.
+  // Do not open showDialog immediately from PopupMenuButton.onSelected:
+  // on macOS / nested Workspace Navigator that can overlap route teardown and
+  // produce framework.dart `_dependents.isEmpty` during deactivate().
+  final TextEditingController _newFolderNameController =
+      TextEditingController();
+  final FocusNode _newFolderNameFocus = FocusNode();
+  bool _showInlineFolderCreator = false;
+  bool _creatingFolder = false;
+  String? _folderCreateError;
+
+  static const Set<String> _projectedFolders = <String>{
+    'matches',
+    'trainings',
+    'journal',
+    'plans',
+    'testing',
+    'schemes',
+    'calendar',
+    'documents',
+    'medical',
+    'tracker',
+    'video',
+    'reports',
+    'chat',
+    'parents',
+  };
+
+  static const Set<String> _listFolders = <String>{
+    'teams',
+    'players',
+    'trainers',
+    'matches',
+    'trainings',
+    'journal',
+    'plans',
+    'testing',
+    'calendar',
+    'documents',
+    'medical',
+    'tracker',
+    'video',
+    'reports',
+    'chat',
+    'parents',
+    'recent',
+    'favorites',
+  };
+
+  bool get _canCreateWorkspaceNode {
+    if (_isPersonal) {
+      if (_folderKey == 'home' ||
+          _folderKey == 'recent' ||
+          _folderKey == 'favorites') {
+        return false;
+      }
+      final category = _personalCategoryForKey(_folderKey);
+      final module = category == null ? null : _personalModuleFor(category);
+      return module != null && _personalDefinitionUnlocked(module);
+    }
+    return _folderKey != 'recent' && _folderKey != 'favorites';
+  }
+
+  WorkspaceRootDataBridge get _rootDataBridge => WorkspaceRootDataBridge(
+        clubId: widget.clubId,
+        currentUserId: widget.currentUserId,
+        teams: widget.teams,
+        players: widget.players,
+        trainers: widget.trainers,
+        selectedTeamId: widget.selectedTeamId,
+        selectedTeamName: widget.selectedTeamName,
+      );
+
+  String get _storageKey => _isPersonal
+      ? 'sportoteka_finder_v1_personal_$_personalUserId'
+      : 'sportoteka_finder_v1_${widget.clubId}';
+
+  bool _isPlanLibraryFolderKey(String key) => key.startsWith('plan-folder:');
+
+  int _planFolderIdFromKey(String key) {
+    if (!_isPlanLibraryFolderKey(key)) return 0;
+    return int.tryParse(key.substring('plan-folder:'.length)) ?? 0;
+  }
+
+  bool get _isPlansWorkspace =>
+      _folderKey == 'plans' || _isPlanLibraryFolderKey(_folderKey);
+
+  bool _isEntityFolderKey(String key) =>
+      key.startsWith('entity:match:') ||
+      key.startsWith('entity:training:') ||
+      key.startsWith('entity:tracker:');
+
+  String _entityModuleTitleForKey(String key) {
+    if (key.startsWith('entity:tracker:')) return 'Tracker';
+    if (key.startsWith('entity:training:')) return 'Тренировки';
+    return 'Матчи';
+  }
+
+  String _entityFallbackTitleForKey(String key) {
+    if (key.startsWith('entity:tracker:')) return 'Tracker-сессия';
+    if (key.startsWith('entity:training:')) return 'Тренировка';
+    return 'Матч';
+  }
+
+  bool _isEntityFolderNode(WorkspaceFinderNode node) =>
+      node.payload?['_workspace_entity_folder'] == true;
+
+  String _entityFolderKeyForNode(WorkspaceFinderNode node) {
+    final record = Map<String, dynamic>.from(
+      node.payload ?? const <String, dynamic>{},
+    );
+    final identity = WorkspaceEntityIdentity.resolve(
+      clubId: widget.clubId,
+      record: record,
+      sectionHint: _sectionTitleForNode(node),
+      kind: node.kind,
+      fallbackId: node.id,
+    );
+    return 'entity:${identity.type}:${identity.id}';
+  }
+
+  /// Resolves the stable Workspace identity for a Finder node.
+  ///
+  /// Tracker archive helpers use this when a session id is not present in the
+  /// raw payload. Keep the resolver local to the Finder state so the Tracker
+  /// integration does not depend on a removed/global helper.
+  WorkspaceEntityIdentity? resolveWorkspaceEntityIdentity(
+    WorkspaceFinderNode node,
+  ) {
+    final record = Map<String, dynamic>.from(
+      node.payload ?? const <String, dynamic>{},
+    );
+    final identity = WorkspaceEntityIdentity.resolve(
+      clubId: widget.clubId,
+      record: record,
+      sectionHint: _sectionTitleForNode(node),
+      kind: node.kind,
+      fallbackId: node.id,
+    );
+    return identity.isValid ? identity : null;
+  }
+
+  bool _payloadContainsTrackerSessionId(dynamic raw, int targetId) {
+    if (targetId <= 0 || raw == null) return false;
+    if (raw is num) return raw.toInt() == targetId;
+    if (raw is List) {
+      return raw
+          .any((item) => _payloadContainsTrackerSessionId(item, targetId));
+    }
+    if (raw is String) {
+      final text = raw.trim();
+      if (text.isEmpty) return false;
+      final direct = int.tryParse(text);
+      if (direct != null) return direct == targetId;
+      try {
+        return _payloadContainsTrackerSessionId(jsonDecode(text), targetId);
+      } catch (_) {
+        return text
+            .split(RegExp(r'[,;\s]+'))
+            .map((part) => int.tryParse(part.trim()))
+            .whereType<int>()
+            .contains(targetId);
+      }
+    }
+    return false;
+  }
+
+  String? _entityFolderAncestorKey(String key) {
+    if (_isEntityFolderKey(key)) return key;
+    var cursorKey = key;
+    var guard = 0;
+    while (cursorKey.startsWith('local-folder:') && guard++ < 12) {
+      final node = _findLocalNode(cursorKey);
+      final parent = node?.parentId?.trim() ?? '';
+      if (_isEntityFolderKey(parent)) return parent;
+      if (parent.isEmpty || parent == 'home') return null;
+      cursorKey = parent;
+    }
+    return null;
+  }
+
+  WorkspaceFinderNode? get _currentEntityFolderRoot {
+    final key = _entityFolderAncestorKey(_folderKey);
+    return key == null ? null : _entityFolderRoots[key];
+  }
+
+  WorkspaceEntityIdentity? get _currentEntityFolderIdentity {
+    final root = _currentEntityFolderRoot;
+    if (root == null) return null;
+    final record = Map<String, dynamic>.from(
+      root.payload ?? const <String, dynamic>{},
+    );
+    final identity = WorkspaceEntityIdentity.resolve(
+      clubId: widget.clubId,
+      record: record,
+      sectionHint: _sectionTitleForNode(root),
+      kind: root.kind,
+      fallbackId: root.id,
+    );
+    final numericId = int.tryParse(identity.id) ?? 0;
+    return identity.isValid && numericId > 0 ? identity : null;
+  }
+
+  bool get _supportsDateTools {
+    if (_folderKey == 'home' ||
+        _folderKey == 'teams' ||
+        _folderKey == 'players' ||
+        _folderKey == 'trainers') {
+      return false;
+    }
+    return true;
+  }
+
+  DateTime? _nodeDate(WorkspaceFinderNode node) {
+    if (node.id == 'local-folder:chat-documents') return null;
+    if (node.payload?['_workspace_chat_date'] == true ||
+        node.payload?['_workspace_chat_document'] == true ||
+        node.payload?['_workspace_chat_edit_copy'] == true) {
+      final date = DateTime.tryParse('${node.payload?['document_date'] ?? ''}');
+      if (date != null) return date;
+    }
+    final direct = node.updatedAt ?? node.createdAt;
+    if (direct != null) return direct;
+    final payload = node.payload;
+    if (payload == null) return null;
+    for (final key in const <String>[
+      'updated_at',
+      'created_at',
+      'date',
+      'match_date',
+      'event_date',
+      'training_date',
+      'start_at',
+      'start_time',
+      'scheduled_at',
+    ]) {
+      final raw = '${payload[key] ?? ''}'.trim();
+      if (raw.isEmpty) continue;
+      final parsed = DateTime.tryParse(raw.replaceFirst(' ', 'T'));
+      if (parsed != null) return parsed;
+    }
+    return null;
+  }
+
+  DateTime _dateOnly(DateTime value) =>
+      DateTime(value.year, value.month, value.day);
+
+  bool _matchesDateFilter(WorkspaceFinderNode node) {
+    if (_dateFilter == 'all' || !_supportsDateTools) return true;
+    final date = _nodeDate(node);
+    if (date == null) {
+      // Navigation/action rows and user folders without a date stay visible.
+      return !_isEntityFolderNode(node);
+    }
+    final now = DateTime.now();
+    final today = _dateOnly(now);
+    final day = _dateOnly(date.toLocal());
+    final diff = today.difference(day).inDays;
+    switch (_dateFilter) {
+      case 'today':
+        return diff == 0;
+      case 'yesterday':
+        return diff == 1;
+      case '7days':
+        return diff >= 0 && diff < 7;
+      case '30days':
+        return diff >= 0 && diff < 30;
+      case 'month':
+        return day.year == today.year && day.month == today.month;
+      case 'year':
+        return day.year == today.year;
+      default:
+        return true;
+    }
+  }
+
+  String _dateGroupLabel(WorkspaceFinderNode node) {
+    final date = _nodeDate(node);
+    if (date == null) return node.isFolder ? 'Папки' : 'Без даты';
+    final now = _dateOnly(DateTime.now());
+    final day = _dateOnly(date.toLocal());
+    final diff = now.difference(day).inDays;
+    if (diff < 0) return 'Предстоящие';
+    if (diff == 0) return 'Сегодня';
+    if (diff == 1) return 'Вчера';
+    if (diff > 1 && diff < 7) return 'Последние 7 дней';
+    if (diff >= 7 && diff < 30) return 'Последние 30 дней';
+    if (day.year == now.year && day.month == now.month) return 'Этот месяц';
+    if (day.year == now.year) return 'Этот год';
+    return '${day.year}';
+  }
+
+  String get _dateFilterLabel {
+    switch (_dateFilter) {
+      case 'today':
+        return 'Сегодня';
+      case 'yesterday':
+        return 'Вчера';
+      case '7days':
+        return '7 дней';
+      case '30days':
+        return '30 дней';
+      case 'month':
+        return 'Этот месяц';
+      case 'year':
+        return 'Этот год';
+      default:
+        return 'Все даты';
+    }
+  }
+
+  void _handleDateMenu(String value) {
+    setState(() {
+      if (value.startsWith('filter:')) {
+        _dateFilter = value.substring('filter:'.length);
+      } else if (value == 'group') {
+        _groupByDate = !_groupByDate;
+      } else if (value == 'newest') {
+        _dateNewestFirst = true;
+      } else if (value == 'oldest') {
+        _dateNewestFirst = false;
+      }
+    });
+  }
+
+  void _wsLog(String message) {
+    debugPrint(
+      '[WORKSPACE_SYNC][FINDER] scope=${widget.scope.name} club=${widget.clubId} '
+      'user=${widget.currentUserId} owner=$_personalUserId '
+      'folder=$_folderKey pending=${_pendingSyncIds.length} $message',
+    );
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _serverStorage = WorkspaceServerStorage(
+        clubId: widget.clubId, userId: widget.currentUserId);
+
+    if (_isPersonal) {
+      final module = (widget.initialModuleKey ?? '').trim();
+      final folderId = widget.initialFolderId ?? 0;
+      if (module.isNotEmpty && _personalModuleFor(module) != null) {
+        _folderKey =
+            folderId > 0 ? _personalFolderKey(module, folderId) : module;
+        if (folderId > 0) {
+          _personalFolderMeta[_folderKey] = <String, dynamic>{
+            'id': folderId,
+            'name': (widget.initialFolderTitle ?? '').trim().isEmpty
+                ? 'Выбранная папка'
+                : widget.initialFolderTitle!.trim(),
+            'category': module,
+            'parent_id': null,
+          };
+        }
+      }
+      _wsLog('INIT personal owner=$_personalUserId');
+      // Lifecycle-safe bootstrap: Personal Workspace can be mounted while the
+      // profile/window tree itself is rebuilding. Do not allow async loaders
+      // that call setState to start inside that build phase.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _loadWorkspace();
+      });
+      return;
+    }
+
+    _wsLog('INIT api=${_serverStorage.apiUrl}');
+    if (widget.currentUserId <= 0) {
+      _wsLog('WARNING currentUserId <= 0: server access may fail');
+    }
+    WorkspaceSyncSignal.calendarRevision.addListener(_onCalendarChanged);
+    WorkspaceSyncSignal.trackerRevision.addListener(_onTrackerChanged);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _loadWorkspace();
+      _loadSelectedTeamTrainers();
+    });
+  }
+
+  @override
+  void dispose() {
+    if (!_isPersonal) {
+      WorkspaceSyncSignal.calendarRevision.removeListener(_onCalendarChanged);
+      WorkspaceSyncSignal.trackerRevision.removeListener(_onTrackerChanged);
+    }
+    _newFolderNameController.dispose();
+    _newFolderNameFocus.dispose();
+    super.dispose();
+  }
+
+  _PersonalWorkspaceModuleDefinition? _personalModuleFor(String key) {
+    for (final module in _personalWorkspaceModules) {
+      if (module.key == key) return module;
+    }
+    return null;
+  }
+
+  bool _isPersonalFolderKey(String key) => key.startsWith('personal-folder:');
+
+  String _personalFolderKey(String category, int id) =>
+      'personal-folder:$category:$id';
+
+  String? _personalCategoryForKey(String key) {
+    if (_personalModuleFor(key) != null) return key;
+    if (!_isPersonalFolderKey(key)) return null;
+    final parts = key.split(':');
+    if (parts.length < 3) return null;
+    return parts[1];
+  }
+
+  int _personalFolderIdForKey(String key) {
+    if (!_isPersonalFolderKey(key)) return 0;
+    final parts = key.split(':');
+    if (parts.length < 3) return 0;
+    return int.tryParse(parts[2]) ?? 0;
+  }
+
+  bool _personalModuleUnlocked(String code) {
+    final item = _personalModuleByCode[code];
+    if (item == null) return false;
+    final state = '${item['state'] ?? ''}'.trim().toLowerCase();
+    return item['has_access'] == true || state == 'active' || state == 'free';
+  }
+
+  bool _personalModulePending(String code) {
+    final item = _personalModuleByCode[code];
+    if (item == null) return false;
+    final state = '${item['state'] ?? ''}'.trim().toLowerCase();
+    return state == 'pending' ||
+        state == 'requested' ||
+        item['request_status'] == 'pending';
+  }
+
+  bool _personalDefinitionUnlocked(_PersonalWorkspaceModuleDefinition module) {
+    if (module.moduleCodes.isEmpty) return true;
+    if (widget.selectionMode &&
+        (widget.selectionModuleKey ?? '').trim() == module.key) {
+      // The caller has already passed the entitlement gate. A temporary
+      // status request failure must never block Save -> Workspace OS.
+      return true;
+    }
+    return module.moduleCodes.any(_personalModuleUnlocked);
+  }
+
+  bool _personalDefinitionPending(_PersonalWorkspaceModuleDefinition module) {
+    if (_personalDefinitionUnlocked(module)) return false;
+    return module.moduleCodes.any(_personalModulePending);
+  }
+
+  String _personalModuleTitle(String code) {
+    final item = _personalModuleByCode[code];
+    final title = '${item?['title'] ?? item?['name'] ?? ''}'.trim();
+    if (title.isNotEmpty) return title;
+    const fallback = <String, String>{
+      'tactics_2d': 'Редактор схем 2D',
+      'tactics_3d': 'Редактор схем 3D',
+      'training_plans': 'Планы-конспекты',
+      'training_management': 'Личные тренировки',
+      'matches': 'Матчи',
+      'testing': 'Тестирование',
+      'player_analytics': 'Аналитика игрока',
+      'video_center': 'Видеоцентр',
+      'video_analysis': 'Видеоанализ PRO',
+      'video_ai': 'AI Видео',
+      'tracker': 'Tracker / Replay',
+      'live_analytics': 'Live Analytics',
+      'ai_assistant': 'AI ассистент',
+    };
+    return fallback[code] ?? code;
+  }
+
+  int _personalModulePrice(String code) {
+    final item = _personalModuleByCode[code];
+    final raw = item?['price_monthly_byn'] ?? item?['price_byn'];
+    if (raw is num) return raw.round();
+    final parsed = int.tryParse('${raw ?? ''}');
+    if (parsed != null) return parsed;
+    const fallback = <String, int>{
+      'tactics_2d': 11,
+      'tactics_3d': 18,
+      'training_plans': 11,
+      'training_management': 15,
+      'matches': 15,
+      'testing': 15,
+      'player_analytics': 11,
+      'video_center': 15,
+      'video_analysis': 33,
+      'video_ai': 54,
+      'tracker': 29,
+      'live_analytics': 36,
+      'ai_assistant': 18,
+    };
+    return fallback[code] ?? 0;
+  }
+
+  Future<void> _loadPersonalEntitlements() async {
+    if (!_isPersonal || _personalUserId <= 0) return;
+    if (mounted) setState(() => _personalModulesLoading = true);
+    try {
+      final result =
+          await PersonalModuleService.status(userId: _personalUserId);
+      _personalModuleByCode.clear();
+      if (result['success'] == true) {
+        for (final item in PersonalModuleService.modules(result)) {
+          final code = '${item['module_code'] ?? ''}'.trim();
+          if (code.isNotEmpty) _personalModuleByCode[code] = item;
+        }
+      }
+    } finally {
+      if (mounted) setState(() => _personalModulesLoading = false);
+    }
+  }
+
+  Future<void> _showPersonalModuleAccess(
+    _PersonalWorkspaceModuleDefinition module,
+  ) async {
+    if (_personalDefinitionPending(module)) {
+      _showSnack('Заявка на модуль уже отправлена.');
+      return;
+    }
+    final locked = module.moduleCodes
+        .where((code) => !_personalModuleUnlocked(code))
+        .toList(growable: false);
+    if (locked.isEmpty) return;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.white,
+      barrierColor: Colors.black.withOpacity(.20),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 18),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.lock_outline_rounded, size: 19),
+                  const SizedBox(width: 9),
+                  Expanded(
+                    child: Text(
+                      module.title,
+                      style: AppTypography.itemTitle(color: _text),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 7),
+              Text(
+                locked.length == 1
+                    ? 'Подключите модуль, чтобы открыть этот раздел личной Sportoteka OS.'
+                    : 'Выберите модуль, который хотите подключить.',
+                style: AppTypography.secondary(color: _muted),
+              ),
+              const SizedBox(height: 12),
+              for (final code in locked)
+                Container(
+                  decoration: const BoxDecoration(
+                    border: Border(bottom: BorderSide(color: _line)),
+                  ),
+                  child: ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(
+                      _personalModuleTitle(code),
+                      style: AppTypography.menuTitle(color: _text),
+                    ),
+                    subtitle: Text(
+                      _personalModulePrice(code) > 0
+                          ? '${_personalModulePrice(code)} BYN / мес.'
+                          : 'По заявке',
+                      style: AppTypography.caption(color: _muted),
+                    ),
+                    trailing: OutlinedButton(
+                      onPressed: () async {
+                        Navigator.of(sheetContext).pop();
+                        final result = await PersonalModuleService.request(
+                          userId: _personalUserId,
+                          moduleCode: code,
+                          source: 'unified_workspace_os',
+                        );
+                        if (!mounted) return;
+                        if (result['success'] == true) {
+                          _showSnack(
+                              'Заявка отправлена: ${_personalModuleTitle(code)}');
+                          await _loadPersonalEntitlements();
+                        } else {
+                          _showSnack(
+                              '${result['message'] ?? 'Не удалось отправить заявку'}');
+                        }
+                      },
+                      child: const Text('Подключить'),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  WorkspaceFinderNode _personalNodeFromMap(
+    Map<String, dynamic> raw,
+    String category,
+    String parentKey,
+  ) {
+    final id = raw['id'] is num
+        ? (raw['id'] as num).toInt()
+        : int.tryParse('${raw['id'] ?? ''}') ?? 0;
+    final kindRaw = '${raw['kind'] ?? ''}'.trim().toLowerCase();
+    final name = '${raw['name'] ?? 'Объект'}'.trim();
+    final isFolder = kindRaw == 'folder';
+    final isDocument = kindRaw == 'document';
+    final mime = '${raw['mime_type'] ?? ''}'.trim();
+    final bytes = raw['size_bytes'] is num
+        ? (raw['size_bytes'] as num).toInt()
+        : int.tryParse('${raw['size_bytes'] ?? 0}') ?? 0;
+
+    WorkspaceFinderNodeKind kind;
+    if (isFolder) {
+      kind = WorkspaceFinderNodeKind.folder;
+    } else if (isDocument) {
+      kind = WorkspaceFinderNodeKind.note;
+    } else if (category == 'video' || mime.startsWith('video/')) {
+      kind = WorkspaceFinderNodeKind.video;
+    } else if (category == 'reports') {
+      kind = WorkspaceFinderNodeKind.report;
+    } else if (category == 'schemes') {
+      kind = WorkspaceFinderNodeKind.document;
+    } else {
+      kind = WorkspaceFinderNodeKind.document;
+    }
+
+    final nodeId =
+        isFolder ? _personalFolderKey(category, id) : 'personal-node:$id';
+    final created = DateTime.tryParse(
+      '${raw['created_at'] ?? ''}'.replaceFirst(' ', 'T'),
+    );
+    final updated = DateTime.tryParse(
+      '${raw['updated_at'] ?? ''}'.replaceFirst(' ', 'T'),
+    );
+    final subtitle = isFolder
+        ? 'Папка'
+        : (isDocument
+            ? 'Документ'
+            : (bytes > 0 ? '${(bytes / 1024).ceil()} КБ' : 'Файл'));
+    final decodedPersonalDocument = isDocument
+        ? PersonalWorkspaceOsService.decodeDocumentContent(raw)
+        : null;
+    final personalDocumentModule = decodedPersonalDocument == null
+        ? ''
+        : '${decodedPersonalDocument['module'] ?? decodedPersonalDocument['object_type'] ?? ''}'
+            .trim();
+    final hasTrainingGraphicDocument = decodedPersonalDocument != null &&
+        (decodedPersonalDocument['doc_json'] is Map ||
+            decodedPersonalDocument['document'] is Map);
+    final isTrainingGraphic = category == 'schemes' &&
+        (personalDocumentModule == 'personal_tactics' ||
+            personalDocumentModule == 'training_graphic' ||
+            hasTrainingGraphicDocument);
+    final trainingGraphicMode = isTrainingGraphic
+        ? '${decodedPersonalDocument?['editor_mode'] ?? decodedPersonalDocument?['mode'] ?? ''}'
+            .trim()
+            .toLowerCase()
+        : '';
+    final trainingGraphicModeLabel = trainingGraphicMode == '3d' ? '3D' : '2D';
+
+    final payload = <String, dynamic>{
+      ...raw,
+      '_workspace_personal_node': true,
+      '_workspace_personal_id': id,
+      '_workspace_personal_category': category,
+      if (isTrainingGraphic) '_workspace_training_graphic': true,
+      if (isTrainingGraphic) 'object_type': 'training_graphic',
+    };
+
+    final node = WorkspaceFinderNode(
+      id: nodeId,
+      title: name.isEmpty ? 'Без названия' : name,
+      subtitle: isTrainingGraphic
+          ? 'Схема $trainingGraphicModeLabel · открыть в редакторе'
+          : subtitle,
+      kind: kind,
+      moduleKey: category,
+      payload: payload,
+      parentId: parentKey,
+      createdAt: created,
+      updatedAt: updated,
+    );
+    if (isFolder) _personalFolderMeta[nodeId] = payload;
+    return node;
+  }
+
+  Future<void> _loadPersonalFolder(String key, {bool force = false}) async {
+    if (!_isPersonal) return;
+    final category = _personalCategoryForKey(key);
+    if (category == null) return;
+    final module = _personalModuleFor(category);
+    if (module == null) return;
+    if (!_personalDefinitionUnlocked(module)) return;
+    if (!force && _personalFolderNodes.containsKey(key)) return;
+
+    final folderId = _personalFolderIdForKey(key);
+    if (mounted) {
+      setState(() {
+        _realFolderLoading.add(key);
+        _personalFolderErrors.remove(key);
+      });
+    }
+    try {
+      final items = await PersonalWorkspaceOsService.list(
+        userId: _personalUserId,
+        category: category,
+        parentId: folderId > 0 ? folderId : null,
+      );
+      final nodes = items
+          .map((row) => _personalNodeFromMap(row, category, key))
+          .toList(growable: false);
+      if (!mounted) return;
+      setState(() {
+        _personalFolderNodes[key] = nodes;
+        _realFolderLoading.remove(key);
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _personalFolderErrors[key] = '$e';
+        _personalFolderNodes[key] = <WorkspaceFinderNode>[];
+        _realFolderLoading.remove(key);
+      });
+    }
+  }
+
+  Future<void> _loadPersonalWorkspace() async {
+    // Same Finder preferences (view mode, recents, favorites), but isolated by user.
+    await _loadLocalWorkspace();
+    await _loadPersonalEntitlements();
+    if (!mounted) return;
+    if (_folderKey != 'home') {
+      final category = _personalCategoryForKey(_folderKey);
+      final module = category == null ? null : _personalModuleFor(category);
+      if (module != null && !_personalDefinitionUnlocked(module)) {
+        setState(() => _folderKey = 'home');
+        return;
+      }
+      await _loadPersonalFolder(_folderKey, force: true);
+    }
+  }
+
+  bool get _canSelectPersonalFolder {
+    if (!_isPersonal || !widget.selectionMode || _folderKey == 'home') {
+      return false;
+    }
+    final required = (widget.selectionModuleKey ?? '').trim();
+    final current = _personalCategoryForKey(_folderKey) ?? '';
+    return required.isEmpty || required == current;
+  }
+
+  void _selectPersonalFolder() {
+    if (!_canSelectPersonalFolder) {
+      final required = (widget.selectionModuleKey ?? '').trim();
+      final title = _personalModuleFor(required)?.title ?? 'нужном разделе';
+      _showSnack('Для этого материала выберите папку в разделе «$title».');
+      return;
+    }
+    final id = _personalFolderIdForKey(_folderKey);
+    final meta = _personalFolderMeta[_folderKey];
+    final metaName = meta == null ? null : meta['name'];
+    final category = _personalCategoryForKey(_folderKey) ?? '';
+    final title = id > 0
+        ? '${metaName ?? widget.initialFolderTitle ?? 'Папка'}'
+        : (_personalModuleFor(category)?.title ?? category);
+    final value = <String, dynamic>{
+      'id': id,
+      'title': title,
+      'category': category,
+    };
+    final callback = widget.onFolderSelected;
+    // Closing a managed window can rebuild the profile and the editor in the
+    // same frame. Defer the hand-off until the current frame is complete.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (callback != null) {
+        callback(value);
+      } else {
+        Navigator.of(context).pop(value);
+      }
+    });
+  }
+
+  void _onCalendarChanged() {
+    final changedTeamId = WorkspaceSyncSignal.lastCalendarTeamId;
+    final selectedTeamId = widget.selectedTeamId ?? 0;
+    if (changedTeamId > 0 &&
+        selectedTeamId > 0 &&
+        changedTeamId != selectedTeamId) {
+      return;
+    }
+
+    _realFolderNodes.remove('trainings');
+    _realFolderNodes.remove('calendar');
+    _realFolderErrors.remove('trainings');
+    _realFolderErrors.remove('calendar');
+
+    if (!mounted) return;
+    if (_folderKey == 'trainings' || _folderKey == 'calendar') {
+      _loadRealFolder(_folderKey, force: true);
+    } else {
+      setState(() {});
+    }
+  }
+
+  int _trackerInt(dynamic value) {
+    if (value is num) return value.toInt();
+    return int.tryParse('${value ?? ''}'.trim()) ?? 0;
+  }
+
+  bool _trackerBool(dynamic value) {
+    if (value is bool) return value;
+    final raw = '${value ?? ''}'.trim().toLowerCase();
+    return raw == '1' || raw == 'true' || raw == 'yes';
+  }
+
+  DateTime? _trackerDateFromNode(WorkspaceFinderNode node) {
+    if (node.updatedAt != null || node.createdAt != null) {
+      return node.updatedAt ?? node.createdAt;
+    }
+    final raw = node.payload ?? const <String, dynamic>{};
+    for (final key in const <String>[
+      'created_at',
+      'start_at',
+      'started_at',
+      'finished_at',
+      'date',
+      'session_date',
+    ]) {
+      final text = '${raw[key] ?? ''}'.trim();
+      if (text.isEmpty) continue;
+      final parsed = DateTime.tryParse(text.replaceFirst(' ', 'T'));
+      if (parsed != null) return parsed;
+    }
+    return null;
+  }
+
+  int _trackerSessionIdFromNode(WorkspaceFinderNode node) {
+    final raw = node.payload ?? const <String, dynamic>{};
+    for (final key in const <String>[
+      'tracker_session_id',
+      'session_id',
+      'id'
+    ]) {
+      final id = _trackerInt(raw[key]);
+      if (id > 0) return id;
+    }
+    final identity = resolveWorkspaceEntityIdentity(node);
+    if (identity != null && identity.type == 'tracker') {
+      return int.tryParse(identity.id) ?? 0;
+    }
+    return 0;
+  }
+
+  bool _trackerNodeIsPersonal(WorkspaceFinderNode node) {
+    final raw = node.payload ?? const <String, dynamic>{};
+    if (_trackerBool(raw['personal_session']) ||
+        _trackerBool(raw['is_personal'])) {
+      return true;
+    }
+    final kind =
+        '${raw['session_kind'] ?? raw['kind'] ?? ''}'.trim().toLowerCase();
+    if (kind.contains('personal') ||
+        kind.contains('individual') ||
+        kind.contains('лич')) {
+      return true;
+    }
+    return node.title.toLowerCase().contains('личная трениров');
+  }
+
+  String _trackerServerGroupKey(WorkspaceFinderNode node) {
+    final raw = node.payload ?? const <String, dynamic>{};
+    for (final key in const <String>[
+      'team_session_id',
+      'teamSessionId',
+      'session_group_id',
+      'sessionGroupId',
+      'group_session_id',
+      'groupSessionId',
+      'team_training_id',
+      'teamTrainingId',
+      'team_live_group_id',
+      'teamLiveGroupId',
+      'session_batch_id',
+      'sessionBatchId',
+      'training_id',
+      'trainingId',
+      'workout_id',
+      'workoutId',
+      'batch_id',
+      'batchId',
+      'live_batch_id',
+      'liveBatchId',
+      'parent_session_id',
+      'parentSessionId',
+    ]) {
+      final value = '${raw[key] ?? ''}'.trim();
+      if (value.isNotEmpty && value != '0' && value.toLowerCase() != 'null') {
+        return value;
+      }
+    }
+    return '';
+  }
+
+  String _trackerAiGroupKey(WorkspaceFinderNode node) {
+    final raw = node.payload ?? const <String, dynamic>{};
+    final teamId = _trackerInt(raw['team_id']);
+    final personal = _trackerNodeIsPersonal(node);
+    final serverKey = _trackerServerGroupKey(node);
+    if (serverKey.isNotEmpty) {
+      return '$teamId|${personal ? 'personal' : 'team'}|server:$serverKey';
+    }
+    final dt = _trackerDateFromNode(node);
+    final day = dt == null
+        ? '${raw['created_at'] ?? raw['date'] ?? ''}'.trim().split(' ').first
+        : '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
+    var title = node.title.trim().toLowerCase().replaceAll('ё', 'е');
+    if (title.isEmpty || title == 'сессия') title = 'тренировочная сессия';
+    if (personal) {
+      final playerId = _trackerInt(raw['player_id']);
+      final playerName = '${raw['player_name'] ?? raw['athlete_name'] ?? ''}'
+          .trim()
+          .toLowerCase();
+      final playerKey = playerId > 0 ? 'id:$playerId' : 'name:$playerName';
+      return '$teamId|personal|$day|$title|$playerKey';
+    }
+    return '$teamId|team|$day|$title';
+  }
+
+  List<WorkspaceFinderNode> _trackerAiGroupForRoot(WorkspaceFinderNode root) {
+    final all = _realFolderNodes['tracker'] ?? const <WorkspaceFinderNode>[];
+    final key = _trackerAiGroupKey(root);
+    final group = all
+        .where((node) => node.kind == WorkspaceFinderNodeKind.tracker)
+        .where((node) => _trackerAiGroupKey(node) == key)
+        .where((node) => _trackerSessionIdFromNode(node) > 0)
+        .toList(growable: false);
+    return group.isEmpty ? <WorkspaceFinderNode>[root] : group;
+  }
+
+  String _trackerPlayerName(WorkspaceFinderNode node) {
+    final raw = node.payload ?? const <String, dynamic>{};
+    for (final key in const <String>[
+      'player_name',
+      'athlete_name',
+      'full_name',
+      'player_full_name',
+    ]) {
+      final value = '${raw[key] ?? ''}'.trim();
+      if (value.isNotEmpty && value.toLowerCase() != 'игрок') return value;
+    }
+    final playerId = _trackerInt(raw['player_id']);
+    return playerId > 0 ? 'Игрок #$playerId' : 'Игрок';
+  }
+
+  Future<void> _generateTrackerAiForRoot(WorkspaceFinderNode root) async {
+    final sessionId = _trackerSessionIdFromNode(root);
+    if (sessionId <= 0) {
+      _showSnack('Не найден ID Tracker-сессии.');
+      return;
+    }
+    if (widget.currentUserId <= 0) {
+      _showSnack('Не найден ID пользователя для запуска SPORTOTEKA AI.');
+      return;
+    }
+    final folderKey = 'entity:tracker:$sessionId';
+    if (_trackerAiGeneratingFolders.contains(folderKey)) return;
+    final group = _trackerAiGroupForRoot(root);
+    final raw = root.payload ?? const <String, dynamic>{};
+    final teamId = _trackerInt(raw['team_id'] ?? widget.selectedTeamId);
+    if (teamId <= 0) {
+      _showSnack('Не найдена команда Tracker-сессии.');
+      return;
+    }
+    final teamName = '${raw['team_name'] ?? widget.selectedTeamName}'.trim();
+    final personal = _trackerNodeIsPersonal(root);
+    final playerId = personal ? _trackerInt(raw['player_id']) : 0;
+    final ids = group
+        .map(_trackerSessionIdFromNode)
+        .where((id) => id > 0)
+        .toSet()
+        .toList(growable: false)
+      ..sort();
+
+    if (mounted) {
+      setState(() => _trackerAiGeneratingFolders.add(folderKey));
+    }
+    try {
+      final created = await _trackerAiArchive.archiveTraining(
+        clubId: widget.clubId,
+        userId: widget.currentUserId,
+        teamId: teamId,
+        teamName: teamName.isEmpty ? 'Команда #$teamId' : teamName,
+        sessionIds: ids.isEmpty ? <int>[sessionId] : ids,
+        personal: personal,
+        playerId: personal && playerId > 0 ? playerId : null,
+        playerName: personal ? _trackerPlayerName(root) : '',
+        finishedAt: _trackerDateFromNode(root),
+      );
+      _noteBodies[created.documentKey] = created.body;
+      await _loadServerWorkspace();
+      if (!mounted) return;
+      await _loadEntityFolder(folderKey, force: true);
+      if (!mounted) return;
+      _showSnack('Анализ ИИ создан и сохранён в этой Tracker-папке.');
+      WorkspaceFinderNode? aiNode;
+      for (final candidate in _entityFolderAttachments[folderKey] ??
+          const <WorkspaceFinderNode>[]) {
+        if (candidate.id == created.documentKey) {
+          aiNode = candidate;
+          break;
+        }
+      }
+      if (aiNode != null && mounted) {
+        await _openNote(aiNode);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      _showSnack('Не удалось создать Анализ ИИ: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _trackerAiGeneratingFolders.remove(folderKey));
+      }
+    }
+  }
+
+  Future<void> _generateTrackerAiArchiveFromOs() async {
+    if (_trackerAiBatchRunning) return;
+    if (widget.currentUserId <= 0) {
+      _showSnack('Не найден ID пользователя для запуска SPORTOTEKA AI.');
+      return;
+    }
+    await _loadRealFolder('tracker', force: true);
+    if (!mounted) return;
+    final all = (_realFolderNodes['tracker'] ?? const <WorkspaceFinderNode>[])
+        .where((node) => node.kind == WorkspaceFinderNodeKind.tracker)
+        .where((node) => _trackerSessionIdFromNode(node) > 0)
+        .toList(growable: false);
+    final groups = <String, List<WorkspaceFinderNode>>{};
+    for (final node in all) {
+      groups
+          .putIfAbsent(_trackerAiGroupKey(node), () => <WorkspaceFinderNode>[])
+          .add(node);
+    }
+
+    final teamIds = groups.values
+        .map((group) => _trackerInt(
+              group.first.payload?['team_id'] ?? widget.selectedTeamId,
+            ))
+        .where((id) => id > 0)
+        .toSet();
+    final existingByTeam = <int, Set<int>>{};
+    for (final teamId in teamIds) {
+      try {
+        existingByTeam[teamId] =
+            await _trackerAiArchive.existingAnalysisSessionIds(
+          clubId: widget.clubId,
+          userId: widget.currentUserId,
+          teamId: teamId,
+        );
+      } catch (_) {
+        existingByTeam[teamId] = <int>{};
+      }
+    }
+
+    final pending = <List<WorkspaceFinderNode>>[];
+    for (final group in groups.values) {
+      final first = group.first;
+      final raw = first.payload ?? const <String, dynamic>{};
+      final teamId = _trackerInt(raw['team_id'] ?? widget.selectedTeamId);
+      final ids = group
+          .map(_trackerSessionIdFromNode)
+          .where((id) => id > 0)
+          .toList(growable: false);
+      final existing = existingByTeam[teamId] ?? const <int>{};
+      if (!ids.any(existing.contains)) pending.add(group);
+    }
+
+    if (mounted) {
+      setState(() {
+        _trackerAiBatchRunning = true;
+        _trackerAiBatchDone = 0;
+        _trackerAiBatchTotal = pending.length;
+      });
+    }
+    var created = 0;
+    var failed = 0;
+    try {
+      for (final group in pending) {
+        final first = group.first;
+        final raw = first.payload ?? const <String, dynamic>{};
+        final teamId = _trackerInt(raw['team_id'] ?? widget.selectedTeamId);
+        final teamName =
+            '${raw['team_name'] ?? widget.selectedTeamName}'.trim();
+        final personal = _trackerNodeIsPersonal(first);
+        final playerId = personal ? _trackerInt(raw['player_id']) : 0;
+        final ids = group
+            .map(_trackerSessionIdFromNode)
+            .where((id) => id > 0)
+            .toSet()
+            .toList(growable: false)
+          ..sort();
+        try {
+          await _trackerAiArchive.archiveTraining(
+            clubId: widget.clubId,
+            userId: widget.currentUserId,
+            teamId: teamId,
+            teamName: teamName.isEmpty ? 'Команда #$teamId' : teamName,
+            sessionIds: ids,
+            personal: personal,
+            playerId: personal && playerId > 0 ? playerId : null,
+            playerName: personal ? _trackerPlayerName(first) : '',
+            finishedAt: _trackerDateFromNode(first),
+          );
+          created++;
+        } catch (e) {
+          failed++;
+          _wsLog(
+              'TRACKER_AI_ARCHIVE group=${_trackerAiGroupKey(first)} failed=$e');
+        }
+        if (mounted) {
+          setState(() => _trackerAiBatchDone = created + failed);
+        }
+      }
+      await _loadServerWorkspace();
+      if (_folderKey.startsWith('entity:tracker:')) {
+        await _loadEntityFolder(_folderKey, force: true);
+      } else {
+        await _loadRealFolder('tracker', force: true);
+      }
+      if (!mounted) return;
+      _showSnack(
+        pending.isEmpty
+            ? 'Все старые Tracker-тренировки уже имеют Анализ ИИ.'
+            : 'Анализ архива готов: $created${failed > 0 ? ' · ошибок: $failed' : ''}.',
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _trackerAiBatchRunning = false;
+          _trackerAiBatchDone = 0;
+          _trackerAiBatchTotal = 0;
+        });
+      }
+    }
+  }
+
+  Future<void> _onTrackerChanged() async {
+    final changedTeamId = WorkspaceSyncSignal.lastTrackerTeamId;
+    final selectedTeamId = widget.selectedTeamId ?? 0;
+    if (changedTeamId > 0 &&
+        selectedTeamId > 0 &&
+        changedTeamId != selectedTeamId) {
+      return;
+    }
+
+    _realFolderNodes.remove('tracker');
+    _realFolderErrors.remove('tracker');
+    if (!mounted) return;
+
+    if (_folderKey == 'tracker') {
+      await _loadRealFolder('tracker', force: true);
+      return;
+    }
+    if (_folderKey.startsWith('entity:tracker:')) {
+      await _loadServerWorkspace();
+      if (!mounted) return;
+      await _loadEntityFolder(_folderKey, force: true);
+      return;
+    }
+    setState(() {});
+  }
+
+  @override
+  void didUpdateWidget(covariant SportotekaWorkspaceFinderPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final teamChanged = oldWidget.selectedTeamId != widget.selectedTeamId ||
+        oldWidget.selectedTeamName != widget.selectedTeamName;
+    final dataChanged = oldWidget.teams.length != widget.teams.length ||
+        oldWidget.players.length != widget.players.length ||
+        oldWidget.trainers.length != widget.trainers.length;
+
+    // didUpdateWidget runs immediately before build(). Several loaders below
+    // begin with setState(), which used to produce
+    // "setState() or markNeedsBuild() called during build" when a Workspace
+    // window was closed and the profile rebuilt underneath it.
+    if (!teamChanged && !dataChanged) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (teamChanged) {
+        _loadSelectedTeamTrainers();
+      }
+      _realFolderNodes.clear();
+      _realFolderErrors.clear();
+      if (_projectedFolders.contains(_folderKey) ||
+          _isPlanLibraryFolderKey(_folderKey)) {
+        _loadRealFolder(_folderKey, force: true);
+      } else {
+        setState(() {});
+      }
+    });
+  }
+
+  Future<void> _loadRealFolder(String key, {bool force = false}) async {
+    final isPlanFolder = _isPlanLibraryFolderKey(key);
+    if (!_projectedFolders.contains(key) && !isPlanFolder) return;
+    if (!force &&
+        (_realFolderNodes.containsKey(key) || _realFolderLoading.contains(key)))
+      return;
+    if (mounted) {
+      setState(() {
+        _realFolderLoading.add(key);
+        _realFolderErrors.remove(key);
+      });
+    }
+    try {
+      final rows = isPlanFolder
+          ? await _rootDataBridge.loadPlanLibraryFolder(
+              folderId: _planFolderIdFromKey(key),
+            )
+          : await _rootDataBridge.loadFolder(key);
+      if (!mounted) return;
+      setState(() {
+        _realFolderNodes[key] = rows;
+        _realFolderLoading.remove(key);
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _realFolderNodes[key] = const <WorkspaceFinderNode>[];
+        _realFolderLoading.remove(key);
+        _realFolderErrors[key] = '$e';
+      });
+    }
+  }
+
+  Future<void> _loadEntityFolder(String key, {bool force = false}) async {
+    if (!_isEntityFolderKey(key)) return;
+    if (!force &&
+        (_entityFolderAttachments.containsKey(key) ||
+            _entityFolderLoading.contains(key))) {
+      return;
+    }
+    final root = _entityFolderRoots[key];
+    if (root == null) return;
+    final record = Map<String, dynamic>.from(
+      root.payload ?? const <String, dynamic>{},
+    );
+    final identity = WorkspaceEntityIdentity.resolve(
+      clubId: widget.clubId,
+      record: record,
+      sectionHint: _sectionTitleForNode(root),
+      kind: root.kind,
+      fallbackId: root.id,
+    );
+    final entityId = int.tryParse(identity.id) ?? 0;
+    if (!identity.isValid || entityId <= 0) return;
+
+    if (mounted) setState(() => _entityFolderLoading.add(key));
+    try {
+      var rows = <Map<String, dynamic>>[];
+      var linkedDocuments = <Map<String, dynamic>>[];
+      WorkspaceServerSnapshot? trackerSnapshot;
+      try {
+        rows = await _serverStorage.listAttachments(
+          entityType: identity.type,
+          entityId: entityId,
+          sectionKey: 'documents',
+        );
+      } catch (e) {
+        debugPrint(
+            '[WORKSPACE][ENTITY_FOLDER] attachments ${identity.type}:${identity.id} skipped: $e');
+      }
+      try {
+        linkedDocuments = await _serverStorage.listEntityDocuments(
+          entityType: identity.type,
+          entityId: identity.id,
+          sectionKey: 'documents',
+        );
+      } catch (e) {
+        debugPrint(
+            '[WORKSPACE][ENTITY_FOLDER] documents ${identity.type}:${identity.id} skipped: $e');
+      }
+      if (identity.type == 'tracker') {
+        try {
+          trackerSnapshot = await _serverStorage.load();
+        } catch (e) {
+          debugPrint('[WORKSPACE][ENTITY_FOLDER] tracker snapshot skipped: $e');
+        }
+      }
+      final nodes = <WorkspaceFinderNode>[];
+      final linkedDocumentKeys = <String>{};
+      final entityLabel = switch (identity.type) {
+        'match' => 'матча',
+        'tracker' => 'Tracker-сессии',
+        _ => 'тренировки',
+      };
+      for (var i = 0; i < rows.length; i++) {
+        final row = Map<String, dynamic>.from(rows[i]);
+        final attachmentId = int.tryParse(
+              '${row['id'] ?? row['attachment_id'] ?? 0}',
+            ) ??
+            0;
+        final title =
+            '${row['original_name'] ?? row['title'] ?? 'Файл'}'.trim();
+        DateTime? date;
+        for (final dateKey in const <String>['updated_at', 'created_at']) {
+          final raw = '${row[dateKey] ?? ''}'.trim();
+          if (raw.isEmpty) continue;
+          date = DateTime.tryParse(raw.replaceFirst(' ', 'T'));
+          if (date != null) break;
+        }
+        nodes.add(WorkspaceFinderNode(
+          id: 'entity-attachment:${identity.type}:${identity.id}:${attachmentId > 0 ? attachmentId : i}',
+          title: title.isEmpty ? 'Файл' : title,
+          subtitle: 'Файл $entityLabel',
+          kind: WorkspaceFinderNodeKind.document,
+          payload: <String, dynamic>{
+            ...row,
+            '_workspace_uploaded_file': true,
+            '_workspace_entity_attachment': true,
+            '_workspace_attachment_id': attachmentId,
+            '_workspace_entity_type': identity.type,
+            '_workspace_entity_id': identity.id,
+            '_workspace_folder_key': key,
+          },
+          parentId: key,
+          isSystem: true,
+          createdAt: date,
+          updatedAt: date,
+        ));
+      }
+      for (var i = 0; i < linkedDocuments.length; i++) {
+        final row = Map<String, dynamic>.from(linkedDocuments[i]);
+        final documentKey =
+            '${row['document_key'] ?? row['client_uid'] ?? row['documentKey'] ?? ''}'
+                .trim();
+        if (documentKey.isEmpty) continue;
+        linkedDocumentKeys.add(documentKey);
+        DateTime? date;
+        for (final dateKey in const <String>['updated_at', 'created_at']) {
+          final raw = '${row[dateKey] ?? ''}'.trim();
+          if (raw.isEmpty) continue;
+          date = DateTime.tryParse(raw.replaceFirst(' ', 'T'));
+          if (date != null) break;
+        }
+        final title = '${row['title'] ?? row['name'] ?? 'Документ'}'.trim();
+        nodes.add(WorkspaceFinderNode(
+          id: documentKey,
+          title: title.isEmpty ? 'Документ' : title,
+          subtitle: 'Документ Sportoteka OS · $entityLabel',
+          kind: WorkspaceFinderNodeKind.note,
+          payload: <String, dynamic>{
+            ...row,
+            '_workspace_entity_document': true,
+            '_workspace_entity_type': identity.type,
+            '_workspace_entity_id': identity.id,
+            '_workspace_folder_key': key,
+          },
+          parentId: key,
+          isSystem: true,
+          createdAt: date,
+          updatedAt: date,
+        ));
+      }
+      // Backward compatibility for AI analyses created by the first
+      // Tracker integration: those documents were stored in Workspace but
+      // linked to a training entity. For a Tracker folder, recover them by
+      // session_ids so the user sees the existing «Анализ ИИ» immediately.
+      if (identity.type == 'tracker' && trackerSnapshot != null) {
+        final snapshot = trackerSnapshot;
+        for (final stored in snapshot.nodes) {
+          if (linkedDocumentKeys.contains(stored.id)) continue;
+          final payload = stored.payload ?? const <String, dynamic>{};
+          if (payload['_workspace_ai_training_analysis'] != true) continue;
+          if (!_payloadContainsTrackerSessionId(
+              payload['session_ids'], entityId)) {
+            continue;
+          }
+          nodes.add(stored.copyWith(
+            parentId: key,
+            isSystem: true,
+            payload: <String, dynamic>{
+              ...payload,
+              '_workspace_entity_document': true,
+              '_workspace_entity_type': 'tracker',
+              '_workspace_entity_id': identity.id,
+              '_workspace_folder_key': key,
+              '_workspace_legacy_ai_tracker_link': true,
+            },
+          ));
+          linkedDocumentKeys.add(stored.id);
+        }
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _entityFolderAttachments[key] = nodes;
+        _entityFolderLoading.remove(key);
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _entityFolderAttachments.putIfAbsent(
+          key,
+          () => const <WorkspaceFinderNode>[],
+        );
+        _entityFolderLoading.remove(key);
+      });
+    }
+  }
+
+  Future<void> _openEntityFolder(WorkspaceFinderNode node) async {
+    final key = _entityFolderKeyForNode(node);
+    if (!mounted) return;
+    setState(() {
+      _entityFolderRoots[key] = node;
+      _inlineAiDocumentLibrary = false;
+      _folderKey = key;
+      _search = '';
+      _selectedNodeId = null;
+      _showSidebarOnCompact = false;
+    });
+    await _loadServerWorkspace();
+    await _loadEntityFolder(key, force: true);
+  }
+
+  Future<void> _enterFolder(String key,
+      {bool closeCompactSidebar = false}) async {
+    if (!mounted) return;
+
+    if (_isPersonal) {
+      final category = _personalCategoryForKey(key);
+      final module = category == null ? null : _personalModuleFor(category);
+      if (module != null && !_personalDefinitionUnlocked(module)) {
+        await _showPersonalModuleAccess(module);
+        return;
+      }
+      setState(() {
+        _inlineAiDocumentLibrary = false;
+        _folderKey = key;
+        _search = '';
+        _selectedNodeId = null;
+        if (closeCompactSidebar) _showSidebarOnCompact = false;
+      });
+      await _loadPersonalFolder(key, force: true);
+      return;
+    }
+
+    setState(() {
+      _inlineAiDocumentLibrary = false;
+      _folderKey = key;
+      _search = '';
+      _selectedNodeId = null;
+      if (closeCompactSidebar) _showSidebarOnCompact = false;
+    });
+
+    // Папки документов тренеров могут создаваться из CMR-профиля,
+    // пока Workspace OS уже открыт. Перед входом в «Документы»
+    // подтягиваем server nodes, чтобы новая папка появилась сразу,
+    // без перезапуска приложения.
+    if (key == 'documents' || key.startsWith('local-folder:chat-documents')) {
+      await _loadServerWorkspace();
+    }
+
+    // Calendar/training records are live server data. Always re-read them
+    // when the user enters the folder so a training created moments ago in the
+    // Calendar appears in Sportoteka OS without restarting the application.
+    await _loadRealFolder(
+      key,
+      force: key == 'trainings' ||
+          key == 'calendar' ||
+          key == 'matches' ||
+          key == 'tracker',
+    );
+  }
+
+  Future<void> _loadWorkspace() async {
+    if (_isPersonal) {
+      _wsLog('LOAD_PERSONAL_WORKSPACE begin');
+      await _loadPersonalWorkspace();
+      _wsLog('LOAD_PERSONAL_WORKSPACE end');
+      return;
+    }
+    _wsLog('LOAD_WORKSPACE begin');
+    await _loadLocalWorkspace();
+    _wsLog(
+        'LOAD_WORKSPACE local loaded nodes=${_localChildren.values.fold<int>(0, (sum, list) => sum + list.length)} notes=${_noteBodies.length} pending=${_pendingSyncIds.toList()}');
+    await _loadServerWorkspace();
+    _wsLog(
+        'LOAD_WORKSPACE end serverAvailable=$_serverAvailable pending=${_pendingSyncIds.toList()}');
+  }
+
+  Future<void> _loadServerWorkspace() async {
+    if (_serverLoading) return;
+    _serverLoading = true;
+    _wsLog('SERVER_LOAD begin pending=${_pendingSyncIds.toList()}');
+    try {
+      var snapshot = await _serverStorage.load();
+      _wsLog(
+          'SERVER_LOAD bootstrap OK nodes=${snapshot.nodes.length} docs=${snapshot.noteBodies.length}');
+      final localNodes = <WorkspaceFinderNode>[
+        for (final list in _localChildren.values) ...list,
+      ];
+      final localById = <String, WorkspaceFinderNode>{
+        for (final node in localNodes) node.id: node
+      };
+      final serverById = <String, WorkspaceFinderNode>{
+        for (final node in snapshot.nodes) node.id: node
+      };
+      final retryIds = <String>{..._pendingSyncIds};
+
+      // New local nodes that never reached the server are always retried.
+      for (final node in localNodes) {
+        final wasServerMirror = node.payload?['_workspace_server'] == true;
+        if (!serverById.containsKey(node.id) &&
+            (!wasServerMirror || _pendingSyncIds.contains(node.id))) {
+          retryIds.add(node.id);
+        }
+      }
+
+      // Migration for documents created by older app versions: if the same ID
+      // exists on the server but the local body is newer, do not let bootstrap
+      // overwrite it. Mark it as pending and push it first.
+      for (final node
+          in localNodes.where((n) => n.kind == WorkspaceFinderNodeKind.note)) {
+        final serverNode = serverById[node.id];
+        if (serverNode == null) continue;
+        final localBody = _noteBodies[node.id] ?? '';
+        final serverBody = snapshot.noteBodies[node.id] ?? '';
+        if (localBody == serverBody) continue;
+        final localUpdated = node.updatedAt;
+        final serverUpdated = serverNode.updatedAt;
+        final localLooksNewer = localUpdated != null &&
+            (serverUpdated == null ||
+                !localUpdated.isBefore(
+                    serverUpdated.subtract(const Duration(seconds: 5))));
+        if (localLooksNewer) retryIds.add(node.id);
+      }
+
+      var changedServer = false;
+      for (final id in retryIds.toList()) {
+        final node = localById[id];
+        if (node == null) {
+          _pendingSyncIds.remove(id);
+          continue;
+        }
+        _wsLog(
+            'SERVER_RETRY uid=$id kind=${node.kind.name} bodyLen=${(_noteBodies[id] ?? '').length} existsOnServer=${serverById.containsKey(id)}');
+        try {
+          if (node.kind == WorkspaceFinderNodeKind.note) {
+            await _serverStorage.syncNodeDocument(
+              node: node,
+              body: _noteBodies[id] ?? '',
+              createHint: !serverById.containsKey(id),
+            );
+          } else if (serverById.containsKey(id)) {
+            try {
+              await _serverStorage.updateNode(node);
+            } catch (_) {
+              await _serverStorage.createNode(node);
+            }
+          } else {
+            try {
+              await _serverStorage.createNode(node);
+            } catch (_) {
+              await _serverStorage.updateNode(node);
+            }
+          }
+          _pendingSyncIds.remove(id);
+          changedServer = true;
+          _wsLog('SERVER_RETRY OK uid=$id');
+        } catch (e, st) {
+          _pendingSyncIds.add(id);
+          _wsLog('SERVER_RETRY FAILED uid=$id error=$e');
+          _wsLog(
+              'SERVER_RETRY stack=${st.toString().split('\n').take(4).join(' | ')}');
+        }
+      }
+
+      if (changedServer) snapshot = await _serverStorage.load();
+
+      final grouped = <String, List<WorkspaceFinderNode>>{};
+      for (final node in snapshot.nodes) {
+        (grouped[node.parentId ?? 'home'] ??= <WorkspaceFinderNode>[])
+            .add(node);
+      }
+      final mergedNotes = <String, String>{...snapshot.noteBodies};
+
+      // Pending local edits stay visible and cannot be replaced by an older
+      // server copy. They will be retried on the next refresh/save.
+      for (final id in _pendingSyncIds) {
+        final local = localById[id];
+        if (local == null) continue;
+        for (final list in grouped.values) {
+          list.removeWhere((item) => item.id == id);
+        }
+        (grouped[local.parentId ?? 'home'] ??= <WorkspaceFinderNode>[])
+            .add(local);
+        if (local.kind == WorkspaceFinderNodeKind.note) {
+          mergedNotes[id] = _noteBodies[id] ?? '';
+        }
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _serverAvailable = true;
+        _localChildren
+          ..clear()
+          ..addAll(grouped);
+        _noteBodies
+          ..clear()
+          ..addAll(mergedNotes);
+        if (snapshot.favorites.isNotEmpty) {
+          _favoriteIds
+            ..clear()
+            ..addAll(snapshot.favorites);
+        }
+        if (snapshot.recent.isNotEmpty) {
+          _recentIds
+            ..clear()
+            ..addAll(snapshot.recent);
+        }
+      });
+      await _persistLocalWorkspace();
+    } catch (e, st) {
+      _serverAvailable = false;
+      _wsLog('SERVER_LOAD FAILED error=$e');
+      _wsLog(
+          'SERVER_LOAD stack=${st.toString().split('\n').take(5).join(' | ')}');
+      // Keep the local cache and pending queue intact. No local document is
+      // replaced when the server is unavailable.
+    } finally {
+      _serverLoading = false;
+    }
+  }
+
+  Future<void> _loadLocalWorkspace() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_storageKey);
+      if (raw == null || raw.trim().isEmpty) return;
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return;
+
+      final foldersRaw = decoded['localChildren'];
+      final loadedChildren = <String, List<WorkspaceFinderNode>>{};
+      if (foldersRaw is Map) {
+        for (final entry in foldersRaw.entries) {
+          final value = entry.value;
+          if (value is! List) continue;
+          loadedChildren['${entry.key}'] = value
+              .whereType<Map>()
+              .map((item) => _nodeFromJson(Map<String, dynamic>.from(item)))
+              .whereType<WorkspaceFinderNode>()
+              .toList();
+        }
+      }
+
+      final notesRaw = decoded['noteBodies'];
+      final loadedNotes = <String, String>{};
+      if (notesRaw is Map) {
+        for (final entry in notesRaw.entries) {
+          loadedNotes['${entry.key}'] = '${entry.value ?? ''}';
+        }
+      }
+
+      final favoriteRaw = decoded['favorites'];
+      final recentRaw = decoded['recent'];
+      final pendingRaw = decoded['pendingSyncIds'];
+      final viewRaw = '${decoded['viewMode'] ?? ''}';
+      if (!mounted) return;
+      setState(() {
+        _localChildren
+          ..clear()
+          ..addAll(loadedChildren);
+        _noteBodies
+          ..clear()
+          ..addAll(loadedNotes);
+        _favoriteIds
+          ..clear()
+          ..addAll(favoriteRaw is List
+              ? favoriteRaw.map((e) => '$e')
+              : const <String>[]);
+        _recentIds
+          ..clear()
+          ..addAll(recentRaw is List
+              ? recentRaw.map((e) => '$e')
+              : const <String>[]);
+        _pendingSyncIds
+          ..clear()
+          ..addAll(pendingRaw is List
+              ? pendingRaw.map((e) => '$e')
+              : const <String>[]);
+        _viewMode = WorkspaceFinderViewMode.list;
+      });
+    } catch (_) {
+      // Повреждённое локальное состояние не должно ломать Спортотека OS.
+    }
+  }
+
+  Map<String, dynamic> _nodeToJson(WorkspaceFinderNode node) =>
+      <String, dynamic>{
+        'id': node.id,
+        'title': node.title,
+        'subtitle': node.subtitle,
+        'kind': node.kind.name,
+        'moduleKey': node.moduleKey,
+        'payload': node.payload,
+        'parentId': node.parentId,
+        'isSystem': node.isSystem,
+        'isFavorite': node.isFavorite,
+        'isShortcut': node.isShortcut,
+        'createdAt': node.createdAt?.toIso8601String(),
+        'updatedAt': node.updatedAt?.toIso8601String(),
+      };
+
+  WorkspaceFinderNode? _nodeFromJson(Map<String, dynamic> json) {
+    final id = '${json['id'] ?? ''}'.trim();
+    final title = '${json['title'] ?? ''}'.trim();
+    if (id.isEmpty || title.isEmpty) return null;
+    final kindName = '${json['kind'] ?? ''}';
+    final kind = WorkspaceFinderNodeKind.values.firstWhere(
+      (item) => item.name == kindName,
+      orElse: () => WorkspaceFinderNodeKind.shortcut,
+    );
+    final payloadRaw = json['payload'];
+    return WorkspaceFinderNode(
+      id: id,
+      title: title,
+      subtitle: '${json['subtitle'] ?? ''}',
+      kind: kind,
+      moduleKey: json['moduleKey'] == null ? null : '${json['moduleKey']}',
+      payload: payloadRaw is Map ? Map<String, dynamic>.from(payloadRaw) : null,
+      parentId: json['parentId'] == null ? null : '${json['parentId']}',
+      isSystem: json['isSystem'] == true,
+      isFavorite: json['isFavorite'] == true,
+      isShortcut: json['isShortcut'] == true,
+      createdAt: DateTime.tryParse('${json['createdAt'] ?? ''}'),
+      updatedAt: DateTime.tryParse('${json['updatedAt'] ?? ''}'),
+    );
+  }
+
+  Future<void> _persistLocalWorkspace() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final data = <String, dynamic>{
+        'localChildren': <String, dynamic>{
+          for (final entry in _localChildren.entries)
+            entry.key: entry.value.map(_nodeToJson).toList(),
+        },
+        'noteBodies': _noteBodies,
+        'favorites': _favoriteIds.toList(),
+        'recent': _recentIds,
+        'pendingSyncIds': _pendingSyncIds.toList(),
+        'viewMode': _viewMode.name,
+      };
+      await prefs.setString(_storageKey, jsonEncode(data));
+      if (_serverAvailable) {
+        try {
+          await _serverStorage.saveState(
+              favorites: _favoriteIds, recent: _recentIds);
+        } catch (_) {
+          _serverAvailable = false;
+        }
+      }
+    } catch (_) {
+      // Локальное сохранение не должно блокировать основные данные клуба.
+    }
+  }
+
+  Future<void> _serverCreateNode(WorkspaceFinderNode node) async {
+    try {
+      await _serverStorage.createNode(node);
+      _serverAvailable = true;
+    } catch (_) {
+      _serverAvailable = false;
+    }
+  }
+
+  Future<void> _serverUpdateNode(WorkspaceFinderNode node) async {
+    try {
+      await _serverStorage.updateNode(node);
+      _serverAvailable = true;
+    } catch (_) {
+      _serverAvailable = false;
+    }
+  }
+
+  Future<void> _serverDeleteNode(String id) async {
+    try {
+      await _serverStorage.deleteNode(id);
+      _serverAvailable = true;
+    } catch (_) {
+      _serverAvailable = false;
+    }
+  }
+
+  String _nodeId(String prefix, Map<String, dynamic> payload, int index) {
+    final raw = payload['id'] ??
+        payload['player_id'] ??
+        payload['trainer_id'] ??
+        payload['team_id'] ??
+        payload['user_id'] ??
+        payload['email'] ??
+        payload['name'] ??
+        index;
+    return '$prefix:$raw';
+  }
+
+  String _teamTitle(Map<String, dynamic> team) {
+    return '${team['name'] ?? team['team_name'] ?? team['title'] ?? 'Команда'}'
+        .trim();
+  }
+
+  String _playerTitle(Map<String, dynamic> player) {
+    final last = '${player['last_name'] ?? player['lastname'] ?? ''}'.trim();
+    final first = '${player['first_name'] ?? player['firstname'] ?? ''}'.trim();
+    final full =
+        '${player['full_name'] ?? player['fullName'] ?? player['name'] ?? ''}'
+            .trim();
+    final joined = [last, first].where((e) => e.isNotEmpty).join(' ').trim();
+    return joined.isNotEmpty ? joined : (full.isNotEmpty ? full : 'Игрок');
+  }
+
+  String _trainerTitle(Map<String, dynamic> trainer) {
+    final last = '${trainer['last_name'] ?? trainer['lastname'] ?? ''}'.trim();
+    final first =
+        '${trainer['first_name'] ?? trainer['firstname'] ?? ''}'.trim();
+    final full =
+        '${trainer['full_name'] ?? trainer['fullName'] ?? trainer['name'] ?? ''}'
+            .trim();
+    final joined = [last, first].where((e) => e.isNotEmpty).join(' ').trim();
+    return joined.isNotEmpty ? joined : (full.isNotEmpty ? full : 'Тренер');
+  }
+
+  List<WorkspaceFinderNode> get _rootNodes {
+    if (_isPersonal) {
+      return _personalWorkspaceModules.map((module) {
+        final unlocked = _personalDefinitionUnlocked(module);
+        final pending = _personalDefinitionPending(module);
+        return WorkspaceFinderNode(
+          id: 'module:${module.key}',
+          title: module.title,
+          subtitle: unlocked
+              ? module.subtitle
+              : (pending
+                  ? 'Заявка отправлена'
+                  : 'Требуется подключение модуля'),
+          kind: WorkspaceFinderNodeKind.folder,
+          moduleKey: module.key,
+          payload: <String, dynamic>{
+            '_workspace_personal_module': true,
+            '_workspace_locked': !unlocked,
+            '_workspace_pending': pending,
+          },
+          isSystem: true,
+        );
+      }).toList(growable: false);
+    }
+    return kWorkspaceFinderModules
+        .map(
+          (module) => WorkspaceFinderNode(
+            id: 'module:${module.key}',
+            title: module.title,
+            subtitle: module.subtitle,
+            kind: WorkspaceFinderNodeKind.folder,
+            moduleKey: module.key,
+            isSystem: true,
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  List<WorkspaceFinderNode> _teamNodes() {
+    return List<WorkspaceFinderNode>.generate(widget.teams.length, (index) {
+      final team = widget.teams[index];
+      final title = _teamTitle(team);
+      final stage =
+          '${team['age_group'] ?? team['stage'] ?? team['category'] ?? ''}'
+              .trim();
+      return WorkspaceFinderNode(
+        id: _nodeId('team', team, index),
+        title: title,
+        subtitle: stage.isEmpty ? 'Команда клуба' : stage,
+        kind: WorkspaceFinderNodeKind.team,
+        moduleKey: 'teams',
+        payload: Map<String, dynamic>.from(team),
+        isSystem: true,
+      );
+    });
+  }
+
+  List<WorkspaceFinderNode> _playerNodes() {
+    return List<WorkspaceFinderNode>.generate(widget.players.length, (index) {
+      final player = widget.players[index];
+      final number =
+          '${player['number'] ?? player['shirt_number'] ?? ''}'.trim();
+      final subtitleParts = <String>[
+        if (widget.selectedTeamName.trim().isNotEmpty)
+          widget.selectedTeamName.trim(),
+        if (number.isNotEmpty) '№$number',
+      ];
+      return WorkspaceFinderNode(
+        id: _nodeId('player', player, index),
+        title: _playerTitle(player),
+        subtitle: subtitleParts.isEmpty ? 'Игрок' : subtitleParts.join(' · '),
+        kind: WorkspaceFinderNodeKind.player,
+        moduleKey: 'players',
+        payload: Map<String, dynamic>.from(player),
+        isSystem: true,
+      );
+    });
+  }
+
+  Future<void> _loadSelectedTeamTrainers() async {
+    final teamId = widget.selectedTeamId ?? 0;
+    if (teamId <= 0) {
+      if (!mounted) return;
+      setState(() {
+        _selectedTeamTrainers = const <Map<String, dynamic>>[];
+        _selectedTeamTrainersLoading = false;
+      });
+      return;
+    }
+
+    if (mounted) setState(() => _selectedTeamTrainersLoading = true);
+    List<Map<String, dynamic>> rows = const <Map<String, dynamic>>[];
+
+    List<Map<String, dynamic>> extract(dynamic decoded) {
+      dynamic raw;
+      if (decoded is List) {
+        raw = decoded;
+      } else if (decoded is Map) {
+        for (final key in const <String>[
+          'trainers',
+          'coaches',
+          'users',
+          'items',
+          'data'
+        ]) {
+          if (decoded[key] is List) {
+            raw = decoded[key];
+            break;
+          }
+        }
+      }
+      if (raw is! List) return const <Map<String, dynamic>>[];
+      return raw
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList(growable: false);
+    }
+
+    try {
+      final response = await http
+          .post(
+            Uri.parse('https://sportotekaapp.ru/api/get_team_trainers.php'),
+            headers: const <String, String>{
+              'Content-Type': 'application/json; charset=utf-8'
+            },
+            body: jsonEncode(<String, dynamic>{'team_id': teamId}),
+          )
+          .timeout(const Duration(seconds: 12));
+      rows = extract(jsonDecode(response.body));
+    } catch (_) {}
+
+    if (rows.isEmpty) {
+      try {
+        final response = await http.post(
+          Uri.parse('https://sportotekaapp.ru/api/get_team_trainers.php'),
+          body: <String, String>{'team_id': '$teamId'},
+        ).timeout(const Duration(seconds: 12));
+        rows = extract(jsonDecode(response.body));
+      } catch (_) {}
+    }
+
+    final unique = <String, Map<String, dynamic>>{};
+    for (final trainer in rows) {
+      final id =
+          '${trainer['trainer_id'] ?? trainer['id'] ?? trainer['user_id'] ?? ''}'
+              .trim();
+      final name = _trainerTitle(trainer).trim().toLowerCase();
+      final key = id.isNotEmpty && id != '0' ? 'id:$id' : 'name:$name';
+      if (name.isNotEmpty) unique[key] = trainer;
+    }
+
+    if (!mounted || teamId != (widget.selectedTeamId ?? 0)) return;
+    setState(() {
+      _selectedTeamTrainers = unique.values.toList(growable: false);
+      _selectedTeamTrainersLoading = false;
+    });
+  }
+
+  List<WorkspaceFinderNode> _trainerNodes() {
+    final source = (widget.selectedTeamId ?? 0) > 0
+        ? _selectedTeamTrainers
+        : widget.trainers;
+    return List<WorkspaceFinderNode>.generate(source.length, (index) {
+      final trainer = source[index];
+      final role =
+          '${trainer['role'] ?? trainer['position'] ?? trainer['specialization'] ?? ''}'
+              .trim();
+      return WorkspaceFinderNode(
+        id: _nodeId('trainer', trainer, index),
+        title: _trainerTitle(trainer),
+        subtitle: role.isEmpty ? 'Тренер' : role,
+        kind: WorkspaceFinderNodeKind.trainer,
+        moduleKey: 'trainers',
+        payload: Map<String, dynamic>.from(trainer),
+        isSystem: true,
+      );
+    });
+  }
+
+  WorkspaceFinderModuleDefinition? _moduleFor(String key) {
+    for (final module in kWorkspaceFinderModules) {
+      if (module.key == key) return module;
+    }
+    return null;
+  }
+
+  List<WorkspaceFinderNode> _smartModuleNodes(String key) {
+    WorkspaceFinderNode link(
+      String id,
+      String title,
+      String subtitle,
+      WorkspaceFinderNodeKind kind,
+      String moduleKey,
+    ) =>
+        WorkspaceFinderNode(
+          id: 'smart:$key:$id',
+          title: title,
+          subtitle: subtitle,
+          kind: kind,
+          moduleKey: moduleKey,
+          isSystem: true,
+        );
+
+    switch (key) {
+      case 'trainings':
+        return <WorkspaceFinderNode>[
+          link('calendar', 'Календарь тренировок', 'Расписание и события',
+              WorkspaceFinderNodeKind.calendar, 'calendar'),
+          link(
+              'plans',
+              'Планы-конспекты',
+              'Упражнения и методические материалы',
+              WorkspaceFinderNodeKind.plan,
+              'plans'),
+          link('attendance', 'Посещаемость', 'Журнал тренировок',
+              WorkspaceFinderNodeKind.training, 'attendance'),
+          link('journal', 'Цифровой журнал', 'Учебно-тренировочный процесс',
+              WorkspaceFinderNodeKind.document, 'journal'),
+          link('tracker', 'Tracker Live', 'GPS и нагрузка на тренировке',
+              WorkspaceFinderNodeKind.tracker, 'tracker'),
+        ];
+      case 'video':
+        return <WorkspaceFinderNode>[
+          link('analysis', 'Видеоанализ матчей', 'Разбор, эпизоды и AI',
+              WorkspaceFinderNodeKind.video, 'videoAnalysis'),
+          link('lessons', 'Видеоуроки', 'Методическая видеотека клуба',
+              WorkspaceFinderNodeKind.video, 'videoLessons'),
+        ];
+      case 'reports':
+        return <WorkspaceFinderNode>[
+          link('tracker', 'Tracker отчёты', 'GPS, ЧСС, нагрузка и карты',
+              WorkspaceFinderNodeKind.report, 'tracker'),
+          link('testing', 'Отчёты тестирования', 'Динамика и результаты тестов',
+              WorkspaceFinderNodeKind.testing, 'testing'),
+          link('attendance', 'Посещаемость', 'Журнал и выгрузка',
+              WorkspaceFinderNodeKind.report, 'attendance'),
+        ];
+      case 'journal':
+        return <WorkspaceFinderNode>[
+          link(
+              'open',
+              'Учебно-тренировочный журнал',
+              'Обложка, план, расписание, посещаемость и сведения об игроках',
+              WorkspaceFinderNodeKind.document,
+              'journal'),
+          link(
+              'attendance',
+              'Посещаемость',
+              'Быстрый переход к отметкам занятий',
+              WorkspaceFinderNodeKind.training,
+              'attendance'),
+        ];
+      case 'documents':
+        return <WorkspaceFinderNode>[
+          link(
+              'journal',
+              'Журнал команды',
+              'Официальная форма и цифровые разделы',
+              WorkspaceFinderNodeKind.document,
+              'journal'),
+          link('players', 'Документы игроков', 'Карточки и личные документы',
+              WorkspaceFinderNodeKind.document, 'players'),
+          link('trainers', 'Документы тренеров', 'Профили и HR-документы',
+              WorkspaceFinderNodeKind.document, 'trainers'),
+          link('medical', 'Медицинские документы', 'Медкарта игроков',
+              WorkspaceFinderNodeKind.medical, 'medical'),
+        ];
+      default:
+        return const <WorkspaceFinderNode>[];
+    }
+  }
+
+  List<WorkspaceFinderNode> _personalNodesForCurrentFolder() {
+    List<WorkspaceFinderNode> nodes;
+    if (_folderKey == 'home') {
+      nodes = List<WorkspaceFinderNode>.of(_rootNodes, growable: true);
+    } else if (_folderKey == 'recent') {
+      final all = <String, WorkspaceFinderNode>{};
+      for (final list in _personalFolderNodes.values) {
+        for (final node in list) {
+          all[node.id] = node;
+        }
+      }
+      nodes = _recentIds
+          .map((id) => all[id])
+          .whereType<WorkspaceFinderNode>()
+          .toList(growable: true);
+    } else if (_folderKey == 'favorites') {
+      nodes = <WorkspaceFinderNode>[];
+      for (final list in _personalFolderNodes.values) {
+        nodes.addAll(list.where((node) => _favoriteIds.contains(node.id)));
+      }
+    } else {
+      nodes = List<WorkspaceFinderNode>.of(
+        _personalFolderNodes[_folderKey] ?? const <WorkspaceFinderNode>[],
+        growable: true,
+      );
+    }
+
+    final query = _search.trim().toLowerCase();
+    if (query.isNotEmpty) {
+      nodes = nodes
+          .where((node) =>
+              node.title.toLowerCase().contains(query) ||
+              node.subtitle.toLowerCase().contains(query))
+          .toList(growable: true);
+    }
+    if (_folderKey != 'home') {
+      nodes.sort((a, b) {
+        if (a.isFolder != b.isFolder) return a.isFolder ? -1 : 1;
+        final ad = a.updatedAt ?? a.createdAt;
+        final bd = b.updatedAt ?? b.createdAt;
+        if (ad != null && bd != null) {
+          final cmp = bd.compareTo(ad);
+          if (cmp != 0) return cmp;
+        }
+        return a.title.toLowerCase().compareTo(b.title.toLowerCase());
+      });
+    }
+    return nodes;
+  }
+
+  List<WorkspaceFinderNode> _nodesForCurrentFolder() {
+    if (_isPersonal) return _personalNodesForCurrentFolder();
+    List<WorkspaceFinderNode> nodes;
+    switch (_folderKey) {
+      case 'home':
+        nodes = _rootNodes;
+        break;
+      case 'teams':
+        nodes = _teamNodes();
+        break;
+      case 'players':
+        nodes = _playerNodes();
+        break;
+      case 'trainers':
+        nodes = _trainerNodes();
+        break;
+      case 'favorites':
+        nodes = _allKnownNodes()
+            .where((node) => _favoriteIds.contains(node.id))
+            .toList();
+        break;
+      case 'recent':
+        final all = <String, WorkspaceFinderNode>{
+          for (final node in _allKnownNodes()) node.id: node,
+        };
+        nodes = _recentIds
+            .map((id) => all[id])
+            .whereType<WorkspaceFinderNode>()
+            .toList();
+        break;
+      default:
+        if (_isEntityFolderKey(_folderKey)) {
+          final root = _entityFolderRoots[_folderKey];
+          final entityAttachments = _entityFolderAttachments[_folderKey] ??
+              const <WorkspaceFinderNode>[];
+          final trackerAiExists = root?.kind ==
+                  WorkspaceFinderNodeKind.tracker &&
+              entityAttachments.any((node) =>
+                  node.payload?['_workspace_ai_training_analysis'] == true ||
+                  node.title.trim().toLowerCase().startsWith('анализ ии'));
+          final trackerAiBusy =
+              _trackerAiGeneratingFolders.contains(_folderKey);
+          nodes = <WorkspaceFinderNode>[
+            if (root != null)
+              WorkspaceFinderNode(
+                id: 'entity-open:${root.id}',
+                title: root.kind == WorkspaceFinderNodeKind.match
+                    ? 'Карточка матча'
+                    : (root.kind == WorkspaceFinderNodeKind.calendar
+                        ? 'Карточка события'
+                        : (root.kind == WorkspaceFinderNodeKind.tracker
+                            ? 'Данные Tracker-сессии'
+                            : 'Карточка тренировки')),
+                subtitle: root.subtitle,
+                kind: root.kind,
+                moduleKey: root.moduleKey,
+                payload: <String, dynamic>{
+                  ...?root.payload,
+                  '_workspace_entity_folder': false,
+                  '_workspace_real_record': true,
+                },
+                isSystem: true,
+                createdAt: root.createdAt,
+                updatedAt: root.updatedAt,
+              ),
+            if (root != null &&
+                root.kind == WorkspaceFinderNodeKind.tracker &&
+                !trackerAiExists)
+              WorkspaceFinderNode(
+                id: 'smart:tracker-ai:${_trackerSessionIdFromNode(root)}',
+                title: 'Анализ ИИ',
+                subtitle: trackerAiBusy
+                    ? 'SPORTOTEKA AI анализирует тренировку…'
+                    : 'Не создан · нажмите, чтобы сформировать анализ этой тренировки',
+                kind: WorkspaceFinderNodeKind.note,
+                payload: <String, dynamic>{
+                  ...?root.payload,
+                  '_workspace_tracker_ai_generate_action': true,
+                },
+                parentId: _folderKey,
+                isSystem: true,
+                createdAt: root.createdAt,
+                updatedAt: root.updatedAt,
+              ),
+            ...entityAttachments,
+          ];
+        } else if (_isPlanLibraryFolderKey(_folderKey)) {
+          nodes = <WorkspaceFinderNode>[
+            ...?_realFolderNodes[_folderKey],
+          ];
+        } else if (_projectedFolders.contains(_folderKey)) {
+          nodes = <WorkspaceFinderNode>[
+            if (_folderKey == 'documents')
+              WorkspaceFinderNode(
+                id: 'smart:documents:ai-library',
+                title: 'Методические материалы',
+                subtitle: 'PDF, Word, Excel, презентации · документы клуба',
+                kind: WorkspaceFinderNodeKind.document,
+                payload: const <String, dynamic>{
+                  '_workspace_ai_document_library': true,
+                },
+                isSystem: true,
+              ),
+            if (_folderKey == 'tracker')
+              WorkspaceFinderNode(
+                id: 'smart:tracker:ai-archive',
+                title: _trackerAiBatchRunning
+                    ? 'Анализ ИИ для архива · $_trackerAiBatchDone/$_trackerAiBatchTotal'
+                    : 'Анализ ИИ для архива',
+                subtitle: _trackerAiBatchRunning
+                    ? 'SPORTOTEKA AI обрабатывает старые Tracker-тренировки…'
+                    : 'Создать недостающие анализы для старых завершённых тренировок',
+                kind: WorkspaceFinderNodeKind.report,
+                payload: const <String, dynamic>{
+                  '_workspace_tracker_ai_archive_action': true,
+                },
+                isSystem: true,
+              ),
+            ...?_realFolderNodes[_folderKey],
+          ];
+        } else {
+          nodes = <WorkspaceFinderNode>[
+            ..._smartModuleNodes(_folderKey),
+            ...?_localChildren[_folderKey],
+          ];
+        }
+        break;
+    }
+
+    // Some system collections (notably _rootNodes) are intentionally
+    // created as fixed-length lists. Below we merge user/server documents
+    // and later sort the collection, so always continue with a mutable copy.
+    // Without this, opening Home after creating a document throws:
+    // Unsupported operation: Cannot add to a fixed-length list.
+    nodes = List<WorkspaceFinderNode>.of(nodes, growable: true);
+
+    // Local/server Workspace documents are valid children of EVERY real
+    // Sportoteka OS section. Previously we did not merge them into home,
+    // teams, players, trainers or projected modules (Plans, Calendar,
+    // Documents, etc.), so a freshly created document was saved but then
+    // disappeared from the folder view.
+    final local = _localChildren[_folderKey];
+    if (local != null && _folderKey != 'favorites' && _folderKey != 'recent') {
+      final known = nodes.map((e) => e.id).toSet();
+      nodes.addAll(
+        local.where((node) => !known.contains(node.id)),
+      );
+    }
+
+    if (_folderKey != 'home' &&
+        _folderKey != 'teams' &&
+        _folderKey != 'players' &&
+        _folderKey != 'trainers' &&
+        _folderKey != 'favorites' &&
+        _folderKey != 'recent' &&
+        !_folderKey.startsWith('local-folder:') &&
+        !_realFolderLoading.contains(_folderKey)) {
+      final module = _moduleFor(_folderKey);
+      if (module != null && _smartModuleNodes(_folderKey).isEmpty) {
+        nodes = <WorkspaceFinderNode>[
+          WorkspaceFinderNode(
+            id: 'open-module:${module.key}',
+            title: 'Открыть ${module.title}',
+            subtitle: module.subtitle,
+            kind: module.kind,
+            moduleKey: module.key,
+            isSystem: true,
+          ),
+          ...nodes,
+        ];
+      }
+    }
+
+    final query = _search.trim().toLowerCase();
+    if (query.isNotEmpty) {
+      nodes = nodes
+          .where((node) =>
+              node.title.toLowerCase().contains(query) ||
+              node.subtitle.toLowerCase().contains(query))
+          .toList();
+    }
+
+    if (_isEntityFolderKey(_folderKey)) {
+      final attachmentIds = <int>{};
+      for (final node
+          in _localChildren[_folderKey] ?? const <WorkspaceFinderNode>[]) {
+        final id = int.tryParse(
+              '${node.payload?['_workspace_attachment_id'] ?? 0}',
+            ) ??
+            0;
+        if (id > 0) attachmentIds.add(id);
+      }
+      if (attachmentIds.isNotEmpty) {
+        nodes.removeWhere((node) {
+          if (node.payload?['_workspace_entity_attachment'] != true)
+            return false;
+          final id = int.tryParse(
+                '${node.payload?['_workspace_attachment_id'] ?? 0}',
+              ) ??
+              0;
+          return id > 0 && attachmentIds.contains(id);
+        });
+      }
+    }
+
+    if (_supportsDateTools && _dateFilter != 'all') {
+      nodes = nodes.where(_matchesDateFilter).toList(growable: true);
+    }
+
+    // Real module collections are already returned by the backend bridge in
+    // meaningful chronological order. When the Finder-style date tools are
+    // active we keep a deterministic date order while preserving no-date
+    // navigation rows at the top.
+    if (_supportsDateTools) {
+      nodes.sort((a, b) {
+        final ad = _nodeDate(a);
+        final bd = _nodeDate(b);
+        if (ad == null && bd == null) {
+          if (a.isFolder != b.isFolder) return a.isFolder ? -1 : 1;
+          return a.title.toLowerCase().compareTo(b.title.toLowerCase());
+        }
+        if (ad == null) return -1;
+        if (bd == null) return 1;
+        return _dateNewestFirst ? bd.compareTo(ad) : ad.compareTo(bd);
+      });
+    } else if (!_projectedFolders.contains(_folderKey) &&
+        !_isPlanLibraryFolderKey(_folderKey)) {
+      nodes.sort((a, b) {
+        if (a.isFolder != b.isFolder) return a.isFolder ? -1 : 1;
+        return a.title.toLowerCase().compareTo(b.title.toLowerCase());
+      });
+    }
+    return nodes;
+  }
+
+  List<WorkspaceFinderNode> _allKnownNodes() {
+    if (_isPersonal) {
+      return <WorkspaceFinderNode>[
+        ..._rootNodes,
+        for (final list in _personalFolderNodes.values) ...list,
+      ];
+    }
+    return <WorkspaceFinderNode>[
+      ..._rootNodes,
+      ..._teamNodes(),
+      ..._playerNodes(),
+      ..._trainerNodes(),
+      for (final list in _realFolderNodes.values) ...list,
+      for (final list in _localChildren.values) ...list,
+    ];
+  }
+
+  Future<void> _refreshCurrentFolder() async {
+    if (_isPersonal) {
+      await _loadPersonalEntitlements();
+      if (_folderKey != 'home') {
+        await _loadPersonalFolder(_folderKey, force: true);
+      } else if (mounted) {
+        setState(() {});
+      }
+      return;
+    }
+
+    await widget.onRefresh?.call();
+
+    // Refresh должен обновлять не только реальные модули, но и серверное
+    // дерево Workspace. Иначе автоматически созданная папка тренера могла
+    // существовать на сервере, но не появляться в уже открытом Workspace OS.
+    await _loadServerWorkspace();
+
+    if (_isEntityFolderKey(_folderKey)) {
+      await _loadEntityFolder(_folderKey, force: true);
+    } else if (_projectedFolders.contains(_folderKey) ||
+        _isPlanLibraryFolderKey(_folderKey)) {
+      await _loadRealFolder(_folderKey, force: true);
+    } else if (mounted) {
+      setState(() {});
+    }
+  }
+
+  void _rememberRecent(WorkspaceFinderNode node) {
+    _recentIds.remove(node.id);
+    _recentIds.insert(0, node.id);
+    if (_recentIds.length > 24) _recentIds.removeLast();
+    _persistLocalWorkspace();
+  }
+
+  Rect _nextWindowRect() {
+    final size = MediaQuery.sizeOf(context);
+    final offset = (_windowCascade % 7) * 22.0;
+    _windowCascade += 1;
+
+    final width = math.min(
+      920.0,
+      math.max(620.0, size.width * .82),
+    );
+    final height = math.min(
+      690.0,
+      math.max(460.0, size.height * .80),
+    );
+
+    final maxLeft = math.max(14.0, size.width - width - 14.0);
+    final maxTop = math.max(14.0, size.height - height - 14.0);
+    final centeredLeft = (size.width - width) / 2;
+    final centeredTop = (size.height - height) / 2;
+
+    return Rect.fromLTWH(
+      (centeredLeft + offset).clamp(14.0, maxLeft).toDouble(),
+      (centeredTop + offset).clamp(14.0, maxTop).toDouble(),
+      width,
+      height,
+    );
+  }
+
+  void _closeWindow(String id) {
+    if (!mounted) return;
+    setState(() {
+      _windows.removeWhere((entry) => entry.id == id);
+      _activeWindowId = _windows.isEmpty ? null : _windows.last.id;
+    });
+  }
+
+  void _activateWindow(String id) {
+    final index = _windows.indexWhere((entry) => entry.id == id);
+    if (index < 0) return;
+    setState(() {
+      final entry = _windows.removeAt(index);
+      _windows.add(entry.copyWith(minimized: false));
+      _activeWindowId = id;
+    });
+  }
+
+  void _moveWindow(String id, Offset delta) {
+    final index = _windows.indexWhere((entry) => entry.id == id);
+    if (index < 0) return;
+
+    final entry = _windows[index];
+    final size = MediaQuery.sizeOf(context);
+    const gap = 10.0;
+
+    final shifted = entry.rect.shift(delta);
+    final maxLeft = math.max(gap, size.width - entry.rect.width - gap);
+    final maxTop = math.max(gap, size.height - entry.rect.height - gap);
+
+    final moved = Rect.fromLTWH(
+      shifted.left.clamp(gap, maxLeft).toDouble(),
+      shifted.top.clamp(gap, maxTop).toDouble(),
+      entry.rect.width,
+      entry.rect.height,
+    );
+
+    setState(() {
+      _windows[index] = entry.copyWith(
+        rect: moved,
+        snap: WorkspaceWindowSnap.none,
+        minimized: false,
+      );
+      _activeWindowId = id;
+    });
+  }
+
+  void _resizeWindow(String id, Offset delta) {
+    final index = _windows.indexWhere((entry) => entry.id == id);
+    if (index < 0) return;
+    final entry = _windows[index];
+    final nextWidth = math.max(520.0, entry.rect.width + delta.dx);
+    final nextHeight = math.max(420.0, entry.rect.height + delta.dy);
+    setState(() => _windows[index] = entry.copyWith(
+        rect: Rect.fromLTWH(
+            entry.rect.left, entry.rect.top, nextWidth, nextHeight),
+        snap: WorkspaceWindowSnap.none));
+  }
+
+  void _minimizeWindow(String id) {
+    final index = _windows.indexWhere((entry) => entry.id == id);
+    if (index < 0) return;
+    setState(() {
+      _windows[index] = _windows[index].copyWith(minimized: true);
+      final visible = _windows
+          .where((entry) => !entry.minimized && entry.id != id)
+          .toList();
+      _activeWindowId = visible.isEmpty ? null : visible.last.id;
+    });
+  }
+
+  void _restoreWindow(String id) {
+    final index = _windows.indexWhere((entry) => entry.id == id);
+    if (index < 0) return;
+    setState(() {
+      final entry = _windows.removeAt(index).copyWith(minimized: false);
+      _windows.add(entry);
+      _activeWindowId = id;
+    });
+  }
+
+  void _snapWindow(String id, WorkspaceWindowSnap snap) {
+    final index = _windows.indexWhere((entry) => entry.id == id);
+    if (index < 0) return;
+    setState(() {
+      _windows[index] = _windows[index].copyWith(snap: snap, minimized: false);
+      _activeWindowId = id;
+    });
+  }
+
+  Future<void> _openDesktopWindow({
+    required String id,
+    required String title,
+    required SportotekaWorkspaceIconKind iconKind,
+    String subtitle = '',
+    required Widget Function(VoidCallback closeWindow) builder,
+  }) async {
+    final existing = _windows.indexWhere((entry) => entry.id == id);
+    if (existing >= 0) {
+      _restoreWindow(id);
+      return;
+    }
+    final close = () => _closeWindow(id);
+    final child = builder(close);
+    setState(() {
+      _windows.add(WorkspaceWindowEntry(
+        id: id,
+        title: title,
+        subtitle: subtitle,
+        iconKind: iconKind,
+        child: child,
+        rect: _nextWindowRect(),
+      ));
+      _activeWindowId = id;
+    });
+  }
+
+  Future<void> _openPersonalDocument(WorkspaceFinderNode node) async {
+    final payload = Map<String, dynamic>.from(
+      node.payload ?? const <String, dynamic>{},
+    );
+    final id = int.tryParse(
+            '${payload['_workspace_personal_id'] ?? payload['id'] ?? 0}') ??
+        0;
+    final category =
+        '${payload['_workspace_personal_category'] ?? payload['category'] ?? _personalCategoryForKey(_folderKey) ?? 'documents'}'
+            .trim();
+    final parentId = payload['parent_id'] is num
+        ? (payload['parent_id'] as num).toInt()
+        : int.tryParse('${payload['parent_id'] ?? 0}') ?? 0;
+    final initialBody = '${payload['content'] ?? ''}';
+
+    Future<void> save(String title, String body) async {
+      final result = await PersonalWorkspaceOsService.saveDocument(
+        userId: _personalUserId,
+        category: category,
+        name: title.trim().isEmpty ? 'Без названия' : title.trim(),
+        content: body,
+        id: id,
+        parentId: parentId > 0 ? parentId : null,
+      );
+      if (result['success'] != true) {
+        throw StateError(
+            '${result['message'] ?? 'Не удалось сохранить документ'}');
+      }
+      await _loadPersonalFolder(_folderKey, force: true);
+    }
+
+    Future<String?> uploadImage(String filePath) async {
+      final result = await PersonalWorkspaceOsService.uploadFile(
+        userId: _personalUserId,
+        category: category,
+        file: File(filePath),
+        parentId: parentId > 0 ? parentId : null,
+      );
+      if (result['success'] != true) {
+        throw StateError(
+            '${result['message'] ?? 'Не удалось загрузить изображение'}');
+      }
+      final item = result['item'];
+      if (item is Map) {
+        final url = '${item['file_url'] ?? ''}'.trim();
+        if (url.isNotEmpty) return url;
+      }
+      return null;
+    }
+
+    Widget editor({VoidCallback? onClose}) => WorkspaceDocumentEditor(
+          initialTitle: node.title,
+          initialBody: initialBody,
+          onSave: save,
+          contextLabel: 'Личный документ',
+          contextName: _personalOwnerTitle,
+          documentType: category == 'plans' ? 'План-конспект' : 'Документ',
+          autoSave: true,
+          onClose: onClose,
+          aiUserId: _personalUserId,
+          aiClubName: 'Личный профиль',
+          aiDocumentKey: 'personal:$id',
+          aiExtraPayload: <String, dynamic>{
+            'scope': 'personal',
+            'owner_user_id': _personalUserId,
+            'category': category,
+            'document_id': id,
+          },
+          onUploadImage: uploadImage,
+          compactWorkspaceChrome: MediaQuery.sizeOf(context).width >= 760,
+          startWithTrainingPlanTemplate: category == 'plans',
+        );
+
+    final width = MediaQuery.sizeOf(context).width;
+    if (width >= 760) {
+      await _openDesktopWindow(
+        id: 'personal-document:$id',
+        title: node.title,
+        subtitle: _personalModuleFor(category)?.title ?? 'Личный документ',
+        iconKind: SportotekaWorkspaceIconKind.document,
+        builder: (closeWindow) => editor(onClose: closeWindow),
+      );
+      return;
+    }
+
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => Scaffold(
+          backgroundColor: Colors.white,
+          body: SafeArea(child: editor()),
+        ),
+      ),
+    );
+  }
+
+  bool _isPersonalTrainingGraphicNode(WorkspaceFinderNode node) {
+    if (!_isPersonal) return false;
+    final payload = Map<String, dynamic>.from(
+      node.payload ?? const <String, dynamic>{},
+    );
+    final category =
+        '${payload['_workspace_personal_category'] ?? payload['category'] ?? node.moduleKey ?? ''}'
+            .trim();
+    if (category != 'schemes') return false;
+
+    if (payload['_workspace_training_graphic'] == true ||
+        '${payload['object_type'] ?? ''}'.trim() == 'training_graphic') {
+      return true;
+    }
+
+    final decoded = PersonalWorkspaceOsService.decodeDocumentContent(payload);
+    if (decoded == null) return false;
+    final module =
+        '${decoded['module'] ?? decoded['object_type'] ?? ''}'.trim();
+    if (module == 'personal_tactics' || module == 'training_graphic') {
+      return true;
+    }
+    return decoded['doc_json'] is Map || decoded['document'] is Map;
+  }
+
+  Map<String, dynamic> _personalTrainingGraphicDocument(
+    WorkspaceFinderNode node,
+  ) {
+    final payload = Map<String, dynamic>.from(
+      node.payload ?? const <String, dynamic>{},
+    );
+    final decoded = PersonalWorkspaceOsService.decodeDocumentContent(payload);
+    if (decoded == null) return payload;
+    return <String, dynamic>{...payload, ...decoded};
+  }
+
+  String _trainingGraphicModeLabel(WorkspaceFinderNode node) {
+    final data = _personalTrainingGraphicDocument(node);
+    final mode =
+        '${data['editor_mode'] ?? data['mode'] ?? ''}'.trim().toLowerCase();
+    if (mode == '2d') return '2D';
+    if (mode == '3d') return '3D';
+    final doc = data['doc_json'] ?? data['document'];
+    if (doc is Map) {
+      final map = Map<String, dynamic>.from(doc);
+      final is3d = map['is3D'] == true ||
+          map['is_3d'] == true ||
+          '${map['view_mode'] ?? ''}'.toLowerCase() == '3d';
+      return is3d ? '3D' : '2D';
+    }
+    return '2D';
+  }
+
+  String _trainingGraphicPreviewUrl(WorkspaceFinderNode node) {
+    final data = _personalTrainingGraphicDocument(node);
+    final raw = '${data['preview_url'] ?? data['thumbnail_url'] ?? ''}'.trim();
+    if (raw.isEmpty || raw == 'null') return '';
+    if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
+    if (raw.startsWith('/')) return 'https://sportotekaapp.ru$raw';
+    return 'https://sportotekaapp.ru/$raw';
+  }
+
+  Uint8List? _trainingGraphicPreviewBytes(WorkspaceFinderNode node) {
+    if (!_isPersonalTrainingGraphicNode(node)) return null;
+    final data = _personalTrainingGraphicDocument(node);
+    var raw =
+        '${data['preview_png_base64'] ?? data['preview_base64'] ?? ''}'.trim();
+    if (raw.isEmpty || raw == 'null') return null;
+    final comma = raw.indexOf(',');
+    if (raw.startsWith('data:image/') && comma >= 0) {
+      raw = raw.substring(comma + 1);
+    }
+    try {
+      return base64Decode(raw);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  bool _trainingGraphicHasPreview(WorkspaceFinderNode node) {
+    if (!_isPersonalTrainingGraphicNode(node)) return false;
+    if (_trainingGraphicPreviewBytes(node) != null) return true;
+    return _trainingGraphicPreviewUrl(node).isNotEmpty;
+  }
+
+  Widget _buildTrainingGraphicPreview(
+    WorkspaceFinderNode node, {
+    required double width,
+    required double height,
+    double radius = 10,
+  }) {
+    final bytes = _trainingGraphicPreviewBytes(node);
+    final url = _trainingGraphicPreviewUrl(node);
+    Widget image;
+    if (bytes != null && bytes.isNotEmpty) {
+      image = Image.memory(
+        bytes,
+        width: width,
+        height: height,
+        fit: BoxFit.cover,
+        gaplessPlayback: true,
+        errorBuilder: (_, __, ___) => _buildTrainingGraphicPreviewFallback(
+          width: width,
+          height: height,
+        ),
+      );
+    } else if (url.isNotEmpty) {
+      image = Image.network(
+        url,
+        width: width,
+        height: height,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => _buildTrainingGraphicPreviewFallback(
+          width: width,
+          height: height,
+        ),
+      );
+    } else {
+      image = _buildTrainingGraphicPreviewFallback(
+        width: width,
+        height: height,
+      );
+    }
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(radius),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: const Color(0xFFF4F6F5),
+          border: Border.all(color: _line),
+          borderRadius: BorderRadius.circular(radius),
+        ),
+        child: SizedBox(
+          width: width,
+          height: height,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              image,
+              Positioned(
+                left: 7,
+                bottom: 6,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(.58),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                    child: Text(
+                      _trainingGraphicModeLabel(node),
+                      style: AppTypography.badge(color: Colors.white),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTrainingGraphicPreviewFallback({
+    required double width,
+    required double height,
+  }) {
+    return SizedBox(
+      width: width,
+      height: height,
+      child: const Center(
+        child: Icon(
+          Icons.sports_soccer_rounded,
+          color: Color(0xFF7A8580),
+          size: 30,
+        ),
+      ),
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> _loadPersonalGraphicsForEditor(
+    int userId,
+  ) async {
+    final rows = await PersonalWorkspaceOsService.listRecursive(
+      userId: userId,
+      category: 'schemes',
+      rootTitle: 'Схемы',
+    );
+    final out = <Map<String, dynamic>>[];
+    for (final row in rows) {
+      if ('${row['kind'] ?? ''}'.trim() != 'document') continue;
+      final decoded = PersonalWorkspaceOsService.decodeDocumentContent(row);
+      if (decoded == null) continue;
+      final module =
+          '${decoded['module'] ?? decoded['object_type'] ?? ''}'.trim();
+      if (module != 'personal_tactics' &&
+          module != 'training_graphic' &&
+          decoded['doc_json'] is! Map &&
+          decoded['document'] is! Map) {
+        continue;
+      }
+      out.add(<String, dynamic>{
+        ...decoded,
+        'id': row['id'],
+        '_workspace_parent_id': row['_workspace_parent_id'] ?? row['parent_id'],
+        '_workspace_parent_title': row['_workspace_parent_title'] ?? 'Схемы',
+        'updated_at': row['updated_at'],
+        'updated_at_ms': DateTime.tryParse('${row['updated_at'] ?? ''}')
+                ?.millisecondsSinceEpoch ??
+            0,
+      });
+    }
+    return out;
+  }
+
+  Future<Map<String, dynamic>?> _savePersonalGraphicFromEditor(
+    int userId,
+    Map<String, dynamic> document,
+  ) async {
+    final rawId = int.tryParse('${document['id'] ?? 0}') ?? 0;
+    // Temporary editor IDs are microsecond timestamps. Only persisted OS IDs
+    // are safe update targets.
+    final serverId = rawId > 0 && rawId < 1000000000 ? rawId : 0;
+    final title = '${document['title'] ?? 'Схема'}'.trim();
+    final parentId =
+        int.tryParse('${document['_workspace_parent_id'] ?? 0}') ?? 0;
+    final body = <String, dynamic>{
+      ...document,
+      'object_type': 'training_graphic',
+      'module': 'personal_tactics',
+      'owner_type': 'user',
+      'owner_user_id': userId,
+      'club_id': 0,
+      'team_id': 0,
+      'workspace_category': 'schemes',
+    };
+    final result = await PersonalWorkspaceOsService.saveDocument(
+      userId: userId,
+      category: 'schemes',
+      id: serverId,
+      parentId: parentId > 0 ? parentId : null,
+      name: title.isEmpty ? 'Схема' : title,
+      content: jsonEncode(body),
+    );
+    if (result['success'] != true || result['item'] is! Map) {
+      throw StateError(
+        '${result['message'] ?? 'Не удалось сохранить схему в Sportoteka OS'}',
+      );
+    }
+    final item = Map<String, dynamic>.from(result['item'] as Map);
+    await _loadPersonalFolder(_folderKey, force: true);
+    return <String, dynamic>{
+      ...body,
+      'id': item['id'],
+      '_workspace_parent_id': parentId,
+      '_workspace_parent_title': document['_workspace_parent_title'] ?? 'Схемы',
+      'updated_at': item['updated_at'],
+      'updated_at_ms': DateTime.tryParse('${item['updated_at'] ?? ''}')
+              ?.millisecondsSinceEpoch ??
+          DateTime.now().millisecondsSinceEpoch,
+    };
+  }
+
+  Future<void> _deletePersonalGraphicFromEditor(
+    int userId,
+    int graphicId,
+  ) async {
+    final result = await PersonalWorkspaceOsService.delete(
+      userId: userId,
+      id: graphicId,
+    );
+    if (result['success'] != true) {
+      throw StateError('${result['message'] ?? 'Не удалось удалить схему'}');
+    }
+    await _loadPersonalFolder(_folderKey, force: true);
+  }
+
+  Future<Map<String, dynamic>?> _pickPersonalSchemeFolderFromEditor({
+    required int userId,
+    int? initialFolderId,
+    String? initialFolderTitle,
+  }) async {
+    if (!mounted || userId <= 0) return null;
+    Map<String, dynamic>? picked;
+
+    SportotekaWorkspaceFinderPanel buildPicker({
+      ValueChanged<Map<String, dynamic>>? onSelected,
+      VoidCallback? onCancel,
+    }) {
+      return SportotekaWorkspaceFinderPanel(
+        scope: WorkspaceOsScope.personal,
+        ownerUserId: userId,
+        ownerDisplayName: _personalOwnerTitle,
+        clubId: 0,
+        clubName: _personalOwnerTitle,
+        currentUserId: userId,
+        teams: const <Map<String, dynamic>>[],
+        players: const <Map<String, dynamic>>[],
+        trainers: const <Map<String, dynamic>>[],
+        selectedTeamId: null,
+        selectedTeamName: '',
+        initialModuleKey: 'schemes',
+        initialFolderId: initialFolderId,
+        initialFolderTitle: initialFolderTitle,
+        selectionMode: true,
+        selectionModuleKey: 'schemes',
+        onFolderSelected: onSelected,
+        onSelectionCancel: onCancel,
+        onOpenModule: (_) {},
+        onOpenPlayer: (_) {},
+        onOpenTeam: (_) {},
+        onOpenTrainer: (_) {},
+      );
+    }
+
+    final width = MediaQuery.sizeOf(context).width;
+    if (width < 760) {
+      return Navigator.of(context, rootNavigator: true)
+          .push<Map<String, dynamic>>(
+        MaterialPageRoute<Map<String, dynamic>>(
+          fullscreenDialog: true,
+          builder: (pickerContext) => Scaffold(
+            backgroundColor: Colors.white,
+            body: SafeArea(
+              child: buildPicker(
+                onSelected: (value) => Navigator.of(pickerContext).pop(value),
+                onCancel: () => Navigator.of(pickerContext).pop(),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    await _openDesktopWindow(
+      id: 'personal-scheme-folder-picker-$userId',
+      title: 'Sportoteka OS',
+      subtitle: 'Схемы · выбрать папку',
+      iconKind: SportotekaWorkspaceIconKind.plans,
+      builder: (closeWindow) => buildPicker(
+        onSelected: (value) {
+          picked = value;
+          closeWindow();
+        },
+        onCancel: closeWindow,
+      ),
+    );
+
+    // _openDesktopWindow only creates the managed window. Wait until the user
+    // closes it before returning the selected folder to TrainingGraphicsScreen.
+    while (mounted &&
+        _windows.any(
+            (entry) => entry.id == 'personal-scheme-folder-picker-$userId')) {
+      await Future<void>.delayed(const Duration(milliseconds: 80));
+    }
+    return picked;
+  }
+
+  Future<void> _openPersonalTrainingGraphic(WorkspaceFinderNode node) async {
+    final raw = Map<String, dynamic>.from(
+      node.payload ?? const <String, dynamic>{},
+    );
+    final decoded = PersonalWorkspaceOsService.decodeDocumentContent(raw) ??
+        <String, dynamic>{};
+    final graphicId =
+        int.tryParse('${raw['_workspace_personal_id'] ?? raw['id'] ?? 0}') ?? 0;
+    final parentId = int.tryParse('${raw['parent_id'] ?? 0}') ?? 0;
+    final doc = decoded['doc_json'] ?? decoded['document'];
+    final modeRaw = '${decoded['editor_mode'] ?? decoded['mode'] ?? ''}'
+        .trim()
+        .toLowerCase();
+    final initial3D = modeRaw == '3d' ||
+        (doc is Map &&
+            (doc['is3D'] == true ||
+                doc['is_3d'] == true ||
+                doc['view_mode'] == '3d'));
+
+    Widget buildEditor() => TrainingGraphicsScreen(
+          personalMode: true,
+          userId: _personalUserId,
+          userDisplayName: _personalOwnerTitle,
+          graphicId: graphicId > 0 ? graphicId : null,
+          initialDocJson: doc,
+          initialFolderId: parentId > 0 ? parentId : null,
+          initialFolderTitle: _currentTitle,
+          initial3DMode: initial3D,
+          initialGraphicTitle: node.title,
+          backfillPersonalPreviewOnOpen: !_trainingGraphicHasPreview(node),
+          moduleAccessGranted: true,
+          personalLibraryLoader: _loadPersonalGraphicsForEditor,
+          personalGraphicSaver: _savePersonalGraphicFromEditor,
+          personalGraphicDeleter: _deletePersonalGraphicFromEditor,
+          personalFolderPicker: _pickPersonalSchemeFolderFromEditor,
+        );
+
+    final width = MediaQuery.sizeOf(context).width;
+    if (width < 760) {
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (_) => Scaffold(
+            backgroundColor: Colors.white,
+            body: SafeArea(child: buildEditor()),
+          ),
+        ),
+      );
+      await _loadPersonalFolder(_folderKey, force: true);
+      return;
+    }
+
+    await _openDesktopWindow(
+      id: 'personal-training-graphic:${graphicId > 0 ? graphicId : node.id}',
+      title: node.title,
+      subtitle: 'Схемы · $_currentTitle',
+      iconKind: SportotekaWorkspaceIconKind.plans,
+      builder: (_) => buildEditor(),
+    );
+  }
+
+  Future<void> _openPersonalNode(WorkspaceFinderNode node) async {
+    if (node.payload?['_workspace_personal_module'] == true) {
+      final key = node.moduleKey ?? '';
+      final module = _personalModuleFor(key);
+      if (module != null && !_personalDefinitionUnlocked(module)) {
+        await _showPersonalModuleAccess(module);
+        return;
+      }
+      if (key.isNotEmpty) await _enterFolder(key);
+      return;
+    }
+
+    if (node.isFolder && _isPersonalFolderKey(node.id)) {
+      await _enterFolder(node.id);
+      return;
+    }
+
+    if (_isPersonalTrainingGraphicNode(node)) {
+      await _openPersonalTrainingGraphic(node);
+      return;
+    }
+
+    if (node.kind == WorkspaceFinderNodeKind.note ||
+        '${node.payload?['kind'] ?? ''}' == 'document') {
+      await _openPersonalDocument(node);
+      return;
+    }
+
+    final url = '${node.payload?['file_url'] ?? ''}'.trim();
+    if (url.isNotEmpty) {
+      await openWorkspaceAttachmentPreview(
+        context,
+        title: node.title,
+        fileUrl: url,
+        mimeType: '${node.payload?['mime_type'] ?? ''}',
+      );
+      return;
+    }
+
+    final moduleKey = node.moduleKey ?? _personalCategoryForKey(_folderKey);
+    if (moduleKey != null && moduleKey.isNotEmpty) {
+      widget.onOpenModule(moduleKey);
+    }
+  }
+
+  Future<void> _createPersonalDocument() async {
+    final category = _personalCategoryForKey(_folderKey);
+    if (category == null) return;
+    final parentId = _personalFolderIdForKey(_folderKey);
+    try {
+      final result = await PersonalWorkspaceOsService.saveDocument(
+        userId: _personalUserId,
+        category: category,
+        name: category == 'plans' ? 'Новый план-конспект' : 'Новый документ',
+        content: '',
+        parentId: parentId > 0 ? parentId : null,
+      );
+      if (result['success'] != true || result['item'] is! Map) {
+        throw StateError(
+            '${result['message'] ?? 'Не удалось создать документ'}');
+      }
+      final raw = Map<String, dynamic>.from(result['item'] as Map);
+      final node = _personalNodeFromMap(raw, category, _folderKey);
+      await _loadPersonalFolder(_folderKey, force: true);
+      if (!mounted) return;
+      await _openPersonalDocument(node);
+    } catch (e) {
+      _showSnack('Не удалось создать документ: $e');
+    }
+  }
+
+  Future<void> _uploadPersonalFiles() async {
+    final category = _personalCategoryForKey(_folderKey);
+    if (category == null) return;
+    final picked = await FilePicker.pickFiles(allowMultiple: true);
+    if (picked == null) return;
+    final parentId = _personalFolderIdForKey(_folderKey);
+    var uploaded = 0;
+    try {
+      for (final file in picked.files) {
+        final path = file.path;
+        if (path == null || path.trim().isEmpty) continue;
+        final result = await PersonalWorkspaceOsService.uploadFile(
+          userId: _personalUserId,
+          category: category,
+          file: File(path),
+          parentId: parentId > 0 ? parentId : null,
+          filename: file.name,
+        );
+        if (result['success'] == true) uploaded += 1;
+      }
+      await _loadPersonalFolder(_folderKey, force: true);
+      _showSnack(uploaded == 1
+          ? 'Файл добавлен в «$_currentTitle».'
+          : 'Файлы ($uploaded) добавлены в «$_currentTitle».');
+    } catch (e) {
+      _showSnack('Не удалось загрузить файл: $e');
+    }
+  }
+
+  Future<void> _renamePersonalNode(WorkspaceFinderNode node) async {
+    final id = int.tryParse(
+          '${node.payload?['_workspace_personal_id'] ?? node.payload?['id'] ?? 0}',
+        ) ??
+        0;
+    if (id <= 0) return;
+    final controller = TextEditingController(text: node.title);
+    final name = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Переименовать'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(hintText: 'Название'),
+          onSubmitted: (value) => Navigator.pop(dialogContext, value.trim()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Отмена'),
+          ),
+          TextButton(
+            onPressed: () =>
+                Navigator.pop(dialogContext, controller.text.trim()),
+            child: const Text('Сохранить'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (name == null || name.trim().isEmpty) return;
+    final result = await PersonalWorkspaceOsService.rename(
+      userId: _personalUserId,
+      id: id,
+      name: name.trim(),
+    );
+    if (result['success'] != true) {
+      _showSnack('${result['message'] ?? 'Не удалось переименовать'}');
+      return;
+    }
+    await _loadPersonalFolder(_folderKey, force: true);
+  }
+
+  Future<void> _deletePersonalNode(WorkspaceFinderNode node) async {
+    final id = int.tryParse(
+          '${node.payload?['_workspace_personal_id'] ?? node.payload?['id'] ?? 0}',
+        ) ??
+        0;
+    if (id <= 0) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Удалить?'),
+        content: Text('«${node.title}» будет удалено из личной Sportoteka OS.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Отмена'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Удалить'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    final result = await PersonalWorkspaceOsService.delete(
+      userId: _personalUserId,
+      id: id,
+    );
+    if (result['success'] != true) {
+      _showSnack('${result['message'] ?? 'Не удалось удалить'}');
+      return;
+    }
+    await _loadPersonalFolder(_folderKey, force: true);
+  }
+
+  Future<void> _openNode(WorkspaceFinderNode node) async {
+    setState(() {
+      _selectedNodeId = node.id;
+      _rememberRecent(node);
+    });
+
+    if (_isPersonal) {
+      await _openPersonalNode(node);
+      return;
+    }
+
+    if (node.payload?['_workspace_tracker_ai_archive_action'] == true) {
+      await _generateTrackerAiArchiveFromOs();
+      return;
+    }
+
+    if (node.payload?['_workspace_tracker_ai_generate_action'] == true) {
+      final root = _entityFolderRoots[_folderKey];
+      if (root == null) {
+        _showSnack('Не найдена Tracker-сессия для анализа.');
+        return;
+      }
+      await _generateTrackerAiForRoot(root);
+      return;
+    }
+
+    if (node.payload?['_workspace_plan_folder'] == true) {
+      final folderId = int.tryParse(
+            '${node.payload?['_workspace_plan_folder_id'] ?? node.payload?['id'] ?? ''}',
+          ) ??
+          0;
+      if (folderId > 0) {
+        await _enterFolder('plan-folder:$folderId');
+      }
+      return;
+    }
+
+    if (node.payload?['_workspace_training_graphic'] == true) {
+      await _openWorkspaceTrainingGraphic(node);
+      return;
+    }
+
+    if (_isEntityFolderNode(node)) {
+      await _openEntityFolder(node);
+      return;
+    }
+
+    if (node.isFolder && node.moduleKey != null) {
+      await _enterFolder(node.moduleKey!);
+      return;
+    }
+
+    if (node.isFolder && node.id.startsWith('local-folder:')) {
+      await _enterFolder(node.id);
+      return;
+    }
+
+    if (node.payload?['_workspace_ai_document_library'] == true) {
+      await _openAiDocumentLibrary();
+      return;
+    }
+
+    if (node.payload?['_workspace_chat_document'] == true) {
+      final payload = Map<String, dynamic>.from(
+        node.payload ?? const <String, dynamic>{},
+      );
+      final fileUrl = _absoluteRecordFileUrl(payload);
+      if (fileUrl.isEmpty) {
+        _showSnack('Для файла не найдена ссылка на сервере.');
+        return;
+      }
+      final folderId =
+          node.parentId ?? '${payload['_workspace_folder_key'] ?? 'documents'}';
+      final mimeType = '${payload['mime_type'] ?? ''}';
+      if (MediaQuery.sizeOf(context).width >= 760) {
+        await _openDesktopWindow(
+          id: 'chat-document:${node.id}',
+          title: node.title,
+          subtitle: node.subtitle,
+          iconKind: SportotekaWorkspaceIconKind.document,
+          builder: (_) => WorkspaceChatDocumentWindow(
+            title: node.title,
+            fileUrl: fileUrl,
+            mimeType: mimeType,
+            sourceNodeId: node.id,
+            folderId: folderId,
+            clubId: widget.clubId,
+            userId: widget.currentUserId,
+            clubName: widget.clubName,
+            onSaved: _loadServerWorkspace,
+          ),
+        );
+      } else {
+        await openWorkspaceChatDocument(
+          context,
+          title: node.title,
+          fileUrl: fileUrl,
+          mimeType: mimeType,
+          sourceNodeId: node.id,
+          folderId: folderId,
+          clubId: widget.clubId,
+          userId: widget.currentUserId,
+          clubName: widget.clubName,
+          onSaved: _loadServerWorkspace,
+        );
+      }
+      return;
+    }
+
+    if (node.payload?['_workspace_uploaded_file'] == true) {
+      final payload = Map<String, dynamic>.from(
+        node.payload ?? const <String, dynamic>{},
+      );
+      final fileUrl = _absoluteRecordFileUrl(payload);
+      if (fileUrl.isEmpty) {
+        _showSnack('Для файла не найдена ссылка на сервере.');
+        return;
+      }
+      final mimeType = '${payload['mime_type'] ?? ''}';
+      final width = MediaQuery.sizeOf(context).width;
+      if (width >= 760) {
+        await _openDesktopWindow(
+          id: 'attachment:${node.id}',
+          title: node.title,
+          subtitle: node.subtitle,
+          iconKind: SportotekaWorkspaceIconKind.document,
+          builder: (_) => WorkspaceAttachmentInlinePreview(
+            title: node.title,
+            fileUrl: fileUrl,
+            mimeType: mimeType,
+          ),
+        );
+      } else {
+        await openWorkspaceAttachmentPreview(
+          context,
+          title: node.title,
+          fileUrl: fileUrl,
+          mimeType: mimeType,
+        );
+      }
+      return;
+    }
+
+    if (node.kind == WorkspaceFinderNodeKind.plan &&
+        node.payload?['_workspace_real_record'] == true) {
+      await _openWorkspaceTrainingPlanEditor(node);
+      return;
+    }
+
+    switch (node.kind) {
+      case WorkspaceFinderNodeKind.player:
+        if (node.payload != null) await _openPlayerProject(node.payload!);
+        return;
+      case WorkspaceFinderNodeKind.team:
+        if (node.payload != null) await _openTeamProject(node.payload!);
+        return;
+      case WorkspaceFinderNodeKind.trainer:
+        if (node.payload != null) await _openTrainerProject(node.payload!);
+        return;
+      case WorkspaceFinderNodeKind.note:
+        _openNote(node);
+        return;
+      case WorkspaceFinderNodeKind.video:
+        if (node.payload?['_workspace_real_record'] == true) {
+          await _openRealRecord(node);
+          return;
+        }
+        await _openVideoCenter(
+          initialSection: node.moduleKey == 'videoLessons'
+              ? WorkspaceVideoCenterSection.lessons
+              : WorkspaceVideoCenterSection.matches,
+        );
+        return;
+      default:
+        if (node.payload?['_workspace_real_record'] == true) {
+          await _openRealRecord(node);
+          return;
+        }
+        if (node.moduleKey != null) widget.onOpenModule(node.moduleKey!);
+    }
+  }
+
+  Future<void> _openAiDocumentLibrary() async {
+    if (!mounted) return;
+    setState(() {
+      _inlineAiDocumentLibrary = true;
+      _folderKey = 'documents';
+      _selectedNodeId = null;
+      _search = '';
+      _showSidebarOnCompact = false;
+    });
+  }
+
+  Future<void> _openMethodDocumentEditorWindow(
+    String documentId,
+    String title,
+    Widget Function(VoidCallback closeWindow) builder,
+  ) async {
+    final width = MediaQuery.sizeOf(context).width;
+
+    if (width < 760) {
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (routeContext) => Scaffold(
+            backgroundColor: Colors.white,
+            body: builder(
+              () => Navigator.of(routeContext).maybePop(),
+            ),
+          ),
+        ),
+      );
+      return;
+    }
+
+    await _openDesktopWindow(
+      id: 'method-document:$documentId',
+      title: title,
+      subtitle: 'Методические материалы · ${widget.clubName}',
+      iconKind: SportotekaWorkspaceIconKind.document,
+      builder: (closeWindow) => builder(closeWindow),
+    );
+  }
+
+  Future<void> _createWorkspaceTrainingPlan() async {
+    final folderId = _isPlanLibraryFolderKey(_folderKey)
+        ? _planFolderIdFromKey(_folderKey)
+        : 0;
+    final teamId = widget.selectedTeamId ?? 0;
+    if (teamId <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Сначала выберите активную команду')),
+      );
+      return;
+    }
+
+    final draft = WorkspaceFinderNode(
+      id: 'draft-plan:${DateTime.now().microsecondsSinceEpoch}',
+      title: 'Новый план-конспект',
+      subtitle: _currentTitle,
+      kind: WorkspaceFinderNodeKind.plan,
+      payload: <String, dynamic>{
+        'id': 0,
+        'plan_id': 0,
+        'club_id': widget.clubId,
+        'team_id': teamId,
+        'team_name': widget.selectedTeamName,
+        'folder_id': folderId,
+        '_workspace_real_record': true,
+        '_workspace_section': 'plans',
+      },
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+    );
+    await _openWorkspaceTrainingPlanEditor(draft, forceNew: true);
+  }
+
+  Future<void> _openWorkspaceTrainingPlanEditor(
+    WorkspaceFinderNode node, {
+    bool forceNew = false,
+  }) async {
+    final raw = Map<String, dynamic>.from(
+      node.payload ?? const <String, dynamic>{},
+    );
+    var planId = forceNew
+        ? 0
+        : (int.tryParse('${raw['plan_id'] ?? raw['id'] ?? 0}') ?? 0);
+    final teamId = int.tryParse(
+          '${raw['team_id'] ?? widget.selectedTeamId ?? 0}',
+        ) ??
+        0;
+    final folderId = int.tryParse(
+          '${raw['folder_id'] ?? (_isPlanLibraryFolderKey(_folderKey) ? _planFolderIdFromKey(_folderKey) : 0)}',
+        ) ??
+        0;
+    final teamName = '${raw['team_name'] ?? widget.selectedTeamName}'.trim();
+    final trainerName =
+        '${raw['trainer_name'] ?? raw['coach_name'] ?? raw['trainer'] ?? ''}'
+            .trim();
+    final storedBody =
+        '${raw['plan_description'] ?? raw['description'] ?? raw['workspace_body'] ?? ''}';
+    final hasWorkspaceBody =
+        WorkspaceTrainingPlanCodec.containsPlan(storedBody);
+
+    String firstNonEmpty(List<dynamic> values) {
+      for (final value in values) {
+        final text = '${value ?? ''}'.trim();
+        if (text.isNotEmpty && text != 'null') return text;
+      }
+      return '';
+    }
+
+    final seed = WorkspaceTrainingPlanCodec.newPlan(
+      clubName: widget.clubName,
+      teamName: teamName,
+      trainerName: trainerName,
+      cycle: firstNonEmpty(<dynamic>[raw['cycle_title'], raw['cycle']]),
+      date: firstNonEmpty(<dynamic>[raw['plan_date'], raw['date']]),
+      theme: firstNonEmpty(<dynamic>[raw['theme'], raw['title'], node.title]),
+      location: firstNonEmpty(<dynamic>[raw['location'], raw['place']]),
+      playersCount: raw['players_count'] ?? raw['player_count'] ?? '',
+      durationMin: raw['duration_min'] ?? raw['duration'] ?? '',
+    );
+
+    final editorId = planId > 0 ? 'training-plan:$planId' : node.id;
+
+    Future<void> savePlan(String title, String body) async {
+      if (teamId <= 0) {
+        throw StateError('Не выбрана команда для плана-конспекта');
+      }
+      final planData = WorkspaceTrainingPlanCodec.decodeFirst(body) ?? seed;
+      final now = DateTime.now();
+      final fallbackDate =
+          '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+      final theme = '${planData['theme'] ?? ''}'.trim();
+      final response = await http
+          .post(
+            Uri.parse('https://sportotekaapp.ru/api/create_training_plan.php'),
+            headers: const <String, String>{
+              'Content-Type': 'application/json; charset=utf-8',
+            },
+            body: jsonEncode(<String, dynamic>{
+              'id': planId,
+              'plan_id': planId,
+              'club_id': widget.clubId,
+              'club_name': widget.clubName,
+              'team_id': teamId,
+              'team_name': teamName,
+              'folder_id': folderId,
+              'theme': theme.isNotEmpty
+                  ? theme
+                  : (title.trim().isEmpty
+                      ? 'Новый план-конспект'
+                      : title.trim()),
+              'cycle_title': '${planData['cycle'] ?? ''}'.trim(),
+              // Workspace OS body is the canonical plan document. Existing
+              // Plans APIs keep it in the plan description, so the same record
+              // remains visible in CMR/Plans and in Workspace.
+              'description': body,
+              'plan_description': body,
+              'workspace_body': body,
+              'plan_date': '${planData['date'] ?? ''}'.trim().isEmpty
+                  ? fallbackDate
+                  : '${planData['date']}'.trim(),
+              'location': '${planData['location'] ?? ''}'.trim(),
+              'players_count': '${planData['players_count'] ?? ''}'.trim(),
+              'duration_min': '${planData['duration_min'] ?? ''}'.trim(),
+            }),
+          )
+          .timeout(const Duration(seconds: 15));
+      final decoded = jsonDecode(response.body);
+      if (response.statusCode < 200 ||
+          response.statusCode >= 300 ||
+          decoded is! Map ||
+          decoded['success'] != true) {
+        throw StateError(
+          decoded is Map
+              ? '${decoded['message'] ?? decoded['error'] ?? 'Не удалось сохранить план'}'
+              : 'Не удалось сохранить план',
+        );
+      }
+      final savedId = int.tryParse(
+            '${decoded['plan_id'] ?? decoded['id'] ?? planId}',
+          ) ??
+          planId;
+      if (savedId > 0) planId = savedId;
+
+      _realFolderNodes.remove('plans');
+      _realFolderNodes.remove('plan-folder:$folderId');
+      if (mounted) {
+        await _loadRealFolder(_folderKey, force: true);
+      }
+    }
+
+    Widget buildEditor(VoidCallback closeWindow) => WorkspaceDocumentEditor(
+          initialTitle: node.title,
+          initialBody: hasWorkspaceBody ? storedBody : '',
+          startWithTrainingPlanTemplate: !hasWorkspaceBody,
+          initialTrainingPlanData: seed,
+          contextLabel: 'План-конспект',
+          contextName: _currentTitle,
+          documentType: 'План-конспект',
+          onSave: savePlan,
+          onClose: closeWindow,
+          compactWorkspaceChrome: true,
+          aiClubId: widget.clubId,
+          aiUserId: widget.currentUserId,
+          aiTeamId: teamId,
+          aiClubName: widget.clubName,
+          aiTeamName: teamName,
+          aiDocumentKey: planId > 0 ? 'training_plan_$planId' : editorId,
+          aiExtraPayload: <String, dynamic>{
+            'workspace_section': 'plans',
+            'folder_id': folderId,
+            'plan_id': planId,
+          },
+        );
+
+    await _openMethodDocumentEditorWindow(
+      editorId,
+      node.title,
+      buildEditor,
+    );
+  }
+
+  Future<void> _openWorkspaceTrainingGraphic(WorkspaceFinderNode node) async {
+    final raw = Map<String, dynamic>.from(
+      node.payload ?? const <String, dynamic>{},
+    );
+    final graphicId =
+        int.tryParse('${raw['id'] ?? raw['graphic_id'] ?? 0}') ?? 0;
+    final teamId =
+        int.tryParse('${raw['team_id'] ?? widget.selectedTeamId ?? 0}') ?? 0;
+    final folderId = int.tryParse(
+          '${raw['_workspace_plan_folder_id'] ?? raw['folder_id'] ?? 0}',
+        ) ??
+        0;
+    final teamName = '${raw['team_name'] ?? widget.selectedTeamName}'.trim();
+
+    Widget buildEditor() => TrainingGraphicsScreen(
+          clubId: widget.clubId,
+          clubName: widget.clubName,
+          teamId: teamId,
+          teamName: teamName,
+          graphicId: graphicId > 0 ? graphicId : null,
+          initialFolderId: folderId > 0 ? folderId : null,
+          initialFolderTitle: _currentTitle,
+        );
+
+    final width = MediaQuery.sizeOf(context).width;
+    if (width < 760) {
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (_) => Scaffold(
+            backgroundColor: Colors.white,
+            body: SafeArea(child: buildEditor()),
+          ),
+        ),
+      );
+      return;
+    }
+
+    await _openDesktopWindow(
+      id: 'training-graphic:${graphicId > 0 ? graphicId : node.id}',
+      title: node.title,
+      subtitle: 'Схемы · $_currentTitle',
+      iconKind: SportotekaWorkspaceIconKind.plans,
+      builder: (_) => buildEditor(),
+    );
+  }
+
+  Future<void> _openVideoCenter({
+    required WorkspaceVideoCenterSection initialSection,
+  }) async {
+    SportotekaWorkspaceVideoCenter buildCenter() =>
+        SportotekaWorkspaceVideoCenter(
+          clubId: widget.clubId,
+          clubName: widget.clubName,
+          teams: widget.teams,
+          players: widget.players,
+          trainers: widget.trainers,
+          currentUserId: widget.currentUserId,
+          selectedTeamId: widget.selectedTeamId,
+          selectedTeamName: widget.selectedTeamName,
+          initialSection: initialSection,
+        );
+
+    final width = MediaQuery.sizeOf(context).width;
+    if (width < 760) {
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (_) => Scaffold(
+            backgroundColor: Colors.white,
+            body: SafeArea(child: buildCenter()),
+          ),
+        ),
+      );
+      return;
+    }
+
+    final lessons = initialSection == WorkspaceVideoCenterSection.lessons;
+    await _openDesktopWindow(
+      id: lessons ? 'video-center:lessons' : 'video-center:matches',
+      title: lessons ? 'Видеоуроки' : 'Видео матчей',
+      subtitle: lessons
+          ? 'Методическая видеотека клуба'
+          : 'Матчи, видео, загрузка и AI-анализ',
+      iconKind: SportotekaWorkspaceIconKind.video,
+      builder: (_) => buildCenter(),
+    );
+  }
+
+  Future<void> _openRealRecord(WorkspaceFinderNode node) async {
+    final record =
+        Map<String, dynamic>.from(node.payload ?? const <String, dynamic>{});
+    final owner =
+        '${record['_workspace_owner'] ?? record['team_name'] ?? widget.selectedTeamName}'
+            .trim();
+    final sectionTitle = _sectionTitleForNode(node);
+    final fileUrl = _absoluteRecordFileUrl(record);
+
+    final identity = WorkspaceEntityIdentity.resolve(
+      clubId: widget.clubId,
+      record: record,
+      sectionHint: sectionTitle,
+      kind: node.kind,
+      fallbackId: node.id,
+    );
+    final legacyNoteKey = 'sportoteka_real_${widget.clubId}_${node.id}';
+
+    WorkspaceEntityRecordDocument buildDocument({VoidCallback? onClose}) =>
+        WorkspaceEntityRecordDocument(
+          ownerTitle: owner.isEmpty ? widget.clubName : owner,
+          sectionTitle: sectionTitle,
+          title: node.title,
+          iconKind: _sportIconForNode(node),
+          record: record,
+          properties: _realRecordProperties(node),
+          noteKey: identity.key,
+          legacyNoteKeys: <String>[legacyNoteKey],
+          entityType: identity.type,
+          entityId: identity.id,
+          fileUrl: fileUrl,
+          clubId: widget.clubId,
+          currentUserId: widget.currentUserId,
+          serverParentKey: 'entity:${identity.type}:${identity.id}',
+          onClose: onClose,
+          onEdit: node.moduleKey == null
+              ? null
+              : () async {
+                  widget.onOpenModule(node.moduleKey!);
+                },
+          onRefresh: () async {
+            await widget.onRefresh?.call();
+            await _loadRealFolder(_folderKey, force: true);
+          },
+        );
+
+    final width = MediaQuery.sizeOf(context).width;
+    if (width < 760) {
+      await Navigator.of(context).push<void>(MaterialPageRoute<void>(
+          builder: (_) => Scaffold(
+              backgroundColor: Colors.white,
+              body: SafeArea(child: buildDocument()))));
+      return;
+    }
+    await _openDesktopWindow(
+      id: 'record:${node.id}',
+      title: node.title,
+      subtitle: sectionTitle,
+      iconKind: _sportIconForNode(node),
+      builder: (closeWindow) => buildDocument(onClose: closeWindow),
+    );
+  }
+
+  String _sectionTitleForNode(WorkspaceFinderNode node) {
+    if (_isPersonal) {
+      final key = node.moduleKey ?? _personalCategoryForKey(_folderKey) ?? '';
+      final title = _personalModuleFor(key)?.title;
+      if (title != null && title.isNotEmpty) return title;
+    }
+    switch (node.kind) {
+      case WorkspaceFinderNodeKind.match:
+        return 'Матчи';
+      case WorkspaceFinderNodeKind.training:
+        return 'Тренировки';
+      case WorkspaceFinderNodeKind.plan:
+        return 'Планы-конспекты';
+      case WorkspaceFinderNodeKind.testing:
+        return 'Тестирование';
+      case WorkspaceFinderNodeKind.calendar:
+        return 'Календарь';
+      case WorkspaceFinderNodeKind.document:
+        return 'Документы';
+      case WorkspaceFinderNodeKind.medical:
+        return 'Медкарта';
+      case WorkspaceFinderNodeKind.report:
+        return 'Отчёты';
+      case WorkspaceFinderNodeKind.video:
+        return 'Видео';
+      case WorkspaceFinderNodeKind.tracker:
+        return 'Tracker';
+      default:
+        return _moduleFor(_folderKey)?.title ?? 'Рабочий файл';
+    }
+  }
+
+  String _workspaceRecordTypeLabel(String raw) {
+    final value = raw.trim();
+    final type = value.toLowerCase();
+    switch (type) {
+      case 'training':
+        return 'Тренировка';
+      case 'league':
+      case 'league_match':
+      case 'championship':
+      case 'official':
+        return 'Игра (чемпионат)';
+      case 'friendly':
+      case 'friendly_match':
+        return 'Товарищеская игра';
+      case 'match':
+        return 'Игра';
+      case 'theory':
+      case 'lecture':
+      case 'class':
+        return 'Теория';
+      case 'gym':
+      case 'ofp':
+      case 'training_gym':
+        return 'ОФП / Зал';
+      case 'dayoff':
+      case 'day_off':
+      case 'off':
+        return 'Выходной';
+      default:
+        return value;
+    }
+  }
+
+  String _workspaceRecordDateLabel(String raw) {
+    final value = raw.trim();
+    if (value.isEmpty) return value;
+    final parsed = DateTime.tryParse(value.replaceFirst(' ', 'T'));
+    if (parsed == null) return value;
+    final local = parsed.toLocal();
+    final date =
+        '${local.day.toString().padLeft(2, '0')}.${local.month.toString().padLeft(2, '0')}.${local.year}';
+    final hasTime = value.contains(':');
+    if (!hasTime) return date;
+    final time =
+        '${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
+    return '$date · $time';
+  }
+
+  List<WorkspaceEntityProperty> _realRecordProperties(
+      WorkspaceFinderNode node) {
+    final row = node.payload ?? const <String, dynamic>{};
+    final out = <WorkspaceEntityProperty>[];
+    void add(String label, List<String> keys) {
+      for (final key in keys) {
+        final raw = '${row[key] ?? ''}'.trim();
+        if (raw.isEmpty || raw.toLowerCase() == 'null') continue;
+        final value = label == 'Тип'
+            ? _workspaceRecordTypeLabel(raw)
+            : label == 'Дата'
+                ? _workspaceRecordDateLabel(raw)
+                : raw;
+        out.add(WorkspaceEntityProperty(label, value));
+        return;
+      }
+    }
+
+    add('Команда', const <String>['team_name']);
+    add('Дата', const <String>[
+      'start_at',
+      'event_date',
+      'training_date',
+      'match_date',
+      'test_date',
+      'plan_date',
+      'record_date',
+      'date'
+    ]);
+    add('Тип', const <String>[
+      'type',
+      'event_type',
+      'category',
+      'record_type',
+      'document_type'
+    ]);
+    add('Соперник', const <String>['opponent', 'opponent_name', 'rival']);
+    add('Счёт', const <String>['score', 'result', 'final_score']);
+    add('Место', const <String>['location', 'venue', 'stadium', 'place']);
+    add('Тренер', const <String>['trainer_name', 'coach_name', 'author_name']);
+    add('Владелец', const <String>['_workspace_owner']);
+    add('Номер', const <String>['document_number', 'number']);
+    add('Срок действия',
+        const <String>['valid_until', 'expires_at', 'expiry_date']);
+    add('Описание',
+        const <String>['notes', 'note', 'comment', 'description', 'value']);
+    add('Файл', const <String>['file_name', 'original_name']);
+    return out;
+  }
+
+  String _absoluteRecordFileUrl(Map<String, dynamic> row) {
+    var raw =
+        '${row['file_url'] ?? row['url'] ?? row['download_url'] ?? row['path'] ?? row['file'] ?? ''}'
+            .trim();
+    if (raw.isEmpty || raw == 'null') return '';
+    if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
+    while (raw.startsWith('../')) raw = raw.substring(3);
+    while (raw.startsWith('./')) raw = raw.substring(2);
+    while (raw.startsWith('/')) raw = raw.substring(1);
+    return 'https://sportotekaapp.ru/$raw';
+  }
+
+  Future<void> _openPlayerProject(Map<String, dynamic> rawPlayer) async {
+    final player = Map<String, dynamic>.from(rawPlayer);
+    player['club_id'] ??= widget.clubId;
+    player['clubId'] ??= widget.clubId;
+    player['team_id'] ??= player['teamId'] ?? widget.selectedTeamId;
+    player['teamId'] ??= player['team_id'] ?? widget.selectedTeamId;
+    player['team_name'] ??= widget.selectedTeamName;
+    player['teamName'] ??= widget.selectedTeamName;
+    final last = '${player['last_name'] ?? player['lastname'] ?? ''}'.trim();
+    final first = '${player['first_name'] ?? player['firstname'] ?? ''}'.trim();
+    final fallback =
+        '${player['full_name'] ?? player['name'] ?? 'Игрок'}'.trim();
+    final title =
+        <String>[last, first].where((e) => e.isNotEmpty).join(' ').trim();
+    final id = '${player['player_id'] ?? player['id'] ?? title}';
+    final width = MediaQuery.sizeOf(context).width;
+    if (width < 760) {
+      final project = SportotekaPlayerProjectScreen(
+        player: player,
+        clubId: widget.clubId,
+        currentUserId: widget.currentUserId,
+        teamId: widget.selectedTeamId,
+        teamName: widget.selectedTeamName,
+        onRefresh: widget.onRefresh,
+      );
+      await Navigator.of(context).push<void>(MaterialPageRoute<void>(
+          builder: (_) => Scaffold(
+              backgroundColor: Colors.white, body: SafeArea(child: project))));
+      return;
+    }
+    await _openDesktopWindow(
+      id: 'player:$id',
+      title: title.isEmpty ? fallback : title,
+      subtitle: widget.selectedTeamName,
+      iconKind: SportotekaWorkspaceIconKind.players,
+      builder: (closeWindow) => SportotekaPlayerProjectScreen(
+        player: player,
+        clubId: widget.clubId,
+        currentUserId: widget.currentUserId,
+        teamId: widget.selectedTeamId,
+        teamName: widget.selectedTeamName,
+        onRefresh: widget.onRefresh,
+        onClose: closeWindow,
+      ),
+    );
+  }
+
+  Future<void> _openTeamProject(Map<String, dynamic> rawTeam) async {
+    final team = Map<String, dynamic>.from(rawTeam);
+    final id = '${team['team_id'] ?? team['id'] ?? team['name'] ?? 'team'}';
+    final title =
+        '${team['name'] ?? team['team_name'] ?? team['title'] ?? 'Команда'}'
+            .trim();
+    final width = MediaQuery.sizeOf(context).width;
+    if (width < 760) {
+      final project = SportotekaTeamProjectScreen(
+          team: team,
+          clubId: widget.clubId,
+          currentUserId: widget.currentUserId,
+          players: widget.players,
+          onRefresh: widget.onRefresh,
+          onOpenModule: widget.onOpenModule);
+      await Navigator.of(context).push<void>(MaterialPageRoute<void>(
+          builder: (_) => Scaffold(
+              backgroundColor: Colors.white, body: SafeArea(child: project))));
+      return;
+    }
+    await _openDesktopWindow(
+      id: 'team:$id',
+      title: title,
+      iconKind: SportotekaWorkspaceIconKind.teams,
+      builder: (closeWindow) => SportotekaTeamProjectScreen(
+        team: team,
+        clubId: widget.clubId,
+        currentUserId: widget.currentUserId,
+        players: widget.players,
+        onRefresh: widget.onRefresh,
+        onOpenModule: widget.onOpenModule,
+        onClose: closeWindow,
+      ),
+    );
+  }
+
+  Future<void> _openTrainerProject(Map<String, dynamic> rawTrainer) async {
+    final trainer = Map<String, dynamic>.from(rawTrainer);
+    final id =
+        '${trainer['trainer_id'] ?? trainer['id'] ?? trainer['name'] ?? 'trainer'}';
+    final last = '${trainer['last_name'] ?? trainer['lastname'] ?? ''}'.trim();
+    final first =
+        '${trainer['first_name'] ?? trainer['firstname'] ?? ''}'.trim();
+    final fallback =
+        '${trainer['full_name'] ?? trainer['name'] ?? 'Тренер'}'.trim();
+    final title =
+        <String>[last, first].where((e) => e.isNotEmpty).join(' ').trim();
+    final width = MediaQuery.sizeOf(context).width;
+    if (width < 760) {
+      final project = SportotekaTrainerProjectScreen(
+          trainer: trainer,
+          clubId: widget.clubId,
+          currentUserId: widget.currentUserId,
+          teams: widget.teams,
+          players: widget.players,
+          onRefresh: widget.onRefresh);
+      await Navigator.of(context).push<void>(MaterialPageRoute<void>(
+          builder: (_) => Scaffold(
+              backgroundColor: Colors.white, body: SafeArea(child: project))));
+      return;
+    }
+    await _openDesktopWindow(
+      id: 'trainer:$id',
+      title: title.isEmpty ? fallback : title,
+      iconKind: SportotekaWorkspaceIconKind.trainers,
+      builder: (closeWindow) => SportotekaTrainerProjectScreen(
+        trainer: trainer,
+        clubId: widget.clubId,
+        currentUserId: widget.currentUserId,
+        teams: widget.teams,
+        players: widget.players,
+        onRefresh: widget.onRefresh,
+        onClose: closeWindow,
+      ),
+    );
+  }
+
+  Future<void> _openProjectSurface(
+    Widget project, {
+    required double maxWidth,
+    required double maxHeight,
+    String windowId = '',
+    String windowTitle = 'Рабочий файл',
+    String windowSubtitle = '',
+    SportotekaWorkspaceIconKind iconKind = SportotekaWorkspaceIconKind.document,
+  }) async {
+    final width = MediaQuery.sizeOf(context).width;
+    if (width < 760) {
+      await Navigator.of(context).push<void>(MaterialPageRoute<void>(
+          builder: (_) => Scaffold(
+              backgroundColor: Colors.white, body: SafeArea(child: project))));
+      return;
+    }
+    final id = windowId.trim().isEmpty
+        ? 'surface:${DateTime.now().microsecondsSinceEpoch}'
+        : windowId;
+    await _openDesktopWindow(
+        id: id,
+        title: windowTitle,
+        subtitle: windowSubtitle,
+        iconKind: iconKind,
+        builder: (_) => project);
+  }
+
+  void _goHome() {
+    setState(() {
+      _inlineAiDocumentLibrary = false;
+      _folderKey = 'home';
+      _search = '';
+      _selectedNodeId = null;
+    });
+  }
+
+  Future<void> _goBackFromCurrentFolder() async {
+    if (_isPersonal) {
+      if (_folderKey == 'home') {
+        if (widget.onSelectionCancel != null) {
+          widget.onSelectionCancel!();
+        }
+        return;
+      }
+      if (_isPersonalFolderKey(_folderKey)) {
+        final category = _personalCategoryForKey(_folderKey) ?? '';
+        final meta = _personalFolderMeta[_folderKey];
+        final parentRaw = meta == null ? null : meta['parent_id'];
+        final parentId = parentRaw is num
+            ? parentRaw.toInt()
+            : int.tryParse('${parentRaw ?? 0}') ?? 0;
+        await _enterFolder(
+          parentId > 0 ? _personalFolderKey(category, parentId) : category,
+        );
+        return;
+      }
+      _goHome();
+      return;
+    }
+    if (_isEntityFolderKey(_folderKey)) {
+      final root = _entityFolderRoots[_folderKey];
+      final fallbackParent = root?.kind == WorkspaceFinderNodeKind.match
+          ? 'matches'
+          : (root?.kind == WorkspaceFinderNodeKind.calendar
+              ? 'calendar'
+              : (root?.kind == WorkspaceFinderNodeKind.tracker
+                  ? 'tracker'
+                  : 'trainings'));
+      final parent =
+          '${root?.payload?['_workspace_entity_folder_parent'] ?? fallbackParent}'
+              .trim();
+      await _enterFolder(parent.isEmpty ? fallbackParent : parent);
+      return;
+    }
+    if (_folderKey.startsWith('local-folder:')) {
+      final current = _findLocalNode(_folderKey);
+      final parent = current?.parentId?.trim() ?? '';
+      await _enterFolder(parent.isEmpty ? 'home' : parent);
+      if (_isEntityFolderKey(parent)) {
+        await _loadEntityFolder(parent);
+      }
+      return;
+    }
+    if (_isPlanLibraryFolderKey(_folderKey)) {
+      final currentId = _planFolderIdFromKey(_folderKey);
+      var parentId = 0;
+      for (final list in _realFolderNodes.values) {
+        for (final node in list) {
+          final id = int.tryParse(
+                  '${node.payload?['_workspace_plan_folder_id'] ?? ''}') ??
+              0;
+          if (id != currentId) continue;
+          parentId = int.tryParse('${node.payload?['parent_id'] ?? 0}') ?? 0;
+          break;
+        }
+      }
+      await _enterFolder(parentId > 0 ? 'plan-folder:$parentId' : 'plans');
+      return;
+    }
+    _goHome();
+  }
+
+  String get _currentTitle {
+    if (_isPersonal) {
+      if (_folderKey == 'home') return _personalOwnerTitle;
+      if (_folderKey == 'favorites') return 'Избранное';
+      if (_folderKey == 'recent') return 'Недавние';
+      if (_isPersonalFolderKey(_folderKey)) {
+        final meta = _personalFolderMeta[_folderKey];
+        final title = '${meta == null ? '' : (meta['name'] ?? '')}'.trim();
+        if (title.isNotEmpty) return title;
+        return 'Папка';
+      }
+      return _personalModuleFor(_folderKey)?.title ?? 'Личное пространство';
+    }
+    if (_folderKey == 'home')
+      return widget.clubName.trim().isEmpty ? 'SPORTOTEKA' : widget.clubName;
+    if (_folderKey == 'favorites') return 'Избранное';
+    if (_folderKey == 'recent') return 'Недавние';
+    if (_isEntityFolderKey(_folderKey)) {
+      return _entityFolderRoots[_folderKey]?.title ??
+          _entityFallbackTitleForKey(_folderKey);
+    }
+    if (_isPlanLibraryFolderKey(_folderKey)) {
+      final currentId = _planFolderIdFromKey(_folderKey);
+      for (final list in _realFolderNodes.values) {
+        for (final node in list) {
+          final id = int.tryParse(
+                  '${node.payload?['_workspace_plan_folder_id'] ?? ''}') ??
+              0;
+          if (id == currentId) return node.title;
+        }
+      }
+      return 'Папка планов';
+    }
+    final module = _moduleFor(_folderKey);
+    if (module != null) return module.title;
+    for (final node in _allKnownNodes()) {
+      if (node.id == _folderKey) return node.title;
+    }
+    return 'Папка';
+  }
+
+  List<String> get _breadcrumbs {
+    if (_isPersonal) {
+      if (_folderKey == 'home') return <String>['Личное пространство'];
+      if (_folderKey == 'favorites') {
+        return <String>['Личное пространство', 'Избранное'];
+      }
+      if (_folderKey == 'recent') {
+        return <String>['Личное пространство', 'Недавние'];
+      }
+      final category = _personalCategoryForKey(_folderKey) ?? _folderKey;
+      final moduleTitle = _personalModuleFor(category)?.title ?? category;
+      if (_isPersonalFolderKey(_folderKey)) {
+        return <String>['Личное пространство', moduleTitle, _currentTitle];
+      }
+      return <String>['Личное пространство', moduleTitle];
+    }
+    if (_folderKey == 'home') return <String>['Клуб'];
+    if (_isEntityFolderKey(_folderKey)) {
+      return <String>[
+        'Клуб',
+        _entityModuleTitleForKey(_folderKey),
+        _currentTitle,
+      ];
+    }
+    if (_folderKey.startsWith('local-folder:')) {
+      final out = <String>[_currentTitle];
+      var cursor = _findLocalNode(_folderKey);
+      var guard = 0;
+      while (cursor != null && guard++ < 8) {
+        final parent = cursor.parentId ?? 'home';
+        if (_isEntityFolderKey(parent)) {
+          final entityTitle = _entityFolderRoots[parent]?.title ??
+              _entityFallbackTitleForKey(parent);
+          out.insert(0, entityTitle);
+          out.insert(0, _entityModuleTitleForKey(parent));
+          break;
+        }
+        if (parent == 'home') break;
+        final module = _moduleFor(parent);
+        if (module != null) {
+          out.insert(0, module.title);
+          break;
+        }
+        cursor = _findLocalNode(parent);
+        if (cursor != null) out.insert(0, cursor.title);
+      }
+      return <String>['Клуб', ...out];
+    }
+    return <String>['Клуб', _currentTitle];
+  }
+
+  Future<void> _createFolder() async {
+    if (!_canCreateWorkspaceNode || _creatingFolder) return;
+
+    // PopupMenuButton.onSelected fires while the popup route is still being
+    // removed. Let that route finish first, then reveal an in-tree editor.
+    await Future<void>.delayed(const Duration(milliseconds: 90));
+    if (!mounted) return;
+
+    _newFolderNameController.clear();
+    setState(() {
+      _showInlineFolderCreator = true;
+      _folderCreateError = null;
+    });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_showInlineFolderCreator) return;
+      _newFolderNameFocus.requestFocus();
+    });
+  }
+
+  void _cancelInlineFolderCreator() {
+    if (!mounted || _creatingFolder) return;
+    _newFolderNameFocus.unfocus();
+    setState(() {
+      _showInlineFolderCreator = false;
+      _folderCreateError = null;
+    });
+  }
+
+  Future<void> _commitInlineFolderCreator() async {
+    if (_creatingFolder || !_showInlineFolderCreator) return;
+
+    final name = _newFolderNameController.text.trim();
+    if (name.isEmpty) {
+      setState(() => _folderCreateError = 'Введите название папки');
+      return;
+    }
+
+    final currentNames = _nodesForCurrentFolder()
+        .where((node) => node.isFolder)
+        .map((node) => node.title.trim().toLowerCase())
+        .toSet();
+    if (currentNames.contains(name.toLowerCase())) {
+      setState(() => _folderCreateError = 'Папка с таким названием уже есть');
+      return;
+    }
+
+    setState(() {
+      _creatingFolder = true;
+      _folderCreateError = null;
+    });
+
+    if (_isPersonal) {
+      final category = _personalCategoryForKey(_folderKey);
+      final parentId = _personalFolderIdForKey(_folderKey);
+      if (category == null) {
+        if (mounted) {
+          setState(() {
+            _creatingFolder = false;
+            _folderCreateError = 'Сначала откройте личный раздел';
+          });
+        }
+        return;
+      }
+      try {
+        final result = await PersonalWorkspaceOsService.createFolder(
+          userId: _personalUserId,
+          category: category,
+          name: name,
+          parentId: parentId > 0 ? parentId : null,
+        );
+        if (result['success'] != true) {
+          throw StateError(
+              '${result['message'] ?? 'Не удалось создать папку'}');
+        }
+        if (!mounted) return;
+        setState(() {
+          _showInlineFolderCreator = false;
+          _creatingFolder = false;
+          _folderCreateError = null;
+        });
+        _newFolderNameFocus.unfocus();
+        await _loadPersonalFolder(_folderKey, force: true);
+      } catch (e) {
+        if (!mounted) return;
+        setState(() {
+          _creatingFolder = false;
+          _folderCreateError = 'Не удалось создать папку: $e';
+          _showInlineFolderCreator = true;
+        });
+      }
+      return;
+    }
+
+    if (_isPlansWorkspace) {
+      final parentId = _isPlanLibraryFolderKey(_folderKey)
+          ? _planFolderIdFromKey(_folderKey)
+          : 0;
+      try {
+        final response = await http.post(
+          Uri.parse('https://sportotekaapp.ru/api/create_plan_folder.php'),
+          body: <String, String>{
+            'club_id': '${widget.clubId}',
+            'parent_id': '$parentId',
+            'name': name,
+            'title': name,
+            'type': parentId == 0 ? 'age' : 'custom',
+            'created_by':
+                '${widget.currentUserId > 0 ? widget.currentUserId : widget.clubId}',
+          },
+        ).timeout(const Duration(seconds: 12));
+        final decoded = jsonDecode(response.body);
+        if (response.statusCode < 200 ||
+            response.statusCode >= 300 ||
+            decoded is! Map ||
+            decoded['success'] != true) {
+          throw StateError(
+            decoded is Map
+                ? '${decoded['message'] ?? decoded['error'] ?? 'Не удалось создать папку'}'
+                : 'Не удалось создать папку',
+          );
+        }
+        if (!mounted) return;
+        setState(() {
+          _showInlineFolderCreator = false;
+          _creatingFolder = false;
+          _folderCreateError = null;
+        });
+        _newFolderNameFocus.unfocus();
+        _realFolderNodes.remove('plans');
+        _realFolderNodes.remove(_folderKey);
+        await _loadRealFolder(_folderKey, force: true);
+      } catch (e) {
+        if (!mounted) return;
+        setState(() {
+          _creatingFolder = false;
+          _folderCreateError = 'Не удалось создать папку: $e';
+          _showInlineFolderCreator = true;
+        });
+      }
+      return;
+    }
+
+    final id = 'local-folder:${DateTime.now().microsecondsSinceEpoch}';
+    final node = WorkspaceFinderNode(
+      id: id,
+      title: name,
+      subtitle: 'Папка',
+      kind: WorkspaceFinderNodeKind.folder,
+      parentId: _folderKey,
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+    );
+
+    try {
+      if (!mounted) return;
+
+      setState(() {
+        final list = List<WorkspaceFinderNode>.of(
+          _localChildren[_folderKey] ?? const <WorkspaceFinderNode>[],
+          growable: true,
+        );
+        list.add(node);
+        _localChildren[_folderKey] = list;
+        _selectedNodeId = id;
+        _showInlineFolderCreator = false;
+        _creatingFolder = false;
+      });
+
+      _newFolderNameFocus.unfocus();
+
+      await _persistLocalWorkspace();
+
+      try {
+        await _serverCreateNode(node);
+      } catch (e) {
+        // The local folder must remain usable even when the server is
+        // temporarily unavailable. Existing Workspace sync will retry later.
+        _wsLog('CREATE_FOLDER server sync failed uid=$id error=$e');
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _creatingFolder = false;
+        _folderCreateError = 'Не удалось создать папку: $e';
+        _showInlineFolderCreator = true;
+      });
+    }
+  }
+
+  Future<void> _createNote() async {
+    if (!_canCreateWorkspaceNode) return;
+    if (_isPersonal) {
+      if (widget.selectionMode) return;
+      await _createPersonalDocument();
+      return;
+    }
+    if (_isPlansWorkspace) {
+      await _createWorkspaceTrainingPlan();
+      return;
+    }
+    final id = 'note:${DateTime.now().microsecondsSinceEpoch}';
+    final node = WorkspaceFinderNode(
+      id: id,
+      title: 'Новый документ',
+      subtitle: 'Заметка Спортотека OS',
+      kind: WorkspaceFinderNodeKind.note,
+      parentId: _folderKey,
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+    );
+    setState(() {
+      (_localChildren[_folderKey] ??= <WorkspaceFinderNode>[]).add(node);
+      _noteBodies[id] = '';
+      _pendingSyncIds.add(id);
+    });
+    await _persistLocalWorkspace();
+    _wsLog('CREATE_NOTE local uid=$id -> sync');
+    try {
+      await _serverStorage.syncNodeDocument(
+          node: node, body: '', createHint: true);
+      final identity = _currentEntityFolderIdentity;
+      if (identity != null) {
+        await _serverStorage.linkDocument(
+          documentKey: id,
+          entityType: identity.type,
+          entityId: identity.id,
+          sectionKey: 'documents',
+          title: node.title,
+        );
+      }
+      _serverAvailable = true;
+      _pendingSyncIds.remove(id);
+      await _persistLocalWorkspace();
+      _wsLog('CREATE_NOTE sync OK uid=$id');
+    } catch (e, st) {
+      _serverAvailable = false;
+      _wsLog('CREATE_NOTE sync FAILED uid=$id error=$e');
+      _wsLog(
+          'CREATE_NOTE stack=${st.toString().split('\n').take(5).join(' | ')}');
+      // Keep pending. The editor save / next refresh retries it.
+    }
+    await _openNote(node);
+  }
+
+  Future<void> _uploadWorkspaceFiles() async {
+    if (_isPersonal) {
+      if (widget.selectionMode) return;
+      await _uploadPersonalFiles();
+      return;
+    }
+    if (widget.clubId <= 0) {
+      _showSnack('Не удалось определить клуб для загрузки файла.');
+      return;
+    }
+
+    final picked = await FilePicker.pickFiles(allowMultiple: true);
+    if (picked == null) return;
+    final paths = picked.files
+        .map((file) => file.path)
+        .whereType<String>()
+        .where((path) => path.trim().isNotEmpty)
+        .toList(growable: false);
+    if (paths.isEmpty) return;
+
+    var uploaded = 0;
+    try {
+      for (final path in paths) {
+        final now = DateTime.now();
+        final fileName = path.split(RegExp(r'[\\/]')).last;
+        final title = fileName.isEmpty ? 'Документ' : fileName;
+        final entityIdentity = _currentEntityFolderIdentity;
+        final attachment = await _serverStorage.uploadAttachment(
+          filePath: path,
+          entityType: entityIdentity?.type ?? 'club',
+          entityId: entityIdentity == null
+              ? widget.clubId
+              : (int.tryParse(entityIdentity.id) ?? widget.clubId),
+          sectionKey:
+              entityIdentity == null ? 'workspace:${_folderKey}' : 'documents',
+          title: title.replaceFirst(RegExp(r'\.[^.]+$'), ''),
+        );
+        final attachmentId = int.tryParse(
+                '${attachment['id'] ?? attachment['attachment_id'] ?? 0}') ??
+            0;
+        final nodeId = attachmentId > 0
+            ? 'workspace-file:$attachmentId'
+            : 'workspace-file:${now.microsecondsSinceEpoch}';
+        final node = WorkspaceFinderNode(
+          id: nodeId,
+          title: title,
+          subtitle: 'Файл · $_currentTitle',
+          kind: WorkspaceFinderNodeKind.document,
+          payload: <String, dynamic>{
+            ...attachment,
+            '_workspace_uploaded_file': true,
+            '_workspace_attachment_id': attachmentId,
+            '_workspace_folder_key': _folderKey,
+            if (entityIdentity != null)
+              '_workspace_entity_type': entityIdentity.type,
+            if (entityIdentity != null)
+              '_workspace_entity_id': entityIdentity.id,
+          },
+          parentId: _folderKey,
+          createdAt: now,
+          updatedAt: now,
+        );
+
+        if (mounted) {
+          setState(() {
+            (_localChildren[_folderKey] ??= <WorkspaceFinderNode>[])
+                .removeWhere(
+              (item) => item.id == node.id,
+            );
+            (_localChildren[_folderKey] ??= <WorkspaceFinderNode>[]).add(node);
+            _pendingSyncIds.add(node.id);
+          });
+        } else {
+          (_localChildren[_folderKey] ??= <WorkspaceFinderNode>[]).add(node);
+          _pendingSyncIds.add(node.id);
+        }
+        await _persistLocalWorkspace();
+
+        try {
+          await _serverStorage.createNode(node);
+          _serverAvailable = true;
+          _pendingSyncIds.remove(node.id);
+          await _persistLocalWorkspace();
+        } catch (_) {
+          _serverAvailable = false;
+          // The local item stays visible and will be retried by Workspace sync.
+        }
+        uploaded += 1;
+      }
+
+      if (_isEntityFolderKey(_folderKey)) {
+        await _loadEntityFolder(_folderKey, force: true);
+      }
+
+      _showSnack(
+        uploaded == 1
+            ? 'Файл добавлен в «$_currentTitle».'
+            : 'Файлы ($uploaded) добавлены в «$_currentTitle».',
+      );
+    } catch (e) {
+      _showSnack('Не удалось загрузить файл: $e');
+    }
+  }
+
+  Future<void> _openNote(WorkspaceFinderNode node) async {
+    _wsLog(
+        'OPEN_NOTE uid=${node.id} pending=${_pendingSyncIds.contains(node.id)} localBodyLen=${(_noteBodies[node.id] ?? '').length}');
+    // Always ask the server for the latest saved copy before opening the
+    // editor, unless this device has a known unsynced local edit. This makes
+    // cross-device saves visible as soon as the document is opened.
+    if (!_pendingSyncIds.contains(node.id)) {
+      try {
+        final remote = await _serverStorage.loadDocument(clientUid: node.id);
+        final remoteBodyForLog = '${remote?['body'] ?? ''}';
+        _wsLog(
+          "OPEN_NOTE remote uid=${node.id} exists=${remote?['exists']} "
+          "version=${remote?['version']} updated=${remote?['updated_at']} "
+          'bodyLen=${remoteBodyForLog.length}',
+        );
+        if (remote != null && remote['exists'] == true) {
+          final remoteBody = '${remote['body'] ?? ''}';
+          final remoteTitle = '${remote['title'] ?? ''}'.trim();
+          final remoteUpdated = DateTime.tryParse(
+            '${remote['updated_at'] ?? ''}'.replaceFirst(' ', 'T'),
+          );
+          final localBefore = _findLocalNode(node.id) ?? node;
+          final localBody = _noteBodies[node.id] ?? '';
+          final localUpdated = localBefore.updatedAt;
+
+          final localLooksNewer = localBody != remoteBody &&
+              localUpdated != null &&
+              (remoteUpdated == null ||
+                  localUpdated
+                      .isAfter(remoteUpdated.add(const Duration(seconds: 5))));
+
+          if (localLooksNewer) {
+            _wsLog(
+                'OPEN_NOTE local newer -> pending uid=${node.id} localUpdated=$localUpdated remoteUpdated=$remoteUpdated localLen=${localBody.length} remoteLen=${remoteBody.length}');
+            // Older application builds could leave a newer body only in the
+            // local cache. Do not overwrite it; queue it for upload instead.
+            _pendingSyncIds.add(node.id);
+          } else {
+            _wsLog(
+                "OPEN_NOTE applying remote uid=${node.id} version=${remote['version']} remoteLen=${remoteBody.length}");
+            if (mounted) {
+              setState(() {
+                _noteBodies[node.id] = remoteBody;
+                _replaceLocalNode(
+                  node.id,
+                  (old) => old.copyWith(
+                    title: remoteTitle.isEmpty ? old.title : remoteTitle,
+                    updatedAt: remoteUpdated ?? old.updatedAt,
+                  ),
+                );
+              });
+            } else {
+              _noteBodies[node.id] = remoteBody;
+            }
+          }
+        }
+        _serverAvailable = true;
+        await _persistLocalWorkspace();
+      } catch (e, st) {
+        // Offline: continue with the local cache. The pending-sync logic will
+        // retry when connectivity returns.
+        _serverAvailable = false;
+        _wsLog('OPEN_NOTE remote load FAILED uid=${node.id} error=$e');
+        _wsLog(
+            'OPEN_NOTE stack=${st.toString().split('\n').take(5).join(' | ')}');
+      }
+    }
+
+    final currentBody = _noteBodies[node.id] ?? '';
+    final localNode = _findLocalNode(node.id);
+    final initialTitle = localNode?.title ?? node.title;
+
+    Future<void> save(String title, String body) async {
+      final saveTitleForLog = title.isEmpty ? 'Без названия' : title;
+      _wsLog(
+          'SAVE begin uid=${node.id} title=$saveTitleForLog bodyLen=${body.length}');
+      setState(() {
+        _noteBodies[node.id] = body;
+        _pendingSyncIds.add(node.id);
+        _replaceLocalNode(
+          node.id,
+          (old) => old.copyWith(
+            title: title.isEmpty ? 'Без названия' : title,
+            updatedAt: DateTime.now(),
+          ),
+        );
+      });
+      await _persistLocalWorkspace();
+      _wsLog(
+          'SAVE local persisted uid=${node.id} pending=${_pendingSyncIds.contains(node.id)}');
+      final savedNode = _findLocalNode(node.id);
+      if (savedNode == null) {
+        _wsLog('SAVE ABORT uid=${node.id}: local node not found');
+        return;
+      }
+      try {
+        await _serverStorage.syncNodeDocument(node: savedNode, body: body);
+        final currentIdentity = _currentEntityFolderIdentity;
+        final payloadType =
+            '${savedNode.payload?['_workspace_entity_type'] ?? ''}'.trim();
+        final payloadId =
+            '${savedNode.payload?['_workspace_entity_id'] ?? ''}'.trim();
+        if (currentIdentity != null) {
+          await _serverStorage.linkDocument(
+            documentKey: savedNode.id,
+            entityType: currentIdentity.type,
+            entityId: currentIdentity.id,
+            sectionKey: 'documents',
+            title: savedNode.title,
+          );
+        } else if (payloadType.isNotEmpty && payloadId.isNotEmpty) {
+          await _serverStorage.linkDocument(
+            documentKey: savedNode.id,
+            entityType: payloadType,
+            entityId: payloadId,
+            sectionKey: 'documents',
+            title: savedNode.title,
+          );
+        }
+        _serverAvailable = true;
+        _pendingSyncIds.remove(node.id);
+        await _persistLocalWorkspace();
+        _wsLog('SAVE server sync OK uid=${node.id} bodyLen=${body.length}');
+      } catch (e, st) {
+        _serverAvailable = false;
+        _wsLog(
+            'SAVE server sync FAILED uid=${node.id} bodyLen=${body.length} error=$e');
+        _wsLog('SAVE stack=${st.toString().split('\n').take(6).join(' | ')}');
+        throw Exception(
+            'Документ сохранён локально, но серверная синхронизация не выполнена: $e');
+      }
+    }
+
+    Future<String?> uploadDocumentImage(String filePath) async {
+      final serverId = int.tryParse(
+            '${node.payload?['_workspace_server_id'] ?? 0}',
+          ) ??
+          0;
+      if (serverId <= 0) {
+        throw Exception('Сначала сохраните документ, затем вставьте фото');
+      }
+      final attachment = await _serverStorage.uploadAttachment(
+        filePath: filePath,
+        entityType: 'document',
+        entityId: serverId,
+        sectionKey: 'images',
+        title: 'Изображение документа',
+      );
+      final url = _absoluteRecordFileUrl(attachment);
+      if (url.isEmpty) {
+        throw Exception('Сервер не вернул ссылку на изображение');
+      }
+      return url;
+    }
+
+    final width = MediaQuery.sizeOf(context).width;
+    if (width >= 760) {
+      await _openDesktopWindow(
+        id: 'note:${node.id}',
+        title: initialTitle,
+        subtitle: _editorContextName,
+        iconKind: SportotekaWorkspaceIconKind.document,
+        builder: (closeWindow) => WorkspaceDocumentEditor(
+          initialTitle: initialTitle,
+          initialBody: currentBody,
+          contextLabel: _editorContextLabel,
+          contextName: _editorContextName,
+          documentType: 'Заметка',
+          liveBlocksKey: node.id,
+          compactWorkspaceChrome: true,
+          onSave: save,
+          onClose: closeWindow,
+          aiClubId: widget.clubId,
+          aiUserId: widget.currentUserId,
+          aiTeamId: widget.selectedTeamId,
+          aiClubName: widget.clubName,
+          aiTeamName: widget.selectedTeamName,
+          aiDocumentKey: node.id,
+          aiExtraPayload: <String, dynamic>{
+            'workspace_section': _folderKey,
+            'workspace_node_id': node.id,
+            'workspace_node_title': initialTitle,
+          },
+          onUploadImage: uploadDocumentImage,
+        ),
+      );
+      return;
+    }
+    await Navigator.of(context).push<void>(
+      PageRouteBuilder<void>(
+        transitionDuration: const Duration(milliseconds: 300),
+        reverseTransitionDuration: const Duration(milliseconds: 220),
+        pageBuilder: (routeContext, animation, secondaryAnimation) => Scaffold(
+          backgroundColor: _bg,
+          body: SafeArea(
+            child: WorkspaceDocumentEditor(
+              initialTitle: initialTitle,
+              initialBody: currentBody,
+              contextLabel: _editorContextLabel,
+              contextName: _editorContextName,
+              documentType: 'Заметка',
+              liveBlocksKey: node.id,
+              onSave: save,
+              onClose: () => Navigator.of(routeContext).pop(),
+              aiClubId: widget.clubId,
+              aiUserId: widget.currentUserId,
+              aiTeamId: widget.selectedTeamId,
+              aiClubName: widget.clubName,
+              aiTeamName: widget.selectedTeamName,
+              aiDocumentKey: node.id,
+              aiExtraPayload: <String, dynamic>{
+                'workspace_section': _folderKey,
+                'workspace_node_id': node.id,
+                'workspace_node_title': initialTitle,
+              },
+              onUploadImage: uploadDocumentImage,
+            ),
+          ),
+        ),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) =>
+            FadeTransition(opacity: animation, child: child),
+      ),
+    );
+  }
+
+  String get _editorContextLabel {
+    final entity = _currentEntityFolderIdentity;
+    if (entity?.type == 'match') return 'Матч';
+    if (entity?.type == 'training') return 'Тренировка';
+    if (entity?.type == 'tracker') return 'Tracker-сессия';
+    switch (_folderKey) {
+      case 'players':
+        return 'Игрок';
+      case 'trainers':
+        return 'Тренер';
+      case 'teams':
+        return 'Команда';
+      case 'trainings':
+        return 'Тренировка';
+      case 'matches':
+        return 'Матч';
+      case 'plans':
+        return 'План-конспект';
+      default:
+        return 'Пространство клуба';
+    }
+  }
+
+  String get _editorContextName {
+    if (_folderKey == 'home') return widget.clubName;
+    final entityRoot = _currentEntityFolderRoot;
+    if (entityRoot != null &&
+        _folderKey != _entityFolderKeyForNode(entityRoot)) {
+      return '${entityRoot.title} · $_currentTitle';
+    }
+    return _currentTitle;
+  }
+
+  WorkspaceFinderNode? _findLocalNode(String id) {
+    for (final list in _localChildren.values) {
+      for (final node in list) {
+        if (node.id == id) return node;
+      }
+    }
+    return null;
+  }
+
+  void _replaceLocalNode(
+    String id,
+    WorkspaceFinderNode Function(WorkspaceFinderNode old) transform,
+  ) {
+    for (final entry in _localChildren.entries) {
+      final index = entry.value.indexWhere((node) => node.id == id);
+      if (index >= 0) {
+        entry.value[index] = transform(entry.value[index]);
+        return;
+      }
+    }
+  }
+
+  Future<void> _deleteLocalNode(WorkspaceFinderNode node) async {
+    if (node.payload?['_workspace_uploaded_file'] == true &&
+        node.payload?['_workspace_attachment_copy_ref'] != true) {
+      final attachmentId = int.tryParse(
+            '${node.payload?['_workspace_attachment_id'] ?? node.payload?['id'] ?? 0}',
+          ) ??
+          0;
+      if (attachmentId > 0) {
+        try {
+          await _serverStorage.deleteAttachment(attachmentId);
+        } catch (e) {
+          _showSnack('Не удалось удалить файл с сервера: $e');
+          return;
+        }
+      }
+    }
+    setState(() {
+      for (final list in _localChildren.values) {
+        list.removeWhere((item) => item.id == node.id);
+      }
+      _localChildren.remove(node.id);
+      _noteBodies.remove(node.id);
+      _favoriteIds.remove(node.id);
+      _recentIds.remove(node.id);
+      if (_selectedNodeId == node.id) _selectedNodeId = null;
+    });
+    await _persistLocalWorkspace();
+    await _serverDeleteNode(node.id);
+  }
+
+  Future<void> _renameLocalNode(WorkspaceFinderNode node) async {
+    if (node.isSystem) return;
+    final controller = TextEditingController(text: node.title);
+    final value = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Переименовать', style: AppTypography.sectionTitle()),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          style: AppTypography.formText(),
+          onSubmitted: (value) => Navigator.of(context).pop(value.trim()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text('Отмена', style: AppTypography.action()),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(controller.text.trim()),
+            child: Text('Готово',
+                style: AppTypography.actionStrong(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (value == null || value.isEmpty || !mounted) return;
+    setState(() => _replaceLocalNode(node.id,
+        (old) => old.copyWith(title: value, updatedAt: DateTime.now())));
+    await _persistLocalWorkspace();
+    final renamed = _findLocalNode(node.id);
+    if (renamed != null) await _serverUpdateNode(renamed);
+  }
+
+  void _copyNode(WorkspaceFinderNode node) {
+    setState(() => _clipboardNode = node);
+    Clipboard.setData(ClipboardData(text: node.title));
+    _showSnack(
+        '«${node.title}» скопирован. Выберите папку и нажмите «Вставить».');
+  }
+
+  Future<void> _syncCopiedNode(
+    WorkspaceFinderNode node, {
+    String body = '',
+  }) async {
+    _pendingSyncIds.add(node.id);
+    await _persistLocalWorkspace();
+    try {
+      if (node.kind == WorkspaceFinderNodeKind.note) {
+        await _serverStorage.syncNodeDocument(
+          node: node,
+          body: body,
+          createHint: true,
+        );
+      } else {
+        await _serverStorage.createNode(node);
+      }
+      _serverAvailable = true;
+      _pendingSyncIds.remove(node.id);
+      await _persistLocalWorkspace();
+    } catch (_) {
+      _serverAvailable = false;
+    }
+  }
+
+  Future<WorkspaceFinderNode> _copyWorkspaceNodeToFolder(
+    WorkspaceFinderNode source,
+    String targetFolderKey,
+  ) async {
+    final now = DateTime.now();
+    final sourcePayload = Map<String, dynamic>.from(
+      source.payload ?? const <String, dynamic>{},
+    );
+    sourcePayload
+      ..remove('_workspace_server_id')
+      ..remove('_workspace_server');
+
+    // Notes/documents created in Sportoteka OS are copied as independent
+    // documents, including their body. Uploaded files are copied as a safe
+    // file reference to the same server attachment; deleting the copied
+    // reference therefore does not delete the original attachment.
+    if (source.kind == WorkspaceFinderNodeKind.note) {
+      final id = 'note:${now.microsecondsSinceEpoch}';
+      final body = _noteBodies[source.id] ?? '';
+      final copy = WorkspaceFinderNode(
+        id: id,
+        title: source.title,
+        subtitle: source.subtitle.isEmpty
+            ? 'Документ Спортотека OS'
+            : source.subtitle,
+        kind: WorkspaceFinderNodeKind.note,
+        payload: sourcePayload,
+        parentId: targetFolderKey,
+        createdAt: now,
+        updatedAt: now,
+      );
+      setState(() {
+        (_localChildren[targetFolderKey] ??= <WorkspaceFinderNode>[]).add(copy);
+        _noteBodies[id] = body;
+      });
+      await _syncCopiedNode(copy, body: body);
+      return copy;
+    }
+
+    if (source.payload?['_workspace_uploaded_file'] == true ||
+        source.payload?['_workspace_entity_attachment'] == true) {
+      final id = 'workspace-file-copy:${now.microsecondsSinceEpoch}';
+      final copy = WorkspaceFinderNode(
+        id: id,
+        title: source.title,
+        subtitle: source.subtitle.isEmpty ? 'Файл' : source.subtitle,
+        kind: WorkspaceFinderNodeKind.document,
+        payload: <String, dynamic>{
+          ...sourcePayload,
+          '_workspace_uploaded_file': true,
+          '_workspace_attachment_copy_ref': true,
+          '_workspace_folder_key': targetFolderKey,
+        },
+        parentId: targetFolderKey,
+        createdAt: now,
+        updatedAt: now,
+      );
+      setState(() {
+        (_localChildren[targetFolderKey] ??= <WorkspaceFinderNode>[]).add(copy);
+      });
+      await _syncCopiedNode(copy);
+      return copy;
+    }
+
+    if (source.kind == WorkspaceFinderNodeKind.folder &&
+        source.id.startsWith('local-folder:')) {
+      final id = 'local-folder:${now.microsecondsSinceEpoch}';
+      final copy = WorkspaceFinderNode(
+        id: id,
+        title: source.title,
+        subtitle: source.subtitle.isEmpty ? 'Папка' : source.subtitle,
+        kind: WorkspaceFinderNodeKind.folder,
+        parentId: targetFolderKey,
+        createdAt: now,
+        updatedAt: now,
+      );
+      setState(() {
+        (_localChildren[targetFolderKey] ??= <WorkspaceFinderNode>[]).add(copy);
+      });
+      await _syncCopiedNode(copy);
+      return copy;
+    }
+
+    // Real Sportoteka entities (match/training/player/etc.) are canonical
+    // records and must not be duplicated by Finder. For those, Paste creates
+    // a link/reference while normal Workspace files are true copies above.
+    final shortcut = WorkspaceFinderNode(
+      id: 'shortcut:${now.microsecondsSinceEpoch}',
+      title: source.title,
+      subtitle:
+          source.subtitle.isEmpty ? 'Ссылка' : '${source.subtitle} · ссылка',
+      kind: source.kind,
+      moduleKey: source.moduleKey,
+      payload: sourcePayload,
+      parentId: targetFolderKey,
+      isShortcut: true,
+      createdAt: now,
+      updatedAt: now,
+    );
+    setState(() {
+      (_localChildren[targetFolderKey] ??= <WorkspaceFinderNode>[])
+          .add(shortcut);
+    });
+    await _syncCopiedNode(shortcut);
+    return shortcut;
+  }
+
+  Future<void> _pasteClipboard() async {
+    final source = _clipboardNode;
+    if (source == null || !_canCreateWorkspaceNode) return;
+    final copy = await _copyWorkspaceNodeToFolder(source, _folderKey);
+    if (!mounted) return;
+    setState(() => _selectedNodeId = copy.id);
+    _showSnack('«${source.title}» вставлен в «$_currentTitle».');
+  }
+
+  Future<void> _dropNode(
+      WorkspaceFinderNode source, WorkspaceFinderNode target) async {
+    if (!(target.isFolder || target.kind == WorkspaceFinderNodeKind.team) ||
+        source.id == target.id) return;
+
+    String? workspaceTargetKey;
+    if (target.id.startsWith('local-folder:')) {
+      workspaceTargetKey = target.id;
+    } else if (_isEntityFolderNode(target)) {
+      workspaceTargetKey = _entityFolderKeyForNode(target);
+      _entityFolderRoots[workspaceTargetKey] = target;
+    }
+
+    if (workspaceTargetKey != null) {
+      final targetKey = workspaceTargetKey;
+      final localSource = _findLocalNode(source.id);
+      if (localSource != null && !source.isSystem && !source.isShortcut) {
+        final moved = localSource.copyWith(
+          parentId: targetKey,
+          updatedAt: DateTime.now(),
+        );
+        setState(() {
+          for (final list in _localChildren.values) {
+            list.removeWhere((item) => item.id == source.id);
+          }
+          (_localChildren[targetKey] ??= <WorkspaceFinderNode>[]).add(moved);
+          _selectedNodeId = moved.id;
+        });
+        await _persistLocalWorkspace();
+        try {
+          await _serverStorage.moveNode(moved.id, targetKey);
+          _serverAvailable = true;
+        } catch (_) {
+          _serverAvailable = false;
+          _pendingSyncIds.add(moved.id);
+          await _persistLocalWorkspace();
+        }
+        _showSnack('«${source.title}» перемещён в «${target.title}».');
+        return;
+      }
+
+      await _copyWorkspaceNodeToFolder(source, targetKey);
+      _showSnack('«${source.title}» добавлен в «${target.title}».');
+      return;
+    }
+
+    if (widget.onMoveEntity != null) {
+      final ok = await widget.onMoveEntity!(source, target);
+      if (ok && mounted) {
+        _showSnack('Изменение применено к данным клуба.');
+        await widget.onRefresh?.call();
+      }
+      return;
+    }
+
+    try {
+      final result = await _entityMoveBridge.move(source, target);
+      if (result.handled) {
+        if (result.success) {
+          _showSnack(result.message.isEmpty
+              ? 'Изменение применено к данным клуба.'
+              : result.message);
+          await widget.onRefresh?.call();
+        } else {
+          _showSnack(result.message.isEmpty
+              ? 'Не удалось выполнить перенос.'
+              : result.message);
+        }
+        return;
+      }
+    } catch (e) {
+      _showSnack('Ошибка переноса: $e');
+      return;
+    }
+
+    _showSnack(
+        'Для этого системного переноса нужен подтверждённый API раздела.');
+  }
+
+  void _showSnack(String text) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(text, style: AppTypography.body(color: Colors.white)),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  WorkspaceEntityIdentity? _attachableIdentity(WorkspaceFinderNode node) {
+    if (node.payload?['_workspace_real_record'] != true) return null;
+    final record = Map<String, dynamic>.from(
+      node.payload ?? const <String, dynamic>{},
+    );
+    final identity = WorkspaceEntityIdentity.resolve(
+      clubId: widget.clubId,
+      record: record,
+      sectionHint: _sectionTitleForNode(node),
+      kind: node.kind,
+      fallbackId: node.id,
+    );
+    final numericId = int.tryParse(identity.id) ?? 0;
+    if (!identity.isValid || numericId <= 0) return null;
+    return identity;
+  }
+
+  Future<void> _attachFilesToNode(WorkspaceFinderNode node) async {
+    final identity = _attachableIdentity(node);
+    if (identity == null) {
+      _showSnack('К этой записи пока нельзя прикреплять файлы.');
+      return;
+    }
+
+    final picked = await FilePicker.pickFiles(allowMultiple: true);
+    if (picked == null) return;
+    final paths = picked.files
+        .map((file) => file.path)
+        .whereType<String>()
+        .where((path) => path.trim().isNotEmpty)
+        .toList(growable: false);
+    if (paths.isEmpty) return;
+
+    final entityId = int.tryParse(identity.id) ?? 0;
+    try {
+      for (final path in paths) {
+        final fileName = path.split(RegExp(r'[\\/]')).last;
+        await _serverStorage.uploadAttachment(
+          filePath: path,
+          entityType: identity.type,
+          entityId: entityId,
+          sectionKey: 'documents',
+          title: fileName.replaceFirst(RegExp(r'\.[^.]+$'), ''),
+        );
+      }
+      _serverAvailable = true;
+      _showSnack(
+        paths.length == 1
+            ? 'Файл прикреплён к «${node.title}».'
+            : 'Файлы (${paths.length}) прикреплены к «${node.title}».',
+      );
+      await _loadRealFolder(_folderKey, force: true);
+    } catch (e) {
+      _serverAvailable = false;
+      _showSnack('Не удалось прикрепить файл: $e');
+    }
+  }
+
+  Future<void> _showPersonalNodeMenu(
+    WorkspaceFinderNode node,
+    Offset position,
+  ) async {
+    final isModule = node.payload?['_workspace_personal_module'] == true;
+    final action = await showMenu<String>(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        position.dx,
+        position.dy,
+        position.dx,
+        position.dy,
+      ),
+      items: <PopupMenuEntry<String>>[
+        PopupMenuItem(
+          value: 'open',
+          child: Text('Открыть', style: AppTypography.menuTitle()),
+        ),
+        if (!isModule)
+          PopupMenuItem(
+            value: 'properties',
+            child: Text('Свойства', style: AppTypography.menuTitle()),
+          ),
+        if (!isModule)
+          PopupMenuItem(
+            value: 'favorite',
+            child: Text(
+              _favoriteIds.contains(node.id)
+                  ? 'Убрать из избранного'
+                  : 'В избранное',
+              style: AppTypography.menuTitle(),
+            ),
+          ),
+        if (!isModule)
+          PopupMenuItem(
+            value: 'rename',
+            child: Text('Переименовать', style: AppTypography.menuTitle()),
+          ),
+        if (!isModule)
+          PopupMenuItem(
+            value: 'delete',
+            child: Text(
+              'Удалить',
+              style: AppTypography.menuTitle(color: const Color(0xFFB04444)),
+            ),
+          ),
+      ],
+    );
+
+    switch (action) {
+      case 'open':
+        await _openNode(node);
+        break;
+      case 'properties':
+        await _showNodeProperties(node);
+        break;
+      case 'favorite':
+        setState(() {
+          if (!_favoriteIds.add(node.id)) _favoriteIds.remove(node.id);
+        });
+        await _persistLocalWorkspace();
+        break;
+      case 'rename':
+        await _renamePersonalNode(node);
+        break;
+      case 'delete':
+        await _deletePersonalNode(node);
+        break;
+    }
+  }
+
+  Future<void> _showNodeMenu(WorkspaceFinderNode node, Offset position) async {
+    if (_isPersonal) {
+      await _showPersonalNodeMenu(node, position);
+      return;
+    }
+    final action = await showMenu<String>(
+      context: context,
+      position: RelativeRect.fromLTRB(
+          position.dx, position.dy, position.dx, position.dy),
+      items: <PopupMenuEntry<String>>[
+        PopupMenuItem(
+            value: 'open',
+            child: Text('Открыть', style: AppTypography.menuTitle())),
+        PopupMenuItem(
+            value: 'copy',
+            child: Text('Копировать', style: AppTypography.menuTitle())),
+        PopupMenuItem(
+            value: 'properties',
+            child: Text('Свойства', style: AppTypography.menuTitle())),
+        if (_attachableIdentity(node) != null)
+          PopupMenuItem(
+              value: 'attach',
+              child: Text('Прикрепить файл', style: AppTypography.menuTitle())),
+        PopupMenuItem(
+          value: 'favorite',
+          child: Text(
+            _favoriteIds.contains(node.id)
+                ? 'Убрать из избранного'
+                : 'В избранное',
+            style: AppTypography.menuTitle(),
+          ),
+        ),
+        if (!node.isSystem)
+          PopupMenuItem(
+              value: 'rename',
+              child: Text('Переименовать', style: AppTypography.menuTitle())),
+        if (!node.isSystem)
+          PopupMenuItem(
+              value: 'delete',
+              child: Text('Удалить',
+                  style:
+                      AppTypography.menuTitle(color: const Color(0xFFB04444)))),
+      ],
+    );
+
+    switch (action) {
+      case 'open':
+        await _openNode(node);
+        break;
+      case 'copy':
+        _copyNode(node);
+        break;
+      case 'properties':
+        await _showNodeProperties(node);
+        break;
+      case 'attach':
+        await _attachFilesToNode(node);
+        break;
+      case 'favorite':
+        setState(() {
+          if (!_favoriteIds.add(node.id)) _favoriteIds.remove(node.id);
+        });
+        await _persistLocalWorkspace();
+        break;
+      case 'rename':
+        await _renameLocalNode(node);
+        break;
+      case 'delete':
+        await _deleteLocalNode(node);
+        break;
+    }
+  }
+
+  WorkspaceFinderNode? get _selectedNode {
+    final id = _selectedNodeId;
+    if (id == null) return null;
+    return _allKnownNodes().where((node) => node.id == id).firstOrNull;
+  }
+
+  String _nodeKindLabel(WorkspaceFinderNode node) {
+    if (node.isShortcut) return 'Ярлык';
+    if (_isPersonalTrainingGraphicNode(node)) {
+      return 'Схема ${_trainingGraphicModeLabel(node)}';
+    }
+    switch (node.kind) {
+      case WorkspaceFinderNodeKind.folder:
+        return 'Папка';
+      case WorkspaceFinderNodeKind.team:
+        return 'Команда';
+      case WorkspaceFinderNodeKind.player:
+        return 'Игрок';
+      case WorkspaceFinderNodeKind.trainer:
+        return 'Тренер';
+      case WorkspaceFinderNodeKind.match:
+        return 'Матч';
+      case WorkspaceFinderNodeKind.training:
+        return 'Тренировка';
+      case WorkspaceFinderNodeKind.plan:
+        return 'План-конспект';
+      case WorkspaceFinderNodeKind.tracker:
+        return 'Tracker';
+      case WorkspaceFinderNodeKind.testing:
+        return 'Тестирование';
+      case WorkspaceFinderNodeKind.calendar:
+        return 'Календарь';
+      case WorkspaceFinderNodeKind.document:
+        return 'Документ';
+      case WorkspaceFinderNodeKind.video:
+        return 'Видео';
+      case WorkspaceFinderNodeKind.report:
+        return 'Отчёт';
+      case WorkspaceFinderNodeKind.chat:
+        return 'Чат';
+      case WorkspaceFinderNodeKind.medical:
+        return 'Медкарта';
+      case WorkspaceFinderNodeKind.parent:
+        return 'Родитель';
+      case WorkspaceFinderNodeKind.shortcut:
+        return 'Ярлык';
+      case WorkspaceFinderNodeKind.note:
+        return 'Документ Sportoteka';
+    }
+  }
+
+  List<(String, String)> _nodeProperties(WorkspaceFinderNode node) {
+    final p = node.payload ?? const <String, dynamic>{};
+    String first(List<String> keys) {
+      for (final key in keys) {
+        final value = '${p[key] ?? ''}'.trim();
+        if (value.isNotEmpty && value != 'null') return value;
+      }
+      return '';
+    }
+
+    final out = <(String, String)>[
+      ('Тип', _nodeKindLabel(node)),
+    ];
+    if (_isPersonalTrainingGraphicNode(node)) {
+      final data = _personalTrainingGraphicDocument(node);
+      out.add(('Режим', _trainingGraphicModeLabel(node)));
+      if (_personalOwnerTitle.trim().isNotEmpty) {
+        out.add(('Владелец', _personalOwnerTitle));
+      }
+      final folderTitle =
+          '${data['_workspace_parent_title'] ?? data['folder_title'] ?? ''}'
+              .trim();
+      if (folderTitle.isNotEmpty) out.add(('Папка', folderTitle));
+    } else if (node.kind == WorkspaceFinderNodeKind.player) {
+      final team = first(const ['team_name', 'teamName']);
+      final position = first(const ['position', 'role_on_field', 'amplua']);
+      final birth = first(const ['birth_date', 'birthday']);
+      if (team.isNotEmpty) out.add(('Команда', team));
+      if (position.isNotEmpty) out.add(('Амплуа', position));
+      if (birth.isNotEmpty) out.add(('Дата рождения', birth));
+    } else if (node.kind == WorkspaceFinderNodeKind.team) {
+      final category = first(const ['category', 'age_group', 'stage']);
+      final sport = first(const ['sport']);
+      if (category.isNotEmpty) out.add(('Категория', category));
+      if (sport.isNotEmpty) out.add(('Вид спорта', sport));
+    } else if (node.kind == WorkspaceFinderNodeKind.trainer) {
+      final role = first(const ['role', 'position', 'trainer_role']);
+      final email = first(const ['email']);
+      if (role.isNotEmpty) out.add(('Роль', role));
+      if (email.isNotEmpty) out.add(('E-mail', email));
+    }
+    final childCount = _localChildren[node.id]?.length ?? 0;
+    if (node.isFolder && childCount > 0)
+      out.add(('Содержимое', '$childCount объектов'));
+    if (node.createdAt != null)
+      out.add(('Создано', _formatNodeDate(node.createdAt!)));
+    if (node.updatedAt != null)
+      out.add(('Изменено', _formatNodeDate(node.updatedAt!)));
+    return out;
+  }
+
+  String _formatNodeDate(DateTime date) {
+    String two(int value) => value.toString().padLeft(2, '0');
+    return '${two(date.day)}.${two(date.month)}.${date.year} · ${two(date.hour)}:${two(date.minute)}';
+  }
+
+  Widget _buildNodeInspector() {
+    final node = _selectedNode;
+    if (node == null) {
+      return Center(
+          child: Text('Выберите объект',
+              style: AppTypography.secondary(color: _muted)));
+    }
+    final props = _nodeProperties(node);
+    return ColoredBox(
+      color: Colors.white,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(18, 20, 18, 18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (_isPersonalTrainingGraphicNode(node))
+              _buildTrainingGraphicPreview(
+                node,
+                width: double.infinity,
+                height: 148,
+                radius: 12,
+              )
+            else
+              const Align(
+                alignment: Alignment.centerLeft,
+                child: SportotekaWorkspaceFolderIcon(
+                  size: 54,
+                  color: Color(0xFF6F7973),
+                  fillColor: Color(0xFFF0F5F2),
+                  showBrandDots: true,
+                ),
+              ),
+            const SizedBox(height: 12),
+            Text(node.title,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.sectionTitle(color: _text)),
+            if (node.subtitle.trim().isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(node.subtitle,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.secondary(color: _muted)),
+            ],
+            const SizedBox(height: 18),
+            for (final prop in props)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(prop.$1, style: AppTypography.caption(color: _muted)),
+                    const SizedBox(height: 2),
+                    Text(prop.$2,
+                        style: AppTypography.secondaryMedium(color: _text)),
+                  ],
+                ),
+              ),
+            const Spacer(),
+            FilledButton(
+              onPressed: () => _openNode(node),
+              style:
+                  FilledButton.styleFrom(backgroundColor: _green, elevation: 0),
+              child: Text('Открыть',
+                  style: AppTypography.actionStrong(color: Colors.white)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showNodeProperties(WorkspaceFinderNode node) async {
+    setState(() => _selectedNodeId = node.id);
+    final size = MediaQuery.sizeOf(context);
+    if (size.width >= 1180) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.white,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(18))),
+      builder: (sheetContext) {
+        final props = _nodeProperties(node);
+        return SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(18, 18, 18, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    const SportotekaWorkspaceFolderIcon(
+                        size: 42,
+                        color: Color(0xFF6F7973),
+                        fillColor: Color(0xFFF0F5F2),
+                        showBrandDots: true),
+                    const SizedBox(width: 10),
+                    Expanded(
+                        child: Text('Свойства',
+                            style: AppTypography.sectionTitle(color: _text))),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                Text(node.title, style: AppTypography.itemTitle(color: _text)),
+                if (_isPersonalTrainingGraphicNode(node)) ...[
+                  const SizedBox(height: 12),
+                  _buildTrainingGraphicPreview(
+                    node,
+                    width: double.infinity,
+                    height: 190,
+                    radius: 12,
+                  ),
+                ],
+                const SizedBox(height: 14),
+                for (final prop in props)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SizedBox(
+                            width: 96,
+                            child: Text(prop.$1,
+                                style: AppTypography.caption(color: _muted))),
+                        Expanded(
+                            child: Text(prop.$2,
+                                style: AppTypography.secondaryMedium(
+                                    color: _text))),
+                      ],
+                    ),
+                  ),
+                const SizedBox(height: 8),
+                FilledButton(
+                  onPressed: () {
+                    Navigator.of(sheetContext).pop();
+                    _openNode(node);
+                  },
+                  style: FilledButton.styleFrom(
+                      backgroundColor: _green, elevation: 0),
+                  child: Text('Открыть',
+                      style: AppTypography.actionStrong(color: Colors.white)),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // IMPORTANT: Workspace OS is often embedded inside the profile and can be
+    // much narrower than the physical screen. MediaQuery reports the whole
+    // window and caused desktop controls to overflow inside a narrow pane.
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final mediaSize = MediaQuery.sizeOf(context);
+        final boundedWidth = constraints.hasBoundedWidth &&
+                constraints.maxWidth.isFinite &&
+                constraints.maxWidth > 0
+            ? constraints.maxWidth
+            : mediaSize.width;
+        final boundedHeight = constraints.hasBoundedHeight &&
+                constraints.maxHeight.isFinite &&
+                constraints.maxHeight > 0
+            ? constraints.maxHeight
+            : mediaSize.height;
+        final size = Size(boundedWidth, boundedHeight);
+        final mobile = size.width < 700;
+        final compact = size.width < 980;
+        final showSidebar = !compact || _showSidebarOnCompact;
+        WorkspaceLiveBlockRuntime.configure(
+          clubIdValue: widget.clubId,
+          teamsValue: widget.teams,
+          playersValue: widget.players,
+          trainersValue: widget.trainers,
+          selectedTeamIdValue: widget.selectedTeamId,
+          selectedTeamNameValue: widget.selectedTeamName,
+          onOpenModuleValue: widget.onOpenModule,
+          onOpenPlayerValue: _openPlayerProject,
+        );
+
+        return WorkspaceLiveBlockContext(
+            clubId: widget.clubId,
+            teams: widget.teams,
+            players: widget.players,
+            trainers: widget.trainers,
+            selectedTeamId: widget.selectedTeamId,
+            selectedTeamName: widget.selectedTeamName,
+            onOpenModule: widget.onOpenModule,
+            onOpenPlayer: _openPlayerProject,
+            child: Shortcuts(
+              shortcuts: const <ShortcutActivator, Intent>{
+                SingleActivator(LogicalKeyboardKey.keyC, meta: true):
+                    _CopyIntent(),
+                SingleActivator(LogicalKeyboardKey.keyC, control: true):
+                    _CopyIntent(),
+                SingleActivator(LogicalKeyboardKey.keyV, meta: true):
+                    _PasteIntent(),
+                SingleActivator(LogicalKeyboardKey.keyV, control: true):
+                    _PasteIntent(),
+              },
+              child: Actions(
+                actions: <Type, Action<Intent>>{
+                  _CopyIntent: CallbackAction<_CopyIntent>(onInvoke: (_) {
+                    if (_isPersonal) return null;
+                    final node = _nodesForCurrentFolder()
+                        .where((n) => n.id == _selectedNodeId)
+                        .firstOrNull;
+                    if (node != null) _copyNode(node);
+                    return null;
+                  }),
+                  _PasteIntent: CallbackAction<_PasteIntent>(onInvoke: (_) {
+                    if (!_isPersonal) _pasteClipboard();
+                    return null;
+                  }),
+                },
+                child: Focus(
+                  autofocus: true,
+                  child: ColoredBox(
+                    color: _bg,
+                    child: Stack(
+                      children: [
+                        Row(
+                          children: [
+                            // On a compact embedded Workspace the sidebar must be
+                            // an overlay, not a Row child. Otherwise it steals up
+                            // to 280 px from the content pane and the toolbar can
+                            // overflow even though the physical screen is wide.
+                            if (!compact && showSidebar)
+                              SizedBox(
+                                width: 226.0,
+                                child: _buildSidebar(compact: compact),
+                              ),
+                            Expanded(
+                                child: _buildMain(
+                                    mobile: mobile, compact: compact)),
+                            if (!compact &&
+                                size.width >= 1180 &&
+                                _selectedNodeId != null) ...[
+                              const VerticalDivider(width: 1, color: _line),
+                              SizedBox(
+                                  width: 276, child: _buildNodeInspector()),
+                            ],
+                          ],
+                        ),
+                        if (compact && showSidebar) ...[
+                          Positioned(
+                            left: 0,
+                            top: 0,
+                            bottom: 0,
+                            width: math.min(300.0, size.width * .86),
+                            child: Material(
+                              color: Colors.white,
+                              elevation: 10,
+                              child: _buildSidebar(compact: true),
+                            ),
+                          ),
+                          Positioned(
+                            left: math.min(300.0, size.width * .86) - 50,
+                            top: 10,
+                            child: IconButton.filledTonal(
+                              onPressed: () =>
+                                  setState(() => _showSidebarOnCompact = false),
+                              icon: const Icon(Icons.close_rounded),
+                              tooltip: 'Закрыть меню',
+                            ),
+                          ),
+                        ],
+                        if (!mobile && _windows.isNotEmpty)
+                          Positioned.fill(
+                            child: WorkspaceWindowLayer(
+                              entries: _windows,
+                              activeId: _activeWindowId,
+                              onActivate: _activateWindow,
+                              onClose: _closeWindow,
+                              onMove: _moveWindow,
+                              onResize: _resizeWindow,
+                              onMinimize: _minimizeWindow,
+                              onRestore: _restoreWindow,
+                              onSnap: _snapWindow,
+                            ),
+                          ),
+                        if (_showInlineFolderCreator)
+                          Positioned(
+                            top: mobile ? 68 : 72,
+                            right: mobile ? 10 : 18,
+                            child: _buildInlineFolderCreator(
+                              mobile: mobile,
+                              availableWidth: size.width,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ));
+      },
+    );
+  }
+
+  Widget _buildInlineFolderCreator({
+    required bool mobile,
+    double? availableWidth,
+  }) {
+    final width = availableWidth ?? MediaQuery.sizeOf(context).width;
+    final usable = math.max(220.0, width - (mobile ? 20.0 : 36.0));
+    final cardWidth = math.min(360.0, usable);
+
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        width: cardWidth,
+        padding: const EdgeInsets.fromLTRB(12, 11, 12, 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(13),
+          border: Border.all(color: _line, width: .8),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(.10),
+              blurRadius: 24,
+              spreadRadius: -8,
+              offset: const Offset(0, 12),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 32,
+                  height: 32,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF0F6F3),
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  child: const Icon(
+                    Icons.create_new_folder_outlined,
+                    color: _green,
+                    size: 18,
+                  ),
+                ),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Новая папка',
+                        style: AppTypography.itemTitle(color: _text),
+                      ),
+                      const SizedBox(height: 1),
+                      Text(
+                        'Создать в «$_currentTitle»',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.caption(color: _muted),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Закрыть',
+                  onPressed:
+                      _creatingFolder ? null : _cancelInlineFolderCreator,
+                  icon: const Icon(
+                    Icons.close_rounded,
+                    color: _muted,
+                    size: 18,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 9),
+            TextField(
+              controller: _newFolderNameController,
+              focusNode: _newFolderNameFocus,
+              enabled: !_creatingFolder,
+              textInputAction: TextInputAction.done,
+              onChanged: (_) {
+                if (_folderCreateError != null) {
+                  setState(() => _folderCreateError = null);
+                }
+              },
+              onSubmitted: (_) => _commitInlineFolderCreator(),
+              style: AppTypography.formText(color: _text),
+              decoration: InputDecoration(
+                hintText: 'Название папки',
+                hintStyle: AppTypography.formHint(color: _muted),
+                errorText: _folderCreateError,
+                filled: true,
+                fillColor: const Color(0xFFF7F9F8),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 11, vertical: 11),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(9),
+                  borderSide: BorderSide.none,
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(9),
+                  borderSide: const BorderSide(color: _line, width: .7),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(9),
+                  borderSide: const BorderSide(color: _green, width: 1.1),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed:
+                        _creatingFolder ? null : _cancelInlineFolderCreator,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: _text,
+                      side: const BorderSide(color: _line),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(9),
+                      ),
+                    ),
+                    child: const Text('Отмена'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed:
+                        _creatingFolder ? null : _commitInlineFolderCreator,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: _green,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(9),
+                      ),
+                    ),
+                    icon: _creatingFolder
+                        ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 1.8,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(Icons.add_rounded, size: 17),
+                    label: Text(
+                      _creatingFolder ? 'Создание...' : 'Создать',
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPersonalSidebar({required bool compact}) {
+    final personal =
+        _personalWorkspaceModules.where((module) => module.group == 'ЛИЧНОЕ');
+    final extra =
+        _personalWorkspaceModules.where((module) => module.group == 'ЕЩЁ');
+
+    Widget moduleTile(_PersonalWorkspaceModuleDefinition module) {
+      final unlocked = _personalDefinitionUnlocked(module);
+      final pending = _personalDefinitionPending(module);
+      return _SideItem(
+        icon: module.icon,
+        title: module.title,
+        selected: _personalCategoryForKey(_folderKey) == module.key,
+        locked: !_personalModulesLoading && !unlocked,
+        pending: !_personalModulesLoading && pending,
+        onTap: () async {
+          if (!unlocked) {
+            await _showPersonalModuleAccess(module);
+            return;
+          }
+          await _enterFolder(
+            module.key,
+            closeCompactSidebar: compact,
+          );
+        },
+      );
+    }
+
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(right: BorderSide(color: _line)),
+      ),
+      child: SafeArea(
+        right: false,
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(10, 14, 10, 24),
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(9, 4, 9, 14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('SPORTOTEKA OS',
+                      style: AppTypography.menuGroup(color: _green)),
+                  const SizedBox(height: 4),
+                  Text(
+                    _personalOwnerTitle,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.itemTitle(color: _text),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Личное пространство',
+                    style: AppTypography.caption(color: _muted),
+                  ),
+                ],
+              ),
+            ),
+            _SideItem(
+              icon: Icons.home_rounded,
+              title: 'Главная',
+              selected: _folderKey == 'home',
+              onTap: () {
+                _goHome();
+                if (compact) setState(() => _showSidebarOnCompact = false);
+              },
+            ),
+            _SideItem(
+              icon: Icons.schedule_rounded,
+              title: 'Недавние',
+              selected: _folderKey == 'recent',
+              onTap: () {
+                setState(() {
+                  _folderKey = 'recent';
+                  _selectedNodeId = null;
+                  if (compact) _showSidebarOnCompact = false;
+                });
+              },
+            ),
+            _SideItem(
+              icon: Icons.star_rounded,
+              title: 'Избранное',
+              selected: _folderKey == 'favorites',
+              onTap: () {
+                setState(() {
+                  _folderKey = 'favorites';
+                  _selectedNodeId = null;
+                  if (compact) _showSidebarOnCompact = false;
+                });
+              },
+            ),
+            const SizedBox(height: 14),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 9),
+              child:
+                  Text('ЛИЧНОЕ', style: AppTypography.menuGroup(color: _muted)),
+            ),
+            const SizedBox(height: 5),
+            for (final module in personal) moduleTile(module),
+            const SizedBox(height: 14),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 9),
+              child: Text('ЕЩЁ', style: AppTypography.menuGroup(color: _muted)),
+            ),
+            const SizedBox(height: 5),
+            for (final module in extra) moduleTile(module),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSidebar({required bool compact}) {
+    if (_isPersonal) return _buildPersonalSidebar(compact: compact);
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(right: BorderSide(color: _line)),
+      ),
+      child: SafeArea(
+        right: false,
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(10, 14, 10, 24),
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(9, 4, 9, 14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('SPORTOTEKA OS',
+                      style: AppTypography.menuGroup(color: _green)),
+                  const SizedBox(height: 4),
+                  Text(
+                    widget.clubName.trim().isEmpty
+                        ? 'Пространство клуба'
+                        : widget.clubName,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.itemTitle(color: _text),
+                  ),
+                ],
+              ),
+            ),
+            _SideItem(
+              icon: Icons.home_rounded,
+              title: 'Главная',
+              selected: _folderKey == 'home',
+              onTap: () {
+                _goHome();
+                if (compact) setState(() => _showSidebarOnCompact = false);
+              },
+            ),
+            _SideItem(
+              icon: Icons.schedule_rounded,
+              title: 'Недавние',
+              selected: _folderKey == 'recent',
+              onTap: () {
+                setState(() => _folderKey = 'recent');
+                if (compact) setState(() => _showSidebarOnCompact = false);
+              },
+            ),
+            _SideItem(
+              icon: Icons.star_rounded,
+              title: 'Избранное',
+              selected: _folderKey == 'favorites',
+              onTap: () {
+                setState(() => _folderKey = 'favorites');
+                if (compact) setState(() => _showSidebarOnCompact = false);
+              },
+            ),
+            const SizedBox(height: 14),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 9),
+              child:
+                  Text('КЛУБ', style: AppTypography.menuGroup(color: _muted)),
+            ),
+            const SizedBox(height: 5),
+            for (final module in kWorkspaceFinderModules.take(9))
+              _SideItem(
+                icon: module.icon,
+                title: module.title,
+                selected: _folderKey == module.key,
+                onTap: () => _enterFolder(
+                  module.key,
+                  closeCompactSidebar: compact,
+                ),
+              ),
+            const SizedBox(height: 14),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 9),
+              child: Text('ЕЩЁ', style: AppTypography.menuGroup(color: _muted)),
+            ),
+            const SizedBox(height: 5),
+            for (final module in kWorkspaceFinderModules.skip(9))
+              _SideItem(
+                icon: module.icon,
+                title: module.title,
+                selected: _folderKey == module.key,
+                onTap: () => _enterFolder(
+                  module.key,
+                  closeCompactSidebar: compact,
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMain({required bool mobile, required bool compact}) {
+    if (_inlineAiDocumentLibrary) {
+      return WorkspaceAiDocumentLibrary(
+        clubId: widget.clubId,
+        userId: widget.currentUserId,
+        teamId: widget.selectedTeamId,
+        clubName: widget.clubName,
+        onClose: () {
+          if (!mounted) return;
+          setState(() {
+            _inlineAiDocumentLibrary = false;
+            _folderKey = 'documents';
+            _selectedNodeId = null;
+            _search = '';
+          });
+        },
+        onOpenDocumentEditor: _openMethodDocumentEditorWindow,
+      );
+    }
+
+    final nodes = _nodesForCurrentFolder();
+    final loadingRealData = _realFolderLoading.contains(_folderKey) ||
+        _entityFolderLoading.contains(_folderKey);
+    final forceList =
+        _listFolders.contains(_folderKey) || _isEntityFolderKey(_folderKey);
+    return Column(
+      children: [
+        _buildToolbar(mobile: mobile, compact: compact),
+        _buildBreadcrumbs(mobile: mobile),
+        Expanded(
+          child: loadingRealData
+              ? _buildRealFolderLoading()
+              : nodes.isEmpty
+                  ? _buildEmpty()
+                  : forceList || _viewMode == WorkspaceFinderViewMode.list
+                      ? _buildList(nodes, mobile: mobile)
+                      : _buildGrid(nodes, mobile: mobile),
+        ),
+        _buildStatusBar(nodes.length),
+      ],
+    );
+  }
+
+  Widget _buildRealFolderLoading() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox.square(
+            dimension: 24,
+            child: CircularProgressIndicator(strokeWidth: 2.2, color: _green),
+          ),
+          const SizedBox(height: 10),
+          Text('Загружаю реальные данные Спортотеки…',
+              style: AppTypography.secondary(color: _muted)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildToolbar({required bool mobile, required bool compact}) {
+    return Container(
+      height: mobile ? 58 : 62,
+      padding: EdgeInsets.symmetric(horizontal: mobile ? 10 : 14),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: _line)),
+      ),
+      child: Row(
+        children: [
+          if (compact)
+            IconButton(
+              onPressed: () => setState(() => _showSidebarOnCompact = true),
+              icon: const Icon(Icons.menu_rounded),
+              tooltip: 'Разделы',
+            ),
+          IconButton(
+            onPressed: _folderKey == 'home'
+                ? (_isPersonal && widget.selectionMode
+                    ? () {
+                        if (widget.onSelectionCancel != null) {
+                          widget.onSelectionCancel!();
+                        } else {
+                          Navigator.of(context).maybePop();
+                        }
+                      }
+                    : null)
+                : _goBackFromCurrentFolder,
+            icon: const Icon(Icons.arrow_back_rounded),
+            tooltip: 'Назад',
+          ),
+          if (!mobile) ...[
+            IconButton(
+              onPressed: _refreshCurrentFolder,
+              icon: const Icon(Icons.refresh_rounded),
+              tooltip: 'Обновить',
+            ),
+            const SizedBox(width: 4),
+          ],
+          Expanded(
+            child: Container(
+              height: 36,
+              constraints: const BoxConstraints(maxWidth: 420),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF4F6F4),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: TextField(
+                onChanged: (value) => setState(() => _search = value),
+                style: AppTypography.formText(),
+                decoration: InputDecoration(
+                  border: InputBorder.none,
+                  isDense: true,
+                  prefixIcon: const Icon(Icons.search_rounded, size: 18),
+                  hintText: mobile ? 'Поиск' : 'Поиск в «$_currentTitle»',
+                  hintStyle: AppTypography.formHint(),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 9),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          if (_supportsDateTools) ...[
+            PopupMenuButton<String>(
+              tooltip: 'Дата и сортировка',
+              onSelected: _handleDateMenu,
+              itemBuilder: (_) => <PopupMenuEntry<String>>[
+                CheckedPopupMenuItem(
+                  value: 'filter:all',
+                  checked: _dateFilter == 'all',
+                  child: Text('Все даты', style: AppTypography.menuTitle()),
+                ),
+                CheckedPopupMenuItem(
+                  value: 'filter:today',
+                  checked: _dateFilter == 'today',
+                  child: Text('Сегодня', style: AppTypography.menuTitle()),
+                ),
+                CheckedPopupMenuItem(
+                  value: 'filter:yesterday',
+                  checked: _dateFilter == 'yesterday',
+                  child: Text('Вчера', style: AppTypography.menuTitle()),
+                ),
+                CheckedPopupMenuItem(
+                  value: 'filter:7days',
+                  checked: _dateFilter == '7days',
+                  child: Text('Последние 7 дней',
+                      style: AppTypography.menuTitle()),
+                ),
+                CheckedPopupMenuItem(
+                  value: 'filter:30days',
+                  checked: _dateFilter == '30days',
+                  child: Text('Последние 30 дней',
+                      style: AppTypography.menuTitle()),
+                ),
+                CheckedPopupMenuItem(
+                  value: 'filter:month',
+                  checked: _dateFilter == 'month',
+                  child: Text('Этот месяц', style: AppTypography.menuTitle()),
+                ),
+                CheckedPopupMenuItem(
+                  value: 'filter:year',
+                  checked: _dateFilter == 'year',
+                  child: Text('Этот год', style: AppTypography.menuTitle()),
+                ),
+                const PopupMenuDivider(),
+                CheckedPopupMenuItem(
+                  value: 'group',
+                  checked: _groupByDate,
+                  child: Text('Группировать по датам',
+                      style: AppTypography.menuTitle()),
+                ),
+                CheckedPopupMenuItem(
+                  value: 'newest',
+                  checked: _dateNewestFirst,
+                  child:
+                      Text('Сначала новые', style: AppTypography.menuTitle()),
+                ),
+                CheckedPopupMenuItem(
+                  value: 'oldest',
+                  checked: !_dateNewestFirst,
+                  child:
+                      Text('Сначала старые', style: AppTypography.menuTitle()),
+                ),
+              ],
+              child: Container(
+                height: 36,
+                padding: EdgeInsets.symmetric(horizontal: mobile ? 9 : 10),
+                decoration: BoxDecoration(
+                  color: _dateFilter == 'all'
+                      ? const Color(0xFFF4F6F4)
+                      : const Color(0xFFEAF5EF),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.date_range_rounded,
+                        size: 18,
+                        color: _dateFilter == 'all' ? _muted : _green),
+                    if (!mobile) ...[
+                      const SizedBox(width: 5),
+                      Text(
+                        _dateFilterLabel,
+                        style: AppTypography.captionMedium(
+                          color: _dateFilter == 'all' ? _muted : _green,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+          ],
+          if (_canCreateWorkspaceNode)
+            PopupMenuButton<String>(
+              tooltip: 'Создать',
+              onSelected: (value) {
+                if (value == 'folder') _createFolder();
+                if (value == 'note') _createNote();
+                if (value == 'upload') _uploadWorkspaceFiles();
+                if (value == 'attach' && _selectedNode != null) {
+                  _attachFilesToNode(_selectedNode!);
+                }
+                if (value == 'paste') _pasteClipboard();
+              },
+              itemBuilder: (_) => <PopupMenuEntry<String>>[
+                PopupMenuItem(
+                    value: 'folder',
+                    child:
+                        Text('Новая папка', style: AppTypography.menuTitle())),
+                if (!(_isPersonal && widget.selectionMode))
+                  PopupMenuItem(
+                      value: 'note',
+                      child: Text(
+                          _isPlansWorkspace
+                              ? 'Новый план-конспект'
+                              : 'Новый документ',
+                          style: AppTypography.menuTitle())),
+                if (!(_isPersonal && widget.selectionMode))
+                  PopupMenuItem(
+                      value: 'upload',
+                      child: Text('Загрузить файл',
+                          style: AppTypography.menuTitle())),
+                if (!_isPersonal &&
+                    _selectedNode != null &&
+                    _attachableIdentity(_selectedNode!) != null)
+                  PopupMenuItem(
+                    value: 'attach',
+                    child: Text('Прикрепить файл к выбранной записи',
+                        style: AppTypography.menuTitle()),
+                  ),
+                if (!_isPersonal && _clipboardNode != null)
+                  PopupMenuItem(
+                      value: 'paste',
+                      child:
+                          Text('Вставить', style: AppTypography.menuTitle())),
+              ],
+              child: Container(
+                height: 36,
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                decoration: BoxDecoration(
+                  color: _green,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.add_rounded,
+                        color: Colors.white, size: 18),
+                    if (!mobile) ...[
+                      const SizedBox(width: 5),
+                      Text('Создать',
+                          style:
+                              AppTypography.actionStrong(color: Colors.white)),
+                    ],
+                  ],
+                ),
+              ),
+            )
+          else if (_clipboardNode != null &&
+              _folderKey.startsWith('local-folder:'))
+            IconButton(
+              tooltip: 'Вставить',
+              onPressed: _pasteClipboard,
+              icon: const Icon(Icons.content_paste_rounded, size: 19),
+            ),
+          if (_isPersonal && widget.selectionMode) ...[
+            const SizedBox(width: 7),
+            Material(
+              color: _canSelectPersonalFolder
+                  ? const Color(0xFFEAF5EF)
+                  : const Color(0xFFF3F4F3),
+              borderRadius: BorderRadius.circular(10),
+              child: InkWell(
+                onTap: _selectPersonalFolder,
+                borderRadius: BorderRadius.circular(10),
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.save_outlined,
+                        size: 17,
+                        color: _canSelectPersonalFolder ? _green : _muted,
+                      ),
+                      if (!mobile) ...[
+                        const SizedBox(width: 5),
+                        Text(
+                          'Сохранить сюда',
+                          style: AppTypography.actionStrong(
+                            color: _canSelectPersonalFolder ? _green : _muted,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+          const SizedBox(width: 6),
+          IconButton(
+            onPressed: () {
+              setState(() {
+                _viewMode = _viewMode == WorkspaceFinderViewMode.grid
+                    ? WorkspaceFinderViewMode.list
+                    : WorkspaceFinderViewMode.grid;
+              });
+              _persistLocalWorkspace();
+            },
+            icon: Icon(
+              _viewMode == WorkspaceFinderViewMode.grid
+                  ? Icons.view_list_rounded
+                  : Icons.grid_view_rounded,
+            ),
+            tooltip:
+                _viewMode == WorkspaceFinderViewMode.grid ? 'Список' : 'Иконки',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBreadcrumbs({required bool mobile}) {
+    return Container(
+      height: mobile ? 42 : 46,
+      padding: EdgeInsets.symmetric(horizontal: mobile ? 12 : 18),
+      alignment: Alignment.centerLeft,
+      child: Row(
+        children: [
+          for (int i = 0; i < _breadcrumbs.length; i++) ...[
+            if (i > 0)
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 4),
+                child:
+                    Icon(Icons.chevron_right_rounded, size: 16, color: _muted),
+              ),
+            InkWell(
+              borderRadius: BorderRadius.circular(6),
+              onTap: i == 0 ? _goHome : null,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
+                child: Text(
+                  _breadcrumbs[i],
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: i == _breadcrumbs.length - 1
+                      ? AppTypography.menuTitle(color: _text)
+                      : AppTypography.menuTitle(color: _muted),
+                ),
+              ),
+            ),
+          ],
+          const Spacer(),
+          if (!mobile && widget.selectedTeamName.trim().isNotEmpty)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEAF5EF),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                widget.selectedTeamName,
+                style: AppTypography.captionMedium(color: _green),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDragFeedback(WorkspaceFinderNode node) {
+    return Material(
+      color: Colors.transparent,
+      child: SizedBox(
+        width: 190,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: const [
+              BoxShadow(color: Color(0x24000000), blurRadius: 18),
+            ],
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(10),
+            child: Row(
+              children: [
+                node.isFolder
+                    ? const _FinderFolderGlyph(size: 24)
+                    : _FinderListGlyph(kind: _sportIconForNode(node), size: 24),
+                const SizedBox(width: 7),
+                Expanded(
+                  child: Text(
+                    node.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.captionMedium(),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGrid(List<WorkspaceFinderNode> nodes, {required bool mobile}) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final targetWidth = mobile ? 142.0 : 154.0;
+        final count =
+            math.max(2, (constraints.maxWidth / targetWidth).floor()).toInt();
+        return GridView.builder(
+          padding:
+              EdgeInsets.fromLTRB(mobile ? 10 : 18, 4, mobile ? 10 : 18, 24),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: count,
+            mainAxisExtent: mobile ? 142 : 150,
+            crossAxisSpacing: mobile ? 6 : 10,
+            mainAxisSpacing: mobile ? 6 : 10,
+          ),
+          itemCount: nodes.length,
+          itemBuilder: (_, index) =>
+              _buildGridNode(nodes[index], mobile: mobile),
+        );
+      },
+    );
+  }
+
+  Widget _buildGridNode(WorkspaceFinderNode node, {required bool mobile}) {
+    final selected = _selectedNodeId == node.id;
+    final favorite = _favoriteIds.contains(node.id);
+    final tile = DragTarget<WorkspaceFinderNode>(
+      onWillAccept: (data) =>
+          data != null &&
+          (node.isFolder || node.kind == WorkspaceFinderNodeKind.team) &&
+          data.id != node.id,
+      onAccept: (data) => _dropNode(data, node),
+      builder: (context, candidate, rejected) {
+        final accepting = candidate.isNotEmpty;
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          padding: const EdgeInsets.fromLTRB(8, 10, 8, 8),
+          decoration: BoxDecoration(
+            color: accepting
+                ? const Color(0xFFE6F4EC)
+                : selected
+                    ? const Color(0xFFEAF3EE)
+                    : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            children: [
+              Expanded(
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    node.isFolder
+                        ? _FinderFolderGlyph(
+                            size: mobile ? 68 : 74,
+                          )
+                        : _isPersonalTrainingGraphicNode(node)
+                            ? _buildTrainingGraphicPreview(
+                                node,
+                                width: mobile ? 104 : 112,
+                                height: mobile ? 68 : 74,
+                                radius: 10,
+                              )
+                            : _FinderListGlyph(
+                                kind: _sportIconForNode(node),
+                                size: mobile ? 62 : 68,
+                              ),
+                    if (favorite)
+                      const Positioned(
+                        top: 1,
+                        right: 12,
+                        child: Icon(Icons.star_rounded,
+                            size: 15, color: Color(0xFFD39C18)),
+                      ),
+                    if (node.isShortcut)
+                      const Positioned(
+                        bottom: 5,
+                        right: 14,
+                        child: Icon(Icons.shortcut_rounded,
+                            size: 15, color: _muted),
+                      ),
+                    if (node.payload?['_workspace_pending'] == true)
+                      const Positioned(
+                        top: 1,
+                        left: 12,
+                        child: Icon(Icons.schedule_rounded,
+                            size: 16, color: _muted),
+                      )
+                    else if (node.payload?['_workspace_locked'] == true)
+                      const Positioned(
+                        top: 1,
+                        left: 12,
+                        child: Icon(Icons.lock_outline_rounded,
+                            size: 16, color: _muted),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 5),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Flexible(
+                    child: Text(
+                      node.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                      style: AppTypography.menuTitle(color: _text),
+                    ),
+                  ),
+                  if (!node.isFolder || node.isSystem) ...[
+                    const SizedBox(width: 5),
+                    const _FinderBrandDots(),
+                  ],
+                ],
+              ),
+              if (node.subtitle.isNotEmpty && !mobile) ...[
+                const SizedBox(height: 2),
+                Text(
+                  node.subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: AppTypography.caption(color: _muted),
+                ),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+
+    final interactive = GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () {
+        setState(() => _selectedNodeId = node.id);
+        if (mobile || node.kind == WorkspaceFinderNodeKind.video)
+          _openNode(node);
+      },
+      onDoubleTap: mobile ? null : () => _openNode(node),
+      onSecondaryTapDown: (details) =>
+          _showNodeMenu(node, details.globalPosition),
+      child: tile,
+    );
+
+    if (_isPersonal) return interactive;
+    if (mobile) {
+      return LongPressDraggable<WorkspaceFinderNode>(
+        data: node,
+        feedback: _buildDragFeedback(node),
+        childWhenDragging: Opacity(opacity: .35, child: interactive),
+        child: interactive,
+      );
+    }
+    return Draggable<WorkspaceFinderNode>(
+      data: node,
+      feedback: _buildDragFeedback(node),
+      childWhenDragging: Opacity(opacity: .35, child: interactive),
+      child: interactive,
+    );
+  }
+
+  Widget _buildList(List<WorkspaceFinderNode> nodes, {required bool mobile}) {
+    return ListView.builder(
+      padding: EdgeInsets.fromLTRB(mobile ? 8 : 14, 2, mobile ? 8 : 14, 28),
+      itemCount: nodes.length,
+      itemBuilder: (_, index) {
+        final node = nodes[index];
+        final selected = _selectedNodeId == node.id;
+        final group =
+            _groupByDate && _supportsDateTools ? _dateGroupLabel(node) : '';
+        final previousGroup = index > 0 && _groupByDate && _supportsDateTools
+            ? _dateGroupLabel(nodes[index - 1])
+            : '';
+        final showGroup = group.isNotEmpty && group != previousGroup;
+
+        final row = DragTarget<WorkspaceFinderNode>(
+          onWillAccept: (data) =>
+              data != null &&
+              (node.isFolder || node.kind == WorkspaceFinderNodeKind.team) &&
+              data.id != node.id,
+          onAccept: (data) => _dropNode(data, node),
+          builder: (context, candidate, rejected) {
+            final tile = Material(
+              color: selected || candidate.isNotEmpty
+                  ? const Color(0xFFEAF3EE)
+                  : Colors.white,
+              borderRadius: BorderRadius.circular(9),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(9),
+                onTap: () {
+                  setState(() => _selectedNodeId = node.id);
+                  if (mobile || node.kind == WorkspaceFinderNodeKind.video) {
+                    _openNode(node);
+                  }
+                },
+                onDoubleTap: mobile ? null : () => _openNode(node),
+                onLongPress: _isPersonal ? null : () => _copyNode(node),
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  child: Row(
+                    children: [
+                      node.isFolder
+                          ? const _FinderFolderGlyph(size: 34)
+                          : _isPersonalTrainingGraphicNode(node)
+                              ? _buildTrainingGraphicPreview(
+                                  node,
+                                  width: 52,
+                                  height: 38,
+                                  radius: 7,
+                                )
+                              : _FinderListGlyph(
+                                  kind: _sportIconForNode(node),
+                                  size: 34,
+                                ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    node.title,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style:
+                                        AppTypography.menuTitle(color: _text),
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                const _FinderBrandDots(compact: true),
+                              ],
+                            ),
+                            if (node.subtitle.isNotEmpty)
+                              Text(
+                                node.subtitle,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTypography.caption(color: _muted),
+                              ),
+                          ],
+                        ),
+                      ),
+                      if (node.payload?['_workspace_pending'] == true)
+                        const Padding(
+                          padding: EdgeInsets.only(right: 6),
+                          child: Icon(Icons.schedule_rounded,
+                              size: 15, color: _muted),
+                        )
+                      else if (node.payload?['_workspace_locked'] == true)
+                        const Padding(
+                          padding: EdgeInsets.only(right: 6),
+                          child: Icon(Icons.lock_outline_rounded,
+                              size: 15, color: _muted),
+                        ),
+                      if (_favoriteIds.contains(node.id))
+                        const Padding(
+                          padding: EdgeInsets.only(right: 2),
+                          child: Icon(
+                            Icons.star_rounded,
+                            size: 15,
+                            color: Color(0xFFD39C18),
+                          ),
+                        ),
+                      IconButton(
+                        icon: const Icon(Icons.more_horiz_rounded, size: 19),
+                        onPressed: () {
+                          final box = context.findRenderObject() as RenderBox?;
+                          final pos =
+                              box?.localToGlobal(const Offset(20, 20)) ??
+                                  const Offset(120, 120);
+                          _showNodeMenu(node, pos);
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+            return GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onDoubleTap: mobile ? null : () => _openNode(node),
+              onSecondaryTapDown: (details) =>
+                  _showNodeMenu(node, details.globalPosition),
+              child: tile,
+            );
+          },
+        );
+
+        final draggableRow = _isPersonal
+            ? row
+            : (mobile
+                ? LongPressDraggable<WorkspaceFinderNode>(
+                    data: node,
+                    feedback: _buildDragFeedback(node),
+                    childWhenDragging: Opacity(opacity: .35, child: row),
+                    child: row,
+                  )
+                : Draggable<WorkspaceFinderNode>(
+                    data: node,
+                    feedback: _buildDragFeedback(node),
+                    childWhenDragging: Opacity(opacity: .35, child: row),
+                    child: row,
+                  ));
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (showGroup)
+              Padding(
+                padding: EdgeInsets.fromLTRB(
+                  mobile ? 8 : 10,
+                  index == 0 ? 8 : 16,
+                  8,
+                  6,
+                ),
+                child: Text(
+                  group,
+                  style: AppTypography.captionMedium(color: _muted),
+                ),
+              ),
+            draggableRow,
+            const Divider(height: 1, indent: 52, color: _line),
+          ],
+        );
+      },
+    );
+  }
+
+  SportotekaWorkspaceIconKind _sportIconForNode(WorkspaceFinderNode node) {
+    if (node.moduleKey != null && node.moduleKey!.isNotEmpty) {
+      return sportotekaWorkspaceIconForModuleKey(node.moduleKey!);
+    }
+    switch (node.kind) {
+      case WorkspaceFinderNodeKind.team:
+        return SportotekaWorkspaceIconKind.teams;
+      case WorkspaceFinderNodeKind.player:
+        return SportotekaWorkspaceIconKind.players;
+      case WorkspaceFinderNodeKind.trainer:
+        return SportotekaWorkspaceIconKind.trainers;
+      case WorkspaceFinderNodeKind.match:
+        return SportotekaWorkspaceIconKind.matches;
+      case WorkspaceFinderNodeKind.training:
+        return SportotekaWorkspaceIconKind.trainings;
+      case WorkspaceFinderNodeKind.plan:
+        return SportotekaWorkspaceIconKind.plans;
+      case WorkspaceFinderNodeKind.tracker:
+        return SportotekaWorkspaceIconKind.tracker;
+      case WorkspaceFinderNodeKind.testing:
+        return SportotekaWorkspaceIconKind.testing;
+      case WorkspaceFinderNodeKind.calendar:
+        return SportotekaWorkspaceIconKind.calendar;
+      case WorkspaceFinderNodeKind.document:
+        return SportotekaWorkspaceIconKind.document;
+      case WorkspaceFinderNodeKind.video:
+        return SportotekaWorkspaceIconKind.video;
+      case WorkspaceFinderNodeKind.report:
+        return SportotekaWorkspaceIconKind.reports;
+      case WorkspaceFinderNodeKind.chat:
+        return SportotekaWorkspaceIconKind.chat;
+      case WorkspaceFinderNodeKind.medical:
+        return SportotekaWorkspaceIconKind.medical;
+      case WorkspaceFinderNodeKind.parent:
+        return SportotekaWorkspaceIconKind.parents;
+      case WorkspaceFinderNodeKind.shortcut:
+        return SportotekaWorkspaceIconKind.shortcut;
+      case WorkspaceFinderNodeKind.note:
+        return SportotekaWorkspaceIconKind.note;
+      case WorkspaceFinderNodeKind.folder:
+        return SportotekaWorkspaceIconKind.folder;
+    }
+  }
+
+  IconData _iconForNode(WorkspaceFinderNode node) {
+    if (node.isFolder && node.moduleKey != null) {
+      return _moduleFor(node.moduleKey!)?.icon ?? Icons.folder_rounded;
+    }
+    if (node.kind == WorkspaceFinderNodeKind.shortcut &&
+        node.moduleKey != null) {
+      return _moduleFor(node.moduleKey!)?.icon ?? Icons.shortcut_rounded;
+    }
+    return workspaceFinderIconForKind(node.kind);
+  }
+
+  Widget _buildEmpty() {
+    if (_isPersonal) {
+      final error = _personalFolderErrors[_folderKey];
+      final isHome = _folderKey == 'home';
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SportotekaWorkspaceFolderIcon(
+                size: 58,
+                color: Color(0xFFAAB8B1),
+                fillColor: Colors.white,
+                showBrandDots: false,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                error != null && error.isNotEmpty
+                    ? 'Не удалось загрузить раздел'
+                    : (isHome ? 'Личная Sportoteka OS' : 'Здесь пока пусто'),
+                style: AppTypography.sectionTitle(color: _text),
+              ),
+              const SizedBox(height: 5),
+              Text(
+                error != null && error.isNotEmpty
+                    ? error
+                    : (isHome
+                        ? 'Выберите раздел. Доступные модули открываются сразу, закрытые отмечены замком.'
+                        : (_search.trim().isNotEmpty
+                            ? 'По запросу ничего не найдено.'
+                            : 'Создайте папку, документ или загрузите файл. Все данные принадлежат только этому профилю.')),
+                textAlign: TextAlign.center,
+                style: AppTypography.secondary(color: _muted),
+              ),
+              const SizedBox(height: 14),
+              if (error != null && error.isNotEmpty)
+                OutlinedButton.icon(
+                  onPressed: _refreshCurrentFolder,
+                  icon: const Icon(Icons.refresh_rounded, size: 18),
+                  label: Text('Обновить', style: AppTypography.action()),
+                )
+              else if (_canCreateWorkspaceNode && !widget.selectionMode)
+                TextButton.icon(
+                  onPressed: _createNote,
+                  icon: const Icon(Icons.note_add_rounded,
+                      size: 18, color: _green),
+                  label: Text('Новый документ', style: AppTypography.action()),
+                )
+              else if (_canCreateWorkspaceNode && widget.selectionMode)
+                TextButton.icon(
+                  onPressed: _createFolder,
+                  icon: const Icon(Icons.create_new_folder_outlined,
+                      size: 18, color: _green),
+                  label: Text('Новая папка', style: AppTypography.action()),
+                ),
+            ],
+          ),
+        ),
+      );
+    }
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SportotekaWorkspaceFolderIcon(
+              size: 58,
+              color: Color(0xFFAAB8B1),
+              fillColor: Colors.white,
+              showBrandDots: false,
+            ),
+            const SizedBox(height: 12),
+            Text('Здесь пока пусто',
+                style: AppTypography.sectionTitle(color: _text)),
+            const SizedBox(height: 5),
+            Text(
+              _search.trim().isNotEmpty
+                  ? 'По запросу ничего не найдено.'
+                  : _projectedFolders.contains(_folderKey)
+                      ? (_realFolderErrors[_folderKey]?.isNotEmpty == true
+                          ? 'Не удалось получить данные раздела. Обновите список или откройте основной модуль.'
+                          : 'В основном разделе Спортотеки пока нет записей.')
+                      : 'Создайте папку или документ. Системные данные клуба появятся здесь автоматически.',
+              textAlign: TextAlign.center,
+              style: AppTypography.secondary(color: _muted),
+            ),
+            const SizedBox(height: 14),
+            if (_projectedFolders.contains(_folderKey))
+              OutlinedButton.icon(
+                onPressed: () => _loadRealFolder(_folderKey, force: true),
+                icon: const Icon(Icons.refresh_rounded, size: 18),
+                label: Text('Обновить данные', style: AppTypography.action()),
+              )
+            else if (_canCreateWorkspaceNode)
+              TextButton.icon(
+                onPressed: _createNote,
+                style: TextButton.styleFrom(
+                  foregroundColor: _text,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 8,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                icon: const Icon(
+                  Icons.note_add_rounded,
+                  size: 18,
+                  color: _green,
+                ),
+                label: Text('Новый документ', style: AppTypography.action()),
+              )
+            else
+              OutlinedButton.icon(
+                onPressed: _refreshCurrentFolder,
+                icon: const Icon(Icons.refresh_rounded, size: 18),
+                label: Text('Обновить список', style: AppTypography.action()),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatusBar(int count) {
+    return Container(
+      height: 30,
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(top: BorderSide(color: _line)),
+      ),
+      child: Row(
+        children: [
+          Text('$count объектов', style: AppTypography.caption(color: _muted)),
+          const Spacer(),
+          if (_isPersonal)
+            Text(
+              widget.selectionMode
+                  ? 'Место сохранения: $_currentTitle'
+                  : 'Личное пространство · $_personalOwnerTitle',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.caption(color: _muted),
+            )
+          else if (_clipboardNode != null)
+            Text('Буфер: ${_clipboardNode!.title}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.caption(color: _muted)),
+        ],
+      ),
+    );
+  }
+}
+
+class _FinderListGlyph extends StatelessWidget {
+  const _FinderListGlyph({required this.kind, required this.size});
+
+  final SportotekaWorkspaceIconKind kind;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(9),
+      ),
+      child: SportotekaWorkspaceIcon(
+        kind: kind,
+        size: size * .58,
+        color: const Color(0xFF3E4A43),
+        accentColor: const Color(0xFF0B8F55),
+      ),
+    );
+  }
+}
+
+class _FinderBrandDots extends StatelessWidget {
+  const _FinderBrandDots({this.compact = false});
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final dot = compact ? 5.0 : 6.0;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: List.generate(
+        3,
+        (index) => Padding(
+          padding: EdgeInsets.only(left: index == 0 ? 0 : 4),
+          child: Container(
+            width: dot,
+            height: dot,
+            decoration: BoxDecoration(
+              color: index == 1
+                  ? const Color(0xFF17A36A)
+                  : const Color(0xFFB8D9C6),
+              shape: BoxShape.circle,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FinderFolderGlyph extends StatelessWidget {
+  const _FinderFolderGlyph({required this.size});
+  final double size;
+
+  @override
+  Widget build(BuildContext context) => SportotekaWorkspaceFolderIcon(
+        size: size,
+        color: const Color(0xFF8D9490),
+        fillColor: const Color(0xFFF2F3F2),
+        showBrandDots: false,
+      );
+}
+
+class _SideItem extends StatelessWidget {
+  const _SideItem({
+    required this.icon,
+    required this.title,
+    required this.selected,
+    required this.onTap,
+    this.locked = false,
+    this.pending = false,
+  });
+
+  final IconData icon;
+  final String title;
+  final bool selected;
+  final bool locked;
+  final bool pending;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 1),
+      child: Material(
+        color: selected ? const Color(0xFFF1F7F4) : Colors.transparent,
+        borderRadius: BorderRadius.circular(8),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
+            child: Row(
+              children: [
+                Icon(icon,
+                    size: 18,
+                    color: selected
+                        ? const Color(0xFF0B8F55)
+                        : const Color(0xFF667169)),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.menuTitle(
+                      color: selected
+                          ? const Color(0xFF101814)
+                          : const Color(0xFF4F5A53),
+                      weight: selected ? FontWeight.w700 : FontWeight.w500,
+                    ),
+                  ),
+                ),
+                if (pending)
+                  const Icon(Icons.schedule_rounded,
+                      size: 14, color: Color(0xFF758079))
+                else if (locked)
+                  const Icon(Icons.lock_outline_rounded,
+                      size: 14, color: Color(0xFF758079)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CopyIntent extends Intent {
+  const _CopyIntent();
+}
+
+class _PasteIntent extends Intent {
+  const _PasteIntent();
+}
+
+extension _IterableFirstOrNull<T> on Iterable<T> {
+  T? get firstOrNull {
+    final iterator = this.iterator;
+    if (!iterator.moveNext()) return null;
+    return iterator.current;
+  }
+}

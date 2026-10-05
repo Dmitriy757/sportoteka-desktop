@@ -122,6 +122,8 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
   Timer? _streamFollowDebounce;
   bool _sending = false;
   _AiMessage? _activeStreamingMessage;
+  http.Client? _activeAiClient;
+  bool _stopRequested = false;
   String? _error;
 
   final ImagePicker _mediaPicker = ImagePicker();
@@ -129,6 +131,12 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
   XFile? _attachmentFile;
   Map<String, dynamic>? _uploadedAttachment;
   bool _uploadingAttachment = false;
+  double _attachmentUploadProgress = 0;
+  bool _attachmentUploadFailed = false;
+  String? _attachmentUploadKind;
+
+  bool get _hasActiveAiWork => _sending || _continuingMessages.isNotEmpty;
+  bool get _canStopAi => _activeAiClient != null || _continuingMessages.isNotEmpty;
 
   String get _composerHint {
     switch (_composerMode) {
@@ -873,6 +881,8 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
   void dispose() {
     _historySaveDebounce?.cancel();
     _streamFollowDebounce?.cancel();
+    _activeAiClient?.close();
+    _activeAiClient = null;
     unawaited(_saveHistoryNow());
     _input.dispose();
     _scroll.dispose();
@@ -1250,50 +1260,51 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
       final result = await FilePicker.pickFiles(
         type: FileType.custom,
         allowedExtensions: const <String>[
-          'pdf',
-          'doc',
-          'docx',
-          'txt',
-          'md',
-          'rtf',
-          'csv',
-          'xlsx',
-          'pptx',
-          'odt',
-          'jpg',
-          'jpeg',
-          'png',
-          'webp',
-          'heic',
+          'pdf', 'doc', 'docx', 'txt', 'md', 'rtf', 'csv', 'xlsx', 'pptx',
+          'odt', 'jpg', 'jpeg', 'png', 'webp', 'heic',
         ],
         allowMultiple: false,
         withData: true,
       );
-
       if (result == null || result.files.isEmpty || !mounted) return;
 
       final picked = result.files.single;
       final bytes = picked.bytes;
       if (bytes == null || bytes.isEmpty) {
-        setState(() {
-          _error = 'Не удалось прочитать выбранный документ.';
-        });
+        setState(() => _error = 'Не удалось прочитать выбранный документ.');
         return;
       }
 
-      final xFile = XFile.fromData(
-        bytes,
-        name: picked.name,
-      );
-
+      final xFile = XFile.fromData(bytes, name: picked.name);
       setState(() {
         _attachmentFile = xFile;
         _uploadedAttachment = null;
-        _uploadingAttachment = true;
         _composerMode = _AiComposerMode.text;
-        _error = null;
       });
+      await _uploadDocumentAttachment(xFile);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _uploadingAttachment = false;
+        _attachmentUploadFailed = true;
+        _error = 'Не удалось добавить документ. Можно нажать «Повторить».';
+      });
+    }
+  }
 
+  Future<void> _uploadDocumentAttachment(XFile file) async {
+    if (!mounted || _uploadingAttachment || widget.personalProfileMode) return;
+
+    setState(() {
+      _uploadingAttachment = true;
+      _attachmentUploadProgress = 0;
+      _attachmentUploadFailed = false;
+      _attachmentUploadKind = 'document';
+      _error = null;
+    });
+
+    try {
+      final bytes = await file.readAsBytes();
       final request = http.MultipartRequest(
         'POST',
         Uri.parse('$_documentBase/upload'),
@@ -1304,21 +1315,21 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
         request.fields['team_id'] = widget.teamId.toString();
       }
       request.fields['title'] =
-          picked.name.replaceFirst(RegExp(r'\.[^.]+$'), '');
+          file.name.replaceFirst(RegExp(r'\.[^.]+$'), '');
       request.fields['ocr'] = 'auto';
       request.fields['extract_images'] = '1';
       request.fields['vision'] = '1';
       request.fields['analyze_layout'] = '1';
+      request.files.add(http.MultipartFile.fromBytes(
+        'file',
+        bytes,
+        filename: file.name,
+      ));
 
-      request.files.add(
-        http.MultipartFile.fromBytes(
-          'file',
-          bytes,
-          filename: picked.name,
-        ),
+      final streamed = await _sendMultipartWithProgress(
+        request,
+        timeout: const Duration(minutes: 8),
       );
-
-      final streamed = await request.send().timeout(const Duration(minutes: 5));
       final response = await http.Response.fromStream(streamed);
       final data = _decodeJson(response.body);
 
@@ -1346,11 +1357,13 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
       setState(() {
         _uploadedAttachment = attachment;
         _uploadingAttachment = false;
+        _attachmentUploadProgress = 1;
+        _attachmentUploadFailed = false;
         _messages.add(
           _AiMessage.assistant(
             text: document['needs_ocr'] == true
-                ? 'Файл «${picked.name}» сохранён. Для него включено распознавание OCR и анализ изображений, поэтому ИИ сможет видеть текст страниц, фото и схемы после обработки.'
-                : 'Файл «${picked.name}» прочитан и сохранён в Спортотека OS → Документы → Методические материалы AI. ИИ сможет использовать текст, изображения и страницы документа в ответах.',
+                ? 'Файл «${file.name}» сохранён. Для него включено распознавание OCR и анализ изображений, поэтому ИИ сможет видеть текст страниц, фото и схемы после обработки.'
+                : 'Файл «${file.name}» прочитан и сохранён в Спортотека OS → Документы → Методические материалы AI. ИИ сможет использовать текст, изображения и страницы документа в ответах.',
             suggestions: const <String>[
               'Сделай краткий конспект документа',
               'Выдели упражнения и методические принципы',
@@ -1366,7 +1379,8 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
       if (!mounted) return;
       setState(() {
         _uploadingAttachment = false;
-        _error = 'Не удалось добавить документ: $e';
+        _attachmentUploadFailed = true;
+        _error = 'Не удалось загрузить документ. Можно нажать «Повторить».';
       });
     }
   }
@@ -1400,6 +1414,7 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
       return;
     }
 
+    _stopRequested = false;
     setState(() {
       _error = null;
       _sending = true;
@@ -1422,55 +1437,35 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
         'vision': true,
       };
 
-      final response = await http
-          .post(
-            Uri.parse('$_documentBase/ask'),
-            headers: const <String, String>{
-              'Content-Type': 'application/json; charset=utf-8',
-              'Accept': 'application/json',
-            },
-            body: jsonEncode(
-              <String, dynamic>{
-                'club_id': widget.clubId,
-                'user_id': widget.userId,
-                if ((widget.teamId ?? 0) > 0) 'team_id': widget.teamId,
-                'document_ids': <String>[documentId],
-                'q': q,
-                'conversation_id': _conversationId,
-                'memory': _conversationMemory(),
-                'ocr': true,
-                'include_images': true,
-                'vision': true,
-                'context': contextPayload,
-              },
-            ),
-          )
-          .timeout(const Duration(seconds: 210));
-
-      final data = _decodeJson(response.body);
-
-      if (response.statusCode < 200 ||
-          response.statusCode >= 300 ||
-          data is! Map ||
-          data['success'] != true) {
-        throw Exception(
-          data is Map
-              ? (data['detail'] ??
-                  data['message'] ??
-                  'Ошибка анализа документа')
-              : 'HTTP ${response.statusCode}',
-        );
-      }
+      final data = await _postAiLegacyJson(
+        url: '$_documentBase/ask',
+        payload: <String, dynamic>{
+          'club_id': widget.clubId,
+          'user_id': widget.userId,
+          if ((widget.teamId ?? 0) > 0) 'team_id': widget.teamId,
+          'document_ids': <String>[documentId],
+          'q': q,
+          'conversation_id': _conversationId,
+          'memory': _conversationMemory(),
+          'ocr': true,
+          'include_images': true,
+          'vision': true,
+          'context': contextPayload,
+        },
+      );
 
       if (!mounted) return;
       setState(() {
         responseMessage = _AiMessage.fromResponse(
-          Map<String, dynamic>.from(data),
+          data,
           allowActions: false,
           fallbackText: 'Документ обработан.',
         );
         _messages.add(responseMessage!);
       });
+    } on _AiGenerationStopped {
+      if (!mounted) return;
+      setState(() => _error = null);
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -1494,6 +1489,7 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
       if (_isNearChatBottom()) {
         _scheduleStreamingFollow(force: true);
       }
+      _stopRequested = false;
       _scheduleHistorySave();
     }
   }
@@ -1516,14 +1512,51 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
     }
   }
 
+  Future<http.StreamedResponse> _sendMultipartWithProgress(
+    http.MultipartRequest request, {
+    required Duration timeout,
+  }) async {
+    final source = request.finalize();
+    final total = request.contentLength;
+    final streamedRequest = http.StreamedRequest(request.method, request.url)
+      ..headers.addAll(request.headers)
+      ..contentLength = total;
+
+    var sent = 0;
+    final client = http.Client();
+    try {
+      final responseFuture = client.send(streamedRequest).timeout(timeout);
+      await for (final chunk in source) {
+        streamedRequest.sink.add(chunk);
+        sent += chunk.length;
+        if (mounted && total > 0) {
+          final progress = (sent / total).clamp(0.0, 1.0);
+          if ((progress - _attachmentUploadProgress).abs() >= .01 ||
+              progress >= 1) {
+            setState(() => _attachmentUploadProgress = progress);
+          }
+        }
+      }
+      await streamedRequest.sink.close();
+      return await responseFuture;
+    } catch (_) {
+      unawaited(streamedRequest.sink.close());
+      rethrow;
+    } finally {
+      client.close();
+    }
+  }
+
   Future<void> _uploadAttachment(XFile file, {required String kind}) async {
-    if (!mounted) return;
+    if (!mounted || _uploadingAttachment) return;
     setState(() {
       _uploadingAttachment = true;
+      _attachmentUploadProgress = 0;
+      _attachmentUploadFailed = false;
+      _attachmentUploadKind = kind;
       _error = null;
     });
     try {
-      final bytes = await file.readAsBytes();
       final req =
           http.MultipartRequest('POST', Uri.parse('$_mediaBase/upload'));
       req.fields['user_id'] = widget.userId.toString();
@@ -1534,13 +1567,19 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
         }
       }
       req.fields['kind'] = kind;
-      req.files.add(http.MultipartFile.fromBytes(
+
+      final fileLength = await file.length();
+      req.files.add(http.MultipartFile(
         'file',
-        bytes,
+        file.openRead(),
+        fileLength,
         filename: file.name,
       ));
 
-      final streamed = await req.send().timeout(const Duration(minutes: 5));
+      final streamed = await _sendMultipartWithProgress(
+        req,
+        timeout: const Duration(minutes: 12),
+      );
       final res = await http.Response.fromStream(streamed);
       final data = _decodeJson(res.body);
       if (res.statusCode != 200 || data is! Map || data['success'] == false) {
@@ -1554,13 +1593,27 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
       setState(() {
         _uploadedAttachment = Map<String, dynamic>.from(data);
         _uploadingAttachment = false;
+        _attachmentUploadProgress = 1;
+        _attachmentUploadFailed = false;
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _uploadingAttachment = false;
-        _error = 'Не удалось загрузить файл: $e';
+        _attachmentUploadFailed = true;
+        _error = 'Не удалось загрузить файл. Можно нажать «Повторить».';
       });
+    }
+  }
+
+  Future<void> _retryAttachmentUpload() async {
+    final file = _attachmentFile;
+    final kind = _attachmentUploadKind;
+    if (file == null || kind == null || _uploadingAttachment) return;
+    if (kind == 'document') {
+      await _uploadDocumentAttachment(file);
+    } else {
+      await _uploadAttachment(file, kind: kind);
     }
   }
 
@@ -1569,6 +1622,9 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
     setState(() {
       _attachmentFile = null;
       _uploadedAttachment = null;
+      _attachmentUploadProgress = 0;
+      _attachmentUploadFailed = false;
+      _attachmentUploadKind = null;
     });
   }
 
@@ -1941,6 +1997,30 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
     });
   }
 
+  void _stopAiGeneration() {
+    if (!_hasActiveAiWork) return;
+    _stopRequested = true;
+    _activeAiClient?.close();
+    _activeAiClient = null;
+
+    if (!mounted) return;
+    setState(() {
+      _sending = false;
+      final partial = _activeStreamingMessage;
+      if (partial != null && _messages.contains(partial)) {
+        final index = _messages.indexOf(partial);
+        final updated = partial.copyWith(canContinue: true);
+        final existingKey = _messageKeys.remove(partial);
+        _messages[index] = updated;
+        if (existingKey != null) _messageKeys[updated] = existingKey;
+        _activeStreamingMessage = updated;
+      }
+      _continuingMessages.clear();
+      _error = null;
+    });
+    _scheduleHistorySave();
+  }
+
   Future<Map<String, dynamic>> _postAiNdjsonStream({
     required String url,
     required Map<String, dynamic> payload,
@@ -1954,80 +2034,104 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
     });
     request.body = jsonEncode(payload);
 
-    final response = await request.send().timeout(const Duration(seconds: 30));
-    if (response.statusCode == 404 || response.statusCode == 405) {
-      await response.stream.drain();
-      throw const _AiStreamingUnavailable();
-    }
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      final body = await response.stream.bytesToString();
-      dynamic decoded;
-      try {
-        decoded = _decodeJson(body);
-      } catch (_) {}
-      throw Exception(
-        decoded is Map
-            ? (decoded['detail'] ?? decoded['message'] ?? 'HTTP ${response.statusCode}')
-            : 'HTTP ${response.statusCode}',
-      );
-    }
+    final client = http.Client();
+    _activeAiClient?.close();
+    _activeAiClient = client;
+    try {
+      final response =
+          await client.send(request).timeout(const Duration(seconds: 30));
+      if (_stopRequested) throw const _AiGenerationStopped();
 
-    Map<String, dynamic>? finalData;
-    await for (final line in response.stream
-        .transform(utf8.decoder)
-        .transform(const LineSplitter())
-        .timeout(const Duration(seconds: 210))) {
-      final trimmed = line.trim();
-      if (trimmed.isEmpty) continue;
-
-      dynamic decoded;
-      try {
-        decoded = jsonDecode(trimmed);
-      } catch (_) {
-        continue;
+      if (response.statusCode == 404 || response.statusCode == 405) {
+        await response.stream.drain();
+        throw const _AiStreamingUnavailable();
       }
-      if (decoded is! Map) continue;
-      final packet = Map<String, dynamic>.from(decoded);
-      final event = '${packet['event'] ?? ''}'.trim();
-      onEvent(event, packet);
-
-      if (event == 'final' && packet['data'] is Map) {
-        finalData = Map<String, dynamic>.from(packet['data'] as Map);
-      } else if (event == 'error') {
-        throw Exception('${packet['message'] ?? 'Ошибка потокового ответа'}');
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        final body = await response.stream.bytesToString();
+        dynamic decoded;
+        try {
+          decoded = _decodeJson(body);
+        } catch (_) {}
+        throw Exception(
+          decoded is Map
+              ? (decoded['detail'] ??
+                  decoded['message'] ??
+                  'HTTP ${response.statusCode}')
+              : 'HTTP ${response.statusCode}',
+        );
       }
-    }
 
-    if (finalData == null) {
-      throw Exception('Сервер завершил поток без final-события');
+      Map<String, dynamic>? finalData;
+      await for (final line in response.stream
+          .transform(utf8.decoder)
+          .transform(const LineSplitter())
+          .timeout(const Duration(seconds: 210))) {
+        if (_stopRequested) throw const _AiGenerationStopped();
+        final trimmed = line.trim();
+        if (trimmed.isEmpty) continue;
+
+        dynamic decoded;
+        try {
+          decoded = jsonDecode(trimmed);
+        } catch (_) {
+          continue;
+        }
+        if (decoded is! Map) continue;
+        final packet = Map<String, dynamic>.from(decoded);
+        final event = '${packet['event'] ?? ''}'.trim();
+        onEvent(event, packet);
+
+        if (event == 'final' && packet['data'] is Map) {
+          finalData = Map<String, dynamic>.from(packet['data'] as Map);
+        } else if (event == 'error') {
+          throw Exception('${packet['message'] ?? 'Ошибка потокового ответа'}');
+        }
+      }
+
+      if (_stopRequested) throw const _AiGenerationStopped();
+      if (finalData == null) {
+        throw Exception('Сервер завершил поток без final-события');
+      }
+      return finalData;
+    } finally {
+      if (identical(_activeAiClient, client)) _activeAiClient = null;
+      client.close();
     }
-    return finalData;
   }
 
   Future<Map<String, dynamic>> _postAiLegacyJson({
     required String url,
     required Map<String, dynamic> payload,
   }) async {
-    final res = await http
-        .post(
-          Uri.parse(url),
-          headers: const <String, String>{
-            'Content-Type': 'application/json; charset=utf-8',
-            'Accept': 'application/json',
-          },
-          body: jsonEncode(payload),
-        )
-        .timeout(const Duration(seconds: 210));
+    final client = http.Client();
+    _activeAiClient?.close();
+    _activeAiClient = client;
+    try {
+      final res = await client
+          .post(
+            Uri.parse(url),
+            headers: const <String, String>{
+              'Content-Type': 'application/json; charset=utf-8',
+              'Accept': 'application/json',
+            },
+            body: jsonEncode(payload),
+          )
+          .timeout(const Duration(seconds: 210));
 
-    final data = _decodeJson(res.body);
-    if (res.statusCode != 200 || data is! Map || data['success'] != true) {
-      throw Exception(
-        data is Map
-            ? (data['detail'] ?? data['message'] ?? 'Ошибка запроса')
-            : 'HTTP ${res.statusCode}',
-      );
+      if (_stopRequested) throw const _AiGenerationStopped();
+      final data = _decodeJson(res.body);
+      if (res.statusCode != 200 || data is! Map || data['success'] != true) {
+        throw Exception(
+          data is Map
+              ? (data['detail'] ?? data['message'] ?? 'Ошибка запроса')
+              : 'HTTP ${res.statusCode}',
+        );
+      }
+      return Map<String, dynamic>.from(data);
+    } finally {
+      if (identical(_activeAiClient, client)) _activeAiClient = null;
+      client.close();
     }
-    return Map<String, dynamic>.from(data);
   }
 
   Future<void> _ask([String? forced]) async {
@@ -2040,6 +2144,7 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
       return;
     }
 
+    _stopRequested = false;
     setState(() {
       _error = null;
       _sending = true;
@@ -2166,6 +2271,20 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
         allowActions: !widget.personalProfileMode,
       );
       responseMessage = _activeStreamingMessage;
+    } on _AiGenerationStopped {
+      if (!mounted) return;
+      final partial = _activeStreamingMessage;
+      if (partial != null && _messages.contains(partial)) {
+        setState(() {
+          final index = _messages.indexOf(partial);
+          final updated = partial.copyWith(canContinue: true);
+          final existingKey = _messageKeys.remove(partial);
+          _messages[index] = updated;
+          if (existingKey != null) _messageKeys[updated] = existingKey;
+          _activeStreamingMessage = updated;
+          _error = null;
+        });
+      }
     } catch (e) {
       if (!mounted) return;
       final partial = _activeStreamingMessage;
@@ -2216,6 +2335,7 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
       if (_isNearChatBottom()) {
         _scheduleStreamingFollow(force: true);
       }
+      _stopRequested = false;
       _scheduleHistorySave();
     }
   }
@@ -2325,6 +2445,7 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
     if (index < 0) return;
 
     var targetMessage = message;
+    _stopRequested = false;
     setState(() {
       _error = null;
       _continuingMessages.add(targetMessage);
@@ -2528,6 +2649,9 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
       if (_isNearChatBottom()) {
         _scheduleStreamingFollow(force: true);
       }
+    } on _AiGenerationStopped {
+      if (!mounted) return;
+      setState(() => _error = null);
     } catch (e) {
       if (!mounted) return;
       setState(() => _error = 'Не удалось загрузить продолжение: $e');
@@ -2541,6 +2665,7 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
           _continuingMessages.remove(targetMessage);
         });
       }
+      _stopRequested = false;
     }
   }
 
@@ -3051,6 +3176,11 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
                     child: _AiComposerAttachmentChip(
                       name: _attachmentFile!.name,
                       uploading: _uploadingAttachment,
+                      progress: _attachmentUploadProgress,
+                      failed: _attachmentUploadFailed,
+                      onRetry: _attachmentUploadKind == null
+                          ? null
+                          : () => unawaited(_retryAttachmentUpload()),
                       icon: _attachedDocumentId().isNotEmpty
                           ? Icons.description_outlined
                           : Icons.attach_file_rounded,
@@ -3132,7 +3262,11 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
                           minLines: 1,
                           maxLines: compact ? 3 : 4,
                           textInputAction: TextInputAction.send,
-                          onSubmitted: (_) => unawaited(_sendCurrentComposer()),
+                          onSubmitted: (_) {
+                            if (!_hasActiveAiWork && !_uploadingAttachment) {
+                              unawaited(_sendCurrentComposer());
+                            }
+                          },
                           decoration: InputDecoration(
                             border: InputBorder.none,
                             hintText: _composerHint,
@@ -3151,22 +3285,35 @@ class _CmrClubAiAssistantPanelState extends State<CmrClubAiAssistantPanel> {
                 borderRadius: BorderRadius.circular(14),
                 child: InkWell(
                   borderRadius: BorderRadius.circular(14),
-                  onTap: (_sending || _uploadingAttachment)
+                  onTap: _uploadingAttachment
                       ? null
-                      : () => unawaited(_sendCurrentComposer()),
+                      : _canStopAi
+                          ? _stopAiGeneration
+                          : _hasActiveAiWork
+                              ? null
+                              : () => unawaited(_sendCurrentComposer()),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 160),
                     width: compact ? 42 : 46,
                     height: compact ? 42 : 46,
-                    decoration: (_sending || _uploadingAttachment)
+                    decoration: (_uploadingAttachment ||
+                            (_hasActiveAiWork && !_canStopAi))
                         ? _AiDecor.disabledButton(radius: 14)
-                        : _AiDecor.aiGradient(radius: 14),
+                        : _canStopAi
+                            ? BoxDecoration(
+                                color: _AiColors.graphite,
+                                borderRadius: BorderRadius.circular(14),
+                              )
+                            : _AiDecor.aiGradient(radius: 14),
                     child: Icon(
-                      (_sending || _uploadingAttachment)
+                      _uploadingAttachment ||
+                              (_hasActiveAiWork && !_canStopAi)
                           ? Icons.more_horiz_rounded
-                          : Icons.arrow_upward_rounded,
+                          : _canStopAi
+                              ? Icons.stop_rounded
+                              : Icons.arrow_upward_rounded,
                       color: Colors.white,
-                      size: 19,
+                      size: _canStopAi ? 18 : 19,
                     ),
                   ),
                 ),
@@ -3226,48 +3373,88 @@ class _AiComposerModeChip extends StatelessWidget {
 class _AiComposerAttachmentChip extends StatelessWidget {
   final String name;
   final bool uploading;
+  final double progress;
+  final bool failed;
   final IconData icon;
   final VoidCallback onClose;
+  final VoidCallback? onRetry;
 
   const _AiComposerAttachmentChip({
     required this.name,
     required this.uploading,
+    required this.progress,
+    required this.failed,
     this.icon = Icons.attach_file_rounded,
     required this.onClose,
+    this.onRetry,
   });
 
   @override
   Widget build(BuildContext context) {
+    final percent = (progress.clamp(0.0, 1.0) * 100).round();
     return Container(
-      height: 30,
-      padding: const EdgeInsets.only(left: 9, right: 4),
+      constraints: const BoxConstraints(minHeight: 30),
+      padding: const EdgeInsets.only(left: 9, right: 4, top: 4, bottom: 4),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(.92),
+        color: failed
+            ? const Color(0xFFFFF7F6)
+            : Colors.white.withOpacity(.92),
         borderRadius: BorderRadius.circular(9),
-        border: Border.all(color: _AiColors.line),
+        border: Border.all(
+          color: failed ? const Color(0xFFF1B8B2) : _AiColors.line,
+        ),
       ),
       child: Row(
         children: [
           if (uploading)
-            const SizedBox(
-              width: 13,
-              height: 13,
+            SizedBox(
+              width: 17,
+              height: 17,
               child: CircularProgressIndicator(
-                strokeWidth: 1.8,
+                value: progress > 0 ? progress.clamp(0.0, 1.0) : null,
+                strokeWidth: 2,
                 color: _AiColors.green,
               ),
             )
           else
-            Icon(icon, size: 14, color: _AiColors.greenDark),
+            Icon(
+              failed ? Icons.error_outline_rounded : icon,
+              size: 14,
+              color: failed ? const Color(0xFFB6473D) : _AiColors.greenDark,
+            ),
           const SizedBox(width: 6),
           Expanded(
             child: Text(
-              uploading ? 'Загрузка · $name' : name,
+              uploading
+                  ? 'Загрузка $percent% · $name'
+                  : failed
+                      ? 'Не загружено · $name'
+                      : name,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: _AiText.chip(size: 10.0, color: _AiColors.text2),
+              style: _AiText.chip(
+                size: 10.0,
+                color: failed ? const Color(0xFF9A3B33) : _AiColors.text2,
+              ),
             ),
           ),
+          if (failed && onRetry != null) ...[
+            const SizedBox(width: 4),
+            InkWell(
+              borderRadius: BorderRadius.circular(7),
+              onTap: onRetry,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 5),
+                child: Text(
+                  'Повторить',
+                  style: _AiText.chip(
+                    size: 9.7,
+                    color: _AiColors.greenDark,
+                  ),
+                ),
+              ),
+            ),
+          ],
           InkWell(
             borderRadius: BorderRadius.circular(99),
             onTap: uploading ? null : onClose,
@@ -5261,6 +5448,10 @@ class _AiBadge extends StatelessWidget {
 
 class _AiStreamingUnavailable implements Exception {
   const _AiStreamingUnavailable();
+}
+
+class _AiGenerationStopped implements Exception {
+  const _AiGenerationStopped();
 }
 
 enum _AiComposerMode { text, image, video }

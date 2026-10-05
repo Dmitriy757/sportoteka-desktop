@@ -12,6 +12,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:http/http.dart' as http;
 
 import 'package:sportoteka/core/theme/app_typography.dart';
+import 'package:sportoteka/core/personal_workspace/personal_workspace_os_service.dart';
 
 // ==================== Цветовая схема (унифицирована с матчами) ====================
 
@@ -135,6 +136,13 @@ class CmrTestingPanel extends StatefulWidget {
   final String? initialPlayerName;
   final VoidCallback? onBackToMenu;
 
+  /// Personal mode reuses this exact testing UI, but stores sessions under
+  /// owner_user_id in Sportoteka OS instead of club/team testing tables.
+  final bool personalMode;
+  final int ownerUserId;
+  final int ownerPlayerId;
+  final String ownerPlayerName;
+
   const CmrTestingPanel({
     super.key,
     required this.clubId,
@@ -148,6 +156,10 @@ class CmrTestingPanel extends StatefulWidget {
     this.initialPlayerId,
     this.initialPlayerName,
     this.onBackToMenu,
+    this.personalMode = false,
+    this.ownerUserId = 0,
+    this.ownerPlayerId = 0,
+    this.ownerPlayerName = '',
   });
 
   @override
@@ -443,6 +455,74 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
     return <Map<String, dynamic>>[];
   }
 
+  bool get _isPersonal => widget.personalMode && widget.ownerUserId > 0;
+  int get _personalPlayerId => widget.ownerPlayerId > 0
+      ? widget.ownerPlayerId
+      : widget.ownerUserId;
+
+  List<Map<String, dynamic>> _fallbackStages() => <Map<String, dynamic>>[
+        for (int age = 6; age <= 17; age++) <String, dynamic>{'code': 'U$age'},
+      ];
+
+  List<Map<String, dynamic>> _fallbackTests(String code) {
+    switch (code) {
+      case 'physical':
+        return <Map<String, dynamic>>[
+          {'code': 'run_10m', 'title': 'Бег 10 м', 'unit': 'с', 'lower_is_better': 1},
+          {'code': 'run_30m', 'title': 'Бег 30 м', 'unit': 'с', 'lower_is_better': 1},
+          {'code': 'shuttle_3x10', 'title': 'Челночный бег 3×10', 'unit': 'с', 'lower_is_better': 1},
+          {'code': 'long_jump', 'title': 'Прыжок в длину', 'unit': 'см', 'lower_is_better': 0},
+        ];
+      case 'technical':
+        return <Map<String, dynamic>>[
+          {'code': 'dribbling', 'title': 'Ведение мяча', 'unit': 'с', 'lower_is_better': 1},
+          {'code': 'passing', 'title': 'Точность передач', 'unit': '%', 'lower_is_better': 0},
+          {'code': 'shooting', 'title': 'Точность ударов', 'unit': '%', 'lower_is_better': 0},
+        ];
+      case 'tactical':
+        return <Map<String, dynamic>>[
+          {'code': 'decision', 'title': 'Игровые решения', 'unit': 'балл', 'lower_is_better': 0},
+          {'code': 'positioning', 'title': 'Позиционирование', 'unit': 'балл', 'lower_is_better': 0},
+        ];
+      default:
+        return <Map<String, dynamic>>[
+          {'code': 'score', 'title': 'Оценка', 'unit': 'балл', 'lower_is_better': 0},
+        ];
+    }
+  }
+
+  Map<String, dynamic>? _personalSessionPayload(int id) {
+    for (final row in sessions) {
+      if (_sessionRowId(row) == id && row['_personal_payload'] is Map) {
+        return Map<String, dynamic>.from(row['_personal_payload'] as Map);
+      }
+    }
+    return null;
+  }
+
+  List<Map<String, dynamic>> _personalMatrixPlayers(int selectedSessionId) {
+    final payload = _personalSessionPayload(selectedSessionId);
+    final rows = (payload?['results'] as List?) ?? const [];
+    final resultMap = <String, dynamic>{};
+    for (final raw in rows.whereType<Map>()) {
+      final row = Map<String, dynamic>.from(raw);
+      final code = _asStr(row['test_code']);
+      if (code.isEmpty) continue;
+      resultMap[code] = <String, dynamic>{'value': row['value']};
+    }
+    return <Map<String, dynamic>>[
+      <String, dynamic>{
+        'id': _personalPlayerId,
+        'player_id': _personalPlayerId,
+        'user_id': widget.ownerUserId,
+        'full_name': widget.ownerPlayerName.trim().isEmpty
+            ? 'Пользователь'
+            : widget.ownerPlayerName.trim(),
+        'results': resultMap,
+      },
+    ];
+  }
+
   bool _hasSessionOn(DateTime d) {
     final iso = _dateIso(d);
     return sessions.any((s) => _sessionDateIso(s) == iso);
@@ -459,6 +539,34 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
   Future<void> _loadSessionsOnly() async {
     sessionsLoading = true;
     try {
+      if (_isPersonal) {
+        final nodes = await PersonalWorkspaceOsService.list(
+          userId: widget.ownerUserId,
+          category: 'reports',
+        );
+        final normalized = <Map<String, dynamic>>[];
+        for (final node in nodes) {
+          if ('${node['kind'] ?? ''}' != 'document') continue;
+          final payload = PersonalWorkspaceOsService.decodeDocumentContent(node);
+          if (payload == null || payload['module'] != 'personal_testing') continue;
+          if (_asStr(payload['category']) != category ||
+              _asStr(payload['stage']) != stage) continue;
+          final date = _asStr(payload['test_date']);
+          if (date.isEmpty) continue;
+          normalized.add(<String, dynamic>{
+            'id': _asInt(node['id']),
+            'test_date': date,
+            'created_at': node['created_at'],
+            'updated_at': node['updated_at'],
+            '_personal_payload': payload,
+          });
+        }
+        normalized.sort((a, b) =>
+            _sessionDateIso(b).compareTo(_sessionDateIso(a)));
+        sessions = normalized;
+        return;
+      }
+
       final uri = Uri.parse('${TestingApi.base}/get_testing_sessions.php').replace(queryParameters: {
         'club_id': '${widget.clubId}',
         'team_id': '${widget.teamId}',
@@ -491,7 +599,6 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
       normalized.sort((a, b) => _sessionDateIso(b).compareTo(_sessionDateIso(a)));
       sessions = normalized;
     } catch (e) {
-      // Не маскируем уже загруженные даты при кратковременной ошибке сети.
       if (sessions.isEmpty) sessions = <Map<String, dynamic>>[];
       debugPrint('CmrTestingPanel: get_testing_sessions failed: $e');
     } finally {
@@ -519,30 +626,57 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
       final selectedSessionId = _sessionIdForDate(_selectedDate);
       sessionId = selectedSessionId;
 
-      final uri = Uri.parse('${TestingApi.base}/get_testing_matrix.php').replace(queryParameters: {
-        'club_id': '${widget.clubId}',
-        'team_id': '${widget.teamId}',
-        'category': category,
-        'stage': stage,
-        'test_date': _dateIso(_selectedDate),
-        if (selectedSessionId > 0) 'session_id': '$selectedSessionId',
-      });
+      Map<String, dynamic> data = <String, dynamic>{};
+      if (widget.teamId > 0) {
+        try {
+          final uri = Uri.parse('${TestingApi.base}/get_testing_matrix.php').replace(queryParameters: {
+            'club_id': '${widget.clubId}',
+            'team_id': '${widget.teamId}',
+            'category': category,
+            'stage': stage,
+            'test_date': _dateIso(_selectedDate),
+            if (!_isPersonal && selectedSessionId > 0) 'session_id': '$selectedSessionId',
+          });
+          final r = await http.get(uri).timeout(const Duration(seconds: 18));
+          data = _decode(r.body);
+        } catch (_) {
+          data = <String, dynamic>{};
+        }
+      }
 
-      final r = await http.get(uri);
-      final data = _decode(r.body);
-      if (data['success'] != true) throw data['message'] ?? 'Не удалось загрузить тестирование';
+      final serverOk = data['success'] == true;
+      if (!serverOk && !_isPersonal) {
+        throw data['message'] ?? 'Не удалось загрузить тестирование';
+      }
 
-      final matrixPlayers = selectedSessionId > 0 ? _list(data['players']) : <Map<String, dynamic>>[];
+      final loadedStages = serverOk ? _list(data['stages']) : _fallbackStages();
+      final loadedCategories = serverOk
+          ? _list(data['categories'])
+          : <Map<String, dynamic>>[
+              {'code': 'physical'},
+              {'code': 'technical'},
+              {'code': 'tactical'},
+            ];
+      final loadedTests = serverOk && _list(data['tests']).isNotEmpty
+          ? _list(data['tests'])
+          : _fallbackTests(category);
+      final loadedNormatives = serverOk ? _list(data['normatives']) : <Map<String, dynamic>>[];
+
+      final matrixPlayers = _isPersonal
+          ? (selectedSessionId > 0
+              ? _personalMatrixPlayers(selectedSessionId)
+              : <Map<String, dynamic>>[])
+          : (selectedSessionId > 0 ? _list(data['players']) : <Map<String, dynamic>>[]);
       final teamPlayers = await _fetchTeamPlayers();
       final mergedPlayers = _mergePlayersWithResults(teamPlayers, matrixPlayers);
 
       _controllers.clear();
       setState(() {
         sessionId = selectedSessionId;
-        stages = _list(data['stages']);
-        categories = _list(data['categories']);
-        tests = _list(data['tests']);
-        normatives = _list(data['normatives']);
+        stages = loadedStages;
+        categories = loadedCategories;
+        tests = loadedTests;
+        normatives = loadedNormatives;
         players = mergedPlayers;
         loading = false;
       });
@@ -565,6 +699,22 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
   }
 
   Future<List<Map<String, dynamic>>> _fetchTeamPlayers() async {
+    if (_isPersonal) {
+      return <Map<String, dynamic>>[
+        <String, dynamic>{
+          'id': _personalPlayerId,
+          'player_id': _personalPlayerId,
+          'user_id': widget.ownerUserId,
+          'full_name': widget.ownerPlayerName.trim().isEmpty
+              ? 'Пользователь'
+              : widget.ownerPlayerName.trim(),
+          'name': widget.ownerPlayerName.trim().isEmpty
+              ? 'Пользователь'
+              : widget.ownerPlayerName.trim(),
+        },
+      ];
+    }
+
     final uri = Uri.parse(_playersUrl).replace(queryParameters: {
       'team_id': widget.teamId.toString(),
     });
@@ -677,6 +827,46 @@ class _CmrTestingPanelState extends State<CmrTestingPanel> {
             'value': _controllers[_key(playerId, code)]?.text.trim() ?? '',
           });
         }
+      }
+
+      if (_isPersonal) {
+        final testDate = _dateIso(_selectedDate);
+        final response = await PersonalWorkspaceOsService.saveDocument(
+          userId: widget.ownerUserId,
+          category: 'reports',
+          id: sessionId,
+          name: 'Тестирование $testDate · ${_categoryTitle(category)}',
+          content: jsonEncode(<String, dynamic>{
+            'module': 'personal_testing',
+            'owner_user_id': widget.ownerUserId,
+            'owner_player_id': _personalPlayerId,
+            'owner_player_name': widget.ownerPlayerName,
+            'category': category,
+            'stage': stage,
+            'test_date': testDate,
+            'title': 'Тестирование ${_categoryTitle(category)} $stage',
+            'results': rows,
+          }),
+        );
+        if (response['success'] != true) {
+          throw response['message'] ?? 'Не удалось сохранить личное тестирование';
+        }
+        final item = response['item'];
+        if (item is Map) {
+          final savedId = _asInt(item['id']);
+          if (savedId > 0) sessionId = savedId;
+        }
+
+        if (reloadAfterSave) {
+          await _load();
+        } else {
+          await _loadSessionsOnly();
+        }
+        if (!mounted || !showFeedback) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Результаты сохранены в личной Sportoteka OS')),
+        );
+        return;
       }
 
       final r = await http.post(

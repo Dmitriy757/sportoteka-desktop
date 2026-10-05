@@ -75,6 +75,14 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
   List<Map<String, dynamic>> _followingProfiles = <Map<String, dynamic>>[];
   bool _followingLoading = false;
 
+  // В «Подписках» дополнительно показываем свежие публикации, которые
+  // пользователи создают именно в своих профилях. Они не попадают в
+  // общую Community-ленту и отображаются только подписчикам в этом разделе.
+  static const Duration _followingProfileWindow = Duration(days: 60);
+  static const int _followingProfileFetchBatchSize = 6;
+  List<Map<String, dynamic>> _followingProfilePosts = <Map<String, dynamic>>[];
+  bool _followingProfilePostsLoading = false;
+
   // Аватар автора поста всегда сверяем с профилем пользователя.
   // get_posts.php у старых/части публикаций может не возвращать photo.
   final Map<int, String> _postAvatarByUserId = <int, String>{};
@@ -116,7 +124,9 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
       setState(() {
         _followingUserIds = <int>{};
         _followingProfiles = <Map<String, dynamic>>[];
+        _followingProfilePosts = <Map<String, dynamic>>[];
         _followingLoading = false;
+        _followingProfilePostsLoading = false;
       });
       return;
     }
@@ -195,6 +205,12 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
       });
 
       await _hydrateFollowingProfiles();
+      // Профильные обновления нужны только в разделе «Подписки».
+      // Так при обычном открытии Community мы не делаем N дополнительных
+      // запросов по всем пользователям, на которых подписан текущий аккаунт.
+      if (_feedScope == _CommunityFeedScope.following) {
+        await _fetchFollowingProfilePosts();
+      }
     } catch (_) {
       // Не очищаем уже загруженные подписки из-за временной сетевой ошибки.
     } finally {
@@ -204,7 +220,13 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
 
   Future<void> _hydrateFollowingProfiles() async {
     final missing = _followingProfiles
-        .where((p) => _safeInt(p['id']) > 0 && _safeStr(p['avatar']).isEmpty)
+        .where((p) {
+          final name = _safeStr(p['name']).trim();
+          return _safeInt(p['id']) > 0 &&
+              (_safeStr(p['avatar']).isEmpty ||
+                  name.isEmpty ||
+                  name == 'Пользователь');
+        })
         .map((p) => _safeInt(p['id']))
         .toSet();
 
@@ -249,6 +271,202 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
         if (changed && mounted) setState(() {});
       } catch (_) {}
     }));
+  }
+
+  Future<void> _fetchFollowingProfilePosts() async {
+    final followedIds = _followingUserIds.where((id) => id > 0).toList();
+
+    if (followedIds.isEmpty) {
+      if (!mounted) return;
+      setState(() {
+        _followingProfilePosts = <Map<String, dynamic>>[];
+        _followingProfilePostsLoading = false;
+      });
+      return;
+    }
+
+    if (mounted) setState(() => _followingProfilePostsLoading = true);
+
+    final cutoff = DateTime.now().subtract(_followingProfileWindow);
+    final collected = <Map<String, dynamic>>[];
+
+    try {
+      // Не отправляем десятки запросов одновременно: небольшие пачки сохраняют
+      // быстрый UI и не создают лишний всплеск нагрузки на PHP API.
+      for (var start = 0;
+          start < followedIds.length;
+          start += _followingProfileFetchBatchSize) {
+        final end = (start + _followingProfileFetchBatchSize < followedIds.length)
+            ? start + _followingProfileFetchBatchSize
+            : followedIds.length;
+        final batch = followedIds.sublist(start, end);
+
+        final rows = await Future.wait<List<Map<String, dynamic>>>(
+          batch.map((userId) => _fetchProfilePostsForFollowingUser(
+                userId,
+                cutoff: cutoff,
+              )),
+        );
+        for (final userRows in rows) {
+          collected.addAll(userRows);
+        }
+      }
+
+      // На случай неоднородных ответов старого API убираем дубликаты по
+      // паре user_id + post_id.
+      final unique = <String, Map<String, dynamic>>{};
+      for (final post in collected) {
+        final key = '${_safeInt(post['user_id'])}:${_safeInt(post['id'])}';
+        if (key == '0:0') continue;
+        final existing = unique[key];
+        if (existing == null) {
+          unique[key] = post;
+          continue;
+        }
+        final oldDate = existing['date'] is DateTime
+            ? existing['date'] as DateTime
+            : DateTime(1970);
+        final newDate = post['date'] is DateTime
+            ? post['date'] as DateTime
+            : DateTime(1970);
+        if (newDate.isAfter(oldDate)) unique[key] = post;
+      }
+
+      final list = unique.values.toList(growable: true)
+        ..sort((a, b) {
+          final aDate = a['date'] is DateTime
+              ? a['date'] as DateTime
+              : DateTime(1970);
+          final bDate = b['date'] is DateTime
+              ? b['date'] as DateTime
+              : DateTime(1970);
+          return bDate.compareTo(aDate);
+        });
+
+      if (!mounted) return;
+      setState(() => _followingProfilePosts = list);
+    } catch (_) {
+      // При временной ошибке сети оставляем уже показанные обновления профилей.
+    } finally {
+      if (mounted) setState(() => _followingProfilePostsLoading = false);
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchProfilePostsForFollowingUser(
+    int userId, {
+    required DateTime cutoff,
+  }) async {
+    if (userId <= 0) return const <Map<String, dynamic>>[];
+
+    try {
+      final response = await http
+          .post(
+            Uri.parse('$_apiBase/get_posts_by_user.php'),
+            body: jsonEncode(<String, dynamic>{
+              'user_id': userId,
+              'visibility': 'profile',
+              'post_type': 'post',
+            }),
+            headers: const <String, String>{
+              'Content-Type': 'application/json',
+            },
+          )
+          .timeout(const Duration(seconds: 12));
+
+      if (response.statusCode != 200) {
+        return const <Map<String, dynamic>>[];
+      }
+
+      final decoded = jsonDecode(
+        utf8.decode(response.bodyBytes, allowMalformed: true),
+      );
+
+      final List<dynamic> rawPosts = decoded is Map
+          ? ((decoded['posts'] ?? decoded['data'] ?? decoded['items'] ?? [])
+                  as List? ??
+              const <dynamic>[])
+          : (decoded is List ? decoded : const <dynamic>[]);
+
+      Map<String, dynamic>? profile;
+      for (final item in _followingProfiles) {
+        if (_safeInt(item['id']) == userId) {
+          profile = item;
+          break;
+        }
+      }
+
+      final profileName =
+          profile == null ? '' : _safeStr(profile['name']).trim();
+      final authorName = profileName.isNotEmpty ? profileName : 'Пользователь';
+      final authorAvatar =
+          profile == null ? '' : _safeStr(profile['avatar']).trim();
+
+      final out = <Map<String, dynamic>>[];
+      for (final rawAny in rawPosts) {
+        if (rawAny is! Map) continue;
+        final raw = Map<String, dynamic>.from(rawAny);
+
+        final visibility = _safeStr(raw['visibility']).trim().toLowerCase();
+        if (visibility.isNotEmpty && visibility != 'profile') continue;
+        final postType = _safeStr(raw['post_type']).trim().toLowerCase();
+        if (postType.isNotEmpty && postType != 'post') continue;
+
+        final createdAt = DateTime.tryParse(
+              _safeStr(raw['created_at'] ?? raw['date']).replaceAll(' ', 'T'),
+            ) ??
+            DateTime.now();
+        if (createdAt.isBefore(cutoff)) continue;
+
+        final body = _safeStr(raw['body'] ?? raw['text'] ?? raw['caption']);
+        final plainBody = _looksLikeHtml(body) ? _htmlToPlain(body) : body;
+        final image = _fixUrl(
+          _safeStr(raw['image'] ?? raw['image_url'] ?? raw['photo']),
+        );
+
+        // Профильные публикации могут содержать те же HTML-блоки с видео,
+        // что и обычная Community-лента.
+        final preview = _extractPostPreview(body);
+        final previewImage = _safeStr(preview['previewImage']);
+        final hasVideo = preview['hasVideo'] == true;
+        final videoUrl = _safeStr(preview['videoUrl']);
+
+        final title = _safeStr(raw['title']).trim();
+        final category = _safeStr(raw['category']).trim();
+
+        if (plainBody.trim().isEmpty &&
+            image.trim().isEmpty &&
+            previewImage.trim().isEmpty &&
+            !hasVideo) {
+          continue;
+        }
+
+        out.add(<String, dynamic>{
+          'id': _safeInt(raw['id']),
+          'title': title,
+          'text': plainBody,
+          'rawBody': body,
+          'category': category.isNotEmpty ? category : 'Профиль',
+          'team': _safeStr(raw['team'] ?? raw['team_name']),
+          'coverUrl': image,
+          'imageUrl': image.isNotEmpty ? image : previewImage,
+          'hasVideo': hasVideo,
+          'videoUrl': videoUrl,
+          'date': createdAt,
+          'authorName': authorName,
+          'user_id': userId,
+          'authorAvatar': authorAvatar,
+          'likes': _safeInt(raw['likes_count'] ?? raw['likes']),
+          'comments': _safeInt(raw['comments_count'] ?? raw['comments']),
+          'liked': (_safeInt(raw['liked_by_me']) == 1) ||
+              (_safeStr(raw['liked_by_me']).toLowerCase() == 'true'),
+          'isProfileUpdate': true,
+        });
+      }
+
+      return out;
+    } catch (_) {
+      return const <Map<String, dynamic>>[];
+    }
   }
 
   Future<void> _openCommunityUserProfile(int userId) async {
@@ -739,16 +957,34 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
       return;
     }
 
-    final index = posts.indexWhere((p) => _safeInt(p['id']) == postId);
-    if (index < 0) return;
-    final bool wasLiked = (posts[index]['liked'] == true);
+    Map<String, dynamic>? targetPost;
+    for (final post in posts) {
+      if (_safeInt(post['id']) == postId) {
+        targetPost = post;
+        break;
+      }
+    }
+    if (targetPost == null) {
+      for (final post in _followingProfilePosts) {
+        if (_safeInt(post['id']) == postId) {
+          targetPost = post;
+          break;
+        }
+      }
+    }
+    final target = targetPost;
+    if (target == null) return;
 
-    setState(() {
-      posts[index]['liked'] = !wasLiked;
-      posts[index]['likes'] =
-          (posts[index]['likes'] ?? 0) + (wasLiked ? -1 : 1);
-      if ((posts[index]['likes'] ?? 0) < 0) posts[index]['likes'] = 0;
-    });
+    final bool wasLiked = target['liked'] == true;
+
+    void applyLocal(bool liked) {
+      target['liked'] = liked;
+      target['likes'] =
+          _safeInt(target['likes']) + (liked == wasLiked ? 0 : (liked ? 1 : -1));
+      if (_safeInt(target['likes']) < 0) target['likes'] = 0;
+    }
+
+    setState(() => applyLocal(!wasLiked));
 
     try {
       final endpoint =
@@ -763,12 +999,14 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
       );
 
       if (res.statusCode != 200) {
-        setState(() {
-          posts[index]['liked'] = wasLiked;
-          posts[index]['likes'] =
-              (posts[index]['likes'] ?? 0) + (wasLiked ? 1 : -1);
-          if ((posts[index]['likes'] ?? 0) < 0) posts[index]['likes'] = 0;
-        });
+        if (mounted) {
+          setState(() {
+            target['liked'] = wasLiked;
+            target['likes'] =
+                _safeInt(target['likes']) + (wasLiked ? 1 : -1);
+            if (_safeInt(target['likes']) < 0) target['likes'] = 0;
+          });
+        }
         return;
       }
 
@@ -777,21 +1015,23 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
           (j['success'] == true ||
               j['status'] == 'ok' ||
               j['status'] == 'already_liked'));
-      if (!ok) {
+      if (!ok && mounted) {
         setState(() {
-          posts[index]['liked'] = wasLiked;
-          posts[index]['likes'] =
-              (posts[index]['likes'] ?? 0) + (wasLiked ? 1 : -1);
-          if ((posts[index]['likes'] ?? 0) < 0) posts[index]['likes'] = 0;
+          target['liked'] = wasLiked;
+          target['likes'] =
+              _safeInt(target['likes']) + (wasLiked ? 1 : -1);
+          if (_safeInt(target['likes']) < 0) target['likes'] = 0;
         });
       }
     } catch (_) {
-      setState(() {
-        posts[index]['liked'] = wasLiked;
-        posts[index]['likes'] =
-            (posts[index]['likes'] ?? 0) + (wasLiked ? 1 : -1);
-        if ((posts[index]['likes'] ?? 0) < 0) posts[index]['likes'] = 0;
-      });
+      if (mounted) {
+        setState(() {
+          target['liked'] = wasLiked;
+          target['likes'] =
+              _safeInt(target['likes']) + (wasLiked ? 1 : -1);
+          if (_safeInt(target['likes']) < 0) target['likes'] = 0;
+        });
+      }
     }
   }
 
@@ -812,17 +1052,28 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
   List<Map<String, dynamic>> get _visiblePosts {
     final q = _searchQuery.trim().toLowerCase();
 
-    final result = posts.where((post) {
+    final source = _feedScope == _CommunityFeedScope.following
+        ? <Map<String, dynamic>>[
+            ...posts,
+            ..._followingProfilePosts,
+          ]
+        : posts;
+
+    final result = source.where((post) {
       final authorId = _safeInt(post['user_id']);
+      final isProfileUpdate = post['isProfileUpdate'] == true;
 
       switch (_feedScope) {
         case _CommunityFeedScope.mine:
-          if (authorId != _currentUserId) return false;
+          // Обновления чужих профилей существуют только внутри «Подписок».
+          if (isProfileUpdate || authorId != _currentUserId) return false;
           break;
         case _CommunityFeedScope.following:
           if (!_followingUserIds.contains(authorId)) return false;
           break;
         case _CommunityFeedScope.all:
+          // Не превращаем личные профильные публикации в общую Community-ленту.
+          if (isProfileUpdate) return false;
           break;
       }
 
@@ -973,14 +1224,16 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
         builder: (_) => NewsDetailScreen(
           title: _safeStr(post['title']).isNotEmpty
               ? _safeStr(post['title'])
-              : widget.sportName,
+              : (post['isProfileUpdate'] == true
+                  ? 'Публикация профиля'
+                  : widget.sportName),
           body: _safeStr(post['text']),
           newsId: _safeInt(post['id']),
           imageUrl: _safeStr(post['imageUrl']),
           focusCommentOnOpen: focusComment,
         ),
       ),
-    ).then((_) => _fetchPosts());
+    ).then((_) => _refreshCommunityFeed());
   }
 
   void _closeOpenedPost() {
@@ -989,7 +1242,7 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
       _openedPost = null;
       _openedPostFocusComment = false;
     });
-    _fetchPosts();
+    _refreshCommunityFeed();
   }
 
   TextStyle _title(double size,
@@ -1226,7 +1479,9 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
             ),
             title: _safeStr(openedPost['title']).isNotEmpty
                 ? _safeStr(openedPost['title'])
-                : widget.sportName,
+                : (openedPost['isProfileUpdate'] == true
+                    ? 'Публикация профиля'
+                    : widget.sportName),
             body: _safeStr(openedPost['text']),
             newsId: _safeInt(openedPost['id']),
             imageUrl: _safeStr(openedPost['imageUrl']),
@@ -1870,12 +2125,15 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
     final isFollowing = _feedScope == _CommunityFeedScope.following;
     final isMine = _feedScope == _CommunityFeedScope.mine;
 
+    final followingContentLoading =
+        _followingLoading || _followingProfilePostsLoading;
+
     final title = hasQuery
         ? 'Ничего не найдено'
         : isFollowing
-            ? (_followingLoading
+            ? (followingContentLoading
                 ? 'Загружаем подписки'
-                : 'В подписках пока нет публикаций')
+                : 'В подписках пока нет обновлений')
             : isMine
                 ? 'У вас пока нет публикаций'
                 : 'Пока нет публикаций';
@@ -1885,7 +2143,7 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
         : isFollowing
             ? (_followingUserIds.isEmpty
                 ? 'Подпишитесь на игроков, тренеров или клубы — их новые публикации появятся здесь.'
-                : 'У пользователей, на которых вы подписаны, пока нет новых публикаций.')
+                : 'Здесь показываются публикации Community и обновления профилей за последние 60 дней.')
             : isMine
                 ? 'Создайте свой первый пост — он появится здесь и в общей ленте.'
                 : 'Создайте первый пост — он появится в общей ленте.';
@@ -1925,7 +2183,8 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
       return const SizedBox.shrink();
     }
 
-    if (_followingLoading && _followingProfiles.isEmpty) {
+    if ((_followingLoading || _followingProfilePostsLoading) &&
+        _followingProfiles.isEmpty) {
       return const Padding(
         padding: EdgeInsets.fromLTRB(10, 0, 10, 10),
         child: SizedBox(
@@ -1951,11 +2210,15 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
         children: [
           Row(
             children: [
-              Text(
-                'Вы подписаны',
-                style: _title(12.2, weight: FontWeight.w600),
+              Expanded(
+                child: Text(
+                  'Вы подписаны · обновления за 60 дней',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: _title(12.2, weight: FontWeight.w600),
+                ),
               ),
-              const Spacer(),
+              const SizedBox(width: 10),
               Text(
                 '${_followingProfiles.length}',
                 style: _text(
@@ -2289,7 +2552,9 @@ class _SportCommunityScreenState extends State<SportCommunityScreen> {
                                 ),
                                 const SizedBox(width: 6),
                                 Text(
-                                  widget.sportName,
+                                  post['isProfileUpdate'] == true
+                                      ? 'Профиль'
+                                      : widget.sportName,
                                   style: _text(
                                     9.6,
                                     weight: FontWeight.w600,

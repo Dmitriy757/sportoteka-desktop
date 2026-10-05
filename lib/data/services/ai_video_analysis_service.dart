@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import '../models/ai_video_analysis_models.dart';
+import '../models/ai_analysis_contract.dart';
 
 /// Native WebSocket client for SPORTOTEKA Video AI.
 ///
@@ -30,6 +31,7 @@ class AiVideoAnalysisService {
   Completer<Map<String, dynamic>>? _runCompleter;
 
   final List<AiFramePacket> _frameCache = <AiFramePacket>[];
+  final Map<String, Map<String, dynamic>> _reportsByJob = <String, Map<String, dynamic>>{};
   final List<Map<String, dynamic>> _events = <Map<String, dynamic>>[];
   final Set<String> _eventKeys = <String>{};
 
@@ -46,7 +48,6 @@ class AiVideoAnalysisService {
   final Map<String, Completer<Map<String, dynamic>>> _pendingRequests =
       <String, Completer<Map<String, dynamic>>>{};
   int _requestSerial = 0;
-  bool _replayAttached = false;
 
   // 0..100 progress of the current recording analysis. The WebSocket server
   // doesn't send a dedicated progress field, so we derive it from the analyzed
@@ -111,6 +112,25 @@ class AiVideoAnalysisService {
     return result;
   }
 
+  static Future<void> _closeSocketTransport(
+    WebSocket? socket, StreamSubscription<dynamic>? subscription,
+  ) async {
+    // Keep the incoming stream alive for the close handshake. Cancelling it
+    // first can prevent the peer's reply from being consumed.
+    if (socket != null) {
+      try {
+        socket.pingInterval = null;
+        await socket.close(WebSocketStatus.normalClosure, 'SPORTOTEKA dispose')
+            .timeout(const Duration(seconds: 3));
+      } catch (_) {}
+    }
+    if (subscription != null) {
+      try {
+        await subscription.cancel().timeout(const Duration(seconds: 3));
+      } catch (_) {}
+    }
+  }
+
   Future<void> connect({bool force = false}) async {
     if (_disposed) {
       throw StateError('AiVideoAnalysisService is already disposed');
@@ -122,27 +142,15 @@ class AiVideoAnalysisService {
 
     final previousSubscription = _socketSubscription;
     _socketSubscription = null;
-    if (previousSubscription != null) {
-      try {
-        await previousSubscription.cancel();
-      } catch (_) {}
-    }
-
     final previous = _socket;
     _socket = null;
-    if (previous != null) {
-      try {
-        await previous.close();
-      } catch (_) {}
-    }
+    await _closeSocketTransport(previous, previousSubscription);
 
     final socket = await WebSocket.connect(webSocketUrl)
         .timeout(const Duration(seconds: 25));
 
     if (_disposed || generation != _socketGeneration) {
-      try {
-        await socket.close();
-      } catch (_) {}
+      await _closeSocketTransport(socket, null);
       return;
     }
 
@@ -208,12 +216,14 @@ class AiVideoAnalysisService {
 
     _activeMatchLiveId = id;
     _syntheticJobId = id;
-    _replayAttached = false;
     final rawProgress = response['progress'];
     final progress = rawProgress is num
         ? rawProgress.toInt()
         : int.tryParse('${rawProgress ?? ''}') ?? 1;
-    _progressPercent = progress.clamp(1, 99);
+    // V8.9.8: reattaching is an observation of the same server job, never a
+    // new run. Keep the highest progress already seen by this client and also
+    // consider any persisted progress carried by the partial report below.
+    _acceptProgressCandidate(progress);
     final rawTime = response['time_ms'];
     final timeMs = rawTime is num
         ? rawTime.toInt()
@@ -229,6 +239,7 @@ class AiVideoAnalysisService {
       if (stats is Map) {
         _latestStats = Map<String, dynamic>.from(stats);
       }
+      _acceptProgressCandidate(AiAnalysisContract.progress(report));
     }
 
     final statusPayload = <String, dynamic>{
@@ -246,7 +257,13 @@ class AiVideoAnalysisService {
     if (!_messageController.isClosed) {
       _messageController.add(statusPayload);
     }
-    return Map<String, dynamic>.from(response);
+    return <String, dynamic>{
+      ...response,
+      'status': 'processing',
+      'progress': _progressPercent.clamp(1, 99).toInt(),
+      'job_id': id,
+      'match_live_id': id,
+    };
   }
 
   /// Attach to the latest completed analysis stored on the Video AI server.
@@ -270,16 +287,15 @@ class AiVideoAnalysisService {
     final rawReport = response['report'];
     if (rawReport is! Map) return null;
     final report = Map<String, dynamic>.from(rawReport);
-    if (report['success'] == false) return null;
+    if (report['success'] == false || !AiAnalysisContract.completed(report)) return null;
 
     final id = (report['match_live_id'] ?? '').toString().trim();
     if (id.isEmpty) return null;
 
     _activeMatchLiveId = id;
     _syntheticJobId = id;
-    _replayAttached = true;
     _progressPercent = 100;
-    _latestReport = report;
+    _acceptReport(report);
     _latestStatus = <String, dynamic>{
       'type': 'status',
       'status': 'completed',
@@ -403,7 +419,7 @@ class AiVideoAnalysisService {
       'players': request.players,
       'home_team_key': request.homeTeamKey,
       'away_team_key': request.awayTeamKey,
-      'focus_team': request.homeTeamKey,
+      'focus_team': request.focusTeamKey,
       'sampling_fps': samplingFps,
       'max_minutes': maxMinutes,
     };
@@ -443,7 +459,29 @@ class AiVideoAnalysisService {
   }
 
   Future<Map<String, dynamic>?> getJobStatusRaw(String jobId) async {
-    return _buildAggregate();
+    final id = jobId.trim();
+    final currentId = _activeMatchLiveId ?? _syntheticJobId ?? '';
+    final isCurrent = id == currentId || id == _syntheticJobId;
+    if (isCurrent && _runCompleter != null && !_runCompleter!.isCompleted) {
+      return _buildAggregate();
+    }
+    final cached = _reportsByJob[id];
+    if (cached != null && AiAnalysisContract.completed(cached)) {
+      return <String, dynamic>{...cached, 'job_id': id};
+    }
+    if (id.startsWith('ml_')) {
+      final response = await _request('get_match_report', <String, dynamic>{'match_live_id': id});
+      final raw = response['report'];
+      if (raw is Map) {
+        final report = Map<String, dynamic>.from(raw);
+        if ('${report['match_live_id'] ?? ''}' == id) {
+          _acceptReport(report, applyCurrent: isCurrent);
+          return <String, dynamic>{...report, 'job_id': id};
+        }
+      }
+      return null;
+    }
+    return isCurrent ? _buildAggregate() : null;
   }
 
   Future<AiJobStatusResponse> pollUntilDone(
@@ -472,64 +510,36 @@ class AiVideoAnalysisService {
     required String jobId,
     required int timeMs,
   }) async {
-    // Persisted Replay: ask the server for an interpolated frame at the exact
-    // video clock. This is what restores smooth rectangles after reopening the
-    // match; the old implementation only had an in-memory cache.
-    if (_replayAttached && (_activeMatchLiveId ?? '').trim().isNotEmpty) {
+    final requestedId = jobId == _syntheticJobId && _activeMatchLiveId != null
+        ? _activeMatchLiveId! : jobId;
+    if (requestedId.startsWith('ml_')) {
       try {
         final response = await _request(
           'get_frame_packet',
-          <String, dynamic>{
-            'match_live_id': _activeMatchLiveId,
-            'time_ms': timeMs,
-          },
+          <String, dynamic>{'match_live_id': requestedId, 'time_ms': timeMs},
           timeout: const Duration(seconds: 6),
         );
-        final rawFrame = response['frame'];
-        if (rawFrame is Map) {
-          final packet = AiFramePacket.fromJson(
-            Map<String, dynamic>.from(rawFrame),
-          );
-          _frameCache.add(packet);
-          if (_frameCache.length > 240) {
-            _frameCache.removeRange(0, _frameCache.length - 240);
-          }
-          return packet;
+        final raw = response['frame'];
+        if (raw is Map) {
+          final packet = AiFramePacket.fromJson(Map<String, dynamic>.from(raw));
+          if (packet.jobId == requestedId) return packet;
         }
-      } catch (_) {
-        // Fall back to any locally cached packet below.
-      }
-    }
-
-    if (_frameCache.isEmpty) {
-      try {
-        await framePackets.first.timeout(const Duration(seconds: 8));
       } catch (_) {}
     }
-
-    if (_frameCache.isEmpty) {
-      return AiFramePacket.fromJson(<String, dynamic>{
-        'success': true,
-        'has_frame': false,
-        'job_id': _activeMatchLiveId ?? _syntheticJobId ?? jobId,
-        'requested_time_ms': timeMs,
-        'time_ms': timeMs,
-        'players': const <dynamic>[],
-      });
+    // Recalculation can display the prior generation while a new job runs.
+    // Never substitute a frame from another job or a distant video timestamp.
+    AiFramePacket? best;
+    var distance = 421;
+    for (final packet in _frameCache) {
+      if (packet.jobId != requestedId) continue;
+      final delta = (packet.timeMs - timeMs).abs();
+      if (delta < distance) { best = packet; distance = delta; }
     }
-
-    AiFramePacket best = _frameCache.first;
-    var bestDistance = (best.timeMs - timeMs).abs();
-
-    for (final packet in _frameCache.skip(1)) {
-      final distance = (packet.timeMs - timeMs).abs();
-      if (distance < bestDistance) {
-        best = packet;
-        bestDistance = distance;
-      }
-    }
-
-    return best;
+    return best ?? AiFramePacket.fromJson(<String, dynamic>{
+      'success': true, 'has_frame': false, 'job_id': requestedId,
+      'requested_time_ms': timeMs, 'time_ms': timeMs,
+      'players': const <dynamic>[], 'ball': null,
+    });
   }
 
   /// The current Video AI WebSocket protocol doesn't expose calibration as a
@@ -645,6 +655,20 @@ class AiVideoAnalysisService {
       }
     }
 
+    // V8.9.8: normalize progress before *any* listener sees a status packet.
+    // The server/proxy can legally send a wrapper with progress=0 while the
+    // same job is already at N%; no UI consumer should ever observe that reset.
+    if (type == 'status' || type == 'match_started' || type == 'active_analysis') {
+      final terminalCompleted = status == 'done' ||
+          status == 'completed' || status == 'complete' || status == 'finished';
+      if (terminalCompleted) {
+        message['progress'] = _acceptProgressCandidate(100, completed: true);
+      } else if (status != 'failed' && status != 'error') {
+        final incoming = AiAnalysisContract.progress(message);
+        message['progress'] = _acceptProgressCandidate(incoming > 0 ? incoming : 1);
+      }
+    }
+
     if (!_messageController.isClosed) {
       _messageController.add(message);
     }
@@ -709,14 +733,11 @@ class AiVideoAnalysisService {
     }
 
     if (type == 'match_report') {
-      final report = message['report'];
-      if (report is Map) {
-        _latestReport = Map<String, dynamic>.from(report);
-        _appendEvents(_latestReport!['events']);
-        final stats = _latestReport!['stats'] ?? _latestReport!['final_stats'];
-        if (stats is Map) {
-          _latestStats = Map<String, dynamic>.from(stats);
-        }
+      final raw = message['report'];
+      if (raw is Map) {
+        final report = Map<String, dynamic>.from(raw);
+        final id = '${report['match_live_id'] ?? message['match_live_id'] ?? ''}';
+        _acceptReport(report, applyCurrent: id == (_activeMatchLiveId ?? ''));
       }
       return;
     }
@@ -730,7 +751,7 @@ class AiVideoAnalysisService {
           status == 'completed' ||
           status == 'complete' ||
           status == 'finished') {
-        _completeRun(_buildAggregate(statusOverride: 'completed'));
+        unawaited(_finishCompletedRun());
       } else if (status == 'failed' || status == 'error') {
         final error = (message['message'] ?? message['error'] ?? 'Video AI failed')
             .toString();
@@ -769,10 +790,28 @@ class AiVideoAnalysisService {
   }
 
 
+  int _acceptProgressCandidate(int candidate, {bool completed = false}) {
+    if (completed) {
+      _progressPercent = 100;
+      return _progressPercent;
+    }
+    final safe = candidate.clamp(1, 99).toInt();
+    if (_progressPercent <= 0 || safe > _progressPercent) {
+      _progressPercent = safe;
+    }
+    return _progressPercent.clamp(1, 99).toInt();
+  }
+
   int _deriveProgressPercent(
     Map<String, dynamic> message,
     Map<String, dynamic> stats,
   ) {
+    // Prefer the server's canonical frame-index progress when present. The old
+    // client recalculated progress from timestamp/duration and could go
+    // backwards when metadata changed or a reconnect briefly restarted at an
+    // earlier timestamp. V8.9.8 treats every source as an observation and keeps
+    // one monotonic progress floor for the current user-started analysis.
+    var candidate = AiAnalysisContract.progress(message).clamp(0, 99).toInt();
     final currentMs = _asDouble(message['time_ms'] ?? message['timestamp']);
     final fps = _asDouble(stats['fps']);
     final frameCount = _asDouble(stats['frame_count']);
@@ -789,14 +828,13 @@ class AiVideoAnalysisService {
       }
     }
 
-    if (totalMs <= 0) {
-      // We know analysis is alive as soon as the first frame arrives. Keep a
-      // visible non-zero progress until duration metadata becomes available.
-      return _progressPercent <= 0 ? 1 : _progressPercent.clamp(1, 99);
+    if (totalMs > 0) {
+      final derived = ((currentMs / totalMs) * 100.0).floor().clamp(1, 99).toInt();
+      if (derived > candidate) candidate = derived;
     }
 
-    final percent = ((currentMs / totalMs) * 100.0).floor();
-    return percent.clamp(1, 99);
+    if (candidate <= 0) candidate = _progressPercent > 0 ? _progressPercent : 1;
+    return _acceptProgressCandidate(candidate);
   }
 
   static double _asDouble(dynamic value) {
@@ -834,6 +872,34 @@ class AiVideoAnalysisService {
     }
   }
 
+  void _acceptReport(Map<String, dynamic> report, {bool applyCurrent = true}) {
+    final id = '${report['match_live_id'] ?? ''}'.trim();
+    if (id.isNotEmpty) {
+      _reportsByJob[id] = Map<String, dynamic>.from(report);
+      while (_reportsByJob.length > 3) { _reportsByJob.remove(_reportsByJob.keys.first); }
+    }
+    if (!applyCurrent) return;
+    _latestReport = Map<String, dynamic>.from(report);
+    if (report['events'] is List) {
+      _events.clear();
+      _eventKeys.clear();
+      _appendEvents(report['events']);
+    }
+    final stats = report['stats'] ?? report['final_stats'];
+    if (stats is Map) _latestStats = Map<String, dynamic>.from(stats);
+    final reportCompleted = AiAnalysisContract.completed(report);
+    final reportFailed = AiAnalysisContract.failed(report);
+    if (reportCompleted) {
+      _acceptProgressCandidate(100, completed: true);
+    } else {
+      final observed = AiAnalysisContract.progress(report);
+      if (observed > 0) _acceptProgressCandidate(observed);
+    }
+    if (reportCompleted || reportFailed) {
+      _latestStatus = <String, dynamic>{...report, 'job_id': id};
+    }
+  }
+
   Map<String, dynamic> _buildAggregate({String? statusOverride}) {
     final status = statusOverride ??
         (_latestStatus?['status'] ??
@@ -843,6 +909,13 @@ class AiVideoAnalysisService {
             .toString();
 
     final report = _latestReport ?? const <String, dynamic>{};
+    final completed = AiAnalysisContract.completed(<String, dynamic>{'status': status});
+    final authoritativeEvents = completed && report['events'] is List
+        ? List<dynamic>.from(report['events'] as List)
+        : List<Map<String, dynamic>>.from(_events);
+    final authoritativeTtd = completed && report['auto_ttd'] is List
+        ? List<dynamic>.from(report['auto_ttd'] as List)
+        : authoritativeEvents;
 
     return <String, dynamic>{
       ...report,
@@ -852,16 +925,40 @@ class AiVideoAnalysisService {
       'status': status,
       'progress': (status == 'completed' || status == 'done')
           ? 100
-          : _progressPercent.clamp(0, 99),
-      'events': List<Map<String, dynamic>>.from(_events),
+          : (_runCompleter != null && !_runCompleter!.isCompleted
+              ? _progressPercent.clamp(1, 99).toInt()
+              : _progressPercent.clamp(0, 99).toInt()),
+      'events': authoritativeEvents,
       // Existing Flutter analytics understands auto_ttd. The Video AI event
       // engine already emits the source actions, so expose them under both keys.
-      'auto_ttd': List<Map<String, dynamic>>.from(_events),
+      'auto_ttd': authoritativeTtd,
       'stats': Map<String, dynamic>.from(_latestStats),
       if (_latestFrameRaw != null) 'latest_frame': _latestFrameRaw,
       if (_latestReport != null) 'report': _latestReport,
       if (_latestStatus?['error'] != null) 'error': _latestStatus!['error'],
     };
+  }
+
+  Future<void> _finishCompletedRun() async {
+    try {
+      var report = _latestReport;
+      final id = _activeMatchLiveId ?? '';
+      if (report == null || !AiAnalysisContract.completed(report) ||
+          !AiAnalysisContract.hasResult(report) || '${report['match_live_id'] ?? ''}' != id) {
+        final response = await _request('get_match_report', <String, dynamic>{'match_live_id': id});
+        final raw = response['report'];
+        report = raw is Map ? Map<String, dynamic>.from(raw) : null;
+      }
+      if (report == null || !AiAnalysisContract.completed(report) ||
+          !AiAnalysisContract.hasResult(report) || '${report['match_live_id'] ?? ''}' != id) {
+        throw StateError('Сервер завершил обработку, но не вернул итоговый AI отчёт');
+      }
+      _acceptReport(report);
+      _completeRun(_buildAggregate(statusOverride: 'completed'));
+    } catch (error) {
+      _latestStatus = <String, dynamic>{'status':'failed','error':'$error','match_live_id':_activeMatchLiveId};
+      _completeRunError('$error');
+    }
   }
 
   void _completeRun(Map<String, dynamic> result) {
@@ -979,18 +1076,57 @@ class AiVideoAnalysisService {
         return;
       }
 
-      final resumeFromMs =
-          _lastFrameTimeMs > 1500 ? _lastFrameTimeMs - 1500 : 0;
       final previousMatchLiveId = _activeMatchLiveId;
+      if ((previousMatchLiveId ?? '').startsWith('ml_')) {
+        final saved = await _request('get_match_report', <String, dynamic>{
+          'match_live_id': previousMatchLiveId,
+        });
+        final raw = saved['report'];
+        if (raw is Map) {
+          final report = Map<String, dynamic>.from(raw);
+          if (AiAnalysisContract.completed(report)) {
+            _acceptReport(report);
+            _completeRun(_buildAggregate(statusOverride: 'completed'));
+            _cancelReconnectTimers();
+            return;
+          }
+          if (AiAnalysisContract.failed(report)) {
+            _acceptReport(report);
+            _completeRunError('${report['error'] ?? 'Video AI failed'}');
+            _cancelReconnectTimers();
+            return;
+          }
+        }
+      }
+      final attached = await _request('get_active_analysis', <String, dynamic>{
+        'match_id': basePayload['match_id'], 'team_id': basePayload['team_id'],
+      });
+      if (attached['active'] == true && '${attached['match_live_id'] ?? ''}'.isNotEmpty) {
+        _activeMatchLiveId = '${attached['match_live_id']}';
+        final raw = attached['report'];
+        if (raw is Map) _acceptReport(Map<String, dynamic>.from(raw));
+        _emitSyntheticStatus(
+          status: '${attached['status'] ?? 'processing'}',
+          message: 'Связь восстановлена, AI продолжает этот матч на сервере',
+        );
+        _reconnectInProgress = false;
+        return;
+      }
+      // There is no surviving background job. Restart from frame zero so the
+      // final report covers the entire recording with one identity history.
+      const resumeFromMs = 0;
       final packetCountBeforeResume = _framePacketCount;
-
-      final payload = <String, dynamic>{
-        ...basePayload,
-        'resume_from_ms': resumeFromMs,
-        'resume_attempt': attempt,
-        if (previousMatchLiveId != null && previousMatchLiveId.isNotEmpty)
-          'resume_previous_match_live_id': previousMatchLiveId,
-      };
+      _activeMatchLiveId = null;
+      _latestReport = null;
+      _latestStats = <String, dynamic>{};
+      _events.clear();
+      _eventKeys.clear();
+      _lastFrameTimeMs = 0;
+      // Keep the visible floor if the backend has to restart scanning from
+      // frame zero after a transport failure. The analysis may repeat work, but
+      // the user's progress indicator must never jump backwards to 0/1%.
+      _acceptProgressCandidate(_progressPercent > 0 ? _progressPercent : 1);
+      final payload = <String, dynamic>{...basePayload, 'resume_from_ms': 0};
 
       _socket!.add(jsonEncode(payload));
 
@@ -1045,7 +1181,9 @@ class AiVideoAnalysisService {
       'message': message,
       'job_id': _activeMatchLiveId ?? _syntheticJobId ?? '',
       'match_live_id': _activeMatchLiveId,
-      'progress': _progressPercent.clamp(0, 99),
+      'progress': (_runCompleter != null && !_runCompleter!.isCompleted)
+          ? _progressPercent.clamp(1, 99).toInt()
+          : _progressPercent.clamp(0, 99).toInt(),
       ...?extra,
     };
 
@@ -1065,6 +1203,8 @@ class AiVideoAnalysisService {
 
   void _resetRunState() {
     _cancelReconnectTimers();
+    final prior = _latestReport;
+    if (prior != null) _acceptReport(prior, applyCurrent: false);
     _activeMatchLiveId = null;
     _latestFrameRaw = null;
     _latestReport = null;
@@ -1078,9 +1218,7 @@ class AiVideoAnalysisService {
     _stopRequested = false;
     _intentionalClose = false;
     _activeRunPayload = null;
-    _replayAttached = false;
     _sentPlayerBindings.clear();
-    _frameCache.clear();
     _events.clear();
     _eventKeys.clear();
   }
@@ -1095,29 +1233,19 @@ class AiVideoAnalysisService {
 
     final subscription = _socketSubscription;
     _socketSubscription = null;
-    if (subscription != null) {
-      try {
-        await subscription.cancel();
-      } catch (_) {}
-    }
-
     final socket = _socket;
     _socket = null;
-    if (socket != null) {
-      try {
-        await socket.close(WebSocketStatus.normalClosure, 'SPORTOTEKA dispose');
-      } catch (_) {}
-    }
-
+    _completeRunError('Video AI service disposed');
     for (final pending in _pendingRequests.values) {
       if (!pending.isCompleted) {
         pending.completeError(StateError('Video AI service disposed'));
       }
     }
     _pendingRequests.clear();
-
-    await _messageController.close();
-    await _frameController.close();
+    await _closeSocketTransport(socket, subscription);
+    // A paused UI listener must not hold disposal indefinitely.
+    try { await _messageController.close().timeout(const Duration(seconds: 2)); } catch (_) {}
+    try { await _frameController.close().timeout(const Duration(seconds: 2)); } catch (_) {}
   }
 
 }

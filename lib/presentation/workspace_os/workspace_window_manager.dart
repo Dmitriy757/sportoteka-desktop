@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:sportoteka/core/theme/app_typography.dart';
 import 'package:sportoteka/presentation/workspace_os/sportoteka_workspace_icons.dart';
 
@@ -587,8 +588,23 @@ Future<void> showWorkspaceManagedWindow(
   void closeWindow() {
     if (closed) return;
     closed = true;
-    if (overlayEntry.mounted) overlayEntry.remove();
-    if (!completer.isCompleted) completer.complete();
+
+    void finishClose() {
+      if (overlayEntry.mounted) overlayEntry.remove();
+      if (!completer.isCompleted) completer.complete();
+    }
+
+    // Removing an OverlayEntry marks the overlay dirty. If a child requests
+    // close while Flutter is rebuilding the underlying profile, doing that
+    // synchronously triggers markNeedsBuild during build and can leave the
+    // profile black. Finish the removal immediately in normal event phases,
+    // but defer it when we are inside build/layout/paint.
+    if (SchedulerBinding.instance.schedulerPhase ==
+        SchedulerPhase.persistentCallbacks) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => finishClose());
+    } else {
+      finishClose();
+    }
   }
 
   overlayEntry = OverlayEntry(

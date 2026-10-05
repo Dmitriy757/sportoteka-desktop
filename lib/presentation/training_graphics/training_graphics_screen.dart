@@ -353,6 +353,11 @@ typedef TgPersonalGraphicSaver = Future<Map<String, dynamic>?> Function(
 );
 typedef TgPersonalGraphicDeleter = Future<void> Function(
     int userId, int graphicId);
+typedef TgPersonalFolderPicker = Future<Map<String, dynamic>?> Function({
+  required int userId,
+  int? initialFolderId,
+  String? initialFolderTitle,
+});
 
 class TrainingGraphicsScreen extends StatefulWidget {
   const TrainingGraphicsScreen({
@@ -370,11 +375,15 @@ class TrainingGraphicsScreen extends StatefulWidget {
     this.personalMode = false,
     this.userId,
     this.userDisplayName,
+    this.initial3DMode = true,
+    this.initialGraphicTitle,
+    this.backfillPersonalPreviewOnOpen = false,
     this.moduleAccessGranted = true,
     this.onManageSubscription,
     this.personalLibraryLoader,
     this.personalGraphicSaver,
     this.personalGraphicDeleter,
+    this.personalFolderPicker,
   });
 
   final int? teamId;
@@ -395,6 +404,19 @@ class TrainingGraphicsScreen extends StatefulWidget {
   final int? userId;
   final String? userDisplayName;
 
+  /// Lets the host open the same editor directly in 2D or 3D.
+  /// Club callers keep the historical 3D default; personal subscriptions can
+  /// expose separate 2D/3D products without duplicating the editor.
+  final bool initial3DMode;
+
+  /// Optional original title supplied by Workspace OS when an existing scheme
+  /// is opened. It is used for preview backfill without renaming the object.
+  final String? initialGraphicTitle;
+
+  /// Old personal schemes may not have a preview yet. Workspace OS sets this
+  /// flag only when it detects a legacy scheme without preview metadata.
+  final bool backfillPersonalPreviewOnOpen;
+
   /// Subscription/entitlement gate supplied by the host app. Billing itself
   /// stays outside this editor; when access is false a calm module-paywall is
   /// rendered instead of partially opening the editor.
@@ -407,6 +429,7 @@ class TrainingGraphicsScreen extends StatefulWidget {
   final TgPersonalLibraryLoader? personalLibraryLoader;
   final TgPersonalGraphicSaver? personalGraphicSaver;
   final TgPersonalGraphicDeleter? personalGraphicDeleter;
+  final TgPersonalFolderPicker? personalFolderPicker;
 
   bool get isPersonalWorkspace => personalMode;
   int get resolvedUserId => userId ?? 0;
@@ -975,21 +998,18 @@ class _TrainingGraphicsScreenState extends State<TrainingGraphicsScreen>
     folderId = (widget.initialFolderId == null || widget.initialFolderId == 0)
         ? 0
         : widget.initialFolderId!;
-    folderTitle = widget.isPersonalWorkspace
-        ? 'Личный Workspace'
-        : ((widget.initialFolderTitle ?? "").trim().isNotEmpty
-            ? widget.initialFolderTitle!.trim()
-            : "Без папки");
-    _folderChosenForSave = widget.isPersonalWorkspace ||
-        (graphicId ?? 0) > 0 ||
-        widget.initialFolderId != null ||
+    folderTitle = (widget.initialFolderTitle ?? '').trim().isNotEmpty
+        ? widget.initialFolderTitle!.trim()
+        : (widget.isPersonalWorkspace ? 'Схемы' : 'Без папки');
+    _folderChosenForSave = (graphicId ?? 0) > 0 ||
+        (widget.initialFolderId ?? 0) > 0 ||
         (widget.initialFolderTitle ?? '').trim().isNotEmpty;
 
     // По умолчанию Training Graphics открывается в том же 3D PRO ракурсе,
     // что и карта Tracker. Сохранённая схема ниже всё равно переопределит
     // эти значения своими параметрами камеры.
     state.set3DParams(
-      enabled: true,
+      enabled: widget.initial3DMode,
       rotationX: -0.34,
       rotationY: 0.0,
       rotationZ: 0.0,
@@ -1004,6 +1024,16 @@ class _TrainingGraphicsScreenState extends State<TrainingGraphicsScreen>
 
     if (_isMeaningfulDoc(widget.initialDocJson)) {
       _applyDocJson(widget.initialDocJson);
+      if (widget.isPersonalWorkspace &&
+          widget.backfillPersonalPreviewOnOpen &&
+          widget.personalGraphicSaver != null &&
+          (graphicId ?? 0) > 0) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            unawaited(_backfillPersonalPreviewForExistingGraphic());
+          }
+        });
+      }
     } else {
       if (!widget.selectMode && graphicId != null && graphicId! > 0) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -1178,13 +1208,22 @@ class _TrainingGraphicsScreenState extends State<TrainingGraphicsScreen>
         }
       }
       if (found == null) throw 'Схема не найдена в личном Workspace';
-      final doc = found['doc_json'] ?? found['document'];
+      // Capture a non-null value before entering setState. Dart does not retain
+      // promotion of a mutable nullable local when it is referenced by a closure.
+      final selected = found;
+      final doc = selected['doc_json'] ?? selected['document'];
       if (!_isMeaningfulDoc(doc)) throw 'Схема повреждена или пуста';
       _applyDocJson(doc);
       if (mounted) {
         setState(() {
           graphicId = id;
-          folderTitle = 'Личный Workspace';
+          final parent = _asInt(
+              selected['_workspace_parent_id'] ?? selected['parent_id']);
+          folderId = parent > 0 ? parent : 0;
+          final cloudFolderTitle =
+              _asStr(selected['_workspace_parent_title']);
+          folderTitle =
+              cloudFolderTitle.isNotEmpty ? cloudFolderTitle : 'Схемы';
           _folderChosenForSave = true;
           _dirty = false;
         });
@@ -1207,9 +1246,29 @@ class _TrainingGraphicsScreenState extends State<TrainingGraphicsScreen>
       );
       return false;
     }
+
+    // A new personal scheme must choose a real Sportoteka OS destination,
+    // exactly like club graphics do. The host supplies the personal picker so
+    // the editor remains reusable in both club and account scopes.
+    if (!_folderChosenForSave && widget.personalFolderPicker != null) {
+      final picked = await widget.personalFolderPicker!(
+        userId: createdBy,
+        initialFolderId: folderId,
+        initialFolderTitle: folderTitle,
+      );
+      if (picked == null || !mounted) return false;
+      setState(() {
+        folderId = _asInt(picked['id']);
+        final pickedTitle = _asStr(picked['title']);
+        folderTitle = pickedTitle.isNotEmpty ? pickedTitle : 'Схемы';
+        _folderChosenForSave = true;
+      });
+    }
+
     if (!mounted) return false;
     setState(() => saving = true);
     try {
+      final previewPng = await _captureWorkspacePreviewPng();
       final docJson = state.toJson();
       docJson['playback'] = _buildPlaybackPayload();
       final items = await _loadPersonalGraphicsLibrary();
@@ -1226,6 +1285,15 @@ class _TrainingGraphicsScreenState extends State<TrainingGraphicsScreen>
         'title': title,
         'updated_at': now.toIso8601String(),
         'updated_at_ms': now.millisecondsSinceEpoch,
+        '_workspace_parent_id': folderId ?? 0,
+        '_workspace_parent_title': folderTitle,
+        'object_type': 'training_graphic',
+        'module': 'personal_tactics',
+        'editor_mode': state.is3DMode ? '3d' : '2d',
+        if (previewPng != null && previewPng.isNotEmpty)
+          'preview_mime_type': 'image/png',
+        if (previewPng != null && previewPng.isNotEmpty)
+          'preview_png_base64': base64Encode(previewPng),
         'doc_json': docJson,
       };
       if (widget.personalGraphicSaver != null) {
@@ -1261,7 +1329,7 @@ class _TrainingGraphicsScreenState extends State<TrainingGraphicsScreen>
       if (!mounted) return true;
       setState(() {
         graphicId = effectiveId;
-        folderTitle = 'Личный Workspace';
+        if (folderTitle.trim().isEmpty) folderTitle = 'Схемы';
         _folderChosenForSave = true;
         _dirty = false;
       });
@@ -2539,6 +2607,55 @@ class _TrainingGraphicsScreenState extends State<TrainingGraphicsScreen>
   // ==========================
   Future<Uint8List?> _capturePng() async {
     return _captureBoundaryPng(_repaintKey, pixelRatio: 3.0);
+  }
+
+  Future<Uint8List?> _captureWorkspacePreviewPng() async {
+    // A 1x canvas snapshot is sharp enough for Finder/grid/property previews
+    // and keeps the personal document payload reasonably small.
+    return _captureBoundaryPng(_repaintKey, pixelRatio: 1.0);
+  }
+
+  Future<void> _backfillPersonalPreviewForExistingGraphic() async {
+    final id = graphicId ?? 0;
+    final userId = widget.resolvedUserId;
+    final saver = widget.personalGraphicSaver;
+    if (!widget.isPersonalWorkspace || id <= 0 || userId <= 0 || saver == null) {
+      return;
+    }
+
+    try {
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted || graphicId != id) return;
+      final png = await _captureWorkspacePreviewPng();
+      if (png == null || png.isEmpty || !mounted) return;
+
+      final docJson = state.toJson();
+      docJson['playback'] = _buildPlaybackPayload();
+      final title = (widget.initialGraphicTitle ?? '').trim().isNotEmpty
+          ? widget.initialGraphicTitle!.trim()
+          : 'Схема';
+      final now = DateTime.now();
+      await saver(userId, <String, dynamic>{
+        'id': id,
+        'owner_type': 'user',
+        'owner_user_id': userId,
+        'club_id': 0,
+        'team_id': 0,
+        'title': title,
+        'updated_at': now.toIso8601String(),
+        'updated_at_ms': now.millisecondsSinceEpoch,
+        '_workspace_parent_id': folderId ?? 0,
+        '_workspace_parent_title': folderTitle,
+        'object_type': 'training_graphic',
+        'module': 'personal_tactics',
+        'editor_mode': state.is3DMode ? '3d' : '2d',
+        'preview_mime_type': 'image/png',
+        'preview_png_base64': base64Encode(png),
+        'doc_json': docJson,
+      });
+    } catch (_) {
+      // Preview backfill must never block opening/editing an existing scheme.
+    }
   }
 
   Future<Uint8List?> _captureBoundaryPng(GlobalKey key,
@@ -5456,6 +5573,26 @@ class _TrainingGraphicsScreenState extends State<TrainingGraphicsScreen>
     await _applyWorkspaceFolderPicker(title: 'Выбор папки');
   }
 
+  Future<void> _pickPersonalFolder() async {
+    final picker = widget.personalFolderPicker;
+    if (picker == null) {
+      await _showPersonalLibrary();
+      return;
+    }
+    final picked = await picker(
+      userId: widget.resolvedUserId,
+      initialFolderId: folderId,
+      initialFolderTitle: folderTitle,
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      folderId = _asInt(picked['id']);
+      final title = _asStr(picked['title']);
+      folderTitle = title.isNotEmpty ? title : 'Схемы';
+      _folderChosenForSave = true;
+    });
+  }
+
   // ==========================
   // Load list (picker mode)
   // ==========================
@@ -6265,7 +6402,7 @@ class _TrainingGraphicsScreenState extends State<TrainingGraphicsScreen>
               onBack: () => Navigator.of(context).maybePop(),
               onFit: null,
               onPickFolder: widget.isPersonalWorkspace
-                  ? _showPersonalLibrary
+                  ? _pickPersonalFolder
                   : _pickFolder,
               onSave: null,
               onTogglePanel: null,
@@ -6810,7 +6947,7 @@ class _TrainingGraphicsScreenState extends State<TrainingGraphicsScreen>
                                   onBack: _handleBack,
                                   onFit: _fitField,
                                   onPickFolder: widget.isPersonalWorkspace
-                                      ? _showPersonalLibrary
+                                      ? _pickPersonalFolder
                                       : _pickFolder,
                                   onSave: _saveGraphic,
                                   onTogglePanel: _togglePanel,

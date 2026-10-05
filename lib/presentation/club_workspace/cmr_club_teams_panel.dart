@@ -384,6 +384,7 @@ class CmrClubTeamsPanel extends StatefulWidget {
   final VoidCallback? onOpenTrainings;
   final VoidCallback? onOpenTesting;
   final VoidCallback? onOpenChats;
+  final VoidCallback? onOpenNews;
   final List<Map<String, dynamic>> events;
   final List<Map<String, dynamic>> latestPlans;
   final List<Map<String, dynamic>> news;
@@ -414,6 +415,7 @@ class CmrClubTeamsPanel extends StatefulWidget {
     this.onOpenTrainings,
     this.onOpenTesting,
     this.onOpenChats,
+    this.onOpenNews,
     this.events = const <Map<String, dynamic>>[],
     this.latestPlans = const <Map<String, dynamic>>[],
     this.news = const <Map<String, dynamic>>[],
@@ -1403,6 +1405,7 @@ class _CmrClubTeamsPanelState extends State<CmrClubTeamsPanel> {
             onOpenTrainings: widget.onOpenTrainings,
             onOpenTesting: widget.onOpenTesting,
             onOpenChats: widget.onOpenChats,
+            onOpenNews: widget.onOpenNews,
             events: widget.events,
             latestPlans: widget.latestPlans,
             news: widget.news,
@@ -4218,6 +4221,7 @@ class _TeamDetails extends StatelessWidget {
   final VoidCallback? onOpenTrainings;
   final VoidCallback? onOpenTesting;
   final VoidCallback? onOpenChats;
+  final VoidCallback? onOpenNews;
   final List<Map<String, dynamic>> events;
   final List<Map<String, dynamic>> latestPlans;
   final List<Map<String, dynamic>> news;
@@ -4246,6 +4250,7 @@ class _TeamDetails extends StatelessWidget {
     required this.onOpenTrainings,
     required this.onOpenTesting,
     required this.onOpenChats,
+    required this.onOpenNews,
     required this.events,
     required this.latestPlans,
     required this.news,
@@ -4441,6 +4446,7 @@ class _TeamDetails extends StatelessWidget {
                     onOpenTrainings: onOpenTrainings ?? onOpenCalendar,
                     onOpenTesting: onOpenTesting,
                     onOpenChats: onOpenChats,
+                    onOpenNews: onOpenNews,
                   ),
                   const SizedBox(height: 12),
                   _safePassport(
@@ -8455,6 +8461,7 @@ class _TeamLiveOverviewBlock extends StatefulWidget {
   final VoidCallback? onOpenTrainings;
   final VoidCallback? onOpenTesting;
   final VoidCallback? onOpenChats;
+  final VoidCallback? onOpenNews;
 
   const _TeamLiveOverviewBlock({
     super.key,
@@ -8476,6 +8483,7 @@ class _TeamLiveOverviewBlock extends StatefulWidget {
     required this.onOpenTrainings,
     required this.onOpenTesting,
     required this.onOpenChats,
+    required this.onOpenNews,
   });
 
   @override
@@ -8530,6 +8538,11 @@ class _TeamLiveOverviewBlockState extends State<_TeamLiveOverviewBlock> {
       news = events.where(_looksLikeNews).toList();
     }
 
+    // В карточке команды показываем только актуальную клубную ленту:
+    // опубликованные записи, относящиеся к выбранной команде (или ко всему
+    // клубу), и только за последние 7 дней.
+    news = news.where(_isRecentPublishedNews).toList();
+
     // В обзор календаря не тащим исторические события. Показываем только
     // сегодня/будущее выбранной команды; ближайшее событие идёт первым.
     events = _upcomingOnly(events);
@@ -8571,8 +8584,31 @@ class _TeamLiveOverviewBlockState extends State<_TeamLiveOverviewBlock> {
     final rawTargets = item['target_team_ids'];
     if (rawTargets is List) {
       final ids = rawTargets.map(_intFromAny).where((id) => id > 0).toList();
+      // Пустой список целей = публикация для всего клуба.
       if (ids.isEmpty) return true;
       return ids.contains(widget.teamId);
+    }
+    if (rawTargets is String) {
+      final raw = rawTargets.trim();
+      // get_club_news.php в разных версиях API может вернуть JSON-строку.
+      // Пустое значение также означает публикацию для всего клуба.
+      if (raw.isEmpty || raw == '[]' || raw.toLowerCase() == 'null') return true;
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is List) {
+          final ids = decoded.map(_intFromAny).where((id) => id > 0).toList();
+          if (ids.isEmpty) return true;
+          return ids.contains(widget.teamId);
+        }
+      } catch (_) {
+        // Поддерживаем старый вариант "65,40" без JSON-скобок.
+        final ids = raw
+            .split(',')
+            .map((value) => _intFromAny(value.trim()))
+            .where((id) => id > 0)
+            .toList();
+        if (ids.isNotEmpty) return ids.contains(widget.teamId);
+      }
     }
 
     final id = _itemTeamId(item);
@@ -8649,15 +8685,18 @@ class _TeamLiveOverviewBlockState extends State<_TeamLiveOverviewBlock> {
 
   Future<List<Map<String, dynamic>>> _fetchClubNews() async {
     final ownerId = widget.clubId > 0 ? widget.clubId : widget.fallbackClubId;
-    if (ownerId <= 0 || widget.viewerUserId <= 0) {
-      return <Map<String, dynamic>>[];
-    }
+    if (ownerId <= 0) return <Map<String, dynamic>>[];
+
+    // В старых местах подключения CmrClubTeamsPanel currentUserId мог не
+    // передаваться. Для кабинета клуба ownerId является безопасным fallback,
+    // иначе запрос вообще не выполнялся и блок новостей всегда был пустым.
+    final viewerId = widget.viewerUserId > 0 ? widget.viewerUserId : ownerId;
 
     try {
       final uri = Uri.parse('https://sportotekaapp.ru/api/get_club_news.php')
           .replace(
         queryParameters: <String, String>{
-          'viewer_id': '${widget.viewerUserId}',
+          'viewer_id': '$viewerId',
           'club_id': '$ownerId',
           'team_id': '${widget.teamId}',
           'limit': '12',
@@ -8667,7 +8706,7 @@ class _TeamLiveOverviewBlockState extends State<_TeamLiveOverviewBlock> {
       final decoded = _tryDecode(resp.body);
       final list = _extractList(decoded, const ['posts', 'data', 'items']);
 
-      return list.map((raw) {
+      final normalized = list.map((raw) {
         final item = Map<String, dynamic>.from(raw);
         final postType = _s(
           item['post_type'] ??
@@ -8679,15 +8718,14 @@ class _TeamLiveOverviewBlockState extends State<_TeamLiveOverviewBlock> {
             _s(item['is_birthday']) == '1' ||
             postType == 'birthday';
 
-        final caption = _s(
-          item['caption'] ??
-              item['text'] ??
-              item['body'] ??
-              item['description'],
-        )
-            .replaceAll(RegExp(r'<[^>]+>'), ' ')
-            .replaceAll(RegExp(r'\s+'), ' ')
-            .trim();
+        final caption = _feedPlainText(
+          _s(
+            item['caption'] ??
+                item['text'] ??
+                item['body'] ??
+                item['description'],
+          ),
+        );
 
         if (_s(item['title']).isEmpty && caption.isNotEmpty) {
           item['title'] = caption.length > 74
@@ -8708,6 +8746,8 @@ class _TeamLiveOverviewBlockState extends State<_TeamLiveOverviewBlock> {
         final image = _normalizeImage(
           _s(
             item['image'] ??
+                item['image_url'] ??
+                item['cover_url'] ??
                 item['photo'] ??
                 item['photo_url'] ??
                 item['avatar'] ??
@@ -8718,9 +8758,38 @@ class _TeamLiveOverviewBlockState extends State<_TeamLiveOverviewBlock> {
 
         return item;
       }).toList();
+
+      // Не полагаемся только на team_id query-параметр: старые версии PHP
+      // могли его игнорировать. Фильтруем аудиторию ещё раз на клиенте.
+      return normalized
+          .where(_belongsToSelectedTeam)
+          .where(_isRecentPublishedNews)
+          .toList();
     } catch (_) {
       return <Map<String, dynamic>>[];
     }
+  }
+
+  bool _isRecentPublishedNews(Map<String, dynamic> item) {
+    if (_s(item['deleted_at']).isNotEmpty) return false;
+
+    final status = _s(item['status']).toLowerCase().trim();
+    if (status.isNotEmpty && status != 'published') return false;
+
+    final rawDate = _s(
+      item['published_at'] ??
+          item['created_at'] ??
+          item['updated_at'] ??
+          item['date'],
+    );
+    if (rawDate.isEmpty) return false;
+
+    final parsed = DateTime.tryParse(rawDate.replaceAll(' ', 'T'));
+    if (parsed == null) return false;
+
+    final now = DateTime.now();
+    final threshold = now.subtract(const Duration(days: 7));
+    return !parsed.isBefore(threshold) && !parsed.isAfter(now.add(const Duration(minutes: 5)));
   }
 
   Future<List<_TeamPlayerWarning>> _fetchTestingWarnings() async {
@@ -8972,7 +9041,8 @@ class _TeamLiveOverviewBlockState extends State<_TeamLiveOverviewBlock> {
                         title: 'Лента и новости',
                         emptyTitle: 'Лента пока пустая',
                         items: data.news,
-                        onTap: widget.onOpenChats,
+                        onTap: widget.onOpenNews,
+                        newsStyle: true,
                       ),
                     ],
                   );
@@ -9245,6 +9315,7 @@ class _TeamCompactFeedBlock extends StatelessWidget {
   final String emptyTitle;
   final List<Map<String, dynamic>> items;
   final VoidCallback? onTap;
+  final bool newsStyle;
 
   const _TeamCompactFeedBlock({
     required this.icon,
@@ -9252,6 +9323,7 @@ class _TeamCompactFeedBlock extends StatelessWidget {
     required this.emptyTitle,
     required this.items,
     required this.onTap,
+    this.newsStyle = false,
   });
 
   @override
@@ -9294,7 +9366,215 @@ class _TeamCompactFeedBlock extends StatelessWidget {
           if (items.isEmpty)
             _TeamInlineEmptyState(text: emptyTitle)
           else
-            ...items.take(3).map((item) => _TeamFeedTile(item: item, onTap: onTap)),
+            ...items
+                .take(newsStyle ? 2 : 3)
+                .map((item) => _TeamFeedTile(
+                      item: item,
+                      onTap: onTap,
+                      newsStyle: newsStyle,
+                    )),
+        ],
+      ),
+    );
+  }
+}
+
+Future<void> _showTeamNewsDetails(
+  BuildContext context,
+  Map<String, dynamic> item,
+) async {
+  final title = _itemTitle(item);
+  final text = _feedPlainText(
+    _s(
+      item['description'] ??
+          item['body'] ??
+          item['text'] ??
+          item['caption'] ??
+          item['comment'],
+    ),
+  );
+  final image = _normalizeImage(
+    _s(
+      item['image'] ??
+          item['image_url'] ??
+          item['cover_url'] ??
+          item['photo'] ??
+          item['photo_url'],
+    ),
+  );
+  final author = _s(
+    item['author'] ??
+        item['author_name'] ??
+        item['club_name'] ??
+        item['team_name'],
+  );
+
+  await showModalBottomSheet<void>(
+    context: context,
+    useSafeArea: true,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (sheetContext) {
+      final media = MediaQuery.of(sheetContext);
+      return FractionallySizedBox(
+        heightFactor: .92,
+        child: Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 10, 10, 8),
+                child: Row(
+                  children: [
+                    const _CmrDotCluster(),
+                    const SizedBox(width: 9),
+                    Expanded(
+                      child: Text(
+                        'Новость команды',
+                        style: _CmrText.title(16),
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Закрыть',
+                      onPressed: () => Navigator.of(sheetContext).pop(),
+                      icon: const Icon(Icons.close_rounded),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1, color: _CmrColors.divider),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.fromLTRB(16, 14, 16, 24 + media.padding.bottom),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (author.isNotEmpty || _teamDateText(item).isNotEmpty)
+                        Row(
+                          children: [
+                            if (author.isNotEmpty)
+                              Expanded(
+                                child: Text(
+                                  author,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: _CmrText.chip(
+                                    size: 11,
+                                    color: _CmrColors.greenDark,
+                                  ),
+                                ),
+                              ),
+                            if (_teamDateText(item).isNotEmpty)
+                              Text(
+                                _teamDateText(item),
+                                style: _CmrText.subtle(10.2),
+                              ),
+                          ],
+                        ),
+                      const SizedBox(height: 10),
+                      Text(title, style: _CmrText.title(19)),
+                      if (text.isNotEmpty) ...[
+                        const SizedBox(height: 10),
+                        SelectableText(
+                          text,
+                          style: _CmrText.muted(12.4).copyWith(height: 1.52),
+                        ),
+                      ],
+                      if (image.isNotEmpty) ...[
+                        const SizedBox(height: 14),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(14),
+                          child: Image.network(
+                            image,
+                            width: double.infinity,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => Container(
+                              height: 180,
+                              color: _CmrColors.soft2,
+                              alignment: Alignment.center,
+                              child: const Icon(
+                                Icons.image_not_supported_outlined,
+                                color: _CmrColors.subtle,
+                                size: 28,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}
+
+class _TeamExpandableNewsText extends StatefulWidget {
+  final String text;
+
+  const _TeamExpandableNewsText({required this.text});
+
+  @override
+  State<_TeamExpandableNewsText> createState() => _TeamExpandableNewsTextState();
+}
+
+class _TeamExpandableNewsTextState extends State<_TeamExpandableNewsText> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = widget.text.trim();
+    if (text.isEmpty) return const SizedBox.shrink();
+
+    final canExpand = text.length > 150 || text.contains('\n');
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(11, 0, 11, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            text,
+            style: _CmrText.muted(10.7).copyWith(height: 1.42),
+            maxLines: _expanded ? null : 3,
+            overflow: _expanded ? TextOverflow.visible : TextOverflow.ellipsis,
+          ),
+          if (canExpand) ...[
+            const SizedBox(height: 4),
+            InkWell(
+              onTap: () => setState(() => _expanded = !_expanded),
+              borderRadius: BorderRadius.circular(8),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 1, vertical: 3),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      _expanded ? 'Свернуть' : 'Развернуть',
+                      style: _CmrText.action().copyWith(
+                        fontSize: 10.8,
+                        color: _CmrColors.greenDark,
+                      ),
+                    ),
+                    const SizedBox(width: 3),
+                    Icon(
+                      _expanded
+                          ? Icons.keyboard_arrow_up_rounded
+                          : Icons.keyboard_arrow_down_rounded,
+                      size: 16,
+                      color: _CmrColors.greenDark,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -9304,8 +9584,13 @@ class _TeamCompactFeedBlock extends StatelessWidget {
 class _TeamFeedTile extends StatelessWidget {
   final Map<String, dynamic> item;
   final VoidCallback? onTap;
+  final bool newsStyle;
 
-  const _TeamFeedTile({required this.item, required this.onTap});
+  const _TeamFeedTile({
+    required this.item,
+    required this.onTap,
+    this.newsStyle = false,
+  });
 
   bool get _isBirthday {
     final type = _s(
@@ -9334,13 +9619,15 @@ class _TeamFeedTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final title = _itemTitle(item);
     final meta = _teamDateText(item);
-    final subtitle = _s(
-      item['description'] ??
-          item['body'] ??
-          item['text'] ??
-          item['comment'] ??
-          item['place'] ??
-          item['location'],
+    final subtitle = _feedPlainText(
+      _s(
+        item['description'] ??
+            item['body'] ??
+            item['text'] ??
+            item['comment'] ??
+            item['place'] ??
+            item['location'],
+      ),
     );
 
     if (_isBirthday) {
@@ -9349,6 +9636,169 @@ class _TeamFeedTile extends StatelessWidget {
         title: title,
         meta: meta,
         subtitle: subtitle,
+      );
+    }
+
+    if (newsStyle) {
+      final image = _normalizeImage(
+        _s(
+          item['image'] ??
+              item['image_url'] ??
+              item['cover_url'] ??
+              item['photo'] ??
+              item['photo_url'],
+        ),
+      );
+      final author = _s(
+        item['author'] ??
+            item['author_name'] ??
+            item['club_name'] ??
+            item['team_name'],
+      );
+
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 9),
+        child: Material(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onTap,
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: _CmrColors.divider.withOpacity(.72),
+                  width: .7,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(11, 10, 11, 7),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 6,
+                          height: 6,
+                          decoration: const BoxDecoration(
+                            color: _CmrColors.green,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 7),
+                        Expanded(
+                          child: Text(
+                            author.isEmpty ? 'Новости команды' : author,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: _CmrText.chip(
+                              size: 10.4,
+                              color: _CmrColors.greenDark,
+                            ),
+                          ),
+                        ),
+                        Text(
+                          meta,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: _CmrText.subtle(9.8),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(11, 0, 11, 7),
+                    child: Text(
+                      title,
+                      style: _CmrText.value(12.6),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (subtitle.isNotEmpty)
+                    _TeamExpandableNewsText(text: subtitle),
+                  if (image.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(0, 2, 0, 0),
+                      child: AspectRatio(
+                        aspectRatio: 16 / 9,
+                        child: Container(
+                          width: double.infinity,
+                          color: _CmrColors.soft2,
+                          child: Image.network(
+                            image,
+                            width: double.infinity,
+                            height: double.infinity,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => Container(
+                              color: _CmrColors.soft2,
+                              alignment: Alignment.center,
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(
+                                    Icons.image_not_supported_outlined,
+                                    size: 25,
+                                    color: _CmrColors.subtle,
+                                  ),
+                                  const SizedBox(height: 5),
+                                  Text(
+                                    'Фото временно недоступно',
+                                    style: _CmrText.subtle(9.8),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            loadingBuilder: (context, child, progress) {
+                              if (progress == null) return child;
+                              return const Center(
+                                child: SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: _CmrColors.green,
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                    ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(10, 8, 10, 9),
+                    child: Row(
+                      children: [
+                        const Spacer(),
+                        TextButton.icon(
+                          onPressed: onTap ?? () => _showTeamNewsDetails(context, item),
+                          style: TextButton.styleFrom(
+                            foregroundColor: _CmrColors.greenDark,
+                            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                            minimumSize: const Size(0, 30),
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          icon: const Icon(Icons.arrow_forward_rounded, size: 15),
+                          label: Text(
+                            'Перейти к новости',
+                            style: _CmrText.action().copyWith(
+                              fontSize: 10.8,
+                              color: _CmrColors.greenDark,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
       );
     }
 
@@ -11035,12 +11485,62 @@ String _s(dynamic value) {
   return text == 'null' ? '' : text;
 }
 
+String _feedPlainText(String value) {
+  if (value.trim().isEmpty) return '';
+  var text = value
+      .replaceAll(RegExp(r'<br\s*/?>', caseSensitive: false), '\n')
+      .replaceAll(RegExp(r'</p\s*>', caseSensitive: false), '\n')
+      .replaceAll(RegExp(r'</div\s*>', caseSensitive: false), '\n')
+      .replaceAll(RegExp(r'<li[^>]*>', caseSensitive: false), '• ')
+      .replaceAll(RegExp(r'</li\s*>', caseSensitive: false), '\n')
+      .replaceAll(RegExp(r'<[^>]+>'), '')
+      .replaceAll('&nbsp;', ' ')
+      .replaceAll('&amp;', '&')
+      .replaceAll('&quot;', '"')
+      .replaceAll('&#39;', "'")
+      .replaceAll('&lt;', '<')
+      .replaceAll('&gt;', '>');
+  text = text
+      .replaceAll(RegExp(r'[ \t]+'), ' ')
+      .replaceAll(RegExp(r' *\n *'), '\n')
+      .replaceAll(RegExp(r'\n{3,}'), '\n\n')
+      .trim();
+  return text;
+}
+
 String _normalizeImage(String value) {
-  final v = value.trim();
+  var v = value.trim();
+  if (v.isEmpty || v == 'null') return '';
+
+  // Иногда API возвращает JSON-массив/объект вместо голой строки. Берём
+  // первый URL, чтобы карточка команды показывала то же фото, что и Новости.
+  if ((v.startsWith('[') && v.endsWith(']')) ||
+      (v.startsWith('{') && v.endsWith('}'))) {
+    try {
+      final decoded = jsonDecode(v);
+      if (decoded is List && decoded.isNotEmpty) {
+        final first = decoded.first;
+        if (first is String) v = first.trim();
+        if (first is Map) {
+          v = _s(first['url'] ?? first['src'] ?? first['path']).trim();
+        }
+      } else if (decoded is Map) {
+        v = _s(decoded['url'] ?? decoded['src'] ?? decoded['path']).trim();
+      }
+    } catch (_) {}
+  }
+
   if (v.isEmpty || v == 'null') return '';
   if (v.startsWith('http://') || v.startsWith('https://')) return v;
-  if (v.startsWith('/')) return 'https://sportotekaapp.ru$v';
-  return 'https://sportotekaapp.ru/$v';
+
+  v = v.replaceFirst(RegExp(r'^/+'), '');
+  if (v.startsWith('uploads/')) {
+    return 'https://sportotekaapp.ru/api/$v';
+  }
+  if (v.startsWith('api/')) {
+    return 'https://sportotekaapp.ru/$v';
+  }
+  return 'https://sportotekaapp.ru/api/uploads/$v';
 }
 
 String _initials(String name) {

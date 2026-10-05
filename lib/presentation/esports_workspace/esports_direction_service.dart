@@ -84,6 +84,22 @@ class EsportsDirectionService {
           final status = _clean(stateMap['status']).isEmpty
               ? (active ? 'active' : 'inactive')
               : _clean(stateMap['status']).toLowerCase();
+          // Stage 8 migration: if the user enabled Esports earlier while the
+          // server endpoints did not yet exist, preserve that local choice and
+          // synchronize it to the server automatically once Core API appears.
+          if (!active && (status == 'not_configured' || status == 'inactive')) {
+            final cached = await _loadCached(clubId);
+            if (cached.active) {
+              return activate(
+                clubId: clubId,
+                userId: userId,
+                disciplines: cached.disciplines.isEmpty
+                    ? const <String>['EA Sports FC']
+                    : cached.disciplines,
+              );
+            }
+          }
+
           await _cache(clubId, active, disciplines);
           return EsportsDirectionState(
             active: active,

@@ -105,7 +105,7 @@ import 'package:sportoteka/presentation/team_description_screen/team_description
 import 'package:sportoteka/presentation/team_matches_screen/team_matches_screen.dart';
 import 'package:sportoteka/presentation/team_management_screen/team_management_screen.dart';
 import 'package:sportoteka/presentation/team_tickets_screen/team_tickets_screen.dart';
-import 'package:sportoteka/presentation/club_dashboard_screen/club_dashboard_screen.dart'; 
+import 'package:sportoteka/presentation/club_dashboard_screen/club_dashboard_screen.dart';
 import 'package:sportoteka/presentation/player_screen/player_self_assessment_screen.dart';
 import 'package:sportoteka/presentation/subscription/subscription_screen.dart';
 import 'package:sportoteka/presentation/player_game_zone/team_rating_screen.dart';
@@ -122,12 +122,13 @@ import 'package:sportoteka/presentation/player_screen/player_match_detail_screen
 import 'package:sportoteka/presentation/player_matches_screen/player_matches_screen.dart';
 import 'package:sportoteka/presentation/club_workspace/club_workspace_screen.dart';
 import 'package:sportoteka/presentation/workspace_hub/workspace_hub_screen.dart';
+import 'package:sportoteka/presentation/personal_workspace/personal_workspace_screen.dart';
 
 class AppRoutes {
   static const String loginScreen = '/login_screen';
 
   static const String splashScreen = '/splash_screen';
-  static const String initialRoute = '/initialRoute'; 
+  static const String initialRoute = '/initialRoute';
   static const String onboardingTwoScreen = '/onboarding_two_screen';
 
   static const String onboardingThreeScreen = '/onboarding_three_screen';
@@ -167,14 +168,13 @@ class AppRoutes {
   static const String categoriesScreen = '/categories_screen';
 
   static const String footBallScreen = '/foot_ball_screen';
-  
-  static const String subscriptionsScreen = '/subscriptionsScreen';
 
+  static const String subscriptionsScreen = '/subscriptionsScreen';
 
   static const String popularGroundScreen = '/popular_ground_screen';
 
   static const String nearbyYouScreen = '/nearby_you_screen';
-  
+
   static const String playerProfileScreen = '/player_profile_screen';
 
   static const String detailScreen = '/detail_screen';
@@ -186,8 +186,6 @@ class AppRoutes {
   static const String selectDateTimeScreen = '/select_date_time_screen';
 
   static const String bookingDetailsOneScreen = '/booking_details_one_screen';
- 
-  
 
   static const String paymentScreen = '/payment_screen';
 
@@ -206,7 +204,6 @@ class AppRoutes {
 
   static const String myBookingComplatedPage = '/my_booking_complated_page';
   static const String clubDashboardScreen = '/clubDashboardScreen';
-
 
   static const String createTeamScreen = '/createTeamScreen';
   static const String bookingDetailsScreen = '/booking_details_screen';
@@ -241,6 +238,7 @@ class AppRoutes {
 
   static const String myProfileScreen = '/my_profile_screen';
   static const String workspaceHubScreen = '/workspace_hub_screen';
+  static const String personalWorkspaceScreen = '/personal_workspace_screen';
 
   static const String editProfileScreen = '/edit_profile_screen';
 
@@ -249,8 +247,8 @@ class AppRoutes {
   static const String privacyPolicyScreen = '/privacy_policy_screen';
 
   static const String helpScreen = '/help_screen';
-  static const String bookingsForMyVenuesScreen = '/bookings_for_my_venues_screen';
-
+  static const String bookingsForMyVenuesScreen =
+      '/bookings_for_my_venues_screen';
 
   static const String aboutUsScreen = '/about_us_screen';
 
@@ -268,28 +266,27 @@ class AppRoutes {
 
   static const String appNavigationScreen = '/app_navigation_screen';
 
-static const String myBookingsScreen = '/myBookingsScreen';
+  static const String myBookingsScreen = '/myBookingsScreen';
 
-static const String mySchoolsScreen = '/mySchoolsScreen';
-
+  static const String mySchoolsScreen = '/mySchoolsScreen';
 
   static const String teamDescriptionScreen = '/teamDescriptionScreen';
   static const String teamMatchesScreen = '/teamMatchesScreen';
   static const String teamManagementScreen = '/teamManagementScreen';
-  static const String teamTicketsScreen = '/teamTicketsScreen';  
-static const String playerSelfAssessmentScreen = '/player-self-assessment';
+  static const String teamTicketsScreen = '/teamTicketsScreen';
+  static const String playerSelfAssessmentScreen = '/player-self-assessment';
 
-static const teamRatingScreen = '/team-rating-screen';
-static const playerChallengesScreen = '/player-challenges-screen';
-static const playerBattlesScreen = '/player-battles-screen';
-static const playerQuizzesScreen = '/player-quizzes-screen';
-static const playerMatchGamesScreen = '/player-match-games-screen';
-static const playerHighlightsScreen = '/player-highlights-screen';
-static const createQuizScreen = '/create-quiz-screen';
-static const teamChallengesScreen = '/team-challenges-screen';
-static const teamQuizzesScreen = '/team-quizzes-screen';
-static const quizDetailScreen = '/quiz-detail-screen';
-static const String playerMatchesScreen = '/player_matches_screen';
+  static const teamRatingScreen = '/team-rating-screen';
+  static const playerChallengesScreen = '/player-challenges-screen';
+  static const playerBattlesScreen = '/player-battles-screen';
+  static const playerQuizzesScreen = '/player-quizzes-screen';
+  static const playerMatchGamesScreen = '/player-match-games-screen';
+  static const playerHighlightsScreen = '/player-highlights-screen';
+  static const createQuizScreen = '/create-quiz-screen';
+  static const teamChallengesScreen = '/team-challenges-screen';
+  static const teamQuizzesScreen = '/team-quizzes-screen';
+  static const quizDetailScreen = '/quiz-detail-screen';
+  static const String playerMatchesScreen = '/player_matches_screen';
 
   static List<GetPage> pages = [
     GetPage(
@@ -347,7 +344,6 @@ static const String playerMatchesScreen = '/player_matches_screen';
       bindings: [
         PasswordChangedPopupBinding(),
       ],
-       
     ),
     GetPage(
       transition: Transition.rightToLeft,
@@ -549,29 +545,35 @@ static const String playerMatchesScreen = '/player_matches_screen';
         ProfileBinding(),
       ],
     ),
-      GetPage(
-  transition: Transition.rightToLeft,
-  name: AppRoutes.addPlayerScreen,
-  page: () {
-    final args = Get.arguments ?? {};
-    final int teamId = int.tryParse((args['teamId'] ?? 0).toString()) ?? 0;
-    final String teamName = (args['teamName'] ?? '').toString();
+    GetPage(
+      transition: Transition.rightToLeft,
+      name: AppRoutes.addPlayerScreen,
+      page: () {
+        final args = Get.arguments ?? {};
+        final int teamId = int.tryParse((args['teamId'] ?? 0).toString()) ?? 0;
+        final String teamName = (args['teamName'] ?? '').toString();
 
-    if (teamId <= 0) {
-      return Scaffold(
-        appBar: AppBar(title: const Text("Ошибка")),
-        body: const Center(child: Text("Не передан teamId для AddPlayerScreen")),
-      );
-    }
+        if (teamId <= 0) {
+          return Scaffold(
+            appBar: AppBar(title: const Text("Ошибка")),
+            body: const Center(
+                child: Text("Не передан teamId для AddPlayerScreen")),
+          );
+        }
 
-    return AddPlayerScreen(teamId: teamId, teamName: teamName);
-  },
-),
+        return AddPlayerScreen(teamId: teamId, teamName: teamName);
+      },
+    ),
 
     GetPage(
       transition: Transition.fadeIn,
       name: workspaceHubScreen,
       page: () => const WorkspaceHubScreen(),
+    ),
+    GetPage(
+      transition: Transition.noTransition,
+      name: personalWorkspaceScreen,
+      page: () => const PersonalWorkspaceScreen(),
     ),
     GetPage(
       transition: Transition.rightToLeft,
@@ -685,7 +687,7 @@ static const String playerMatchesScreen = '/player_matches_screen';
         SplashBinding(),
       ],
     ),
-  GetPage(
+    GetPage(
       transition: Transition.rightToLeft,
       name: myGroundsScreen,
       page: () => MyGroundsScreen(),
@@ -703,126 +705,127 @@ static const String playerMatchesScreen = '/player_matches_screen';
         MyTeamBinding(),
       ],
     ),
-    
-    GetPage(
-  name: '/myProgramsScreen',
-  page: () => const MyProgramsScreen(),
-),
-GetPage(
-  transition: Transition.rightToLeft,
-  name: AppRoutes.createTeamScreen,
-  page: () => CreateTeamScreen(),
-),
 
     GetPage(
-  transition: Transition.rightToLeft,
-  name: AppRoutes.playerProfileScreen,
-  page: () {
-    final args = Get.arguments;
+      name: '/myProgramsScreen',
+      page: () => const MyProgramsScreen(),
+    ),
+    GetPage(
+      transition: Transition.rightToLeft,
+      name: AppRoutes.createTeamScreen,
+      page: () => CreateTeamScreen(),
+    ),
 
-    final Map<String, dynamic> player = args is Map<String, dynamic>
-        ? args
-        : args is Map
-            ? Map<String, dynamic>.from(args)
-            : <String, dynamic>{};
+    GetPage(
+      transition: Transition.rightToLeft,
+      name: AppRoutes.playerProfileScreen,
+      page: () {
+        final args = Get.arguments;
 
-    return CmrPlayerProfileScreen(player: player);
-  },
-),
-GetPage(
-  name: AppRoutes.editPlayerScreen,
-  page: () => EditPlayerScreen(), // ✅ БЕЗ аргументов
-),
+        final Map<String, dynamic> player = args is Map<String, dynamic>
+            ? args
+            : args is Map
+                ? Map<String, dynamic>.from(args)
+                : <String, dynamic>{};
 
-GetPage(
-  transition: Transition.rightToLeft,
-  name: AppRoutes.myBookingsScreen,
-  page: () => const MyBookingsScreen(),
-),
-GetPage(
-  name: AppRoutes.bookingsForMyVenuesScreen,
-  page: () => const BookingsForMyVenuesScreen(),
-),
-GetPage(
-  name: AppRoutes.mySchoolsScreen,
-  page: () => MySchoolsScreen(),
-  ),
-  GetPage(
-  name: AppRoutes.teamDescriptionScreen,
-  page: () => const TeamDescriptionScreen(),
-),
-GetPage(
-  name: AppRoutes.teamMatchesScreen,
-  page: () => const TeamMatchesScreen(),
-),
-GetPage(
-  name: AppRoutes.teamManagementScreen,
-  page: () => const TeamManagementScreen(),
-),
-GetPage(
-  name: AppRoutes.teamTicketsScreen,
-  page: () => const TeamTicketsScreen(),
-),
-GetPage(
-  name: AppRoutes.clubDashboardScreen,
-  page: () => const ClubWorkspaceScreen(),
-),
+        return CmrPlayerProfileScreen(player: player);
+      },
+    ),
+    GetPage(
+      name: AppRoutes.editPlayerScreen,
+      page: () => EditPlayerScreen(), // ✅ БЕЗ аргументов
+    ),
 
-GetPage(
-  name: AppRoutes.playerSelfAssessmentScreen,
-  page: () => PlayerSelfAssessmentScreen(),
-),
+    GetPage(
+      transition: Transition.rightToLeft,
+      name: AppRoutes.myBookingsScreen,
+      page: () => const MyBookingsScreen(),
+    ),
+    GetPage(
+      name: AppRoutes.bookingsForMyVenuesScreen,
+      page: () => const BookingsForMyVenuesScreen(),
+    ),
+    GetPage(
+      name: AppRoutes.mySchoolsScreen,
+      page: () => MySchoolsScreen(),
+    ),
+    GetPage(
+      name: AppRoutes.teamDescriptionScreen,
+      page: () => const TeamDescriptionScreen(),
+    ),
+    GetPage(
+      name: AppRoutes.teamMatchesScreen,
+      page: () => const TeamMatchesScreen(),
+    ),
+    GetPage(
+      name: AppRoutes.teamManagementScreen,
+      page: () => const TeamManagementScreen(),
+    ),
+    GetPage(
+      name: AppRoutes.teamTicketsScreen,
+      page: () => const TeamTicketsScreen(),
+    ),
+    GetPage(
+      name: AppRoutes.clubDashboardScreen,
+      page: () => const ClubWorkspaceScreen(),
+    ),
 
-GetPage(
-  name: AppRoutes.subscriptionsScreen,
-  page: () => const SubscriptionScreen(), // Убрали 's' - теперь правильно
-),
-GetPage(
-  name: AppRoutes.teamRatingScreen,
-  page: () => const TeamRatingScreen(),
-),
-GetPage(
-  name: AppRoutes.playerChallengesScreen,
-  page: () => const PlayerChallengesScreen(),
-),
-GetPage(
-  name: AppRoutes.playerBattlesScreen,
-  page: () => const PlayerBattlesScreen(),
-),
-GetPage(
-  name: AppRoutes.playerQuizzesScreen,
-  page: () => const PlayerQuizzesScreen(),
-),
-GetPage(
-  name: AppRoutes.playerMatchGamesScreen,
-  page: () => const PlayerMatchGamesScreen(),
-),
-GetPage(
-  name: AppRoutes.playerHighlightsScreen,
-  page: () => const PlayerHighlightsScreen(),
-),
-GetPage(
-  name: AppRoutes.createQuizScreen,
-  page: () => const CreateQuizScreen(),
-),
-GetPage(
-  name: AppRoutes.teamChallengesScreen,
-  page: () => const TeamChallengesScreen(),
-),
-GetPage(
-  name: AppRoutes.teamQuizzesScreen,
-  page: () => const TeamQuizzesScreen(),
-),
-GetPage(
-  name: AppRoutes.quizDetailScreen,
-  page: () => const QuizDetailScreen(),
-),GetPage(
-  name: AppRoutes.playerMatchesScreen,
-  page: () => const PlayerMatchesScreen(),
-),
-GetPage(
-  name: '/club-workspace',
-  page: () => const ClubWorkspaceScreen(),
-),
-      ];
+    GetPage(
+      name: AppRoutes.playerSelfAssessmentScreen,
+      page: () => PlayerSelfAssessmentScreen(),
+    ),
+
+    GetPage(
+      name: AppRoutes.subscriptionsScreen,
+      page: () => const SubscriptionScreen(), // Убрали 's' - теперь правильно
+    ),
+    GetPage(
+      name: AppRoutes.teamRatingScreen,
+      page: () => const TeamRatingScreen(),
+    ),
+    GetPage(
+      name: AppRoutes.playerChallengesScreen,
+      page: () => const PlayerChallengesScreen(),
+    ),
+    GetPage(
+      name: AppRoutes.playerBattlesScreen,
+      page: () => const PlayerBattlesScreen(),
+    ),
+    GetPage(
+      name: AppRoutes.playerQuizzesScreen,
+      page: () => const PlayerQuizzesScreen(),
+    ),
+    GetPage(
+      name: AppRoutes.playerMatchGamesScreen,
+      page: () => const PlayerMatchGamesScreen(),
+    ),
+    GetPage(
+      name: AppRoutes.playerHighlightsScreen,
+      page: () => const PlayerHighlightsScreen(),
+    ),
+    GetPage(
+      name: AppRoutes.createQuizScreen,
+      page: () => const CreateQuizScreen(),
+    ),
+    GetPage(
+      name: AppRoutes.teamChallengesScreen,
+      page: () => const TeamChallengesScreen(),
+    ),
+    GetPage(
+      name: AppRoutes.teamQuizzesScreen,
+      page: () => const TeamQuizzesScreen(),
+    ),
+    GetPage(
+      name: AppRoutes.quizDetailScreen,
+      page: () => const QuizDetailScreen(),
+    ),
+    GetPage(
+      name: AppRoutes.playerMatchesScreen,
+      page: () => const PlayerMatchesScreen(),
+    ),
+    GetPage(
+      name: '/club-workspace',
+      page: () => const ClubWorkspaceScreen(),
+    ),
+  ];
 }

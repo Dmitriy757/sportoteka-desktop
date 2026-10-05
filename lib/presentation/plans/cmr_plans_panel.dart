@@ -1,6 +1,7 @@
 // lib/presentation/plans/cmr_plans_panel.dart
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:file_picker/file_picker.dart';
@@ -11,6 +12,7 @@ import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
 
 import 'package:sportoteka/core/theme/app_typography.dart';
+import 'package:sportoteka/core/personal_workspace/personal_workspace_os_service.dart';
 
 import 'package:sportoteka/presentation/plans/plan_detail_screen.dart';
 import 'package:sportoteka/presentation/plans/plan_folders_screen.dart';
@@ -36,6 +38,11 @@ class CmrPlansPanel extends StatefulWidget {
   /// а обратно в меню CMR.
   final VoidCallback? onBackToMenu;
 
+  /// Personal mode keeps this exact plans UI, while plans/folders/files are
+  /// owned by owner_user_id in Sportoteka OS rather than club/team storage.
+  final bool personalMode;
+  final int ownerUserId;
+
   const CmrPlansPanel({
     super.key,
     required this.clubId,
@@ -45,6 +52,8 @@ class CmrPlansPanel extends StatefulWidget {
     this.trainerId = 0,
     this.trainerName = '',
     this.onBackToMenu,
+    this.personalMode = false,
+    this.ownerUserId = 0,
   });
 
   @override
@@ -142,7 +151,56 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
     return raw.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
   }
 
-  bool get _hasTeam => widget.teamId != null && widget.teamId! > 0;
+  bool get _isPersonal => widget.personalMode && widget.ownerUserId > 0;
+  bool get _hasTeam => _isPersonal || (widget.teamId != null && widget.teamId! > 0);
+
+  Map<String, dynamic> _personalPlanFromNode(Map<String, dynamic> node) {
+    final payload = PersonalWorkspaceOsService.decodeDocumentContent(node) ??
+        <String, dynamic>{};
+    return <String, dynamic>{
+      ...payload,
+      'id': _asInt(node['id']),
+      'plan_id': _asInt(node['id']),
+      'folder_id': node['parent_id'] ?? 0,
+      'folder_title': selectedFolderTitle,
+      'club_id': 0,
+      'team_id': 0,
+      'trainer_id': widget.ownerUserId,
+      'created_by': widget.ownerUserId,
+      'created_at': payload['created_at'] ?? node['created_at'],
+      'updated_at': node['updated_at'],
+      '_personal_mode': true,
+    };
+  }
+
+  Future<Map<String, dynamic>> _savePersonalPlan(
+    Map<String, dynamic> payload, {
+    int id = 0,
+  }) async {
+    final theme = _asStr(payload['theme']).isEmpty
+        ? 'Новый план'
+        : _asStr(payload['theme']);
+    final data = await PersonalWorkspaceOsService.saveDocument(
+      userId: widget.ownerUserId,
+      category: 'plans',
+      id: id,
+      parentId: _activeFolderId > 0 ? _activeFolderId : null,
+      name: theme,
+      content: jsonEncode(<String, dynamic>{
+        ...payload,
+        'module': 'personal_training_plan',
+        'owner_user_id': widget.ownerUserId,
+        'club_id': 0,
+        'team_id': 0,
+        'trainer_id': widget.ownerUserId,
+        'created_by': widget.ownerUserId,
+      }),
+    );
+    if (data['success'] != true) {
+      throw StateError('${data['message'] ?? 'Не удалось сохранить личный план'}');
+    }
+    return data;
+  }
 
   @override
   void initState() {
@@ -171,6 +229,30 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
     });
 
     try {
+      if (_isPersonal) {
+        final nodes = await PersonalWorkspaceOsService.list(
+          userId: widget.ownerUserId,
+          category: 'plans',
+        );
+        final rootFolders = nodes
+            .where((e) => '${e['kind'] ?? ''}' == 'folder')
+            .map((e) => <String, dynamic>{
+                  'id': _asInt(e['id']),
+                  'parent_id': _asInt(e['parent_id']),
+                  'title': _asStr(e['name']),
+                  'name': _asStr(e['name']),
+                  '_level': 0,
+                })
+            .toList();
+        _allFolders = rootFolders;
+        folders = List<Map<String, dynamic>>.from(rootFolders);
+        _expandedFolderIds.clear();
+        await _loadPlansForTeam();
+        if (!mounted) return;
+        setState(() => loading = false);
+        return;
+      }
+
       final foldersResp = await PlanFoldersApi.list(
         clubId: widget.clubId,
       );
@@ -238,6 +320,52 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
 
   Future<void> _loadPlansForTeam() async {
     try {
+      if (_isPersonal) {
+        final nodes = await PersonalWorkspaceOsService.list(
+          userId: widget.ownerUserId,
+          category: 'plans',
+          parentId: selectedFolderId,
+        );
+        var loadedPlans = nodes
+            .where((e) => '${e['kind'] ?? ''}' == 'document')
+            .map(_personalPlanFromNode)
+            .where((p) {
+              final module = _asStr(p['module']);
+              return module.isEmpty || module == 'personal_training_plan';
+            })
+            .toList();
+
+        final q = searchCtrl.text.trim().toLowerCase();
+        if (q.isNotEmpty) {
+          loadedPlans = loadedPlans.where((p) {
+            return _asStr(p['theme']).toLowerCase().contains(q) ||
+                _asStr(p['cycle_title']).toLowerCase().contains(q) ||
+                _asStr(p['description']).toLowerCase().contains(q);
+          }).toList();
+        }
+        loadedPlans = _sortedExplorerCopy(loadedPlans, kind: 'plan');
+        await _loadMaterialsForCurrentFolder(silent: true);
+        final oldPlanId = _asInt(selectedPlan?['id']);
+        Map<String, dynamic>? nextSelected = selectedPlan == null
+            ? null
+            : Map<String, dynamic>.from(selectedPlan!);
+        if (oldPlanId > 0) {
+          for (final plan in loadedPlans) {
+            if (_asInt(plan['id']) == oldPlanId) {
+              nextSelected = plan;
+              break;
+            }
+          }
+        }
+        if (!mounted) return;
+        setState(() {
+          plans = loadedPlans;
+          selectedPlan = nextSelected;
+        });
+        _syncEditors();
+        return;
+      }
+
       final resp = await TrainingPlansApi.listPlans(
         clubId: widget.clubId,
         teamId: _hasTeam ? widget.teamId! : 0,
@@ -363,6 +491,42 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
     }
 
     try {
+      if (_isPersonal) {
+        final nodes = await PersonalWorkspaceOsService.list(
+          userId: widget.ownerUserId,
+          category: 'plans',
+          parentId: selectedFolderId,
+        );
+        var nextFiles = nodes
+            .where((e) => '${e['kind'] ?? ''}' == 'file')
+            .map((e) => <String, dynamic>{
+                  ...e,
+                  'title': _asStr(e['name']),
+                  'file_name': _asStr(e['name']),
+                  'url': e['file_url'],
+                })
+            .toList();
+        final q = searchCtrl.text.trim().toLowerCase();
+        if (q.isNotEmpty) {
+          nextFiles = nextFiles.where((f) =>
+              _asStr(f['title']).toLowerCase().contains(q)).toList();
+        }
+        nextFiles = _sortedExplorerCopy(nextFiles, kind: 'file');
+        if (!mounted) {
+          graphics = <Map<String, dynamic>>[];
+          files = nextFiles;
+          loadingMaterials = false;
+          return;
+        }
+        setState(() {
+          graphics = <Map<String, dynamic>>[];
+          files = nextFiles;
+          loadingMaterials = false;
+          materialsError = null;
+        });
+        return;
+      }
+
       final results = await Future.wait<Map<String, dynamic>>([
         TrainingGraphicsApi.list(
           clubId: widget.clubId,
@@ -915,6 +1079,14 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
     final id = _asInt(folder['id']);
     final title = _asStr(folder['title']).isEmpty ? 'Папка' : _asStr(folder['title']);
     if (id <= 0) return;
+
+    // Personal plans stay inside the same CMR plans engine. Opening the old
+    // PlanFoldersScreen here would switch back to club/team APIs.
+    if (_isPersonal) {
+      _selectFolder(<String, dynamic>{...folder, 'title': title});
+      return;
+    }
+
     Get.to(
       () => PlanFoldersScreen(
         clubId: widget.clubId,
@@ -1545,6 +1717,21 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
     setState(() => saving = true);
 
     try {
+      if (_isPersonal) {
+        final r = await PersonalWorkspaceOsService.createFolder(
+          userId: widget.ownerUserId,
+          category: 'plans',
+          parentId: (parentId ?? 0) > 0 ? parentId : null,
+          name: title,
+        );
+        if (r['success'] != true) {
+          throw r['message'] ?? 'Не удалось создать папку';
+        }
+        await _load();
+        Get.snackbar('Готово', 'Папка создана');
+        return;
+      }
+
       final r = await PlanFoldersApi.create(
         clubId: widget.clubId,
         parentId: parentId,
@@ -1720,6 +1907,21 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
     setState(() => saving = true);
 
     try {
+      if (_isPersonal) {
+        final r = await PersonalWorkspaceOsService.rename(
+          userId: widget.ownerUserId,
+          id: id,
+          name: title,
+        );
+        if (r['success'] != true) {
+          throw r['message'] ?? 'Не удалось переименовать папку';
+        }
+        selectedFolderTitle = title;
+        await _load();
+        Get.snackbar('Готово', 'Папка переименована');
+        return;
+      }
+
       final r = await PlanFoldersApi.rename(
         clubId: widget.clubId,
         folderId: id,
@@ -1777,6 +1979,25 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
     setState(() => saving = true);
 
     try {
+      if (_isPersonal) {
+        final r = await PersonalWorkspaceOsService.delete(
+          userId: widget.ownerUserId,
+          id: id,
+        );
+        if (r['success'] != true) {
+          throw r['message'] ?? 'Не удалось удалить папку';
+        }
+        selectedFolderId = null;
+        selectedFolderTitle = 'Все материалы';
+        _folderHistory
+          ..clear()
+          ..add(null);
+        _folderHistoryIndex = 0;
+        await _load();
+        Get.snackbar('Готово', 'Папка удалена');
+        return;
+      }
+
       final r = await PlanFoldersApi.remove(
         clubId: widget.clubId,
         folderId: id,
@@ -1988,6 +2209,24 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
   }
 
   Future<void> _uploadSingleFile(PlatformFile picked) async {
+    if (_isPersonal) {
+      final path = picked.path;
+      if (path == null || path.trim().isEmpty) {
+        throw 'Для личной OS нужен локальный путь к файлу';
+      }
+      final data = await PersonalWorkspaceOsService.uploadFile(
+        userId: widget.ownerUserId,
+        category: 'plans',
+        parentId: _activeFolderId > 0 ? _activeFolderId : null,
+        file: File(path),
+        filename: picked.name,
+      );
+      if (data['success'] != true) {
+        throw data['message'] ?? 'Сервер не принял файл';
+      }
+      return;
+    }
+
     final request = http.MultipartRequest(
       'POST',
       Uri.parse('${TrainingPlansApi.base}/upload_file.php'),
@@ -2252,6 +2491,19 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
     if (confirmed != true) return;
     if (mounted) setState(() => saving = true);
     try {
+      if (_isPersonal) {
+        final response = await PersonalWorkspaceOsService.delete(
+          userId: widget.ownerUserId,
+          id: fileId,
+        );
+        if (response['success'] != true) {
+          throw response['message'] ?? 'Не удалось удалить файл';
+        }
+        await _loadMaterialsForCurrentFolder();
+        Get.snackbar('Готово', 'Файл удалён');
+        return;
+      }
+
       final response = await http.post(
         Uri.parse('${TrainingPlansApi.base}/delete_file.php'),
         body: <String, String>{
@@ -2341,6 +2593,27 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
         'plan_date': _asStr(plan['plan_date'] ?? plan['created_at']),
       };
 
+      if (_isPersonal) {
+        final personalPayload = <String, dynamic>{
+          ...payload,
+          'club_id': 0,
+          'club_name': 'Личный профиль',
+          'team_id': 0,
+          'team_name': 'Личный профиль',
+          'trainer_id': widget.ownerUserId,
+          'created_by': widget.ownerUserId,
+        };
+        await _savePersonalPlan(personalPayload, id: planId);
+        if (!mounted) return;
+        setState(() {
+          selectedPlan = <String, dynamic>{...plan, ...personalPayload};
+          themeCtrl.text = title;
+        });
+        await _loadPlansForTeam();
+        Get.snackbar('Готово', 'План переименован');
+        return;
+      }
+
       final response = await http
           .post(
             Uri.parse('${TrainingPlansApi.base}/create_training_plan.php'),
@@ -2401,6 +2674,20 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
     setState(() => saving = true);
 
     try {
+      if (_isPersonal) {
+        final r = await PersonalWorkspaceOsService.delete(
+          userId: widget.ownerUserId,
+          id: planId,
+        );
+        if (r['success'] != true) {
+          throw r['message'] ?? 'Не удалось удалить план';
+        }
+        selectedPlan = null;
+        await _loadPlansForTeam();
+        Get.snackbar('Готово', 'План удалён');
+        return;
+      }
+
       final r = await TrainingPlansApi.deletePlan(
         clubId: widget.clubId,
         planId: planId,
@@ -2433,7 +2720,7 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
     final activeTeamId =
         widget.teamId ?? _asInt(plan['team_id']);
 
-    if (activeTeamId <= 0) {
+    if (!_isPersonal && activeTeamId <= 0) {
       Get.snackbar(
         'План',
         'Не выбрана команда для плана',
@@ -2468,6 +2755,36 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
         'plan_description': descriptionCtrl.text.trim(),
         'plan_date': dateCtrl.text.trim(),
       };
+
+      if (_isPersonal) {
+        final personalPayload = <String, dynamic>{
+          ...payload,
+          'club_id': 0,
+          'club_name': 'Личный профиль',
+          'team_id': 0,
+          'team_name': 'Личный профиль',
+          'trainer_id': widget.ownerUserId,
+          'created_by': widget.ownerUserId,
+        };
+        final data = await _savePersonalPlan(personalPayload, id: planId);
+        final item = data['item'];
+        final savedPlanId = item is Map ? _asInt(item['id']) : 0;
+        if (savedPlanId <= 0) throw 'Сервер не вернул plan_id';
+        if (!mounted) return;
+        setState(() {
+          selectedPlan = <String, dynamic>{
+            ...plan,
+            ...personalPayload,
+            'id': savedPlanId,
+            'plan_id': savedPlanId,
+            '_is_local_draft': false,
+          };
+          editMode = false;
+        });
+        await _loadPlansForTeam();
+        Get.snackbar('Готово', creating ? 'План создан' : 'План сохранён');
+        return;
+      }
 
       final response = await http
           .post(
@@ -2543,6 +2860,27 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
   }
 
   void _openFullFoldersScreen() {
+    if (_isPersonal) {
+      Get.to(
+        () => Scaffold(
+          backgroundColor: Colors.white,
+          body: SafeArea(
+            child: CmrPlansPanel(
+              clubId: 0,
+              clubName: 'Личный профиль',
+              teamId: null,
+              teamName: 'Личный профиль',
+              trainerId: widget.ownerUserId,
+              trainerName: widget.trainerName,
+              personalMode: true,
+              ownerUserId: widget.ownerUserId,
+            ),
+          ),
+        ),
+      );
+      return;
+    }
+
     Get.to(
       () => PlanFoldersScreen(
         clubId: widget.clubId,
@@ -2557,6 +2895,18 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
   void _openFullPlanScreen() {
     final plan = selectedPlan;
     if (plan == null) return;
+
+    if (_isPersonal) {
+      // Personal plans are edited by the shared Workspace document editor
+      // inside this module. Do not route to the club-only PlanDetailScreen.
+      if (mounted) {
+        setState(() {
+          selectedPlan = plan;
+          editMode = true;
+        });
+      }
+      return;
+    }
 
     Get.to(
       () => const PlanDetailScreen(),
@@ -3732,6 +4082,9 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
   }
 
   bool _usesWorkspacePlanEditor(Map<String, dynamic> plan) {
+    // In personal mode never instantiate the team-bound PlanDetailScreen.
+    // The shared Workspace editor is the canonical editor for user-owned plans.
+    if (_isPersonal) return true;
     if (plan['_is_local_draft'] == true) return true;
     final body = _asStr(
       plan['plan_description'] ?? plan['description'] ?? plan['workspace_body'],
@@ -3769,7 +4122,7 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
           sourcePlan['plan_id'],
     );
     final activeTeamId = widget.teamId ?? _asInt(sourcePlan['team_id']);
-    if (activeTeamId <= 0) {
+    if (!_isPersonal && activeTeamId <= 0) {
       throw StateError('Не выбрана команда для плана-конспекта');
     }
 
@@ -3817,6 +4170,34 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
       'players_count': _asStr(decoded['players_count']),
       'duration_min': _asStr(decoded['duration_min']),
     };
+
+    if (_isPersonal) {
+      final personalPayload = <String, dynamic>{
+        ...payload,
+        'club_id': 0,
+        'club_name': 'Личный профиль',
+        'team_id': 0,
+        'team_name': 'Личный профиль',
+        'trainer_id': widget.ownerUserId,
+        'created_by': widget.ownerUserId,
+      };
+      final saved = await _savePersonalPlan(personalPayload, id: planId);
+      final item = saved['item'];
+      final savedPlanId = item is Map ? _asInt(item['id']) : 0;
+      if (savedPlanId <= 0) throw StateError('Сервер не вернул plan_id');
+      if (!mounted) return;
+      setState(() {
+        selectedPlan = <String, dynamic>{
+          ...sourcePlan,
+          ...personalPayload,
+          'id': savedPlanId,
+          'plan_id': savedPlanId,
+          '_is_local_draft': false,
+        };
+      });
+      await _loadPlansForTeam();
+      return;
+    }
 
     final response = await http
         .post(
@@ -3892,12 +4273,14 @@ class _CmrPlansPanelState extends State<CmrPlansPanel> {
       onClose: _closePlanEditor,
       compactWorkspaceChrome: false,
       showTemplates: true,
-      aiClubId: widget.clubId,
-      aiUserId: null,
-      aiTeamId: teamId > 0 ? teamId : null,
-      aiClubName: widget.clubName,
-      aiTeamName: widget.teamName,
-      aiDocumentKey: planId > 0 ? 'training_plan_$planId' : 'training_plan_draft_${widget.clubId}_${_activeFolderId}',
+      aiClubId: _isPersonal ? 0 : widget.clubId,
+      aiUserId: _isPersonal ? widget.ownerUserId : null,
+      aiTeamId: _isPersonal ? null : (teamId > 0 ? teamId : null),
+      aiClubName: _isPersonal ? 'Личный профиль' : widget.clubName,
+      aiTeamName: _isPersonal ? 'Личный профиль' : widget.teamName,
+      aiDocumentKey: planId > 0
+          ? '${_isPersonal ? 'personal' : 'training'}_plan_$planId'
+          : '${_isPersonal ? 'personal' : 'training'}_plan_draft_${_isPersonal ? widget.ownerUserId : widget.clubId}_${_activeFolderId}',
       aiExtraPayload: <String, dynamic>{
         'workspace_section': 'plans',
         'folder_id': _asInt(plan['folder_id']) > 0

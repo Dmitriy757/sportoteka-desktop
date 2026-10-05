@@ -1,0 +1,2243 @@
+import 'dart:convert';
+import 'dart:io';
+import 'dart:typed_data';
+
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
+import 'package:sportoteka/core/theme/app_typography.dart';
+import 'package:sportoteka/presentation/workspace_os/workspace_player_data_bridge.dart';
+
+class WorkspacePlayerPersonalCardScreen extends StatefulWidget {
+  const WorkspacePlayerPersonalCardScreen({
+    super.key,
+    required this.player,
+    required this.clubId,
+    this.teamId,
+    this.teamName = '',
+    this.currentUserId = 0,
+    this.onRefresh,
+  });
+
+  final Map<String, dynamic> player;
+  final int clubId;
+  final int? teamId;
+  final String teamName;
+  final int currentUserId;
+  final Future<void> Function()? onRefresh;
+
+  @override
+  State<WorkspacePlayerPersonalCardScreen> createState() =>
+      _WorkspacePlayerPersonalCardScreenState();
+}
+
+class _WorkspacePlayerPersonalCardScreenState
+    extends State<WorkspacePlayerPersonalCardScreen> {
+  static const _api = 'https://sportotekaapp.ru/api/player_card';
+  // Единая палитра официальных цифровых документов Sportoteka.
+  // Совпадает с цифровым журналом.
+  static const _green = Color(0xFF00A750);
+  static const _greenDark = Color(0xFF067A46);
+  static const _greenSoft = Color(0xFFF3FAF6);
+  static const _text = Color(0xFF0B0F14);
+  static const _muted = Color(0xFF6B7280);
+  static const _line = Color(0xFFE9ECEA);
+  static const _soft = Color(0xFFFAFBFA);
+  static const _canvas = Color(0xFFF6F7F6);
+  static const _danger = Color(0xFFB42318);
+
+  final _bridge = WorkspacePlayerDataBridge();
+  bool _loading = true;
+  bool _syncing = false;
+  bool _exporting = false;
+  bool _previewLoading = false;
+  String? _previewError;
+  Uint8List? _previewPdfBytes;
+  String? _error;
+  Map<String, dynamic> _data = <String, dynamic>{};
+  int _tab = 0;
+
+  static const List<(_CardTab, String, IconData)> _tabs =
+      <(_CardTab, String, IconData)>[
+    (_CardTab.basic, 'Основные данные', Icons.badge_outlined),
+    (_CardTab.training, 'Подготовка', Icons.sports_soccer_rounded),
+    (_CardTab.tests, 'Нормативы', Icons.fact_check_outlined),
+    (_CardTab.results, 'Результаты', Icons.emoji_events_outlined),
+    (_CardTab.signatures, 'Подписи', Icons.draw_rounded),
+    (_CardTab.document, 'Документ', Icons.description_outlined),
+  ];
+
+  int get _playerId => _bridge.resolvePlayerId(widget.player);
+  int get _teamId => _bridge.resolveTeamId(widget.player, widget.teamId);
+  Map<String, dynamic> get _resolved => _map(_data['resolved']);
+  List<Map<String, dynamic>> get _tests => _list(_data['tests']);
+  List<Map<String, dynamic>> get _results => _list(_data['results']);
+  List<Map<String, dynamic>> get _trainers => _list(_data['trainers']);
+  List<Map<String, dynamic>> get _trainerSignatures =>
+      _list(_data['trainer_signatures']);
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Map<String, dynamic> _map(dynamic raw) =>
+      raw is Map ? Map<String, dynamic>.from(raw) : <String, dynamic>{};
+
+  List<Map<String, dynamic>> _list(dynamic raw) => raw is List
+      ? raw.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList()
+      : <Map<String, dynamic>>[];
+
+  String _t(dynamic value) {
+    final s = '${value ?? ''}'.trim();
+    return s == 'null' ? '' : s;
+  }
+
+  String _first(Map<String, dynamic> row, List<String> keys) {
+    for (final key in keys) {
+      final value = _t(row[key]);
+      if (value.isNotEmpty) return value;
+    }
+    return '';
+  }
+
+  String _ymd(dynamic value) {
+    final raw = _t(value);
+    if (raw.length >= 10) return raw.substring(0, 10);
+    return raw;
+  }
+
+  String get _playerName {
+    final name = _t(_resolved['full_name']);
+    if (name.isNotEmpty) return name;
+    final last = _first(widget.player, const ['last_name', 'lastname']);
+    final first = _first(widget.player, const ['first_name', 'firstname']);
+    return '$last $first'.trim().isEmpty ? 'Игрок' : '$last $first'.trim();
+  }
+
+  Uri _uri(String path, [Map<String, String>? extra]) {
+    return Uri.parse('$_api/$path').replace(queryParameters: <String, String>{
+      'player_id': '$_playerId',
+      'club_id': '${widget.clubId}',
+      if (_teamId > 0) 'team_id': '$_teamId',
+      if (widget.currentUserId > 0) 'user_id': '${widget.currentUserId}',
+      ...?extra,
+    });
+  }
+
+  Future<void> _load({bool syncSources = true}) async {
+    if (_playerId <= 0) {
+      setState(() {
+        _loading = false;
+        _error = 'Не удалось определить player_id';
+      });
+      return;
+    }
+    if (mounted) {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    }
+    try {
+      final response = await http
+          .get(_uri('index.php', const {'action': 'bootstrap'}))
+          .timeout(const Duration(seconds: 25));
+      final decoded = jsonDecode(response.body);
+      if (decoded is! Map || decoded['success'] != true) {
+        throw StateError(
+            '${decoded is Map ? decoded['message'] : 'Ошибка API'}');
+      }
+      if (!mounted) return;
+      setState(() {
+        _data = Map<String, dynamic>.from(decoded);
+        _loading = false;
+        _previewPdfBytes = null;
+        _previewError = null;
+      });
+      if (syncSources) await _syncFromSportoteka();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = '$e';
+      });
+    }
+  }
+
+  Future<Map<String, dynamic>> _post(
+    String action,
+    Map<String, dynamic> payload,
+  ) async {
+    final response = await http
+        .post(
+          _uri('index.php'),
+          headers: const {'Content-Type': 'application/json; charset=utf-8'},
+          body: jsonEncode(<String, dynamic>{
+            'action': action,
+            'player_id': _playerId,
+            'club_id': widget.clubId,
+            'team_id': _teamId,
+            'user_id': widget.currentUserId,
+            ...payload,
+          }),
+        )
+        .timeout(const Duration(seconds: 30));
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map || decoded['success'] != true) {
+      throw StateError('${decoded is Map ? decoded['message'] : 'Ошибка API'}');
+    }
+    final result = Map<String, dynamic>.from(decoded);
+    if (mounted) {
+      setState(() {
+        _data = result;
+        _previewPdfBytes = null;
+        _previewError = null;
+      });
+    }
+    return result;
+  }
+
+  bool _matchBelongsToPlayer(Map<String, dynamic> row) {
+    final playerIds = <int>{
+      _playerId,
+      int.tryParse(_t(_resolved['user_id'])) ?? 0,
+    }..remove(0);
+    if (playerIds.isEmpty) return false;
+    for (final key in const <String>[
+      'player_id',
+      'footballer_id',
+      'athlete_id',
+      'user_id',
+      'playerId',
+      'player_user_id',
+      'member_id',
+    ]) {
+      final id = int.tryParse(_t(row[key])) ?? 0;
+      if (playerIds.contains(id)) return true;
+    }
+    for (final raw in <dynamic>[
+      row['players'],
+      row['participants'],
+      row['lineup'],
+      row['squad'],
+      row['roster'],
+      row['player_ids'],
+      row['participant_ids'],
+    ]) {
+      if (raw is List) {
+        for (final item in raw) {
+          if (item is Map) {
+            final id = int.tryParse(_first(
+                    Map<String, dynamic>.from(item), const [
+                  'player_id',
+                  'footballer_id',
+                  'athlete_id',
+                  'user_id',
+                  'id'
+                ])) ??
+                0;
+            if (playerIds.contains(id)) return true;
+          } else {
+            final id = int.tryParse('$item') ?? 0;
+            if (playerIds.contains(id)) return true;
+          }
+        }
+      }
+    }
+    return false;
+  }
+
+  Future<void> _syncFromSportoteka() async {
+    if (_syncing || _teamId <= 0) return;
+    setState(() => _syncing = true);
+    try {
+      final testRows = <Map<String, dynamic>>[];
+      final sessions = await _bridge.loadTestingSessions(
+        player: widget.player,
+        clubId: widget.clubId,
+        teamId: _teamId,
+      );
+      final selectedSessions = sessions.take(12).toList(growable: false);
+      for (var i = 0; i < selectedSessions.length; i++) {
+        final session = selectedSessions[i];
+        final enriched = await _bridge.enrichTestingSessionForPlayer(
+          player: widget.player,
+          clubId: widget.clubId,
+          teamId: _teamId,
+          session: session,
+        );
+        final sessionId = _first(enriched, const ['session_id', 'id']);
+        final date =
+            _ymd(_first(enriched, const ['test_date', 'date', 'created_at']));
+        final metrics = _list(enriched['workspace_results']);
+        for (var j = 0; j < metrics.length; j++) {
+          final metric = metrics[j];
+          final code = _first(metric, const ['code', 'id']);
+          final title = _first(metric, const ['title', 'name', 'code']);
+          final value = _first(metric, const ['value', 'result', 'score']);
+          final unit = _t(metric['unit']);
+          final rating = _first(metric, const ['rating', 'status']);
+          final rendered = <String>[
+            '$value${unit.isEmpty ? '' : ' $unit'}'.trim(),
+            if (rating.isNotEmpty) rating,
+          ].where((e) => e.isNotEmpty).join(' · ');
+          if (title.isEmpty || rendered.isEmpty) continue;
+          testRows.add(<String, dynamic>{
+            'source_key':
+                'testing:${sessionId.isEmpty ? '$date:$i' : sessionId}:${code.isEmpty ? j : code}',
+            'test_date': date,
+            'title': title,
+            'result': rendered,
+            'sort_order': i * 100 + j,
+          });
+        }
+      }
+
+      final resultRows = <Map<String, dynamic>>[];
+      final matches = await _bridge.loadTeamMatches(
+        player: widget.player,
+        teamId: _teamId,
+      );
+      final playerMatches =
+          matches.where(_matchBelongsToPlayer).take(30).toList();
+      for (var i = 0; i < playerMatches.length; i++) {
+        final match = playerMatches[i];
+        final id = _first(match, const ['match_id', 'id', 'event_id']);
+        final date = _ymd(_first(
+          match,
+          const [
+            'match_date',
+            'date',
+            'event_date',
+            'scheduled_at',
+            'start_at'
+          ],
+        ));
+        final opponent = _first(
+          match,
+          const ['opponent', 'opponent_name', 'opponent_team', 'rival_name'],
+        );
+        final competition = _first(
+          match,
+          const [
+            'competition_name',
+            'tournament_name',
+            'competition',
+            'league_name'
+          ],
+        );
+        final name = competition.isNotEmpty
+            ? competition
+            : (opponent.isNotEmpty ? 'Матч — $opponent' : 'Матч');
+        final city = _first(match, const ['city', 'location', 'place']);
+        final country = _first(match, const ['country', 'country_name']);
+        final our = _first(match,
+            const ['our_score', 'team_score', 'score_for', 'home_score']);
+        final opp = _first(
+            match, const ['opponent_score', 'score_against', 'away_score']);
+        final score = our.isNotEmpty && opp.isNotEmpty
+            ? '$our:$opp'
+            : _first(match, const ['result', 'score']);
+        resultRows.add(<String, dynamic>{
+          'source_key': 'match:${id.isEmpty ? '$date:$i:$opponent' : id}',
+          'competition_name': name,
+          'event_date': date,
+          'city_country': <String>[city, country]
+              .where((e) => e.isNotEmpty)
+              .toSet()
+              .join(', '),
+          'sport_program': _t(_resolved['sport_program']),
+          'result': score,
+          'place':
+              _first(match, const ['place', 'position_place', 'final_place']),
+          'rank_info': _first(match, const ['rank_info', 'sport_rank', 'rank']),
+          'national_team':
+              _first(match, const ['national_team', 'national_team_status']),
+          'sort_order': i,
+        });
+      }
+
+      await _post('sync_sources', <String, dynamic>{
+        'tests': testRows,
+        'results': resultRows,
+      });
+    } catch (_) {
+      // Карточка остаётся доступной даже если один из старых модулей тестов/матчей
+      // на конкретном сервере не отвечает.
+    } finally {
+      if (mounted) setState(() => _syncing = false);
+    }
+  }
+
+  Future<void> _editFields({
+    required String title,
+    required List<_CardFieldDef> fields,
+    String action = 'save_meta',
+  }) async {
+    final controllers = <String, TextEditingController>{
+      for (final f in fields) f.key: TextEditingController(text: f.value),
+    };
+    final save = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(24),
+        child: Container(
+          width: 760,
+          constraints: const BoxConstraints(maxHeight: 820),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x10000000),
+                blurRadius: 34,
+                spreadRadius: -18,
+                offset: Offset(0, 18),
+              ),
+            ],
+          ),
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(22, 20, 14, 12),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(title,
+                          style: AppTypography.screenTitle(color: _text)),
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.pop(dialogContext, false),
+                      icon: const Icon(Icons.close_rounded),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1, color: _line),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(22),
+                  child: Wrap(
+                    spacing: 14,
+                    runSpacing: 14,
+                    children: fields.map((f) {
+                      final wide = f.lines > 1;
+                      return SizedBox(
+                        width: wide ? 716 : 350,
+                        child: _SoftField(
+                          controller: controllers[f.key]!,
+                          label: f.label,
+                          maxLines: f.lines,
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(22, 12, 22, 18),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(dialogContext, false),
+                      child: const Text('Отмена'),
+                    ),
+                    const SizedBox(width: 8),
+                    FilledButton(
+                      style: _greenButtonStyle(),
+                      onPressed: () => Navigator.pop(dialogContext, true),
+                      child: const Text('Сохранить'),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (save != true) {
+      for (final c in controllers.values) c.dispose();
+      return;
+    }
+    final payload = <String, dynamic>{
+      for (final f in fields) f.key: controllers[f.key]!.text.trim(),
+    };
+    for (final c in controllers.values) c.dispose();
+    try {
+      await _post(action, payload);
+      if (mounted) _snack('Данные карточки сохранены');
+    } catch (e) {
+      if (mounted) _snack('Не удалось сохранить: $e', error: true);
+    }
+  }
+
+  Future<void> _editMeta() async {
+    final r = _resolved;
+    await _editFields(
+      title: 'Основные данные спортсмена',
+      action: 'save_basic',
+      fields: <_CardFieldDef>[
+        _CardFieldDef('last_name', 'Фамилия', _t(r['last_name'])),
+        _CardFieldDef('first_name', 'Имя', _t(r['first_name'])),
+        _CardFieldDef('middle_name', 'Отчество', _t(r['middle_name'])),
+        _CardFieldDef(
+            'birth_date', 'Дата рождения YYYY-MM-DD', _t(r['birth_date'])),
+        _CardFieldDef('birth_place', 'Место рождения', _t(r['birth_place'])),
+        _CardFieldDef('phone', 'Телефон', _t(r['phone'])),
+        _CardFieldDef('email', 'Email', _t(r['email'])),
+        _CardFieldDef('nationality', 'Гражданство', _t(r['nationality'])),
+        _CardFieldDef('position', 'Амплуа', _t(r['position'])),
+        _CardFieldDef('jersey_number', 'Игровой номер', _t(r['jersey_number'])),
+        _CardFieldDef('institution_name', 'Учреждение образования',
+            _t(r['institution_name'])),
+        _CardFieldDef('class_name', 'Класс', _t(r['class_name'])),
+        _CardFieldDef(
+            'study_or_work', 'Место учёбы / работы', _t(r['study_or_work']),
+            lines: 2),
+        _CardFieldDef('study_work_position', 'Профессия / должность',
+            _t(r['study_work_position'])),
+        _CardFieldDef('education', 'Образование', _t(r['education']), lines: 2),
+        _CardFieldDef('enrollment_date', 'Дата зачисления YYYY-MM-DD',
+            _t(r['enrollment_date'])),
+        _CardFieldDef('enrollment_order_number', 'Номер приказа о зачислении',
+            _t(r['enrollment_order_number'])),
+        _CardFieldDef(
+            'identity_doc_name', 'Документ', _t(r['identity_doc_name'])),
+        _CardFieldDef(
+            'identity_doc_series', 'Серия', _t(r['identity_doc_series'])),
+        _CardFieldDef(
+            'identity_doc_number', 'Номер', _t(r['identity_doc_number'])),
+        _CardFieldDef('identity_doc_issue_date', 'Дата выдачи YYYY-MM-DD',
+            _t(r['identity_doc_issue_date'])),
+        _CardFieldDef('identity_doc_issuer_code', 'Код органа',
+            _t(r['identity_doc_issuer_code'])),
+        _CardFieldDef('identity_doc_issuer_name', 'Кем выдан',
+            _t(r['identity_doc_issuer_name']),
+            lines: 2),
+      ],
+    );
+  }
+
+  Future<void> _editTrainingMeta() async {
+    final r = _resolved;
+    await _editFields(
+      title: 'Спортивная подготовка',
+      fields: <_CardFieldDef>[
+        _CardFieldDef(
+            'transfer_info', 'Перевод / направление', _t(r['transfer_info']),
+            lines: 2),
+        _CardFieldDef('restoration_info',
+            'Восстановление / зачисление в группу', _t(r['restoration_info']),
+            lines: 2),
+        _CardFieldDef('training_institution',
+            'Учреждение спортивной подготовки', _t(r['training_institution']),
+            lines: 2),
+        _CardFieldDef('preparation_duration', 'Продолжительность подготовки',
+            _t(r['preparation_duration']),
+            lines: 2),
+        _CardFieldDef('preparation_funding', 'Источник финансирования',
+            _t(r['preparation_funding'])),
+        _CardFieldDef(
+            'sport_program', 'Вид спорта / программа', _t(r['sport_program'])),
+        _CardFieldDef('judging_category', 'Судейская категория',
+            _t(r['judging_category']),
+            lines: 2),
+        _CardFieldDef('director_name', 'Директор', _t(r['director_name'])),
+      ],
+    );
+  }
+
+  List<int> _selectedTrainerIds() {
+    final raw = _resolved['training_coach_ids'];
+    if (raw is List) {
+      return raw
+          .map((e) => int.tryParse('$e') ?? 0)
+          .where((e) => e > 0)
+          .toList();
+    }
+    return _trainers
+        .map((e) => int.tryParse('${e['id']}') ?? 0)
+        .where((e) => e > 0)
+        .toList();
+  }
+
+  Map<String, dynamic>? _trainerById(int id) {
+    for (final trainer in _trainers) {
+      if ((int.tryParse('${trainer['id']}') ?? 0) == id) return trainer;
+    }
+    return null;
+  }
+
+  Map<String, dynamic>? _trainerSignatureFor(int userId) {
+    for (final row in _trainerSignatures) {
+      final id =
+          int.tryParse('${row['user_id'] ?? row['signer_user_id'] ?? 0}') ?? 0;
+      if (id == userId) return row;
+    }
+    return null;
+  }
+
+  Future<void> _editTrainers() async {
+    if (_trainers.isEmpty) {
+      _snack('В команде пока нет назначенных тренеров', error: true);
+      return;
+    }
+    final selected = _selectedTrainerIds().toSet();
+    var personalId =
+        int.tryParse('${_resolved['personal_trainer_user_id'] ?? 0}') ?? 0;
+    if (personalId <= 0 && selected.isNotEmpty) personalId = selected.first;
+    final saved = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => Dialog(
+          backgroundColor: Colors.transparent,
+          child: Container(
+            width: 650,
+            constraints: const BoxConstraints(maxHeight: 760),
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text('Тренеры спортсмена',
+                          style: AppTypography.sectionTitle(color: _text)),
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.pop(dialogContext),
+                      icon: const Icon(Icons.close_rounded),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Flexible(
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: _trainers.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 8),
+                    itemBuilder: (_, index) {
+                      final trainer = _trainers[index];
+                      final id = int.tryParse('${trainer['id']}') ?? 0;
+                      final checked = selected.contains(id);
+                      final isPersonal = personalId == id;
+                      return Container(
+                        decoration: BoxDecoration(
+                          color: checked ? _greenSoft : _soft,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+                        child: Row(
+                          children: [
+                            Checkbox(
+                              value: checked,
+                              activeColor: _green,
+                              side: BorderSide.none,
+                              onChanged: (value) {
+                                setDialogState(() {
+                                  if (value == true) {
+                                    selected.add(id);
+                                    if (personalId <= 0) personalId = id;
+                                  } else {
+                                    selected.remove(id);
+                                    if (personalId == id) {
+                                      personalId =
+                                          selected.isEmpty ? 0 : selected.first;
+                                    }
+                                  }
+                                });
+                              },
+                            ),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                      _t(trainer['full_name']).isEmpty
+                                          ? 'Тренер'
+                                          : _t(trainer['full_name']),
+                                      style: AppTypography.bodyMedium(
+                                          color: _text)),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    _t(trainer['profile']) == 'main'
+                                        ? 'Главный тренер команды'
+                                        : 'Тренер команды',
+                                    style: AppTypography.caption(color: _muted),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Radio<int>(
+                              value: id,
+                              groupValue: personalId,
+                              activeColor: _green,
+                              onChanged: checked
+                                  ? (value) => setDialogState(
+                                      () => personalId = value ?? personalId)
+                                  : null,
+                            ),
+                            Text('Личный',
+                                style: AppTypography.captionMedium(
+                                    color: isPersonal ? _green : _muted)),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(dialogContext),
+                      child: const Text('Отмена'),
+                    ),
+                    const SizedBox(width: 8),
+                    FilledButton(
+                      style: _greenButtonStyle(),
+                      onPressed: selected.isEmpty || personalId <= 0
+                          ? null
+                          : () =>
+                              Navigator.pop(dialogContext, <String, dynamic>{
+                                'training_coach_ids': selected.toList(),
+                                'personal_trainer_user_id': personalId,
+                              }),
+                      child: const Text('Сохранить'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    if (saved == null) return;
+    try {
+      await _post('save_trainers', saved);
+      if (mounted) _snack('Тренеры обновлены');
+    } catch (e) {
+      if (mounted) _snack('Не удалось сохранить тренеров: $e', error: true);
+    }
+  }
+
+  ButtonStyle _greenButtonStyle() => FilledButton.styleFrom(
+        backgroundColor: _greenSoft,
+        foregroundColor: _greenDark,
+        disabledBackgroundColor: _greenSoft,
+        disabledForegroundColor: _greenDark.withOpacity(.45),
+        elevation: 0,
+        shadowColor: Colors.transparent,
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        textStyle: AppTypography.custom(
+          size: 11.8,
+          weight: FontWeight.w700,
+          color: _greenDark,
+        ),
+      );
+
+  Future<Uint8List> _fetchExport(String type) async {
+    final response = await http
+        .get(_uri(type == 'pdf' ? 'export_pdf.php' : 'export_docx.php'))
+        .timeout(const Duration(seconds: 90));
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw StateError(
+          'Сервер вернул ${response.statusCode}: ${response.body}');
+    }
+    return response.bodyBytes;
+  }
+
+  String _safeFileBase() {
+    final n =
+        _playerName.replaceAll(RegExp(r'[^A-Za-zА-Яа-яЁё0-9 _-]'), '').trim();
+    return 'Личная карточка спортсмена ${n.isEmpty ? _playerId : n}';
+  }
+
+  Future<void> _openPdf() async {
+    if (_exporting) return;
+    setState(() => _exporting = true);
+    try {
+      final bytes = await _fetchExport('pdf');
+      if (!mounted) return;
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (_) => Scaffold(
+            backgroundColor: const Color(0xFFF3F4F3),
+            appBar: AppBar(
+              title: Text(_safeFileBase(), style: AppTypography.itemTitle()),
+            ),
+            body: SfPdfViewer.memory(bytes),
+          ),
+        ),
+      );
+    } catch (e) {
+      if (mounted) _snack('PDF не открылся: $e', error: true);
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
+  }
+
+  Future<void> _saveExport(String type) async {
+    if (_exporting) return;
+    setState(() => _exporting = true);
+    try {
+      final bytes = await _fetchExport(type);
+      final ext = type == 'pdf' ? 'pdf' : 'docx';
+      final path = await FilePicker.saveFile(
+        dialogTitle: type == 'pdf' ? 'Сохранить PDF' : 'Сохранить DOCX',
+        fileName: '${_safeFileBase()}.$ext',
+        type: FileType.custom,
+        allowedExtensions: <String>[ext],
+      );
+      if (path == null || path.trim().isEmpty) return;
+      await File(path).writeAsBytes(bytes, flush: true);
+      if (mounted) _snack('${ext.toUpperCase()} сохранён');
+    } catch (e) {
+      if (mounted) _snack('Не удалось сохранить: $e', error: true);
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
+  }
+
+  Future<void> _saveToPlayerDocuments() async {
+    if (_exporting) return;
+    setState(() => _exporting = true);
+    Directory? temp;
+    try {
+      final pdf = await _fetchExport('pdf');
+      final docx = await _fetchExport('docx');
+      temp = await Directory.systemTemp.createTemp('sportoteka_player_card_');
+      final base = _safeFileBase();
+      final pdfFile = File('${temp.path}/$base.pdf');
+      final docxFile = File('${temp.path}/$base.docx');
+      await pdfFile.writeAsBytes(pdf, flush: true);
+      await docxFile.writeAsBytes(docx, flush: true);
+      for (final item in <(File, String)>[
+        (pdfFile, 'PDF'),
+        (docxFile, 'DOCX')
+      ]) {
+        final file = PlatformFile(
+          name: item.$1.path.split(Platform.pathSeparator).last,
+          size: await item.$1.length(),
+          path: item.$1.path,
+        );
+        await _bridge.uploadMedicalAttachment(
+          player: widget.player,
+          file: file,
+          title: '$base · ${item.$2}',
+          type: 'Документ',
+          comment:
+              'Сформировано из цифровой личной карточки спортсмена Sportoteka',
+          date: DateTime.now(),
+        );
+      }
+      await widget.onRefresh?.call();
+      if (mounted) _snack('PDF и DOCX добавлены в документы игрока');
+    } catch (e) {
+      if (mounted) _snack('Не удалось добавить в документы: $e', error: true);
+    } finally {
+      if (temp != null) {
+        try {
+          await temp.delete(recursive: true);
+        } catch (_) {}
+      }
+      if (mounted) setState(() => _exporting = false);
+    }
+  }
+
+  Future<void> _addTest() async {
+    final date = TextEditingController();
+    final title = TextEditingController();
+    final result = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.white,
+        title: Text('Добавить норматив',
+            style: AppTypography.sectionTitle(color: _text)),
+        content: SizedBox(
+          width: 520,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _SoftField(controller: date, label: 'Дата YYYY-MM-DD'),
+              const SizedBox(height: 10),
+              _SoftField(controller: title, label: 'Вид норматива'),
+              const SizedBox(height: 10),
+              _SoftField(controller: result, label: 'Результат'),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Отмена')),
+          FilledButton(
+            style: _greenButtonStyle(),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Добавить'),
+          ),
+        ],
+      ),
+    );
+    if (ok == true && title.text.trim().isNotEmpty) {
+      try {
+        await _post('save_test', <String, dynamic>{
+          'test_date': date.text.trim(),
+          'title': title.text.trim(),
+          'result': result.text.trim(),
+        });
+      } catch (e) {
+        if (mounted) _snack('Не удалось добавить норматив: $e', error: true);
+      }
+    }
+    date.dispose();
+    title.dispose();
+    result.dispose();
+  }
+
+  Future<void> _addResult() async {
+    final fields = <_CardFieldDef>[
+      const _CardFieldDef('competition_name', 'Соревнование', ''),
+      const _CardFieldDef('event_date', 'Дата YYYY-MM-DD', ''),
+      const _CardFieldDef('city_country', 'Город / страна', ''),
+      _CardFieldDef(
+          'sport_program', 'Вид спорта', _t(_resolved['sport_program'])),
+      const _CardFieldDef('result', 'Спортивный результат', ''),
+      const _CardFieldDef('place', 'Место', ''),
+      const _CardFieldDef('rank_info', 'Присвоение звания / разряда', '',
+          lines: 2),
+      const _CardFieldDef('national_team', 'Сборная команда', '', lines: 2),
+    ];
+    final controllers = <String, TextEditingController>{
+      for (final f in fields) f.key: TextEditingController(text: f.value),
+    };
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Container(
+          width: 680,
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+              color: Colors.white, borderRadius: BorderRadius.circular(20)),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('Добавить спортивный результат',
+                  style: AppTypography.sectionTitle(color: _text)),
+              const SizedBox(height: 14),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 560),
+                child: SingleChildScrollView(
+                  child: Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: fields
+                        .map((f) => SizedBox(
+                              width: f.lines > 1 ? 640 : 314,
+                              child: _SoftField(
+                                  controller: controllers[f.key]!,
+                                  label: f.label,
+                                  maxLines: f.lines),
+                            ))
+                        .toList(),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                      onPressed: () => Navigator.pop(dialogContext, false),
+                      child: const Text('Отмена')),
+                  const SizedBox(width: 8),
+                  FilledButton(
+                      style: _greenButtonStyle(),
+                      onPressed: () => Navigator.pop(dialogContext, true),
+                      child: const Text('Добавить')),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (ok == true && controllers['competition_name']!.text.trim().isNotEmpty) {
+      try {
+        await _post('save_result', <String, dynamic>{
+          for (final f in fields) f.key: controllers[f.key]!.text.trim(),
+        });
+      } catch (e) {
+        if (mounted) _snack('Не удалось добавить результат: $e', error: true);
+      }
+    }
+    for (final c in controllers.values) c.dispose();
+  }
+
+  Future<void> _captureSignature() async {
+    final signature = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => _AthleteSignatureDialog(
+        name: _playerName,
+        title: 'Подпись спортсмена',
+      ),
+    );
+    if (signature == null) return;
+    try {
+      await _post('save_signature', <String, dynamic>{
+        'signature_json': signature,
+        'athlete_signature_name': _playerName,
+      });
+      if (mounted) _snack('Подпись спортсмена сохранена');
+    } catch (e) {
+      if (mounted) _snack('Не удалось сохранить подпись: $e', error: true);
+    }
+  }
+
+  Future<void> _captureTrainerSignature(Map<String, dynamic> trainer) async {
+    final trainerId = int.tryParse('${trainer['id'] ?? 0}') ?? 0;
+    if (trainerId <= 0) return;
+    final trainerName =
+        _t(trainer['full_name']).isEmpty ? 'Тренер' : _t(trainer['full_name']);
+    final signature = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => _AthleteSignatureDialog(
+        name: trainerName,
+        title: 'Подпись тренера',
+      ),
+    );
+    if (signature == null) return;
+    try {
+      await _post('save_trainer_signature', <String, dynamic>{
+        'trainer_user_id': trainerId,
+        'trainer_name': trainerName,
+        'signature_json': signature,
+      });
+      if (mounted) _snack('Подпись тренера сохранена и связана с журналом');
+    } catch (e) {
+      if (mounted)
+        _snack('Не удалось сохранить подпись тренера: $e', error: true);
+    }
+  }
+
+  Future<void> _loadPreview({bool force = false}) async {
+    if (_previewLoading) return;
+    if (!force && _previewPdfBytes != null) return;
+    if (mounted) {
+      setState(() {
+        _previewLoading = true;
+        _previewError = null;
+      });
+    }
+    try {
+      final bytes = await _fetchExport('pdf');
+      if (!mounted) return;
+      setState(() {
+        _previewPdfBytes = bytes;
+        _previewLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _previewLoading = false;
+        _previewError = '$e';
+      });
+    }
+  }
+
+  void _selectTab(int index) {
+    if (_tab == index) return;
+    setState(() => _tab = index);
+    if (_tabs[index].$1 == _CardTab.document) {
+      _loadPreview();
+    }
+  }
+
+  void _snack(String message, {bool error = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: error ? _danger : _green,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final baseTheme = Theme.of(context);
+    return Theme(
+      data: baseTheme.copyWith(
+        scaffoldBackgroundColor: _canvas,
+        inputDecorationTheme: InputDecorationTheme(
+          filled: true,
+          fillColor: const Color(0xFFF1F3F3),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide.none,
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide.none,
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide.none,
+          ),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+          labelStyle: const TextStyle(color: _muted, fontSize: 12),
+          floatingLabelStyle:
+              const TextStyle(color: _text, fontWeight: FontWeight.w600),
+        ),
+        filledButtonTheme: FilledButtonThemeData(
+          style: _greenButtonStyle(),
+        ),
+        outlinedButtonTheme: OutlinedButtonThemeData(
+          style: OutlinedButton.styleFrom(
+            foregroundColor: _greenDark,
+            side: BorderSide.none,
+            backgroundColor: _greenSoft,
+            elevation: 0,
+            shadowColor: Colors.transparent,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+            textStyle: AppTypography.custom(
+              size: 11.8,
+              weight: FontWeight.w700,
+              color: _greenDark,
+            ),
+          ),
+        ),
+        textButtonTheme: TextButtonThemeData(
+          style: TextButton.styleFrom(
+            foregroundColor: _greenDark,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            textStyle: AppTypography.custom(
+              size: 11.5,
+              weight: FontWeight.w600,
+              color: _greenDark,
+            ),
+          ),
+        ),
+      ),
+      child: Container(
+        color: _canvas,
+        child: Column(
+          children: [
+            _buildHeader(),
+            if (_error != null)
+              Container(
+                width: double.infinity,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 18, vertical: 9),
+                color: const Color(0xFFFFF3F1),
+                child:
+                    Text(_error!, style: AppTypography.caption(color: _danger)),
+              ),
+            Expanded(
+              child: _loading
+                  ? const Center(
+                      child: CircularProgressIndicator(color: _green))
+                  : _buildBody(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 16, 20, 14),
+      decoration: const BoxDecoration(color: Colors.white),
+      child: Row(
+        children: [
+          IconButton(
+            tooltip: 'Назад',
+            onPressed: () => Navigator.of(context).maybePop(),
+            icon: const Icon(Icons.arrow_back_rounded, size: 20),
+          ),
+          const SizedBox(width: 4),
+          Container(
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              color: _greenSoft,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(
+              Icons.assignment_ind_rounded,
+              color: _green,
+              size: 23,
+            ),
+          ),
+          const SizedBox(width: 13),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Личная карточка спортсмена',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: _text,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '$_playerName${widget.teamName.trim().isEmpty ? '' : ' · ${widget.teamName.trim()}'}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: _muted,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (_syncing || _exporting)
+            const Padding(
+              padding: EdgeInsets.only(right: 10),
+              child: SizedBox.square(
+                dimension: 16,
+                child: CircularProgressIndicator(strokeWidth: 2, color: _green),
+              ),
+            ),
+          IconButton(
+            tooltip: 'Обновить',
+            onPressed: _loading ? null : () => _load(),
+            icon: const Icon(Icons.refresh_rounded),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBody() {
+    return Column(
+      children: [
+        _buildTabs(),
+        Expanded(child: _buildActiveTab()),
+      ],
+    );
+  }
+
+  Widget _buildTabs() {
+    return Container(
+      height: 54,
+      color: Colors.white,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        itemCount: _tabs.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 6),
+        itemBuilder: (context, index) {
+          final item = _tabs[index];
+          final active = index == _tab;
+          return InkWell(
+            onTap: () => _selectTab(index),
+            borderRadius: BorderRadius.circular(12),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              padding: const EdgeInsets.symmetric(horizontal: 13),
+              decoration: BoxDecoration(
+                color: active ? _greenSoft : Colors.transparent,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    item.$3,
+                    size: 17,
+                    color: active ? _green : _muted,
+                  ),
+                  const SizedBox(width: 7),
+                  Text(
+                    item.$2,
+                    style: TextStyle(
+                      color: active ? _green : _text,
+                      fontSize: 12.5,
+                      fontWeight: active ? FontWeight.w700 : FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildActiveTab() {
+    switch (_tabs[_tab].$1) {
+      case _CardTab.basic:
+        return _buildBasicTab();
+      case _CardTab.training:
+        return _buildTrainingTab();
+      case _CardTab.tests:
+        return _buildTestsTab();
+      case _CardTab.results:
+        return _buildResultsTab();
+      case _CardTab.signatures:
+        return _buildSignaturesTab();
+      case _CardTab.document:
+        return _buildDocumentTab();
+    }
+    return const SizedBox.shrink();
+  }
+
+  Widget _tabList(List<Widget> children) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
+      children: children,
+    );
+  }
+
+  Widget _buildBasicTab() {
+    return _tabList([
+      Align(
+        alignment: Alignment.centerLeft,
+        child: _Action(
+          icon: Icons.edit_outlined,
+          label: 'Редактировать данные',
+          onTap: _editMeta,
+        ),
+      ),
+      const SizedBox(height: 12),
+      _sectionCard(
+        title: 'Основные данные',
+        icon: Icons.badge_outlined,
+        child: Wrap(
+          spacing: 22,
+          runSpacing: 14,
+          children: [
+            _Info('ФИО', _playerName, width: 300),
+            _Info('Дата рождения', _t(_resolved['birth_date'])),
+            _Info('Место рождения', _t(_resolved['birth_place']), width: 260),
+            _Info('Телефон', _t(_resolved['phone'])),
+            _Info('Email', _t(_resolved['email']), width: 280),
+            _Info('Гражданство', _t(_resolved['nationality'])),
+            _Info('Амплуа', _t(_resolved['position'])),
+            _Info('Игровой номер', _t(_resolved['jersey_number'])),
+            _Info('Учреждение образования', _t(_resolved['institution_name']),
+                width: 300),
+            _Info('Класс', _t(_resolved['class_name'])),
+            _Info('Учёба / работа', _t(_resolved['study_work']), width: 300),
+            _Info('Профессия / должность', _t(_resolved['study_work_position']),
+                width: 300),
+            _Info('Образование', _t(_resolved['education']), width: 300),
+            _Info('Родители', _t(_resolved['parents_text']), width: 600),
+            _Info(
+              'Зачисление',
+              <String>[
+                _t(_resolved['enrollment_order_number']).isEmpty
+                    ? ''
+                    : 'пр. № ${_t(_resolved['enrollment_order_number'])}',
+                _t(_resolved['enrollment_date']),
+              ].where((e) => e.isNotEmpty).join(' · '),
+              width: 300,
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(height: 12),
+      _sectionCard(
+        title: 'Документ, удостоверяющий личность',
+        icon: Icons.credit_card_outlined,
+        child: Wrap(
+          spacing: 22,
+          runSpacing: 14,
+          children: [
+            _Info('Документ', _t(_resolved['identity_doc_name']), width: 260),
+            _Info('Серия', _t(_resolved['identity_doc_series'])),
+            _Info('Номер', _t(_resolved['identity_doc_number'])),
+            _Info('Дата выдачи', _t(_resolved['identity_doc_issue_date'])),
+            _Info('Код органа', _t(_resolved['identity_doc_issuer_code'])),
+            _Info('Кем выдан', _t(_resolved['identity_doc_issuer_name']),
+                width: 500),
+          ],
+        ),
+      ),
+    ]);
+  }
+
+  Widget _buildTrainingTab() {
+    final selectedIds = _selectedTrainerIds().toSet();
+    final selectedTrainers = _trainers
+        .where((t) => selectedIds.contains(int.tryParse('${t['id']}') ?? 0))
+        .toList(growable: false);
+    final personalId =
+        int.tryParse('${_resolved['personal_trainer_user_id'] ?? 0}') ?? 0;
+    return _tabList([
+      Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          _Action(
+            icon: Icons.manage_accounts_outlined,
+            label: 'Выбрать тренеров',
+            onTap: _editTrainers,
+          ),
+          _Action(
+            icon: Icons.edit_outlined,
+            label: 'Редактировать подготовку',
+            onTap: _editTrainingMeta,
+          ),
+        ],
+      ),
+      const SizedBox(height: 12),
+      _sectionCard(
+        title: 'Тренеры',
+        icon: Icons.groups_2_rounded,
+        child: selectedTrainers.isEmpty
+            ? Text('Тренеры не выбраны',
+                style: AppTypography.body(color: _muted))
+            : Column(
+                children: selectedTrainers.map((trainer) {
+                  final id = int.tryParse('${trainer['id']}') ?? 0;
+                  final personal = id == personalId;
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 11),
+                    decoration: BoxDecoration(
+                      color: personal ? _greenSoft : _soft,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 34,
+                          height: 34,
+                          alignment: Alignment.center,
+                          decoration: const BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Text(
+                            _initials(_t(trainer['full_name'])),
+                            style: AppTypography.captionMedium(color: _green),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _t(trainer['full_name']).isEmpty
+                                    ? 'Тренер'
+                                    : _t(trainer['full_name']),
+                                style: AppTypography.bodyMedium(color: _text),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                personal
+                                    ? 'Личный тренер'
+                                    : 'Тренер спортивной подготовки',
+                                style: AppTypography.caption(
+                                    color: personal ? _green : _muted),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (_trainerSignatureFor(id) != null)
+                          const Icon(Icons.draw_rounded,
+                              size: 17, color: _green),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              ),
+      ),
+      const SizedBox(height: 12),
+      _sectionCard(
+        title: 'Спортивная подготовка',
+        icon: Icons.sports_soccer_rounded,
+        child: Wrap(
+          spacing: 22,
+          runSpacing: 14,
+          children: [
+            _Info('Учреждение', _t(_resolved['training_institution']),
+                width: 360),
+            _Info('Тренеры', _t(_resolved['training_coaches_text']),
+                width: 420),
+            _Info('Личный тренер', _t(_resolved['personal_trainer_name']),
+                width: 300),
+            _Info('Продолжительность', _t(_resolved['preparation_duration']),
+                width: 300),
+            _Info('Финансирование', _t(_resolved['preparation_funding']),
+                width: 260),
+            _Info('Вид спорта', _t(_resolved['sport_program'])),
+            _Info('Судейская категория', _t(_resolved['judging_category']),
+                width: 300),
+            _Info('Перевод / направление', _t(_resolved['transfer_info']),
+                width: 420),
+            _Info('Восстановление', _t(_resolved['restoration_info']),
+                width: 420),
+          ],
+        ),
+      ),
+    ]);
+  }
+
+  Widget _buildTestsTab() {
+    return _tabList([
+      _dataTableCard(
+        title: 'Контрольно-переводные нормативы',
+        icon: Icons.fact_check_outlined,
+        onAdd: _addTest,
+        columns: const ['Дата', 'Норматив', 'Результат', 'Источник'],
+        rows: _tests
+            .map((row) => <String>[
+                  _t(row['test_date']),
+                  _t(row['title']),
+                  _t(row['result']),
+                  _t(row['source']) == 'testing' ? 'Тестирование' : 'Вручную',
+                ])
+            .toList(),
+      ),
+    ]);
+  }
+
+  Widget _buildResultsTab() {
+    return _tabList([
+      _dataTableCard(
+        title: 'Спортивные результаты',
+        icon: Icons.emoji_events_outlined,
+        onAdd: _addResult,
+        columns: const [
+          'Соревнование',
+          'Дата',
+          'Город',
+          'Вид спорта',
+          'Результат',
+          'Место',
+        ],
+        rows: _results
+            .map((row) => <String>[
+                  _t(row['competition_name']),
+                  _t(row['event_date']),
+                  _t(row['city_country']),
+                  _t(row['sport_program']),
+                  _t(row['result']),
+                  _t(row['place']),
+                ])
+            .toList(),
+      ),
+    ]);
+  }
+
+  Widget _buildSignaturesTab() {
+    final selectedIds = _selectedTrainerIds().toSet();
+    final selectedTrainers = _trainers
+        .where((t) => selectedIds.contains(int.tryParse('${t['id']}') ?? 0))
+        .toList(growable: false);
+    final personalId =
+        int.tryParse('${_resolved['personal_trainer_user_id'] ?? 0}') ?? 0;
+    return _tabList([
+      _sectionCard(
+        title: 'Подпись тренера',
+        icon: Icons.draw_rounded,
+        child: selectedTrainers.isEmpty
+            ? Text('Сначала выберите тренеров в разделе «Подготовка».',
+                style: AppTypography.body(color: _muted))
+            : Column(
+                children: selectedTrainers.map((trainer) {
+                  final id = int.tryParse('${trainer['id']}') ?? 0;
+                  final signature = _trainerSignatureFor(id);
+                  final signedAt = _t(signature?['signed_at']);
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: id == personalId ? _greenSoft : _soft,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _t(trainer['full_name']).isEmpty
+                                    ? 'Тренер'
+                                    : _t(trainer['full_name']),
+                                style: AppTypography.bodyMedium(color: _text),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                signedAt.isEmpty
+                                    ? (id == personalId
+                                        ? 'Личный тренер · подписи нет'
+                                        : 'Подписи нет')
+                                    : (id == personalId
+                                        ? 'Личный тренер · $signedAt'
+                                        : signedAt),
+                                style: AppTypography.caption(color: _muted),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (signature != null) ...[
+                          _SignatureInkPreview(
+                            json: _t(signature['signature_json']),
+                            width: 120,
+                            height: 42,
+                          ),
+                          const SizedBox(width: 10),
+                        ],
+                        FilledButton.icon(
+                          style: _greenButtonStyle(),
+                          onPressed: () => _captureTrainerSignature(trainer),
+                          icon: const Icon(Icons.draw_rounded, size: 16),
+                          label: Text(signature == null
+                              ? 'Подписать'
+                              : 'Переподписать'),
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              ),
+      ),
+      const SizedBox(height: 12),
+      _sectionCard(
+        title: 'Подпись спортсмена',
+        icon: Icons.person_outline_rounded,
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _t(_resolved['athlete_signed_at']).isEmpty
+                        ? 'Подпись ещё не добавлена'
+                        : 'Подписано: ${_t(_resolved['athlete_signed_at'])}',
+                    style: AppTypography.body(color: _muted),
+                  ),
+                  if (_t(_resolved['athlete_signature_json']).isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    _SignatureInkPreview(
+                      json: _t(_resolved['athlete_signature_json']),
+                      width: 150,
+                      height: 48,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            FilledButton.icon(
+              style: _greenButtonStyle(),
+              onPressed: _captureSignature,
+              icon: const Icon(Icons.draw_rounded, size: 17),
+              label: Text(_t(_resolved['athlete_signed_at']).isEmpty
+                  ? 'Подписать'
+                  : 'Переподписать'),
+            ),
+          ],
+        ),
+      ),
+    ]);
+  }
+
+  Widget _buildDocumentTab() {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(18, 18, 18, 12),
+          child: Row(
+            children: [
+              Expanded(
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _Action(
+                      icon: Icons.refresh_rounded,
+                      label: 'Обновить предпросмотр',
+                      onTap: () => _loadPreview(force: true),
+                    ),
+                    _Action(
+                      icon: Icons.open_in_full_rounded,
+                      label: 'Открыть PDF',
+                      onTap: _openPdf,
+                    ),
+                    _Action(
+                      icon: Icons.save_alt_rounded,
+                      label: 'Сохранить PDF',
+                      onTap: () => _saveExport('pdf'),
+                    ),
+                    _Action(
+                      icon: Icons.description_outlined,
+                      label: 'Сохранить DOCX',
+                      onTap: () => _saveExport('docx'),
+                    ),
+                    _Action(
+                      icon: Icons.folder_special_outlined,
+                      label: 'В документы игрока',
+                      onTap: _saveToPlayerDocuments,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: _previewLoading
+              ? const Center(child: CircularProgressIndicator(color: _green))
+              : _previewError != null
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.picture_as_pdf_outlined,
+                                size: 36, color: _muted),
+                            const SizedBox(height: 10),
+                            Text('Не удалось загрузить предпросмотр',
+                                style: AppTypography.bodyMedium(color: _text)),
+                            const SizedBox(height: 6),
+                            Text(_previewError!,
+                                textAlign: TextAlign.center,
+                                style: AppTypography.caption(color: _muted)),
+                            const SizedBox(height: 12),
+                            FilledButton(
+                              style: _greenButtonStyle(),
+                              onPressed: () => _loadPreview(force: true),
+                              child: const Text('Повторить'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                  : _previewPdfBytes == null
+                      ? Center(
+                          child: FilledButton.icon(
+                            style: _greenButtonStyle(),
+                            onPressed: _loadPreview,
+                            icon:
+                                const Icon(Icons.visibility_outlined, size: 17),
+                            label: const Text('Показать документ'),
+                          ),
+                        )
+                      : SfPdfViewer.memory(_previewPdfBytes!),
+        ),
+      ],
+    );
+  }
+
+  String _initials(String name) {
+    final parts =
+        name.trim().split(RegExp(r'\s+')).where((e) => e.isNotEmpty).toList();
+    if (parts.isEmpty) return 'ТР';
+    return parts.take(2).map((e) => e.substring(0, 1).toUpperCase()).join();
+  }
+
+  Widget _sectionCard({
+    required String title,
+    required IconData icon,
+    required Widget child,
+    Widget? action,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Text(
+                title,
+                style: const TextStyle(
+                  color: Color(0xFF1F2937),
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            if (action != null) ...[
+              const SizedBox(width: 14),
+              action,
+            ],
+          ],
+        ),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x05000000),
+                blurRadius: 20,
+                spreadRadius: -14,
+                offset: Offset(0, 10),
+              ),
+            ],
+          ),
+          child: child,
+        ),
+      ],
+    );
+  }
+
+  Widget _dataTableCard({
+    required String title,
+    required IconData icon,
+    required List<String> columns,
+    required List<List<String>> rows,
+    VoidCallback? onAdd,
+  }) {
+    final content = rows.isEmpty
+        ? Text('Данных пока нет', style: AppTypography.body(color: _muted))
+        : SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: DataTable(
+              headingRowColor: MaterialStateProperty.all(_soft),
+              dividerThickness: .6,
+              columns: columns
+                  .map((c) => DataColumn(
+                        label: Text(
+                          c,
+                          style: AppTypography.captionMedium(color: _text),
+                        ),
+                      ))
+                  .toList(),
+              rows: rows
+                  .map((row) => DataRow(
+                        cells: row
+                            .map((cell) => DataCell(Text(
+                                  cell.isEmpty ? '—' : cell,
+                                  style: AppTypography.caption(color: _text),
+                                )))
+                            .toList(),
+                      ))
+                  .toList(),
+            ),
+          );
+    return _sectionCard(
+      title: title,
+      icon: icon,
+      action: onAdd == null
+          ? null
+          : _Action(
+              icon: Icons.add_rounded,
+              label: 'Добавить',
+              onTap: onAdd,
+            ),
+      child: content,
+    );
+  }
+}
+
+enum _CardTab { basic, training, tests, results, signatures, document }
+
+class _CardFieldDef {
+  const _CardFieldDef(this.key, this.label, this.value, {this.lines = 1});
+  final String key;
+  final String label;
+  final String value;
+  final int lines;
+}
+
+class _SoftField extends StatelessWidget {
+  const _SoftField({
+    required this.controller,
+    required this.label,
+    this.maxLines = 1,
+  });
+  final TextEditingController controller;
+  final String label;
+  final int maxLines;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 6),
+          child: Text(label,
+              style: AppTypography.captionMedium(
+                  color: _WorkspacePlayerPersonalCardScreenState._muted)),
+        ),
+        TextField(
+          controller: controller,
+          maxLines: maxLines,
+          style: AppTypography.body(
+              color: _WorkspacePlayerPersonalCardScreenState._text),
+          decoration: InputDecoration(
+            filled: true,
+            fillColor: const Color(0xFFF1F3F3),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _Action extends StatelessWidget {
+  const _Action({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: _WorkspacePlayerPersonalCardScreenState._greenSoft,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox.shrink(),
+              Icon(
+                icon,
+                size: 17,
+                color: _WorkspacePlayerPersonalCardScreenState._greenDark,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: AppTypography.custom(
+                  size: 11.6,
+                  weight: FontWeight.w700,
+                  color: _WorkspacePlayerPersonalCardScreenState._greenDark,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _Info extends StatelessWidget {
+  const _Info(this.label, this.value, {this.width = 220});
+  final String label;
+  final String value;
+  final double width;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: width,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label,
+              style: AppTypography.captionMedium(
+                  color: _WorkspacePlayerPersonalCardScreenState._muted)),
+          const SizedBox(height: 4),
+          Text(
+            value.trim().isEmpty ? '—' : value.trim(),
+            style: AppTypography.bodyMedium(
+                color: _WorkspacePlayerPersonalCardScreenState._text),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+List<List<Offset>> _decodeNormalizedSignature(String raw) {
+  if (raw.trim().isEmpty) return const <List<Offset>>[];
+  try {
+    final decoded = jsonDecode(raw);
+    if (decoded is! List) return const <List<Offset>>[];
+    return decoded
+        .whereType<List>()
+        .map((stroke) {
+          return stroke
+              .whereType<List>()
+              .where((point) => point.length >= 2)
+              .map((point) {
+            final x = point[0] is num
+                ? (point[0] as num).toDouble()
+                : double.tryParse('${point[0]}') ?? 0;
+            final y = point[1] is num
+                ? (point[1] as num).toDouble()
+                : double.tryParse('${point[1]}') ?? 0;
+            return Offset(x.clamp(0.0, 1.0), y.clamp(0.0, 1.0));
+          }).toList();
+        })
+        .where((stroke) => stroke.isNotEmpty)
+        .toList();
+  } catch (_) {
+    return const <List<Offset>>[];
+  }
+}
+
+class _SignatureInkPreview extends StatelessWidget {
+  const _SignatureInkPreview({
+    required this.json,
+    this.width = 140,
+    this.height = 46,
+  });
+
+  final String json;
+  final double width;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    final strokes = _decodeNormalizedSignature(json);
+    if (strokes.isEmpty) return const SizedBox.shrink();
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      padding: const EdgeInsets.all(4),
+      child: CustomPaint(
+        painter: _NormalizedSignaturePainter(strokes),
+      ),
+    );
+  }
+}
+
+class _NormalizedSignaturePainter extends CustomPainter {
+  const _NormalizedSignaturePainter(this.strokes);
+  final List<List<Offset>> strokes;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = const Color(0xFF171B18)
+      ..strokeWidth = 1.8
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..style = PaintingStyle.stroke;
+    for (final stroke in strokes) {
+      if (stroke.isEmpty) continue;
+      Offset scale(Offset p) => Offset(p.dx * size.width, p.dy * size.height);
+      if (stroke.length == 1) {
+        final point = scale(stroke.first);
+        canvas.drawCircle(point, 1.2, paint..style = PaintingStyle.fill);
+        paint.style = PaintingStyle.stroke;
+        continue;
+      }
+      final first = scale(stroke.first);
+      final path = Path()..moveTo(first.dx, first.dy);
+      for (final point in stroke.skip(1)) {
+        final scaled = scale(point);
+        path.lineTo(scaled.dx, scaled.dy);
+      }
+      canvas.drawPath(path, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _NormalizedSignaturePainter oldDelegate) => true;
+}
+
+class _AthleteSignatureDialog extends StatefulWidget {
+  const _AthleteSignatureDialog({required this.name, required this.title});
+  final String name;
+  final String title;
+
+  @override
+  State<_AthleteSignatureDialog> createState() =>
+      _AthleteSignatureDialogState();
+}
+
+class _AthleteSignatureDialogState extends State<_AthleteSignatureDialog> {
+  final List<List<Offset>> _strokes = <List<Offset>>[];
+  Size _size = Size.zero;
+
+  void _start(DragStartDetails d) {
+    if (_size.width <= 0 || _size.height <= 0) return;
+    setState(() => _strokes.add(<Offset>[d.localPosition]));
+  }
+
+  void _update(DragUpdateDetails d) {
+    if (_strokes.isEmpty) return;
+    setState(() => _strokes.last.add(d.localPosition));
+  }
+
+  String _json() {
+    if (_size.width <= 0 || _size.height <= 0) return '[]';
+    return jsonEncode(_strokes
+        .map((stroke) => stroke
+            .map((p) => <double>[
+                  (p.dx / _size.width).clamp(0.0, 1.0),
+                  (p.dy / _size.height).clamp(0.0, 1.0),
+                ])
+            .toList())
+        .toList());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      child: Container(
+        width: 660,
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(widget.title,
+                style: AppTypography.sectionTitle(
+                    color: _WorkspacePlayerPersonalCardScreenState._text)),
+            const SizedBox(height: 4),
+            Text(widget.name,
+                style: AppTypography.caption(
+                    color: _WorkspacePlayerPersonalCardScreenState._muted)),
+            const SizedBox(height: 14),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                _size = Size(constraints.maxWidth, 230);
+                return GestureDetector(
+                  onPanStart: _start,
+                  onPanUpdate: _update,
+                  child: Container(
+                    height: 230,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFAFBFA),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                          color: _WorkspacePlayerPersonalCardScreenState._line),
+                    ),
+                    child: CustomPaint(
+                      painter: _SignaturePainter(_strokes),
+                      size: Size.infinite,
+                    ),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                TextButton.icon(
+                  onPressed: () => setState(_strokes.clear),
+                  icon: const Icon(Icons.delete_outline_rounded),
+                  label: const Text('Очистить'),
+                ),
+                const Spacer(),
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Отмена'),
+                ),
+                const SizedBox(width: 8),
+                FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor:
+                        _WorkspacePlayerPersonalCardScreenState._greenSoft,
+                    foregroundColor:
+                        _WorkspacePlayerPersonalCardScreenState._green,
+                    elevation: 0,
+                  ),
+                  onPressed: _strokes.isEmpty
+                      ? null
+                      : () => Navigator.pop(context, _json()),
+                  child: const Text('Сохранить подпись'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SignaturePainter extends CustomPainter {
+  const _SignaturePainter(this.strokes);
+  final List<List<Offset>> strokes;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = const Color(0xFF171B18)
+      ..strokeWidth = 2.2
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke;
+    for (final stroke in strokes) {
+      if (stroke.isEmpty) continue;
+      if (stroke.length == 1) {
+        canvas.drawCircle(stroke.first, 1.2, paint..style = PaintingStyle.fill);
+        paint.style = PaintingStyle.stroke;
+        continue;
+      }
+      final path = Path()..moveTo(stroke.first.dx, stroke.first.dy);
+      for (final p in stroke.skip(1)) {
+        path.lineTo(p.dx, p.dy);
+      }
+      canvas.drawPath(path, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _SignaturePainter oldDelegate) => true;
+}

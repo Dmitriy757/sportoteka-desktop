@@ -1,0 +1,46 @@
+{
+  "kind": "sportoteka_video_ai_v89_flutter",
+  "project": "/Users/dmitrij/Documents/sportoteka2.0",
+  "files": [
+    {
+      "path": "/Users/dmitrij/Documents/sportoteka2.0/lib/data/models/ai_analysis_contract.dart",
+      "existed": true,
+      "installed_sha256": "485b4ae1f344d63651ae7206e719788441cafd86f90c0c414eeb51d464cbce31",
+      "backup": "files/000",
+      "original_sha256": "485b4ae1f344d63651ae7206e719788441cafd86f90c0c414eeb51d464cbce31",
+      "mode": 420,
+      "uid": 501,
+      "gid": 20
+    },
+    {
+      "path": "/Users/dmitrij/Documents/sportoteka2.0/lib/data/models/ai_video_analysis_models.dart",
+      "existed": true,
+      "installed_sha256": "11c234d1a3d8f9dc7909b1cb393d2c08c713273646ed90372580edada7871030",
+      "backup": "files/001",
+      "original_sha256": "11c234d1a3d8f9dc7909b1cb393d2c08c713273646ed90372580edada7871030",
+      "mode": 420,
+      "uid": 501,
+      "gid": 20
+    },
+    {
+      "path": "/Users/dmitrij/Documents/sportoteka2.0/lib/data/services/ai_video_analysis_service.dart",
+      "existed": true,
+      "installed_sha256": "99a5926d27e2f9bc2792082eb59269ddec9d309bb94e65a9bad65a07e57b4f06",
+      "backup": "files/002",
+      "original_sha256": "99a5926d27e2f9bc2792082eb59269ddec9d309bb94e65a9bad65a07e57b4f06",
+      "mode": 420,
+      "uid": 501,
+      "gid": 20
+    },
+    {
+      "path": "/Users/dmitrij/Documents/sportoteka2.0/lib/presentation/team_video_analysis/team_video_analysis_unified.dart",
+      "existed": true,
+      "installed_sha256": "10cb9b3b50dd49ca9138cb9e425f3d81967f043e2f8c5c0b97554406f8c8ab6b",
+      "backup": "files/003",
+      "original_sha256": "10cb9b3b50dd49ca9138cb9e425f3d81967f043e2f8c5c0b97554406f8c8ab6b",
+      "mode": 420,
+      "uid": 501,
+      "gid": 20
+    }
+  ]
+}

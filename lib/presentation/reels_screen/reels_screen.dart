@@ -66,7 +66,7 @@ class ReelsScreen extends StatefulWidget {
 }
 
 class _ReelsScreenState extends State<ReelsScreen>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   static const bool kShowAll = true;
 
   // ===== API =====
@@ -88,6 +88,13 @@ class _ReelsScreenState extends State<ReelsScreen>
   late final PageController _pageController;
 
   bool _muted = false;
+
+  // Playback guard: Reels must never keep playing behind another screen
+  // or while the app is backgrounded.
+  bool _appIsActive = true;
+  bool _tickerActive = true;
+  bool _coveredByChildRoute = false;
+  int _playbackEpoch = 0;
   bool _fitModeContain = true;
   bool _userForcedFitMode = false;
 
@@ -97,6 +104,8 @@ class _ReelsScreenState extends State<ReelsScreen>
 
   int _me = 1;
   final Set<int> _likeBusyReels = {};
+  final Set<int> _savedReelIds = {};
+  final Set<int> _followedUserIds = {};
 
   final Map<int, List<Map<String, dynamic>>> _commentsCache = {};
   final Map<int, bool> _commentsLoading = {};
@@ -118,6 +127,7 @@ class _ReelsScreenState extends State<ReelsScreen>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
 
     _currentPage = widget.initialIndex < 0 ? 0 : widget.initialIndex;
     _pageController = PageController(initialPage: _currentPage);
@@ -139,6 +149,8 @@ class _ReelsScreenState extends State<ReelsScreen>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _playbackEpoch++;
     _cancelViewTimer();
     _disposeAllControllers();
     _pageController.dispose();
@@ -149,6 +161,80 @@ class _ReelsScreenState extends State<ReelsScreen>
     ]);
 
     super.dispose();
+  }
+
+  bool get _playbackAllowed =>
+      mounted && _appIsActive && _tickerActive && !_coveredByChildRoute;
+
+  Future<void> _pauseAllPlayback() async {
+    _cancelViewTimer();
+    _playbackEpoch++;
+    final controllers = _controllers.values.toList(growable: false);
+    for (final c in controllers) {
+      try {
+        if (c.value.isInitialized && c.value.isPlaying) {
+          await c.pause();
+        }
+      } catch (_) {}
+    }
+  }
+
+  Future<void> _resumeCurrentPlayback() async {
+    if (!_playbackAllowed || reels.isEmpty) return;
+    final index = _currentPage.clamp(0, reels.length - 1);
+    await _ensureController(index, autoplay: false);
+    if (!_playbackAllowed || index != _currentPage) return;
+    final c = _controllers[index];
+    if (c == null || !c.value.isInitialized) return;
+    try {
+      await c.setVolume(_muted ? 0.0 : 1.0);
+      if (_playbackAllowed && !c.value.isPlaying) {
+        await c.play();
+        _scheduleViewForIndex(index);
+      }
+    } catch (_) {}
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final nextTickerActive = TickerMode.of(context);
+    if (_tickerActive == nextTickerActive) return;
+    _tickerActive = nextTickerActive;
+    if (!_tickerActive) {
+      _pauseAllPlayback();
+    } else if (_appIsActive && !_coveredByChildRoute) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _resumeCurrentPlayback();
+      });
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final active = state == AppLifecycleState.resumed;
+    if (_appIsActive == active) return;
+    _appIsActive = active;
+    if (!active) {
+      _pauseAllPlayback();
+    } else if (!_coveredByChildRoute) {
+      _resumeCurrentPlayback();
+    }
+  }
+
+  Future<T?> _pushPausingReel<T>(Route<T> route) async {
+    _coveredByChildRoute = true;
+    await _pauseAllPlayback();
+    if (mounted) setState(() {});
+    try {
+      return await Navigator.of(context).push<T>(route);
+    } finally {
+      _coveredByChildRoute = false;
+      if (mounted) {
+        await _resumeCurrentPlayback();
+      }
+    }
   }
 
   Future<void> _bootstrap() async {
@@ -352,7 +438,7 @@ class _ReelsScreenState extends State<ReelsScreen>
           _pageController.jumpToPage(targetIndex);
         }
 
-        await _ensureController(targetIndex, autoplay: true);
+        await _ensureController(targetIndex, autoplay: _playbackAllowed);
         _ensureController(targetIndex + 1);
         _ensureController(targetIndex - 1);
 
@@ -461,6 +547,7 @@ class _ReelsScreenState extends State<ReelsScreen>
 
   // ===== CONTROLLERS =====
   Future<void> _ensureController(int index, {bool autoplay = false}) async {
+    final requestEpoch = _playbackEpoch;
     if (index < 0 || index >= reels.length) return;
     if (_controllers.containsKey(index)) return;
     if (_initializing.contains(index)) return;
@@ -474,7 +561,7 @@ class _ReelsScreenState extends State<ReelsScreen>
 
     final controller = VideoPlayerController.networkUrl(
       Uri.parse(url),
-      videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
+      videoPlayerOptions: VideoPlayerOptions(mixWithOthers: false),
     );
 
     try {
@@ -486,7 +573,10 @@ class _ReelsScreenState extends State<ReelsScreen>
 
       if (!mounted) return;
 
-      if (autoplay && index == _currentPage) {
+      if (autoplay &&
+          index == _currentPage &&
+          requestEpoch == _playbackEpoch &&
+          _playbackAllowed) {
         await controller.play();
       }
 
@@ -728,10 +818,125 @@ class _ReelsScreenState extends State<ReelsScreen>
     }
   }
 
+  bool _isSaved(int reelId) => _savedReelIds.contains(reelId);
+
+  void _toggleSaved(int reelId) {
+    if (reelId <= 0) return;
+    setState(() {
+      if (!_savedReelIds.add(reelId)) {
+        _savedReelIds.remove(reelId);
+      }
+    });
+  }
+
+  void _toggleFollow(int userId) {
+    if (userId <= 0 || userId == _meId()) return;
+    setState(() {
+      if (!_followedUserIds.add(userId)) {
+        _followedUserIds.remove(userId);
+      }
+    });
+  }
+
+  Future<void> _showReelMoreMenu(int index) async {
+    if (index < 0 || index >= reels.length) return;
+    final reel = reels[index];
+    final reelId = _toInt(reel['id']);
+    final authorId = _toInt(reel['user_id']);
+    final saved = _isSaved(reelId);
+
+    _coveredByChildRoute = true;
+    await _pauseAllPlayback();
+    if (!mounted) return;
+
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: const Color(0xFF151515),
+      barrierColor: Colors.black54,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) {
+        Widget item(IconData icon, String title, String value, {Color? color}) {
+          return ListTile(
+            leading: Icon(icon, color: color ?? Colors.white, size: 23),
+            title: Text(
+              title,
+              style: AppTypography.custom(
+                size: 14,
+                weight: FontWeight.w500,
+                color: color ?? Colors.white,
+              ),
+            ),
+            onTap: () => Navigator.pop(sheetContext, value),
+          );
+        }
+
+        return SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(8, 0, 8, 10),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                item(
+                  saved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+                  saved ? 'Убрать из сохранённых' : 'Сохранить',
+                  'save',
+                ),
+                item(Icons.send_rounded, 'Поделиться', 'share'),
+                if (authorId > 0)
+                  item(Icons.person_outline_rounded, 'Перейти в профиль', 'profile'),
+                item(
+                  Icons.flag_outlined,
+                  'Пожаловаться',
+                  'report',
+                  color: const Color(0xFFFF6B6B),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    _coveredByChildRoute = false;
+    if (!mounted) return;
+
+    switch (action) {
+      case 'save':
+        _toggleSaved(reelId);
+        await _resumeCurrentPlayback();
+        break;
+      case 'share':
+        await _shareReel(index);
+        await _resumeCurrentPlayback();
+        break;
+      case 'profile':
+        if (authorId > 0) {
+          await _openUserProfile(authorId);
+        } else {
+          await _resumeCurrentPlayback();
+        }
+        break;
+      case 'report':
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Жалоба будет доступна после подключения API модерации.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        await _resumeCurrentPlayback();
+        break;
+      default:
+        await _resumeCurrentPlayback();
+    }
+  }
+
   // ===== PROFILE =====
-  void _openUserProfile(int userId) {
-    Navigator.push(
-      context,
+  Future<void> _openUserProfile(int userId) async {
+    await _pushPausingReel<void>(
       MaterialPageRoute(
         builder: (_) => MyProfileScreen(userId: userId),
       ),
@@ -815,6 +1020,11 @@ class _ReelsScreenState extends State<ReelsScreen>
     }
 
     if (!mounted) return;
+
+    // Instagram-like behavior: when comments cover most of the reel,
+    // stop the video/audio and resume only after the sheet closes.
+    _coveredByChildRoute = true;
+    await _pauseAllPlayback();
 
     await showModalBottomSheet(
       context: context,
@@ -1309,6 +1519,11 @@ class _ReelsScreenState extends State<ReelsScreen>
         );
       },
     );
+
+    _coveredByChildRoute = false;
+    if (mounted) {
+      await _resumeCurrentPlayback();
+    }
   }
 
   TextStyle _uiText(
@@ -1409,67 +1624,39 @@ class _ReelsScreenState extends State<ReelsScreen>
         bottom: false,
         child: Padding(
           padding: EdgeInsets.fromLTRB(
-            isLandscape ? 10 : 12,
+            isLandscape ? 10 : 14,
             8,
-            isLandscape ? 10 : 12,
+            isLandscape ? 10 : 14,
             8,
           ),
           child: Row(
             children: [
               if (widget.showBackButton || !isMobileTopBar) ...[
-                Material(
-                  color: Colors.black.withOpacity(.26),
-                  borderRadius: BorderRadius.circular(9),
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(9),
-                    onTap: () => Navigator.maybePop(context),
-                    child: const SizedBox(
-                      width: 34,
-                      height: 34,
-                      child: Icon(
-                        Icons.arrow_back_ios_new_rounded,
-                        color: Colors.white,
-                        size: 14,
-                      ),
-                    ),
-                  ),
+                _TopIconButton(
+                  icon: Icons.arrow_back_ios_new_rounded,
+                  onTap: () {
+                    _pauseAllPlayback();
+                    Navigator.maybePop(context);
+                  },
+                  size: 18,
                 ),
-                const SizedBox(width: 9),
+                const SizedBox(width: 10),
               ],
-              _brandDots(
-                color: const Color(0xFF00A750),
-                compact: true,
-              ),
-              const SizedBox(width: 8),
-              Flexible(
-                child: Text(
-                  (widget.title ?? '').trim().isNotEmpty
-                      ? widget.title!.trim()
-                      : 'REELS',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: _uiText(
-                    isLandscape ? 11.5 : 12.2,
-                    weight: FontWeight.w600,
-                    color: Colors.white,
+              _GlassSurface(
+                radius: 18,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 9,
                   ),
+                  child: _brandDots(),
                 ),
               ),
               const Spacer(),
-              _topAction(
-                label: _fitModeContain ? 'FIT' : 'FILL',
-                active: _userForcedFitMode,
-                onTap: () {
-                  setState(() {
-                    _fitModeContain = !_fitModeContain;
-                    _userForcedFitMode = true;
-                  });
-                },
-              ),
-              const SizedBox(width: 6),
-              _topAction(
-                label: _muted ? 'Без звука' : 'Звук',
-                active: !_muted,
+              _TopIconButton(
+                icon: _muted
+                    ? Icons.volume_off_rounded
+                    : Icons.volume_up_rounded,
                 onTap: () async {
                   setState(() => _muted = !_muted);
                   final c = _controllers[_currentPage];
@@ -1480,63 +1667,19 @@ class _ReelsScreenState extends State<ReelsScreen>
               ),
               if (widget.allowUpload) ...[
                 const SizedBox(width: 6),
-                _topAction(
-                  label: 'Добавить',
-                  active: true,
+                _TopIconButton(
+                  icon: Icons.add_box_outlined,
                   onTap: () async {
-                    await Navigator.push(
-                      context,
+                    await _pushPausingReel<void>(
                       MaterialPageRoute(
                         builder: (context) =>
                             UploadReelScreen(onUploadComplete: _fetchReels),
                       ),
                     );
-                    _fetchReels();
+                    await _fetchReels();
                   },
                 ),
               ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _topAction({
-    required String label,
-    required bool active,
-    required VoidCallback onTap,
-  }) {
-    return Material(
-      color: active
-          ? const Color(0xFF00A750).withOpacity(.88)
-          : Colors.black.withOpacity(.26),
-      borderRadius: BorderRadius.circular(8),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: 8,
-            vertical: 7,
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _statusDot(
-                active ? Colors.white : Colors.white54,
-                size: 4,
-                glow: false,
-              ),
-              const SizedBox(width: 5),
-              Text(
-                label,
-                style: _uiText(
-                  9,
-                  weight: FontWeight.w600,
-                  color: active ? Colors.white : Colors.white70,
-                ),
-              ),
             ],
           ),
         ),
@@ -1600,7 +1743,7 @@ class _ReelsScreenState extends State<ReelsScreen>
                           await prevC.pause();
                         }
 
-                        await _ensureController(index, autoplay: true);
+                        await _ensureController(index, autoplay: _playbackAllowed);
 
                         if (!_userForcedFitMode) {
                           final curC2 = _controllers[index];
@@ -1612,7 +1755,7 @@ class _ReelsScreenState extends State<ReelsScreen>
                         final curC = _controllers[index];
                         if (curC != null && curC.value.isInitialized) {
                           await curC.setVolume(_muted ? 0.0 : 1.0);
-                          if (!curC.value.isPlaying) {
+                          if (_playbackAllowed && !curC.value.isPlaying) {
                             await curC.play();
                           }
                         }
@@ -1646,23 +1789,23 @@ class _ReelsScreenState extends State<ReelsScreen>
                             !isLandscape && mq.size.width < 900;
 
                         final mobileBottomMenuReserve = isMobileShell
-                            ? (mq.size.height * 0.085)
-                                .clamp(52.0, 76.0)
+                            ? (mq.size.height * 0.065)
+                                .clamp(40.0, 58.0)
                                 .toDouble()
                             : 0.0;
 
                         final overlayBottom = isLandscape
-                            ? 4.0 + bottomSafe
+                            ? 3.0 + bottomSafe
                             : mobileBottomMenuReserve +
                                 bottomSafe +
-                                4.0;
+                                2.0;
                         final actionGap = isLandscape
-                            ? 10.0
+                            ? 7.0
                             : (mq.size.height < 520
-                                ? 7.0
+                                ? 5.0
                                 : mq.size.height < 760
-                                    ? 9.0
-                                    : 12.0);
+                                    ? 6.0
+                                    : 7.0);
                         final actionIcon = isLandscape ? 18.0 : 20.0;
 
                         final bool liked = reel['liked'] == true;
@@ -1682,7 +1825,7 @@ class _ReelsScreenState extends State<ReelsScreen>
                                   if (controller.value.isPlaying) {
                                     await controller.pause();
                                     _cancelViewTimer();
-                                  } else {
+                                  } else if (_playbackAllowed && index == _currentPage) {
                                     await controller.play();
                                     if (index == _currentPage) {
                                       _scheduleViewForIndex(index);
@@ -1766,34 +1909,31 @@ class _ReelsScreenState extends State<ReelsScreen>
                                   crossAxisAlignment: CrossAxisAlignment.end,
                                   children: [
                                     Expanded(
-                                      child: Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          _BottomCaption(
-                                            avatarUrl: authorAvatar,
-                                            username: authorName,
-                                            description:
-                                                (reel['description'] ?? '').toString(),
-                                            onOpenProfile: () => _openUserProfile(authorId),
-                                          ),
-                                          const SizedBox(height: 3),
-                                          _ShareInlineAction(
-                                            onTap: () => _shareReel(index),
-                                          ),
-                                        ],
+                                      child: _BottomCaption(
+                                        avatarUrl: authorAvatar,
+                                        username: authorName,
+                                        description:
+                                            (reel['description'] ?? '').toString(),
+                                        isOwnProfile: authorId == _meId(),
+                                        following: _followedUserIds.contains(authorId),
+                                        onOpenProfile: () => _openUserProfile(authorId),
+                                        onFollow: () => _toggleFollow(authorId),
                                       ),
                                     ),
-                                    const SizedBox(width: 8),
+                                    const SizedBox(width: 10),
                                     _RightActionsColumn(
                                       liked: liked,
                                       likes: (reel['likes'] ?? 0).toString(),
                                       comments: (reel['comments'] ?? 0).toString(),
-                                      views: (reel['views'] ?? 0).toString(),
-                                      iconSize: actionIcon,
+                                      saved: _isSaved(_toInt(reel['id'])),
+                                      avatarUrl: authorAvatar,
                                       gap: actionGap,
                                       onLike: () => _toggleLike(index),
                                       onComments: () => _openCommentsSheet(index),
+                                      onRepost: () => _shareReel(index),
+                                      onShare: () => _shareReel(index),
+                                      onSave: () => _toggleSaved(_toInt(reel['id'])),
+                                      onMore: () => _showReelMoreMenu(index),
                                     ),
                                   ],
                                 ),
@@ -1873,6 +2013,50 @@ class _ReelsScreenState extends State<ReelsScreen>
 
 
 
+class _TopIconButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+  final double size;
+
+  const _TopIconButton({
+    required this.icon,
+    required this.onTap,
+    this.size = 21,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        width: 34,
+        height: 34,
+        decoration: BoxDecoration(
+          color: Colors.black.withOpacity(.26),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: const Color(0xFF00A750).withOpacity(.26),
+            width: .9,
+          ),
+          boxShadow: [
+            BoxShadow(color: Colors.black.withOpacity(.42), blurRadius: 10),
+            BoxShadow(color: const Color(0xFF00A750).withOpacity(.12), blurRadius: 12),
+          ],
+        ),
+        child: Center(
+          child: Icon(
+            icon,
+            color: Colors.white,
+            size: size,
+            shadows: const [Shadow(color: Colors.black54, blurRadius: 8)],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _GlassSurface extends StatelessWidget {
   final Widget child;
   final double radius;
@@ -1939,22 +2123,29 @@ class _RightActionsColumn extends StatelessWidget {
   final bool liked;
   final String likes;
   final String comments;
-  final String views;
-  final double iconSize;
+  final bool saved;
+  final String avatarUrl;
   final double gap;
-
   final VoidCallback onLike;
   final VoidCallback onComments;
+  final VoidCallback onRepost;
+  final VoidCallback onShare;
+  final VoidCallback onSave;
+  final VoidCallback onMore;
 
   const _RightActionsColumn({
     required this.liked,
     required this.likes,
     required this.comments,
-    required this.views,
-    required this.iconSize,
+    required this.saved,
+    required this.avatarUrl,
     required this.gap,
     required this.onLike,
     required this.onComments,
+    required this.onRepost,
+    required this.onShare,
+    required this.onSave,
+    required this.onMore,
   });
 
   @override
@@ -1962,32 +2153,221 @@ class _RightActionsColumn extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        _ActionMetric(
-          kind: _MetricIconKind.like,
+        _ReelSideAction(
+          icon: liked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
           label: likes,
-          accentColor: liked
-              ? const Color(0xFFD92D20)
-              : Colors.white70,
+          activeColor: liked ? const Color(0xFFFF3040) : Colors.white,
           onTap: onLike,
-          active: liked,
-          compact: true,
+          iconSize: 21,
         ),
         SizedBox(height: gap),
-        _ActionMetric(
-          kind: _MetricIconKind.comment,
+        _ReelSideAction(
+          icon: Icons.mode_comment_outlined,
           label: comments,
-          accentColor: const Color(0xFF00A750),
           onTap: onComments,
-          compact: true,
+          iconSize: 20,
         ),
         SizedBox(height: gap),
-        _ActionMetric(
-          kind: _MetricIconKind.view,
-          label: views,
-          accentColor: const Color(0xFFF59E0B),
-          compact: true,
+        _ReelSideAction(
+          icon: Icons.repeat_rounded,
+          label: 'Репост',
+          onTap: onRepost,
+          iconSize: 21,
         ),
+        SizedBox(height: gap),
+        _ReelSideAction(
+          icon: Icons.send_rounded,
+          label: '',
+          onTap: onShare,
+          iconSize: 20,
+        ),
+        SizedBox(height: gap),
+        _ReelSideAction(
+          icon: saved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+          label: '',
+          onTap: onSave,
+          iconSize: 20,
+        ),
+        SizedBox(height: gap * .82),
+        _ReelSideAction(
+          icon: Icons.more_horiz_rounded,
+          label: '',
+          onTap: onMore,
+          iconSize: 21,
+        ),
+        SizedBox(height: gap),
+        _AudioTile(avatarUrl: avatarUrl),
       ],
+    );
+  }
+}
+
+class _ReelSideAction extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final Color activeColor;
+  final double iconSize;
+
+  const _ReelSideAction({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.activeColor = Colors.white,
+    this.iconSize = 21,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(.28),
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: const Color(0xFF00A750).withOpacity(.22),
+                  width: .8,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(.38),
+                    blurRadius: 8,
+                  ),
+                ],
+              ),
+              alignment: Alignment.center,
+              child: Icon(
+                icon,
+                color: activeColor,
+                size: iconSize,
+                shadows: const [
+                  Shadow(color: Colors.black54, blurRadius: 7),
+                ],
+              ),
+            ),
+            if (label.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(
+                label,
+                textAlign: TextAlign.center,
+                style: AppTypography.custom(
+                  size: 9.0,
+                  weight: FontWeight.w600,
+                  color: Colors.white,
+                  height: 1.0,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+
+class _InlineBrandDots extends StatelessWidget {
+  final double dotSize;
+  final double spacing;
+  final bool compact;
+  final Color color;
+
+  const _InlineBrandDots({
+    this.dotSize = 3.2,
+    this.spacing = 2,
+    this.compact = false,
+    this.color = const Color(0xFF00A750),
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final opacities = compact
+        ? const <double>[.40, .58, .76, 1]
+        : const <double>[.32, .5, .7, 1];
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        for (int i = 0; i < opacities.length; i++) ...[
+          Container(
+            width: dotSize + i * .6,
+            height: dotSize + i * .6,
+            decoration: BoxDecoration(
+              color: color.withOpacity(opacities[i]),
+              shape: BoxShape.circle,
+            ),
+          ),
+          if (i != opacities.length - 1) SizedBox(width: spacing),
+        ],
+      ],
+    );
+  }
+}
+
+class _AudioTile extends StatelessWidget {
+  final String avatarUrl;
+  const _AudioTile({required this.avatarUrl});
+
+  @override
+  Widget build(BuildContext context) {
+    final hasAvatar = avatarUrl.trim().isNotEmpty;
+    return Container(
+      width: 30,
+      height: 30,
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: Colors.black,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFF00A750).withOpacity(.95), width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF00A750).withOpacity(.22),
+            blurRadius: 10,
+          ),
+        ],
+      ),
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(5),
+              child: hasAvatar
+                  ? Image.network(
+                      avatarUrl,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => const _AudioFallback(),
+                    )
+                  : const _AudioFallback(),
+            ),
+          ),
+          const Positioned(
+            right: 2,
+            bottom: 2,
+            child: _InlineBrandDots(dotSize: 2.4, spacing: 1.5, compact: true),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AudioFallback extends StatelessWidget {
+  const _AudioFallback();
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: const Color(0xFF242424),
+      alignment: Alignment.center,
+      child: const Icon(Icons.music_note_rounded, color: Colors.white, size: 18),
     );
   }
 }
@@ -2248,100 +2628,181 @@ class _ShareInlineAction extends StatelessWidget {
   }
 }
 
-class _BottomCaption extends StatelessWidget {
+class _BottomCaption extends StatefulWidget {
   final String avatarUrl;
   final String username;
   final String description;
+  final bool isOwnProfile;
+  final bool following;
   final VoidCallback onOpenProfile;
+  final VoidCallback onFollow;
 
   const _BottomCaption({
     required this.avatarUrl,
     required this.username,
     required this.description,
+    required this.isOwnProfile,
+    required this.following,
     required this.onOpenProfile,
+    required this.onFollow,
   });
 
   @override
+  State<_BottomCaption> createState() => _BottomCaptionState();
+}
+
+class _BottomCaptionState extends State<_BottomCaption> {
+  bool _expanded = false;
+
+  @override
   Widget build(BuildContext context) {
-    final normalizedAvatar = avatarUrl.trim();
+    final normalizedAvatar = widget.avatarUrl.trim();
+    final username = widget.username.trim().isEmpty
+        ? 'Пользователь'
+        : widget.username.trim();
+    final description = widget.description.trim();
+    final compact = MediaQuery.of(context).size.height < 650;
 
     return Column(
+      mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: onOpenProfile,
-            borderRadius: BorderRadius.circular(9),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 2),
-              child: Row(
-                children: [
-                  if (normalizedAvatar.isNotEmpty)
-                    CircleAvatar(
-                      radius: 14,
-                      backgroundColor: Colors.white12,
-                      backgroundImage: NetworkImage(normalizedAvatar),
-                    )
-                  else
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        for (final item in const <List<double>>[
-                          <double>[3.0, .34],
-                          <double>[3.8, .48],
-                          <double>[4.6, .68],
-                          <double>[5.4, 1],
-                        ]) ...[
-                          Container(
-                            width: item[0],
-                            height: item[0],
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF00A750)
-                                  .withOpacity(item[1]),
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                          const SizedBox(width: 3),
-                        ],
-                      ],
-                    ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      username.isEmpty ? 'Пользователь' : username,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTypography.custom(
-                        size: 11.6,
-                        weight: FontWeight.w600,
-                        color: Colors.white,
-                        height: 1.15,
-                        letterSpacing: 0,
+        Row(
+          children: [
+            GestureDetector(
+              onTap: widget.onOpenProfile,
+              child: CircleAvatar(
+                radius: 16,
+                backgroundColor: Colors.white24,
+                backgroundImage:
+                    normalizedAvatar.isNotEmpty ? NetworkImage(normalizedAvatar) : null,
+                child: normalizedAvatar.isEmpty
+                    ? const Icon(Icons.person_rounded, color: Colors.white, size: 18)
+                    : null,
+              ),
+            ),
+            const SizedBox(width: 9),
+            Flexible(
+              child: GestureDetector(
+                onTap: widget.onOpenProfile,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Flexible(
+                      child: Text(
+                        username,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.custom(
+                          size: 12.4,
+                          weight: FontWeight.w700,
+                          color: Colors.white,
+                          height: 1.0,
+                        ),
                       ),
                     ),
+                  ],
+                ),
+              ),
+            ),
+            if (!widget.isOwnProfile) ...[
+              const SizedBox(width: 9),
+              GestureDetector(
+                onTap: widget.onFollow,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: widget.following
+                        ? Colors.white.withOpacity(.13)
+                        : const Color(0xFF00A750).withOpacity(.16),
+                    borderRadius: BorderRadius.circular(9),
+                    border: Border.all(
+                      color: widget.following
+                          ? Colors.white70
+                          : const Color(0xFF00A750).withOpacity(.92),
+                      width: 1,
+                    ),
+                    boxShadow: widget.following
+                        ? null
+                        : [
+                            BoxShadow(
+                              color: const Color(0xFF00A750).withOpacity(.16),
+                              blurRadius: 10,
+                            ),
+                          ],
                   ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (!widget.following) ...[
+                        const _InlineBrandDots(dotSize: 2.4, spacing: 1.5, compact: true),
+                        const SizedBox(width: 6),
+                      ],
+                      Text(
+                        widget.following ? 'Вы подписаны' : 'Подписаться',
+                        style: AppTypography.custom(
+                          size: 10.2,
+                          weight: FontWeight.w700,
+                          color: Colors.white,
+                          height: 1.0,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+        if (description.isNotEmpty) ...[
+          const SizedBox(height: 9),
+          GestureDetector(
+            onTap: () => setState(() => _expanded = !_expanded),
+            child: Text.rich(
+              TextSpan(
+                children: [
+                  TextSpan(text: description),
+                  if (!_expanded && description.length > 90)
+                    const TextSpan(
+                      text: '  ещё',
+                      style: TextStyle(color: Colors.white70),
+                    ),
                 ],
+              ),
+              maxLines: _expanded ? null : (compact ? 2 : 3),
+              overflow: _expanded ? TextOverflow.visible : TextOverflow.ellipsis,
+              style: AppTypography.custom(
+                size: 11.2,
+                weight: FontWeight.w400,
+                color: Colors.white,
+                height: 1.28,
               ),
             ),
           ),
-        ),
-        if (description.trim().isNotEmpty) ...[
-          const SizedBox(height: 7),
-          Text(
-            description,
-            style: AppTypography.custom(
-              size: 10.4,
-              weight: FontWeight.w400,
-              color: Colors.white,
-              height: 1.32,
-              letterSpacing: 0,
-            ),
-            maxLines: MediaQuery.of(context).size.height < 520 ? 2 : 3,
-            overflow: TextOverflow.ellipsis,
-          ),
         ],
+        const SizedBox(height: 9),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.music_note_rounded, color: Colors.white, size: 13),
+            const SizedBox(width: 5),
+            const _InlineBrandDots(dotSize: 2.2, spacing: 1.5, compact: true),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                'Оригинальное аудио · $username',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.custom(
+                  size: 10.2,
+                  weight: FontWeight.w500,
+                  color: Colors.white,
+                  height: 1.0,
+                ),
+              ),
+            ),
+          ],
+        ),
       ],
     );
   }

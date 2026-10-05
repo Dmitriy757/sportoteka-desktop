@@ -15,7 +15,7 @@ class PrefUtils {
 
   static String teamIdKey = "${prefName}teamId";
   static String userIdKey = "${prefName}userId";
-  static String userClubIdKey = "${prefName}userClubId";    // ДОБАВЛЕНО
+  static String userClubIdKey = "${prefName}userClubId"; // ДОБАВЛЕНО
   static String userClubNameKey = "${prefName}userClubName"; // ДОБАВЛЕНО
 
   // Активный клуб Staff Access для сотрудника, который может работать
@@ -24,24 +24,28 @@ class PrefUtils {
   static String activeStaffClubIdKey = "${prefName}activeStaffClubId";
   static String activeStaffClubNameKey = "${prefName}activeStaffClubName";
 
-  static String agreedEulaKey = "${prefName}agreedEula";
+  // Текущий Workspace-контекст. Staff-клуб можно помнить отдельно, но
+  // personal/staff/club не должны смешивать права и подписки.
+  static String activeWorkspaceTypeKey = "${prefName}activeWorkspaceType";
+  static String activeWorkspaceClubIdKey = "${prefName}activeWorkspaceClubId";
+  static String activeWorkspaceTeamIdKey = "${prefName}activeWorkspaceTeamId";
+  static String activeWorkspaceStaffAccessIdKey =
+      "${prefName}activeWorkspaceStaffAccessId";
 
+  static String agreedEulaKey = "${prefName}agreedEula";
 
   /// служебный ключ фото
   static const String _userPhotoKey = "user_photo";
 
+  static Future<void> setUnreadChatsCount(int v) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('unread_chats_count', v);
+  }
 
-static Future<void> setUnreadChatsCount(int v) async {
-  final prefs = await SharedPreferences.getInstance();
-  await prefs.setInt('unread_chats_count', v);
-}
-
-static Future<int?> getUnreadChatsCount() async {
-  final prefs = await SharedPreferences.getInstance();
-  return prefs.getInt('unread_chats_count');
-}
-
-
+  static Future<int?> getUnreadChatsCount() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt('unread_chats_count');
+  }
 
   // ===== ДОБАВЬ ЭТО ВНУТРЬ КЛАССА =====
 
@@ -54,8 +58,6 @@ static Future<int?> getUnreadChatsCount() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(key, value);
   }
-
-
 
   // ---------------------------
   // INTERNAL
@@ -164,6 +166,69 @@ static Future<int?> getUnreadChatsCount() async {
     return p.getString(activeStaffClubNameKey) ?? '';
   }
 
+  static Future<void> setActiveWorkspaceType(String type) async {
+    final p = await _instance();
+    final value = type.trim().toLowerCase();
+    if (value.isEmpty) {
+      await p.remove(activeWorkspaceTypeKey);
+    } else {
+      await p.setString(activeWorkspaceTypeKey, value);
+    }
+  }
+
+  static Future<String> getActiveWorkspaceType() async {
+    final p = await _instance();
+    return p.getString(activeWorkspaceTypeKey) ?? 'personal';
+  }
+
+  static Future<void> setActiveWorkspaceScope({
+    int? clubId,
+    int? teamId,
+    int? staffAccessId,
+  }) async {
+    final p = await _instance();
+
+    if ((clubId ?? 0) > 0) {
+      await p.setInt(activeWorkspaceClubIdKey, clubId!);
+    } else {
+      await p.remove(activeWorkspaceClubIdKey);
+    }
+
+    if ((teamId ?? 0) > 0) {
+      await p.setInt(activeWorkspaceTeamIdKey, teamId!);
+    } else {
+      await p.remove(activeWorkspaceTeamIdKey);
+    }
+
+    if ((staffAccessId ?? 0) > 0) {
+      await p.setInt(activeWorkspaceStaffAccessIdKey, staffAccessId!);
+    } else {
+      await p.remove(activeWorkspaceStaffAccessIdKey);
+    }
+  }
+
+  static Future<void> clearActiveWorkspaceScope() async {
+    final p = await _instance();
+    await p.remove(activeWorkspaceClubIdKey);
+    await p.remove(activeWorkspaceTeamIdKey);
+    await p.remove(activeWorkspaceStaffAccessIdKey);
+  }
+
+  static Future<int?> getActiveWorkspaceClubId() async {
+    final p = await _instance();
+    return p.getInt(activeWorkspaceClubIdKey);
+  }
+
+  static Future<int?> getActiveWorkspaceTeamId() async {
+    final p = await _instance();
+    return p.getInt(activeWorkspaceTeamIdKey);
+  }
+
+  static Future<int?> getActiveWorkspaceStaffAccessId() async {
+    final p = await _instance();
+    return p.getInt(activeWorkspaceStaffAccessIdKey);
+  }
+
   // ---------------------------
   // ROLE / USER DATA (STATIC)
   // ---------------------------
@@ -237,8 +302,7 @@ static Future<int?> getUnreadChatsCount() async {
     return null;
   }
 
-
- // ---------------------------
+  // ---------------------------
   // Generic helpers (для черновиков/кеша)
   // ---------------------------
   static Future<void> setStringValue(String key, String value) async {
@@ -255,7 +319,6 @@ static Future<int?> getUnreadChatsCount() async {
     final p = await _instance();
     await p.remove(key);
   }
-
 
   // ---------------------------
   // EULA
@@ -278,10 +341,14 @@ static Future<int?> getUnreadChatsCount() async {
 
     await p.remove(userIdKey);
     await p.remove(teamIdKey);
-    await p.remove(userClubIdKey);     // ДОБАВЛЕНО
-    await p.remove(userClubNameKey);   // ДОБАВЛЕНО
+    await p.remove(userClubIdKey); // ДОБАВЛЕНО
+    await p.remove(userClubNameKey); // ДОБАВЛЕНО
     await p.remove(activeStaffClubIdKey);
     await p.remove(activeStaffClubNameKey);
+    await p.remove(activeWorkspaceTypeKey);
+    await p.remove(activeWorkspaceClubIdKey);
+    await p.remove(activeWorkspaceTeamIdKey);
+    await p.remove(activeWorkspaceStaffAccessIdKey);
     await p.remove(userRole);
     await p.remove(userFirstName);
     await p.remove(userLastName);
@@ -304,24 +371,40 @@ extension PrefUtilsInstanceCompat on PrefUtils {
   Future<void> setUserFirstName(String v) => PrefUtils.setUserFirstName(v);
   Future<void> setUserLastName(String v) => PrefUtils.setUserLastName(v);
   Future<void> setUserEmail(String v) => PrefUtils.setUserEmail(v);
-  Future<void> setUserClubId(int v) => PrefUtils.setUserClubId(v);      // ДОБАВЛЕНО
-  Future<void> setUserClubName(String v) => PrefUtils.setUserClubName(v); // ДОБАВЛЕНО
+  Future<void> setUserClubId(int v) => PrefUtils.setUserClubId(v); // ДОБАВЛЕНО
+  Future<void> setUserClubName(String v) =>
+      PrefUtils.setUserClubName(v); // ДОБАВЛЕНО
   Future<void> setActiveStaffClubId(int v) => PrefUtils.setActiveStaffClubId(v);
-  Future<void> setActiveStaffClubName(String v) => PrefUtils.setActiveStaffClubName(v);
+  Future<void> setActiveStaffClubName(String v) =>
+      PrefUtils.setActiveStaffClubName(v);
+  Future<void> setActiveWorkspaceType(String v) =>
+      PrefUtils.setActiveWorkspaceType(v);
 
   // instance getters (синхронные раньше у тебя были — сделаем безопасно через cached prefs)
   String getUserRole() => PrefUtils._prefs?.getString(PrefUtils.userRole) ?? '';
-  String getUserFirstName() => PrefUtils._prefs?.getString(PrefUtils.userFirstName) ?? '';
-  String getUserLastName() => PrefUtils._prefs?.getString(PrefUtils.userLastName) ?? '';
-  String getUserEmail() => PrefUtils._prefs?.getString(PrefUtils.userEmail) ?? '';
-  int getUserClubId() => PrefUtils._prefs?.getInt(PrefUtils.userClubIdKey) ?? 0;         // ДОБАВЛЕНО
-  String getUserClubName() => PrefUtils._prefs?.getString(PrefUtils.userClubNameKey) ?? 'Мой клуб'; // ДОБАВЛЕНО
-  int getActiveStaffClubId() => PrefUtils._prefs?.getInt(PrefUtils.activeStaffClubIdKey) ?? 0;
-  String getActiveStaffClubName() => PrefUtils._prefs?.getString(PrefUtils.activeStaffClubNameKey) ?? '';
+  String getUserFirstName() =>
+      PrefUtils._prefs?.getString(PrefUtils.userFirstName) ?? '';
+  String getUserLastName() =>
+      PrefUtils._prefs?.getString(PrefUtils.userLastName) ?? '';
+  String getUserEmail() =>
+      PrefUtils._prefs?.getString(PrefUtils.userEmail) ?? '';
+  int getUserClubId() =>
+      PrefUtils._prefs?.getInt(PrefUtils.userClubIdKey) ?? 0; // ДОБАВЛЕНО
+  String getUserClubName() =>
+      PrefUtils._prefs?.getString(PrefUtils.userClubNameKey) ??
+      'Мой клуб'; // ДОБАВЛЕНО
+  int getActiveStaffClubId() =>
+      PrefUtils._prefs?.getInt(PrefUtils.activeStaffClubIdKey) ?? 0;
+  String getActiveStaffClubName() =>
+      PrefUtils._prefs?.getString(PrefUtils.activeStaffClubNameKey) ?? '';
+  String getActiveWorkspaceType() =>
+      PrefUtils._prefs?.getString(PrefUtils.activeWorkspaceTypeKey) ??
+      'personal';
 
   // theme_helper у тебя вызывает PrefUtils().getThemeData() синхронно —
   // дадим sync чтение из кэша, чтобы компилилось.
-  String getThemeData() => PrefUtils._prefs?.getString('themeData') ?? 'primary';
+  String getThemeData() =>
+      PrefUtils._prefs?.getString('themeData') ?? 'primary';
 
   Future<void> setThemeData(String v) => PrefUtils.setThemeData(v);
 
@@ -329,4 +412,3 @@ extension PrefUtilsInstanceCompat on PrefUtils {
     await PrefUtils.clearAll();
   }
 }
-

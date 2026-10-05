@@ -1,0 +1,8 @@
+{
+  "local_backup": "/Users/dmitrij/Documents/sportoteka2.0/.sportoteka_backups/video_ai_v89_20261002_170530_2bcc09",
+  "remote_backup": "/var/www/ai_analysis/.sportoteka_backups/video_ai_v89_20261002_140518_710f24",
+  "remote": "sportoteka-vm",
+  "ssh_config": "/Users/dmitrij/.ssh/technopark/sportoteka/client01/config",
+  "root": "/var/www/ai_analysis",
+  "service": "sportoteka-video-ai.service"
+}
